@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useCart } from "@/context/CartContext";
 import { toast } from "sonner";
+import Image from "next/image";
 
 export default function CheckoutModal({ isOpen, onClose }) {
   const router = useRouter();
@@ -120,7 +121,10 @@ export default function CheckoutModal({ isOpen, onClose }) {
                   <div key={item.cartKey} className="flex gap-4 items-start pb-4 border-b border-zinc-100 last:border-0 last:pb-0">
                     {/* Food mini icon/image placeholder */}
                     <div className="relative h-12 w-16 bg-zinc-100 rounded-md overflow-hidden shrink-0">
-                      <img src={item.image} alt={item.name} className="object-cover w-full h-full" />
+                      <Image
+                      height={150}
+                      width={100}
+                      src={item.image} alt={item.name} className="object-cover w-full h-full" />
                     </div>
                     {/* Item Details */}
                     <div className="flex-1 min-w-0 space-y-0.5">

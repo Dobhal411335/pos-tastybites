@@ -16,12 +16,12 @@ export class AuthService {
     if (!isMatch) throw new Error('Invalid credentials');
 
     const token = await signToken({
-      userId: admin._id,
-      restaurantId: admin.restaurantId,
+      userId: admin._id.toString(),
+      restaurantId: admin.restaurantId ? admin.restaurantId.toString() : null,
       role: admin.role,
     });
 
-    return { token, user: { id: admin._id, email: admin.email, role: admin.role } };
+    return { token, user: { id: admin._id.toString(), email: admin.email, role: admin.role } };
   }
 
   async employeeLogin(email, password) {
@@ -32,12 +32,12 @@ export class AuthService {
     if (!isMatch) throw new Error('Invalid credentials');
 
     const token = await signToken({
-      userId: employee._id,
-      restaurantId: employee.restaurantId,
+      userId: employee._id.toString(),
+      restaurantId: employee.restaurantId ? employee.restaurantId.toString() : null,
       role: employee.role,
     });
 
-    return { token, user: { id: employee._id, email: employee.email, role: employee.role } };
+    return { token, user: { id: employee._id.toString(), email: employee.email, role: employee.role } };
   }
 
   async getCurrentUser(userId, role) {

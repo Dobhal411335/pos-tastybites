@@ -11,11 +11,35 @@ export class AuthRepository {
   }
 
   async findAdminById(id) {
-    return await Admin.findById(id).select('-password').lean();
+    try {
+      let queryId = id;
+      if (id && typeof id === 'object' && !id._bsontype) {
+        // Safe conversion of stringified JSON objects
+        const str = JSON.stringify(id);
+        if (str.includes('buffer')) {
+          // If it contains a buffer array, let Mongoose fail gracefully or try to construct standard hex
+          return null;
+        }
+      }
+      return await Admin.findById(queryId).select('-password').lean();
+    } catch (err) {
+      return null;
+    }
   }
 
   async findEmployeeById(id) {
-    return await Employee.findById(id).select('-password').lean();
+    try {
+      let queryId = id;
+      if (id && typeof id === 'object' && !id._bsontype) {
+        const str = JSON.stringify(id);
+        if (str.includes('buffer')) {
+          return null;
+        }
+      }
+      return await Employee.findById(queryId).select('-password').lean();
+    } catch (err) {
+      return null;
+    }
   }
 
   async updateAdminPassword(id, hashedPassword) {

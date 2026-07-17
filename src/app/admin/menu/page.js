@@ -1,0 +1,14 @@
+"use client";
+
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+
+export default function MenuModuleIndex() {
+  const router = useRouter();
+
+  useEffect(() => {
+    router.replace("/admin/menu/categories");
+  }, [router]);
+
+  return null;
+}

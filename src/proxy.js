@@ -14,9 +14,10 @@ export async function proxy(request) {
   const token = request.cookies.get('token')?.value;
   const { pathname } = request.nextUrl;
 
-  const isAuthPage = pathname.startsWith('/login') || pathname.startsWith('/register');
   const isAdminPage = pathname.startsWith('/admin');
+  const isAdminAuthPage = pathname === '/admin/login';
   const isEmployeePage = pathname.startsWith('/employee');
+  const isEmployeeAuthPage = pathname === '/employee/login';
 
   // Verify token
   let payload = null;
@@ -32,24 +33,35 @@ export async function proxy(request) {
   let response;
 
   // Route protection
-  if (!payload && (isAdminPage || isEmployeePage)) {
-    response = NextResponse.redirect(new URL('/login', request.url));
-  } else if (payload && isAuthPage) {
-    // If logged in, redirect away from auth pages based on role
-    if (payload.role === 'ADMIN') {
-      response = NextResponse.redirect(new URL('/admin', request.url));
+  if (!payload) {
+    if (isAdminPage && !isAdminAuthPage) {
+      response = NextResponse.redirect(new URL('/admin/login', request.url));
+    } else if (isEmployeePage && !isEmployeeAuthPage) {
+      response = NextResponse.redirect(new URL('/employee/login', request.url));
     } else {
-      response = NextResponse.redirect(new URL('/employee', request.url));
+      response = NextResponse.next({
+        request: {
+          headers: requestHeaders,
+        },
+      });
     }
-  } else if (payload && isAdminPage && payload.role !== 'ADMIN') {
-    response = NextResponse.redirect(new URL('/unauthorized', request.url));
   } else {
-    // Normal routing, inject request ID headers
-    response = NextResponse.next({
-      request: {
-        headers: requestHeaders,
-      },
-    });
+    // Authenticated
+    if (isAdminAuthPage || isEmployeeAuthPage) {
+      if (payload.role === 'ADMIN') {
+        response = NextResponse.redirect(new URL('/admin/dashboard', request.url));
+      } else {
+        response = NextResponse.redirect(new URL('/employee', request.url));
+      }
+    } else if (isAdminPage && payload.role !== 'ADMIN') {
+      response = NextResponse.redirect(new URL('/unauthorized', request.url));
+    } else {
+      response = NextResponse.next({
+        request: {
+          headers: requestHeaders,
+        },
+      });
+    }
   }
 
   // 2. Set the Request ID on response headers
