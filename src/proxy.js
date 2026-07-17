@@ -6,6 +6,11 @@ const JWT_SECRET = new TextEncoder().encode(
 );
 
 export async function proxy(request) {
+  // 1. Generate or read Request ID
+  const reqId = request.headers.get('x-request-id') || crypto.randomUUID();
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set('x-request-id', reqId);
+
   const token = request.cookies.get('token')?.value;
   const { pathname } = request.nextUrl;
 
@@ -24,31 +29,38 @@ export async function proxy(request) {
     }
   }
 
+  let response;
+
   // Route protection
   if (!payload && (isAdminPage || isEmployeePage)) {
-    return NextResponse.redirect(new URL('/login', request.url));
-  }
-
-  if (payload && isAuthPage) {
+    response = NextResponse.redirect(new URL('/login', request.url));
+  } else if (payload && isAuthPage) {
     // If logged in, redirect away from auth pages based on role
     if (payload.role === 'ADMIN') {
-      return NextResponse.redirect(new URL('/admin', request.url));
+      response = NextResponse.redirect(new URL('/admin', request.url));
+    } else {
+      response = NextResponse.redirect(new URL('/employee', request.url));
     }
-    return NextResponse.redirect(new URL('/employee', request.url));
+  } else if (payload && isAdminPage && payload.role !== 'ADMIN') {
+    response = NextResponse.redirect(new URL('/unauthorized', request.url));
+  } else {
+    // Normal routing, inject request ID headers
+    response = NextResponse.next({
+      request: {
+        headers: requestHeaders,
+      },
+    });
   }
 
-  // Role protection
-  if (payload) {
-    if (isAdminPage && payload.role !== 'ADMIN') {
-      return NextResponse.redirect(new URL('/unauthorized', request.url));
-    }
-    // Employee cannot access admin routes (handled above)
-    // Admin can access employee routes (implicitly allowed if we only restrict employee)
-  }
-
-  return NextResponse.next();
+  // 2. Set the Request ID on response headers
+  response.headers.set('x-request-id', reqId);
+  return response;
 }
 
 export const config = {
-  matcher: ['/admin/:path*', '/employee/:path*', '/login', '/register'],
+  // Match all request paths except for static assets to ensure Request ID is globally generated
+  matcher: [
+    '/((?!_next/static|_next/image|favicon.ico).*)',
+  ],
 };
+
