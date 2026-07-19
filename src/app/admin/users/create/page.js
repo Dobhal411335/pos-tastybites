@@ -79,12 +79,6 @@ export default function CreateServerAccountPage() {
                 Generate new employee credentials and server accounts.
               </p>
             </div>
-            <Button variant="outline" asChild className="h-10 px-4 font-semibold text-[15px] gap-2 hover:bg-zinc-50 border-zinc-200 text-zinc-700">
-              <Link href="/admin/dashboard">
-                <ArrowLeft className="w-5 h-5" />
-                Back To Dashboard
-              </Link>
-            </Button>
           </div>
 
           <Card className="shadow-sm border-zinc-200 bg-white overflow-hidden">

@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { toast, Toaster } from "sonner";
 import { PALETTE } from "@/utils/paletteeColor";
@@ -18,9 +20,28 @@ export default function TodayOrderListPage() {
     { id: 3, orderNumber: "ORD-003", amount: 104.99, status: "confirmed" },
   ]);
 
-  const handleConfirm = (id) => {
-    setOrders(orders.map(o => o.id === id ? { ...o, status: "confirmed" } : o));
-    toast.success("Order confirmed!");
+  const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
+  const [selectedOrder, setSelectedOrder] = useState(null);
+  const [guestName, setGuestName] = useState("");
+  const [callNumber, setCallNumber] = useState("");
+  const [tableNo, setTableNo] = useState("");
+
+  const handleConfirmClick = (order) => {
+    setSelectedOrder(order);
+    setIsConfirmModalOpen(true);
+    setGuestName("");
+    setCallNumber("");
+    setTableNo("");
+  };
+
+  const handleFinalConfirm = (e) => {
+    e.preventDefault();
+    if (selectedOrder) {
+      setOrders(orders.map(o => o.id === selectedOrder.id ? { ...o, status: "confirmed" } : o));
+      toast.success("Order confirmed!");
+    }
+    setIsConfirmModalOpen(false);
+    setSelectedOrder(null);
   };
 
   const handleCancel = (id) => {
@@ -114,7 +135,7 @@ export default function TodayOrderListPage() {
                               variant="outline"
                               size="sm"
                               disabled={o.status === 'confirmed'}
-                              onClick={() => handleConfirm(o.id)}
+                              onClick={() => handleConfirmClick(o)}
                               className={`h-8 px-3 text-[12px] font-bold ${o.status === 'confirmed' ? 'opacity-50 cursor-not-allowed border-emerald-200 text-emerald-700 bg-emerald-50/50' : 'border-emerald-200 text-emerald-700 hover:bg-emerald-50 hover:border-emerald-300'}`}
                             >
                               <CheckCircle className="w-3.5 h-3.5 mr-1.5" /> Confirm
@@ -160,6 +181,99 @@ export default function TodayOrderListPage() {
 
         </div>
       </div>
+
+      {/* Final Confirm Modal for Admin */}
+      {isConfirmModalOpen && selectedOrder && (
+        <div className="fixed inset-0 bg-zinc-900/40 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200">
+          <Card className="w-full max-w-md shadow-2xl border-none overflow-hidden bg-white animate-in zoom-in-95 slide-in-from-bottom-4 duration-300">
+            <CardHeader className="bg-zinc-50 border-b border-zinc-100 pb-4 relative">
+              <button 
+                onClick={() => setIsConfirmModalOpen(false)} 
+                className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-full hover:bg-zinc-200 text-zinc-500 transition-colors"
+              >
+                <XCircle className="w-5 h-5" />
+              </button>
+              <CardTitle className="text-[20px] font-bold text-zinc-900">Confirm Order</CardTitle>
+              <CardDescription className="text-[14px]">Finalize details before sending to the kitchen.</CardDescription>
+            </CardHeader>
+
+            <CardContent className="p-6">
+              <div className="flex justify-between items-center bg-blue-50/50 p-3 rounded-lg border border-blue-100 mb-6">
+                <div className="space-y-1">
+                  <span className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider block">Order ID</span>
+                  <span className="font-bold text-[15px] text-zinc-900">{selectedOrder.orderNumber}</span>
+                </div>
+                <div className="text-right space-y-1">
+                  <span className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider block">Date &amp; Time</span>
+                  <span className="font-bold text-[14px] text-zinc-700">{new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                </div>
+              </div>
+
+              <form onSubmit={handleFinalConfirm} className="space-y-5">
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <label className="text-[13px] font-semibold text-zinc-700">Guest Name</label>
+                    <Input 
+                      value={guestName}
+                      onChange={(e) => setGuestName(e.target.value)}
+                      placeholder="e.g. John Doe"
+                      className="bg-white border-zinc-200 h-11 text-[15px] focus:ring-2 focus:ring-[#1e40af]"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-[13px] font-semibold text-zinc-700">Call Number</label>
+                    <Input 
+                      value={callNumber}
+                      onChange={(e) => setCallNumber(e.target.value)}
+                      placeholder="e.g. +1 234 567 8900"
+                      className="bg-white border-zinc-200 h-11 text-[15px] focus:ring-2 focus:ring-[#1e40af]"
+                    />
+                  </div>
+                </div>
+
+                <div className="relative flex items-center py-2">
+                  <div className="grow border-t border-black"></div>
+                  <span className="shrink-0 mx-4 text-black text-[12px] font-semibold uppercase">Or Select Table</span>
+                  <div className="grow border-t border-black"></div>
+                </div>
+
+                <div className="space-y-2">
+                  <Select value={tableNo} onValueChange={setTableNo}>
+                    <SelectTrigger className="w-full bg-white border-zinc-200 h-11 text-[15px] focus:ring-2 focus:ring-[#1e40af]">
+                      <SelectValue placeholder="Assign a table..." />
+                    </SelectTrigger>
+                    <SelectContent className="bg-white">
+                      <SelectItem value="T1">Table 1 (Window)</SelectItem>
+                      <SelectItem value="T2">Table 2 (Center)</SelectItem>
+                      <SelectItem value="T3">Table 3 (Patio)</SelectItem>
+                      <SelectItem value="T4">Table 4 (VIP)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="pt-4 flex gap-3">
+                  <Button 
+                    type="button"
+                    variant="outline"
+                    onClick={() => setIsConfirmModalOpen(false)}
+                    className="flex-1 h-12 font-bold text-zinc-700 border-zinc-200 hover:bg-zinc-50"
+                  >
+                    Cancel
+                  </Button>
+                  <Button 
+                    type="submit"
+                    className="flex-1 h-12 bg-[#1e40af] hover:bg-blue-900 text-white font-bold text-[15px] shadow-md transition-transform hover:scale-[1.02]"
+                  >
+                    Confirm Order
+                  </Button>
+                </div>
+              </form>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
     </div>
   );
 }

@@ -51,10 +51,10 @@ export default function CreateTablePage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-8">
+          <div className="flex flex-col items-center w-full gap-8">
             
             {/* Form Section */}
-            <div className="md:col-span-5 space-y-6">
+            <div className="w-full space-y-6">
               <Card className="shadow-sm border-zinc-200 bg-white overflow-hidden">
                 <CardHeader className="bg-zinc-50/50 border-b border-zinc-100 pb-4">
                   <CardTitle className="text-[18px] font-bold text-zinc-900 flex items-center gap-2">
@@ -89,7 +89,7 @@ export default function CreateTablePage() {
             </div>
 
             {/* Overview Table */}
-            <div className="md:col-span-7">
+            <div className="w-full">
               <Card className="shadow-sm border-zinc-200 bg-white overflow-hidden h-full flex flex-col">
                 <CardHeader className="bg-zinc-50/50 border-b border-zinc-100 pb-4 flex flex-row items-center justify-between gap-4">
                   <CardTitle className="text-[18px] font-bold text-zinc-900 flex items-center gap-2">

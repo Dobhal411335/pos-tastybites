@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import { ArrowLeft, Trash2, Key, Loader2, MoreHorizontal, UserCheck, ShieldCheck, Mail, ShieldAlert } from "lucide-react";
+import { ArrowLeft, Trash2, Key, Loader2, MoreHorizontal, UserCheck, ShieldCheck, Mail, ShieldAlert, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -137,10 +137,10 @@ export default function ListOfServerAccountsPage() {
             </Button>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+          <div className="flex flex-col items-center w-full gap-8">
             
             {/* Action Panel */}
-            <div className="lg:col-span-4 space-y-6">
+            <div className="w-full space-y-6">
               <Card className="shadow-sm border-zinc-200 bg-white overflow-hidden">
                 <CardHeader className="bg-zinc-50/50 border-b border-zinc-100 pb-4">
                   <CardTitle className="text-[18px] font-bold text-zinc-900 flex items-center gap-2">
@@ -185,7 +185,7 @@ export default function ListOfServerAccountsPage() {
             </div>
 
             {/* Users Table */}
-            <div className="lg:col-span-8">
+            <div className="w-full">
               <Card className="shadow-sm border-zinc-200 bg-white overflow-hidden h-full flex flex-col">
                 <CardHeader className="bg-zinc-50/50 border-b border-zinc-100 pb-4 flex flex-row items-center justify-between gap-4">
                   <CardTitle className="text-[18px] font-bold text-zinc-900 flex items-center gap-2">
@@ -283,63 +283,69 @@ export default function ListOfServerAccountsPage() {
 
       {/* Auto Generate Login Modal (Restyled) */}
       {isLoginModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="relative w-full max-w-sm bg-[#F97316] rounded-3xl p-8 shadow-2xl border-4 border-white text-center flex flex-col items-center gap-6 animate-in zoom-in-95 duration-200">
-            {/* Circular black X close button */}
-            <button
-              type="button"
-              onClick={() => setIsLoginModalOpen(false)}
-              className="absolute -top-5 -right-5 h-10 w-10 bg-white text-zinc-950 rounded-full flex items-center justify-center font-black border-4 border-zinc-950 text-lg shadow-md hover:bg-zinc-100 transition-colors z-10"
-            >
-              ×
-            </button>
-            
-            <div className="space-y-2 mt-2">
-              <h3 className="text-[22px] font-black text-white uppercase tracking-wide leading-tight">
-                Generate Login
-              </h3>
-              <p className="text-[12px] text-orange-100 uppercase tracking-widest font-black font-sans opacity-90">
-                &quot;Get Started in a Click.&quot;
-              </p>
-            </div>
-
-            <form onSubmit={handleConfirmLoginCreation} className="w-full space-y-4">
-              <div className="space-y-3">
-                <div className="relative bg-white rounded-xl flex items-center px-4 py-3 border-2 border-zinc-950 shadow-sm">
-                  <input
-                    type="text"
-                    readOnly
-                    value={modalUsername}
-                    className="w-full text-zinc-900 font-bold text-center text-[14px] outline-none bg-transparent"
-                  />
-                </div>
-
-                <div className="relative bg-white rounded-xl flex items-center px-4 py-3 border-2 border-zinc-950 shadow-sm">
-                  <input
-                    type="text"
-                    readOnly
-                    value={modalPassword}
-                    className="w-full text-zinc-900 font-bold text-center text-[14px] outline-none bg-transparent"
-                  />
-                </div>
-              </div>
-
-              <div className="flex items-center justify-center gap-1.5 text-white/90 font-bold text-[11px] pt-1">
-                <ShieldCheck className="w-3.5 h-3.5" /> Password Strength: Strong
-              </div>
-
-              <button
-                type="submit"
-                className="w-full bg-[#1e40af] hover:bg-blue-900 text-white font-black py-4 rounded-xl text-[14px] uppercase tracking-widest shadow-md transition-transform hover:scale-[1.02] mt-2 border-2 border-[#1e40af]"
+        <div className="fixed inset-0 bg-zinc-900/40 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200">
+          <Card className="w-full max-w-sm shadow-2xl border-none overflow-hidden bg-white animate-in zoom-in-95 slide-in-from-bottom-4 duration-300">
+            <CardHeader className="bg-zinc-50 border-b border-zinc-100 pb-4 relative text-center">
+              <button 
+                type="button"
+                onClick={() => setIsLoginModalOpen(false)} 
+                className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-full hover:bg-zinc-200 text-zinc-500 transition-colors"
               >
-                Create Credentials
+                <XCircle className="w-5 h-5" />
               </button>
+              <CardTitle className="text-[20px] font-bold text-zinc-900">Generate Login</CardTitle>
+              <CardDescription className="text-[14px]">Get Started in a Click.</CardDescription>
+            </CardHeader>
 
-              <button type="button" className="text-[11px] font-semibold text-orange-200 underline hover:text-white mt-4 transition-colors">
-                Email these credentials securely
-              </button>
-            </form>
-          </div>
+            <CardContent className="p-6">
+              <form onSubmit={handleConfirmLoginCreation} className="space-y-5">
+                <div className="space-y-4">
+                  <div className="space-y-1.5 text-left">
+                    <label className="text-[13px] font-semibold text-zinc-700">Username</label>
+                    <div className="relative bg-zinc-50 rounded-md border border-zinc-200 px-3 py-2.5">
+                      <input
+                        type="text"
+                        readOnly
+                        value={modalUsername}
+                        className="w-full text-zinc-900 font-bold text-[14px] outline-none bg-transparent"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5 text-left">
+                    <label className="text-[13px] font-semibold text-zinc-700">Generated Password</label>
+                    <div className="relative bg-zinc-50 rounded-md border border-zinc-200 px-3 py-2.5">
+                      <input
+                        type="text"
+                        readOnly
+                        value={modalPassword}
+                        className="w-full text-zinc-900 font-bold text-[14px] outline-none bg-transparent"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-center gap-1.5 text-emerald-600 font-bold text-[12px]">
+                  <ShieldCheck className="w-4 h-4" /> Password Strength: Strong
+                </div>
+
+                <div className="pt-2">
+                  <Button
+                    type="submit"
+                    className="w-full h-12 bg-[#1e40af] hover:bg-blue-900 text-white font-bold text-[15px] shadow-md transition-transform hover:scale-[1.02]"
+                  >
+                    Create Credentials
+                  </Button>
+                </div>
+                
+                <div className="text-center pt-2">
+                  <button type="button" className="text-[13px] font-semibold text-zinc-500 hover:text-[#1e40af] transition-colors underline decoration-zinc-300 hover:decoration-[#1e40af]">
+                    Email these credentials securely
+                  </button>
+                </div>
+              </form>
+            </CardContent>
+          </Card>
         </div>
       )}
 

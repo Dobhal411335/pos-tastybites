@@ -2,13 +2,15 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, PackagePlus, PlusCircle, Receipt, ClipboardList, TrendingUp } from "lucide-react";
+import { ArrowLeft, PackagePlus, PlusCircle, Receipt, ClipboardList, TrendingUp, CalendarClock, Eye, Badge, MoreHorizontal, Edit, Trash } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast, Toaster } from "sonner";
 import { PALETTE } from "@/utils/paletteeColor";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 export default function StockInPage() {
   const [formData, setFormData] = useState({
@@ -22,6 +24,11 @@ export default function StockInPage() {
     tax: "",
     invoiceAmount: "",
   });
+  const [searchMenuHead, setSearchMenuHead] = useState("");
+  const [stockOuts, setStockOuts] = useState([
+    { id: 1, name: "Tomato", stock: "45", log: "View", type: "Raw", measure: "kg", status: "Active" },
+    { id: 2, name: "Milk", stock: "12", log: "View", type: "Liquid", measure: "L", status: "Active" },
+  ]);
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -56,10 +63,10 @@ export default function StockInPage() {
 
           </div>
 
-          <form onSubmit={handleCreate} className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+          <form onSubmit={handleCreate} className="flex flex-col items-center w-full gap-8">
 
             {/* Main Form Section */}
-            <div className="lg:col-span-8 space-y-6">
+            <div className="space-y-6 w-full">
 
               {/* Product Details Card */}
               <Card className="shadow-sm border-zinc-200 bg-white overflow-hidden">
@@ -177,69 +184,169 @@ export default function StockInPage() {
                 </CardContent>
               </Card>
 
-            </div>
+              {/* Sidebar Invoice & Save Section */}
+              <div className="space-y-6">
 
-            {/* Sidebar Invoice & Save Section */}
-            <div className="lg:col-span-4 space-y-6">
-
-              <Card className="shadow-sm border-zinc-200 bg-white overflow-hidden">
-                <CardHeader className="bg-zinc-50/50 border-b border-zinc-100 pb-4">
-                  <CardTitle className="text-[18px] font-bold text-zinc-900 flex items-center gap-2">
-                    <Receipt className="w-5 h-5 text-[#1e40af]" /> Purchase Invoice
-                  </CardTitle>
-                  <CardDescription className="text-[14px]">Optional invoice documentation.</CardDescription>
-                </CardHeader>
-                <CardContent className="p-6 space-y-4">
-                  <div className="space-y-2">
-                    <label className="text-[14px] font-semibold text-zinc-900">Invoice Number</label>
-                    <Input
-                      type="text"
-                      name="invoiceNumber"
-                      placeholder="e.g. INV-2026-892"
-                      value={formData.invoiceNumber}
-                      onChange={handleChange}
-                      className="h-11 text-[15px] bg-white border-zinc-200 focus:ring-[#F97316] uppercase font-mono"
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
+                <Card className="shadow-sm border-zinc-200 bg-white overflow-hidden">
+                  <CardHeader className="bg-zinc-50/50 border-b border-zinc-100 pb-4">
+                    <CardTitle className="text-[18px] font-bold text-zinc-900 flex items-center gap-2">
+                      <Receipt className="w-5 h-5 text-[#1e40af]" /> Purchase Invoice
+                    </CardTitle>
+                    <CardDescription className="text-[14px]">Optional invoice documentation.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="p-6 space-y-4">
                     <div className="space-y-2">
-                      <label className="text-[14px] font-semibold text-zinc-900">Tax ($)</label>
+                      <label className="text-[14px] font-semibold text-zinc-900">Invoice Number</label>
                       <Input
-                        type="number"
-                        step="0.01"
-                        name="tax"
-                        placeholder="0.00"
-                        value={formData.tax}
+                        type="text"
+                        name="invoiceNumber"
+                        placeholder="e.g. INV-2026-892"
+                        value={formData.invoiceNumber}
                         onChange={handleChange}
-                        className="h-11 text-[15px] bg-white border-zinc-200 focus:ring-[#F97316]"
+                        className="h-11 text-[15px] bg-white border-zinc-200 focus:ring-[#F97316] uppercase font-mono"
                       />
                     </div>
-                    <div className="space-y-2">
-                      <label className="text-[14px] font-semibold text-zinc-900">Amount ($)</label>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        name="invoiceAmount"
-                        placeholder="0.00"
-                        value={formData.invoiceAmount}
-                        onChange={handleChange}
-                        className="h-11 text-[15px] bg-white border-zinc-200 focus:ring-[#F97316]"
-                      />
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <label className="text-[14px] font-semibold text-zinc-900">Tax ($)</label>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          name="tax"
+                          placeholder="0.00"
+                          value={formData.tax}
+                          onChange={handleChange}
+                          className="h-11 text-[15px] bg-white border-zinc-200 focus:ring-[#F97316]"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[14px] font-semibold text-zinc-900">Amount ($)</label>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          name="invoiceAmount"
+                          placeholder="0.00"
+                          value={formData.invoiceAmount}
+                          onChange={handleChange}
+                          className="h-11 text-[15px] bg-white border-zinc-200 focus:ring-[#F97316]"
+                        />
+                      </div>
                     </div>
-                  </div>
-                </CardContent>
-              </Card>
+                  </CardContent>
+                </Card>
 
-              <Button
-                type="submit"
-                className="w-full h-14 text-[16px] font-bold text-white transition-transform hover:scale-[1.02] shadow-md"
-                style={{ backgroundColor: "#1e40af" }}
-              >
-                Submit Stock Entry
-              </Button>
+                <Button
+                  type="submit"
+                  className="w-full h-14 text-[16px] font-bold text-white transition-transform hover:scale-[1.02] shadow-md"
+                  style={{ backgroundColor: "#1e40af" }}
+                >
+                  Submit Stock Entry
+                </Button>
+              </div>
+
             </div>
 
           </form>
+
+          {/* Overview Table */}
+          <Card className="shadow-sm border-zinc-200 bg-white overflow-hidden mt-8">
+            <CardHeader className="bg-zinc-50/50 border-b border-zinc-100 pb-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="flex-1 w-full max-w-sm">
+                <Select value={searchMenuHead} onValueChange={setSearchMenuHead}>
+                  <SelectTrigger className="w-full h-10 text-[14px] bg-white border-zinc-200 focus:ring-2 focus:ring-[#F97316]">
+                    <SelectValue placeholder="Search Menu Head" />
+                  </SelectTrigger>
+                  <SelectContent style={{ backgroundColor: PALETTE.canvas }}>
+                    <SelectItem value="all">All Categories</SelectItem>
+                    <SelectItem value="Produce">Produce</SelectItem>
+                    <SelectItem value="Dairy">Dairy</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="text-[13px] font-semibold text-zinc-500 flex items-center gap-2">
+                <CalendarClock className="w-4 h-4" />
+                Current Date Status
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader className="bg-zinc-50">
+                  <TableRow>
+                    <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6">Product Name</TableHead>
+                    <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6 text-center">Stock</TableHead>
+                    <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6 text-center">Log</TableHead>
+                    <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6 text-center">Type</TableHead>
+                    <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6 text-center">Measure</TableHead>
+                    <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6 text-center">Status</TableHead>
+                    <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6 text-center">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {stockOuts.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={7} className="h-24 text-center text-zinc-500 text-[14px]">No records found.</TableCell>
+                    </TableRow>
+                  ) : (
+                    stockOuts.map((s) => (
+                      <TableRow key={s.id} className="h-16 hover:bg-zinc-50 transition-colors">
+                        <TableCell className="px-6">
+                          <span className="font-semibold text-[15px] text-zinc-900">{s.name}</span>
+                        </TableCell>
+                        <TableCell className="px-6 text-center">
+                          <span className="inline-flex items-center justify-center bg-zinc-100 text-zinc-700 px-3 py-1 rounded-md text-[14px] font-bold border border-zinc-200">
+                            {s.stock}
+                          </span>
+                        </TableCell>
+                        <TableCell className="px-6 text-center">
+                          <button type="button" className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 hover:underline text-[13px] font-semibold">
+                            <Eye className="w-3.5 h-3.5" /> {s.log}
+                          </button>
+                        </TableCell>
+                        <TableCell className="px-6 text-center text-[14px] font-semibold text-zinc-700">
+                          {s.type}
+                        </TableCell>
+                        <TableCell className="px-6 text-center text-[13px] font-bold text-zinc-500 uppercase">
+                          {s.measure}
+                        </TableCell>
+                        <TableCell className="px-6 text-center">
+                          {s.status === "Active" ? (
+                            <Badge className="bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border-none px-2.5 py-1 text-[13px] font-semibold">
+                              Active
+                            </Badge>
+                          ) : (
+                            <Badge className="bg-red-50 text-red-600 hover:bg-red-100 border-none px-2.5 py-1 text-[13px] font-semibold">
+                              Inactive
+                            </Badge>
+                          )}
+                        </TableCell>
+                        <TableCell className="px-6 text-center">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-8 w-8 border text-zinc-500 hover:text-zinc-900 cursor-pointer">
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-40 bg-white">
+                              <DropdownMenuItem className="text-[14px] font-medium cursor-pointer">
+                                <Edit className="mr-2 h-4 w-4" /> Edit Record
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                className="text-[14px] font-medium text-red-600 focus:bg-red-500 focus:text-white cursor-pointer"
+                                onClick={() => handleDelete(s.id)}
+                              >
+                                <Trash className="mr-2 h-4 w-4" /> Delete
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+
 
         </div>
       </div>

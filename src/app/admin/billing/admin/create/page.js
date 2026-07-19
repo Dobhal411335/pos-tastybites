@@ -69,10 +69,10 @@ export default function CreateOrderPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 xl:grid-cols-12 gap-8">
+          <div className="flex flex-col gap-8">
             
             {/* Left Column: Menu Selection */}
-            <div className="xl:col-span-5 space-y-6">
+            <div className="space-y-6">
               <Card className="shadow-sm border-zinc-200 bg-white overflow-hidden h-full flex flex-col">
                 <CardHeader className="bg-zinc-50/50 border-b border-zinc-100 pb-4 flex flex-row items-center justify-between gap-4">
                   <div className="flex items-center gap-2">
@@ -84,7 +84,7 @@ export default function CreateOrderPage() {
                       <SelectTrigger className="h-9 text-[13px] bg-white border-zinc-200 focus:ring-2 focus:ring-[#F97316]">
                         <SelectValue placeholder="All Items" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="bg-white">
                         <SelectItem value="all">All Items</SelectItem>
                         <SelectItem value="Pizza">Pizza</SelectItem>
                         <SelectItem value="Pasta">Pasta</SelectItem>
@@ -138,8 +138,8 @@ export default function CreateOrderPage() {
               </Card>
             </div>
 
-            {/* Right Column: Cart & Billing */}
-            <div className="xl:col-span-7 space-y-6">
+            {/*Cart & Billing */}
+            <div className="space-y-6">
               
               {/* Cart Table */}
               <Card className="shadow-sm border-zinc-200 bg-white overflow-hidden">
@@ -236,19 +236,19 @@ export default function CreateOrderPage() {
                 </Card>
 
                 {/* Totals & Checkout */}
-                <Card className="shadow-sm border-zinc-200 bg-zinc-900 text-white overflow-hidden flex flex-col">
+                <Card className="shadow-sm border-zinc-200 bg-zinc-100 text-white overflow-hidden flex flex-col">
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-[18px] font-bold flex items-center gap-2">
+                    <CardTitle className="text-[18px] text-black font-bold flex items-center gap-2">
                       <Receipt className="w-5 h-5 text-[#F97316]" /> Order Summary
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="p-6 flex-1 flex flex-col justify-between space-y-6">
                     <div className="space-y-3 border-b border-zinc-700 pb-4">
-                      <div className="flex justify-between items-center text-[14px] text-zinc-300 font-medium">
+                      <div className="flex justify-between items-center text-[14px] text-black font-medium">
                         <span>Subtotal</span>
                         <span>${totalAmount.toFixed(2)}</span>
                       </div>
-                      <div className="flex justify-between items-center text-[14px] text-zinc-300 font-medium">
+                      <div className="flex justify-between items-center text-[14px] text-black font-medium">
                         <span>Tax & Fees</span>
                         <span>${totalTax.toFixed(2)}</span>
                       </div>

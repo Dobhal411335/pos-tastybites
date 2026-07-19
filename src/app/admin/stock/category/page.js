@@ -58,42 +58,49 @@ export default function StockCategoryPage() {
 
           <form onSubmit={handleCreate} className="grid grid-cols-1 lg:grid-cols-12 gap-8">
             {/* Form Section */}
-            <div className="lg:col-span-8 space-y-6">
-              <Card className="shadow-sm border-zinc-200 bg-white overflow-hidden">
-                <CardHeader className="bg-zinc-50/50 border-b border-zinc-100 pb-4">
-                  <CardTitle className="text-[18px] font-bold text-zinc-900">Add New Category</CardTitle>
-                  <CardDescription className="text-[14px]">Create a new organizational category for stock tracking.</CardDescription>
+            <div className="lg:col-span-8">
+              <Card className="overflow-hidden border-zinc-200 bg-white shadow-sm">
+                <CardHeader className="border-b border-zinc-100 bg-zinc-50/50">
+                  <CardTitle className="text-lg font-semibold text-zinc-900">
+                    Add New Category
+                  </CardTitle>
+                  <CardDescription>
+                    Create a new organizational category for stock tracking.
+                  </CardDescription>
                 </CardHeader>
+
                 <CardContent className="p-6">
-                  <div className="space-y-2">
-                    <label className="text-[14px] font-semibold text-zinc-900">
-                      Stock Menu Head <span className="text-red-500">*</span>
-                    </label>
-                    <div className="relative">
-                      <LayoutList className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-400" />
-                      <Input
-                        type="text"
-                        placeholder="e.g. Beverages, Seafood, Packaging..."
-                        value={menuHead}
-                        onChange={(e) => setMenuHead(e.target.value)}
-                        className="pl-10 h-11 text-[16px] bg-white border-zinc-200 focus:ring-[#12A594]"
-                      />
+                  <div className="flex flex-col gap-5 lg:flex-row lg:items-end">
+                    <div className="flex-1 space-y-2">
+                      <label className="text-sm font-semibold text-zinc-900">
+                        Stock Menu Head <span className="text-red-500">*</span>
+                      </label>
+
+                      <div className="relative">
+                        <LayoutList className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-zinc-400" />
+
+                        <Input
+                          type="text"
+                          placeholder="e.g. Beverages, Seafood, Packaging..."
+                          value={menuHead}
+                          onChange={(e) => setMenuHead(e.target.value)}
+                          className="h-11 pl-10"
+                        />
+                      </div>
                     </div>
+
+                    <Button
+                      type="submit"
+                      className="h-11 px-8 font-semibold text-white lg:shrink-0"
+                      style={{ backgroundColor: "#1e40af" }}
+                    >
+                      Create Category
+                    </Button>
                   </div>
                 </CardContent>
               </Card>
             </div>
 
-            {/* Sidebar Save Section */}
-            <div className="lg:col-span-4 flex flex-col justify-end">
-              <Button
-                type="submit"
-                className="w-full h-12 text-[15px] font-bold text-white transition-transform hover:scale-[1.02] shadow-md"
-                style={{ backgroundColor: "#1e40af" }}
-              >
-                Create Category
-              </Button>
-            </div>
           </form>
 
           {/* Overview Table */}

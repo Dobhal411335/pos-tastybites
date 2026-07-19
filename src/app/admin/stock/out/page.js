@@ -68,9 +68,9 @@ export default function StockOutPage() {
 
           </div>
 
-          <form onSubmit={handleCreate} className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+          <form onSubmit={handleCreate} className="flex flex-col items-center w-full gap-8">
             {/* Form Section */}
-            <div className="lg:col-span-8 space-y-6">
+            <div className="space-y-6 w-full">
 
               <Card className="shadow-sm border-zinc-200 bg-white overflow-hidden">
                 <CardHeader className="bg-zinc-50/50 border-b border-zinc-100 pb-4">
@@ -185,10 +185,8 @@ export default function StockOutPage() {
                 </CardContent>
               </Card>
 
-            </div>
-
             {/* Sidebar Save Section */}
-            <div className="lg:col-span-4 flex flex-col justify-end pb-[72px]">
+            <div className="flex flex-col justify-end">
               <Button
                 type="submit"
                 className="w-full h-14 text-[16px] font-bold text-white transition-transform hover:scale-[1.02] shadow-md"
@@ -196,6 +194,8 @@ export default function StockOutPage() {
               >
                 Balance Stock
               </Button>
+            </div>
+
             </div>
           </form>
 
