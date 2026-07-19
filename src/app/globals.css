@@ -1,13 +1,14 @@
 @import "tailwindcss";
 
 :root {
-  --background: #F9F9FB;
-  --foreground: #1A1D20;
-  --primary: #0F6B7A;
-  --primary-hover: #0b505c;
-  --accent: #12A594;
-  --accent-hover: #0e8274;
-  --border: #E8EBEF;
+  --background: #FAFAFA;
+  --foreground: #18181B;
+  --primary: #F97316;
+  --primary-hover: #EA580C;
+  --accent: #F97316;
+  --accent-hover: #EA580C;
+  --border: #E5E7EB;
+  --muted: #71717A;
 }
 
 @theme inline {
@@ -24,9 +25,12 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-h1, h2, h3, .font-serif-menu {
-  font-family: Georgia, Cambria, "Times New Roman", Times, serif;
+/* Tabular numerals for prices, totals, quantities */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
 }

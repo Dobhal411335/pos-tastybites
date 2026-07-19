@@ -6,6 +6,7 @@ import TopNavbar from "@/components/layout/TopNavbar";
 import ModuleSidebar from "@/components/layout/ModuleSidebar";
 import { Loader2 } from "lucide-react";
 import { Toaster } from "sonner";
+import { FooterBar } from "@/components/layout/FooterBar";
 
 export default function GuestsModuleLayout({ children }) {
   const router = useRouter();
@@ -46,7 +47,7 @@ export default function GuestsModuleLayout({ children }) {
   return (
     <div className="min-h-screen bg-[#FAF9F6] flex flex-col antialiased text-[#1F2937] font-sans">
       <Toaster position="top-right" richColors />
-      
+
       <TopNavbar
         adminName={adminUser?.name}
         onMenuToggle={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -72,6 +73,8 @@ export default function GuestsModuleLayout({ children }) {
           </div>
         </main>
       </div>
+      <FooterBar />
+
     </div>
   );
 }

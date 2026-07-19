@@ -6,6 +6,7 @@ import TopNavbar from "@/components/layout/TopNavbar";
 import ModuleSidebar from "@/components/layout/ModuleSidebar";
 import { Loader2 } from "lucide-react";
 import { Toaster } from "sonner";
+import { FooterBar } from "@/components/layout/FooterBar";
 
 export default function MenuModuleLayout({ children }) {
   const router = useRouter();
@@ -42,7 +43,6 @@ export default function MenuModuleLayout({ children }) {
       items: [
         { label: "Menu Category", href: "/admin/menu/categories" },
         { label: "Create Product", href: "/admin/menu/products" },
-        { label: "Product Detail", href: "/admin/menu/details" },
         { label: "Create Festive Offer", href: "/admin/menu/offers" },
       ],
     },
@@ -87,12 +87,14 @@ export default function MenuModuleLayout({ children }) {
         )}
 
         {/* Right Content Viewport */}
-        <main className="flex-1 overflow-y-auto p-6 sm:p-8 md:p-12">
-          <div className="mx-auto max-w-5xl bg-white border border-[#ECECEC] p-6 sm:p-10 rounded-xl shadow-xs min-h-[500px]">
+        <main className="flex-1 overflow-y-auto p-8">
+          <div className="mx-auto max-w-6xl bg-white border border-[#ECECEC] p-6 sm:p-10 rounded-xl shadow-xs min-h-[500px]">
             {children}
           </div>
         </main>
       </div>
+
+      <FooterBar/>
     </div>
   );
 }

@@ -1,20 +1,47 @@
 "use client";
 
 import React, { useState } from "react";
-import { Edit, Trash2, CheckCircle2, XCircle } from "lucide-react";
+import { useRouter } from "next/navigation";
+import {
+  Search,
+  Plus,
+  MoreHorizontal,
+  ArrowUpDown,
+  ChevronLeft,
+  ChevronRight,
+  LogOut,
+  LayoutGrid,
+  Edit,
+  Trash
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { toast } from "sonner";
+import { Card, CardContent, CardHeader, CardFooter } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Badge } from "@/components/ui/badge";
+import { toast, Toaster } from "sonner";
+import { PALETTE } from "@/utils/paletteeColor"
 
 export default function MenuCategoriesPage() {
+  const router = useRouter();
+
   const [categories, setCategories] = useState([
-    { id: 1, name: "Starters & Appetizers", active: true },
-    { id: 2, name: "Gourmet Hamburgers", active: true },
-    { id: 3, name: "Wood-Fired Pizzas", active: true },
-    { id: 4, name: "Seasonal Desserts", active: true },
-    { id: 5, name: "Premium Cocktails & Drinks", active: false },
+    { id: 1, name: "Starters & Appetizers", items: 12, status: "Active" },
+    { id: 2, name: "Gourmet Hamburgers", items: 8, status: "Active" },
+    { id: 3, name: "Wood-Fired Pizzas", items: 15, status: "Active" },
+    { id: 4, name: "Seasonal Desserts", items: 6, status: "Active" },
+    { id: 5, name: "Premium Cocktails & Drinks", items: 24, status: "Inactive" },
+    { id: 6, name: "Starters & Appetizers", items: 12, status: "Active" },
+    { id: 7, name: "Gourmet Hamburgers", items: 8, status: "Active" },
+    { id: 8, name: "Wood-Fired Pizzas", items: 15, status: "Active" },
+    { id: 9, name: "Seasonal Desserts", items: 6, status: "Active" },
+    { id: 10, name: "Premium Cocktails & Drinks", items: 24, status: "Inactive" },
   ]);
-  
+
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
 
   const handleCreateCategory = (e) => {
@@ -23,25 +50,18 @@ export default function MenuCategoriesPage() {
       toast.error("Please enter a category name.");
       return;
     }
-    
+
     const newCat = {
       id: Date.now(),
       name: newCategoryName.trim(),
-      active: true,
+      items: 0,
+      status: "Active",
     };
-    
+
     setCategories([...categories, newCat]);
     setNewCategoryName("");
+    setIsAddDialogOpen(false);
     toast.success("Category created successfully!");
-  };
-
-  const handleToggleStatus = (id) => {
-    setCategories(
-      categories.map((cat) =>
-        cat.id === id ? { ...cat, active: !cat.active } : cat
-      )
-    );
-    toast.info("Category status updated.");
   };
 
   const handleDeleteCategory = (id) => {
@@ -49,113 +69,174 @@ export default function MenuCategoriesPage() {
     toast.success("Category deleted successfully.");
   };
 
+  const filteredCategories = categories.filter(c =>
+    c.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
   return (
-    <div className="space-y-8 font-sans">
-      
-      {/* Page Header */}
-      <div className="space-y-1">
-        <h2 className="text-xl font-bold tracking-tight text-zinc-900 font-serif">
-          Create Menu Category
-        </h2>
-        <p className="text-xs text-zinc-400 font-light">
-          Add or manage your restaurant menu sections
-        </p>
+    <div className="flex flex-col" style={{ backgroundColor: PALETTE.canvas, color: PALETTE.ink }}>
+      <Toaster position="top-right" richColors />
+      {/* MAIN CONTENT AREA */}
+      <div className="flex-1 flex overflow-hidden">
+        {/* PAGE CONTENT */}
+        <main className="flex-1 overflow-y-auto p-8">
+          <div className="max-w-[1800px] mx-auto space-y-8">
+
+            {/* Page Header */}
+            <div className="flex items-end justify-between">
+              <div>
+                <h1 className="text-[32px] font-bold leading-tight" style={{ color: PALETTE.ink }}>
+                  Menu Categories
+                </h1>
+                <p className="text-[15px] mt-1" style={{ color: PALETTE.inkMuted }}>
+                  Manage the sections of your menu where products are assigned.
+                </p>
+              </div>
+
+              <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button className="h-10 px-4 font-semibold text-[15px] gap-2 transition-transform hover:scale-[1.02]" style={{ backgroundColor: PALETTE.accent, color: "white" }}>
+                    <Plus className="w-5 h-5" />
+                    Add Category
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-[425px]">
+                  <form onSubmit={handleCreateCategory}>
+                    <DialogHeader>
+                      <DialogTitle className="text-[22px] font-bold">Add Category</DialogTitle>
+                      <DialogDescription className="text-[15px]">
+                        Create a new category to group related menu items.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="py-6">
+                      <div className="space-y-2">
+                        <label className="text-[14px] font-semibold" style={{ color: PALETTE.ink }}>
+                          Category Name <span className="text-red-500">*</span>
+                        </label>
+                        <Input
+                          autoFocus
+                          placeholder="e.g. Signature Burgers"
+                          className="h-11 text-[16px]"
+                          value={newCategoryName}
+                          onChange={(e) => setNewCategoryName(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                    <DialogFooter>
+                      <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)} className="h-11 hover:bg-red-600 hover:text-white px-6 font-semibold cursor-pointer">
+                        Cancel
+                      </Button>
+                      <Button type="submit" className="h-11 px-6 font-semibold cursor-pointer" style={{ backgroundColor: PALETTE.accent, color: "white" }}>
+                        Save Category
+                      </Button>
+                    </DialogFooter>
+                  </form>
+                </DialogContent>
+              </Dialog>
+            </div>
+
+            {/* Table Card */}
+            <Card className="bg-white border-0 rounded-xl overflow-hidden" style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.06)", border: `1px solid ${PALETTE.border}` }}>
+
+              {/* Toolbar */}
+              <CardHeader className="px-6 py-5 border-b" style={{ borderColor: PALETTE.border, paddingBottom: "1.25rem" }}>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div className="relative w-full sm:w-80">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+                    <Input
+                      placeholder="Search categories..."
+                      className="h-10 pl-9 bg-zinc-50 border-zinc-200 text-[14px]"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                    />
+                  </div>
+                </div>
+              </CardHeader>
+
+              {/* Table */}
+              <Table>
+                <TableHeader className="bg-zinc-50 sticky top-0 z-10 border-b border-zinc-200">
+                  <TableRow className="hover:bg-transparent">
+                    <TableHead className="w-[45%] text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6">
+                      Category Name <ArrowUpDown className="inline w-3 h-3 ml-1" />
+                    </TableHead>
+                    <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6">
+                      Status
+                    </TableHead>
+                    <TableHead className="text-right text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6">
+                      Actions
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredCategories.length > 0 ? (
+                    filteredCategories.map((cat) => (
+                      <TableRow key={cat.id} className="h-16 hover:bg-zinc-50 transition-colors">
+                        <TableCell className="px-6 font-semibold text-[15px] text-zinc-900">
+                          {cat.name}
+                        </TableCell>
+                        <TableCell className="px-6">
+                          {cat.status === "Active" ? (
+                            <Badge className="bg-emerald-50 text-emerald-700 hover:bg-emerald-50 border-none px-2.5 py-1 text-[13px] font-semibold">
+                              Active
+                            </Badge>
+                          ) : (
+                            <Badge className="bg-zinc-100 text-zinc-600 hover:bg-zinc-100 border-none px-2.5 py-1 text-[13px] font-semibold">
+                              Inactive
+                            </Badge>
+                          )}
+                        </TableCell>
+                        <TableCell className="px-6 text-right">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-8 w-8 text-zinc-500 hover:text-zinc-900 border cursor-pointer">
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-40 bg-white">
+                              <DropdownMenuItem className="text-[14px] font-medium cursor-pointer">
+                              <Edit/>  Edit Category
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                className="text-[14px] font-medium text-red-600 focus:bg-red-500 focus:text-white cursor-pointer"
+                                onClick={() => handleDeleteCategory(cat.id)}
+                              >
+                              <Trash/>  Delete
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  ) : (
+                    <TableRow>
+                      <TableCell colSpan={4} className="h-32 text-center text-zinc-500 text-[15px]">
+                        No categories found matching &quot;{searchQuery}&quot;
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+
+              {/* Pagination */}
+              <CardFooter className="px-6 py-4 border-t border-zinc-200 bg-zinc-50 flex items-center justify-between">
+                <span className="text-[14px] text-zinc-500 font-medium">
+                  Showing {filteredCategories.length} of {categories.length} categories
+                </span>
+                <div className="flex items-center gap-1">
+                  <Button variant="outline" size="icon" className="h-8 w-8 text-zinc-400" disabled>
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <Button variant="outline" size="icon" className="h-8 w-8 text-zinc-400" disabled>
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </CardFooter>
+            </Card>
+
+          </div>
+        </main>
       </div>
-
-      {/* Create Category Form */}
-      <form onSubmit={handleCreateCategory} className="space-y-4 max-w-md">
-        <div className="space-y-2">
-          <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest block">
-            Category Name
-          </label>
-          <Input
-            type="text"
-            placeholder="Type Here"
-            value={newCategoryName}
-            onChange={(e) => setNewCategoryName(e.target.value)}
-            className="bg-white border-zinc-200 rounded-[10px] h-11 focus:ring-[#F97316] text-sm"
-          />
-        </div>
-        
-        <Button
-          type="submit"
-          className="bg-[#F97316] hover:bg-[#e06510] text-white rounded-[10px] px-8 py-5 text-xs font-bold uppercase tracking-widest"
-        >
-          Create Menu
-        </Button>
-      </form>
-
-      {/* Categories Table */}
-      <div className="space-y-4">
-        <h3 className="text-xs font-extrabold uppercase tracking-widest text-[#6B7280]">
-          Active Categories
-        </h3>
-        
-        <div className="overflow-x-auto border border-[#ECECEC] rounded-[12px] overflow-hidden">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-blue-800 text-white uppercase text-[9px] tracking-widest font-black">
-                <th className="p-4 font-black">Menu Head Name</th>
-                <th className="p-4 font-black text-center w-24">Edit</th>
-                <th className="p-4 font-black text-center w-28">Status</th>
-                <th className="p-4 font-black text-center w-24">Delete</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#ECECEC] bg-white text-xs text-zinc-800">
-              {categories.map((cat, index) => (
-                <tr
-                  key={cat.id}
-                  className={index % 2 === 0 ? "bg-white" : "bg-zinc-50"}
-                >
-                  <td className="p-4 font-bold text-zinc-900">{cat.name}</td>
-                  
-                  {/* Edit Action */}
-                  <td className="p-4 text-center">
-                    <button className="text-zinc-500 hover:text-blue-600 transition-colors p-1">
-                      <Edit className="h-4 w-4 mx-auto" />
-                    </button>
-                  </td>
-
-                  {/* Status Toggle */}
-                  <td className="p-4 text-center">
-                    <button
-                      onClick={() => handleToggleStatus(cat.id)}
-                      className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-[10px] text-[9px] font-black uppercase tracking-wider transition-all ${
-                        cat.active
-                          ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
-                          : "bg-red-50 text-red-700 hover:bg-red-100"
-                      }`}
-                    >
-                      {cat.active ? (
-                        <>
-                          <CheckCircle2 className="h-3 w-3" />
-                          <span>Active</span>
-                        </>
-                      ) : (
-                        <>
-                          <XCircle className="h-3 w-3" />
-                          <span>Inactive</span>
-                        </>
-                      )}
-                    </button>
-                  </td>
-
-                  {/* Delete Action */}
-                  <td className="p-4 text-center">
-                    <button
-                      onClick={() => handleDeleteCategory(cat.id)}
-                      className="text-zinc-400 hover:text-red-500 transition-colors p-1"
-                    >
-                      <Trash2 className="h-4 w-4 mx-auto" />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-      
     </div>
   );
 }

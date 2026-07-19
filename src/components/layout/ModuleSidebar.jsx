@@ -56,7 +56,7 @@ export default function ModuleSidebar({ groups = [] }) {
                     }`}
                   />
 
-                  <span className="text-sm font-semibold text-zinc-800">
+                  <span className="text-base font-semibold text-zinc-800">
                     {group.title}
                   </span>
                 </div>
@@ -80,7 +80,7 @@ export default function ModuleSidebar({ groups = [] }) {
                       <Link
                         key={index}
                         href={item.href}
-                        className={`group mx-2 mb-1 flex items-center justify-between rounded-lg px-4 py-3 text-sm transition-all duration-200 ${
+                        className={`group mx-2 mb-1 flex items-center justify-between rounded-lg px-4 py-3 text-base transition-all duration-200 ${
                           active
                             ? "bg-orange-50 text-orange-600 font-semibold"
                             : "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900"

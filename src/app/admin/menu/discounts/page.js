@@ -2,10 +2,27 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Trash2, Edit, CheckCircle2, ArrowUpDown } from "lucide-react";
+import { ArrowLeft, Trash2, CheckCircle2, ArrowUpDown, MoreHorizontal, Tag, FolderTree, Package, Edit, Trash } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { toast } from "sonner";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { toast, Toaster } from "sonner";
+import { PALETTE } from "@/utils/paletteeColor";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  RadioGroup,
+  RadioGroupItem,
+} from "@/components/ui/radio-group";
 
+import { Label } from "@/components/ui/label";
 export default function ApplyDiscountsPage() {
   const [appliedDiscounts, setAppliedDiscounts] = useState([
     { id: 1, code: "TASTY15", targetType: "Category", targetName: "Gourmet Hamburgers", active: true },
@@ -15,7 +32,7 @@ export default function ApplyDiscountsPage() {
   const [selectedCode, setSelectedCode] = useState("TASTY15");
   const [selectedMenuCategory, setSelectedMenuCategory] = useState("Gourmet Hamburgers");
   const [selectedProduct, setSelectedProduct] = useState("Spicy Garlic Shrimp");
-  
+
   // Decide whether to apply to category or product
   const [targetMode, setTargetMode] = useState("Category"); // 'Category' or 'Product'
 
@@ -23,7 +40,7 @@ export default function ApplyDiscountsPage() {
     e.preventDefault();
 
     const targetName = targetMode === "Category" ? selectedMenuCategory : selectedProduct;
-    
+
     // Check duplication
     const duplicate = appliedDiscounts.some(
       (d) => d.code === selectedCode && d.targetType === targetMode && d.targetName === targetName
@@ -52,169 +69,297 @@ export default function ApplyDiscountsPage() {
   };
 
   return (
-    <div className="space-y-8 font-sans max-w-5xl">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 border-b border-zinc-100 pb-5">
-        <div className="space-y-1">
-          <h2 className="text-xl font-bold tracking-tight text-zinc-900 font-serif">
-            Apply Coupon to Menu / Products
-          </h2>
-          <p className="text-xs text-zinc-400">
-            Map active discount codes to entire menu categories or select standalone products.
-          </p>
-        </div>
-        <Link href="/admin/menu/products">
-          <Button className="bg-[#B91C1C] hover:bg-red-700 text-white rounded-[10px] flex items-center gap-1.5 py-5 px-6 font-bold text-xs uppercase tracking-wider">
-            <ArrowLeft className="h-4 w-4" />
-            <span>Back To Products</span>
-          </Button>
-        </Link>
-      </div>
+    <div className="flex flex-col overflow-hidden min-h-screen" style={{ backgroundColor: PALETTE.canvas, color: PALETTE.ink }}>
+      <Toaster position="top-right" richColors />
 
-      {/* Form Card */}
-      <form onSubmit={handleApplyCoupon} className="space-y-5 bg-zinc-50/50 p-6 rounded-xl border border-zinc-200 max-w-2xl">
-        
-        {/* Select Discount Offer Coupon Code */}
-        <div className="space-y-2">
-          <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest block">
-            Select Discount Offer Coupon Code
-          </label>
-          <select
-            value={selectedCode}
-            onChange={(e) => setSelectedCode(e.target.value)}
-            className="w-full bg-white border border-zinc-200 rounded-[10px] h-11 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#F97316] font-mono font-bold"
-          >
-            <option value="TASTY15">TASTY15 (15% OFF)</option>
-            <option value="WELCOME5">WELCOME5 ($5.00 OFF)</option>
-          </select>
-        </div>
+      <div className="flex-1 overflow-y-auto p-8">
+        <div className="max-w-[1200px] mx-auto space-y-8 pb-16 font-sans">
 
-        {/* Target selection Mode toggle */}
-        <div className="space-y-2">
-          <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest block">
-            Apply Target Selection
-          </label>
-          <div className="flex gap-4">
-            <button
-              type="button"
-              onClick={() => setTargetMode("Category")}
-              className={`flex-1 py-3 text-xs uppercase font-extrabold tracking-wider border rounded-[10px] transition-all ${
-                targetMode === "Category"
-                  ? "bg-[#FFF7ED] border-[#F97316] text-[#F97316]"
-                  : "bg-white border-zinc-200 text-zinc-650 hover:bg-zinc-55"
-              }`}
-            >
-              Menu Category
-            </button>
-            
-            <button
-              type="button"
-              onClick={() => setTargetMode("Product")}
-              className={`flex-1 py-3 text-xs uppercase font-extrabold tracking-wider border rounded-[10px] transition-all ${
-                targetMode === "Product"
-                  ? "bg-[#FFF7ED] border-[#F97316] text-[#F97316]"
-                  : "bg-white border-zinc-200 text-zinc-650 hover:bg-zinc-55"
-              }`}
-            >
-              Single Product
-            </button>
+          {/* Header */}
+          <div className="flex flex-col sm:flex-row justify-between sm:items-end gap-4 border-b border-zinc-200 pb-5">
+            <div>
+              <h1 className="text-[32px] font-bold leading-tight" style={{ color: PALETTE.ink }}>
+                Apply Coupon to Menu / Products
+              </h1>
+              <p className="text-[15px] mt-1" style={{ color: PALETTE.inkMuted }}>
+                Map active discount codes to entire menu categories or select standalone products.
+              </p>
+            </div>
           </div>
-        </div>
 
-        {/* Category selection */}
-        {targetMode === "Category" ? (
-          <div className="space-y-2">
-            <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest block">
-              Select Menu Category
-            </label>
-            <select
-              value={selectedMenuCategory}
-              onChange={(e) => setSelectedMenuCategory(e.target.value)}
-              className="w-full bg-white border border-zinc-200 rounded-[10px] h-11 px-3 text-sm focus:outline-none"
-            >
-              <option value="Starters & Appetizers">Starters & Appetizers</option>
-              <option value="Gourmet Hamburgers">Gourmet Hamburgers</option>
-              <option value="Wood-Fired Pizzas">Wood-Fired Pizzas</option>
-              <option value="Seasonal Desserts">Seasonal Desserts</option>
-            </select>
-          </div>
-        ) : (
-          /* Product selection */
-          <div className="space-y-2">
-            <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest block">
-              Select Product
-            </label>
-            <select
-              value={selectedProduct}
-              onChange={(e) => setSelectedProduct(e.target.value)}
-              className="w-full bg-white border border-zinc-200 rounded-[10px] h-11 px-3 text-sm focus:outline-none"
-            >
-              <option value="Spicy Garlic Shrimp">Spicy Garlic Shrimp</option>
-              <option value="Classic Cheese Beef Burger">Classic Cheese Beef Burger</option>
-              <option value="Bacon Truffle Burger">Bacon Truffle Burger</option>
-              <option value="Margherita Supreme Pizza">Margherita Supreme Pizza</option>
-            </select>
-          </div>
-        )}
+          <form onSubmit={handleApplyCoupon} className="grid grid-cols-1 gap-8">
 
-        <Button
-          type="submit"
-          className="w-full bg-[#12A594] hover:bg-[#0f8b7b] text-white rounded-[10px] py-6 text-xs uppercase tracking-widest font-black"
-        >
-          Apply Coupon Target
-        </Button>
-      </form>
+            {/* Form Section */}
+            <div className="space-y-6">
+              <Card className="shadow-sm border-zinc-200 bg-white overflow-hidden">
+                <CardHeader className="bg-zinc-50/50 border-b border-zinc-100 pb-4">
+                  <CardTitle className="text-[18px] font-bold text-zinc-900">Discount Target Selection</CardTitle>
+                  <CardDescription className="text-[14px]">Select the coupon code and choose what it applies to.</CardDescription>
+                </CardHeader>
+                <CardContent className="p-6 space-y-6">
 
-      {/* Applied discounts table */}
-      <div className="space-y-4">
-        <h3 className="text-xs font-extrabold uppercase tracking-widest text-[#6B7280]">
-          Active Coupon Mappings Overview
-        </h3>
-        
-        <div className="overflow-x-auto border border-[#ECECEC] rounded-[12px] overflow-hidden">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-blue-800 text-white uppercase text-[9px] tracking-widest font-black">
-                <th className="p-4 font-black">
-                  <div className="flex items-center gap-1 cursor-pointer">
-                    <span>Promotion Code</span>
-                    <ArrowUpDown className="h-3 w-3" />
+                  {/* Select Discount Offer Coupon Code */}
+                  <div className="space-y-2">
+                    <label className="text-[14px] font-semibold text-zinc-900">
+                      Select Discount Offer Coupon Code <span className="text-red-500">*</span>
+                    </label>
+                    <div className="relative w-full">
+                      <Tag className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-zinc-400 z-10 pointer-events-none" />
+
+                      <Select
+                        value={selectedCode}
+                        onValueChange={setSelectedCode}
+                      >
+                        <SelectTrigger className="w-full h-11 pl-10 text-[15px] font-mono font-semibold border-zinc-200 focus:ring-2 focus:ring-[#F97316]">
+                          <SelectValue placeholder="Select Coupon Code" />
+                        </SelectTrigger>
+
+                        <SelectContent className="" style={{ backgroundColor: PALETTE.canvas }}>
+                          <SelectItem value="TASTY15">
+                            TASTY15 (15% OFF)
+                          </SelectItem>
+
+                          <SelectItem value="WELCOME5">
+                            WELCOME5 ($5.00 OFF)
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
-                </th>
-                <th className="p-4 font-black text-center w-40">Apply On (Type)</th>
-                <th className="p-4 font-black text-center w-52">Target Name</th>
-                <th className="p-4 font-black text-center w-28">Status</th>
-                <th className="p-4 font-black text-center w-24">Delete</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#ECECEC] bg-white text-xs text-zinc-800">
-              {appliedDiscounts.map((ad) => (
-                <tr key={ad.id} className="hover:bg-zinc-50">
-                  <td className="p-4 font-mono font-bold text-zinc-900">{ad.code}</td>
-                  <td className="p-4 text-center font-bold text-zinc-400">
-                    <span className="bg-zinc-100 text-zinc-650 px-2 py-0.5 rounded text-[10px]">
-                      {ad.targetType}
-                    </span>
-                  </td>
-                  <td className="p-4 text-center font-extrabold text-zinc-800">{ad.targetName}</td>
-                  <td className="p-4 text-center">
-                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-[10px] text-[8px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-700">
-                      <CheckCircle2 className="h-3 w-3" />
-                      <span>Active</span>
-                    </span>
-                  </td>
-                  <td className="p-4 text-center">
-                    <button
-                      onClick={() => handleDeleteApplication(ad.id)}
-                      className="text-zinc-400 hover:text-red-550 p-1"
+
+                  {/* Target Mode */}
+                  <div className="space-y-3 pt-2">
+                    <Label className="text-[14px] font-semibold text-zinc-900">
+                      Apply Target Selection
+                    </Label>
+
+                    <RadioGroup
+                      value={targetMode}
+                      onValueChange={setTargetMode}
+                      className="grid grid-cols-1 sm:grid-cols-2 gap-4"
                     >
-                      <Trash2 className="h-4 w-4 mx-auto" />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                      <Label
+                        htmlFor="category"
+                        className={`flex cursor-pointer items-center gap-4 rounded-xl border-2 p-4 transition-all ${targetMode === "Category"
+                          ? "border-[#F97316] bg-orange-50"
+                          : "border-zinc-200 hover:border-zinc-300"
+                          }`}
+                      >
+                        <RadioGroupItem value="Category" id="category" />
+
+                        <FolderTree
+                          className={`h-6 w-6 ${targetMode === "Category"
+                            ? "text-[#F97316]"
+                            : "text-zinc-400"
+                            }`}
+                        />
+
+                        <div>
+                          <p className="font-semibold text-sm">
+                            Menu Category
+                          </p>
+
+                          <p className="text-xs text-zinc-500">
+                            Apply coupon to a category
+                          </p>
+                        </div>
+                      </Label>
+
+                      <Label
+                        htmlFor="product"
+                        className={`flex cursor-pointer items-center gap-4 rounded-xl border-2 p-4 transition-all ${targetMode === "Product"
+                          ? "border-[#F97316] bg-orange-50"
+                          : "border-zinc-200 hover:border-zinc-300"
+                          }`}
+                      >
+                        <RadioGroupItem value="Product" id="product" />
+
+                        <Package
+                          className={`h-6 w-6 ${targetMode === "Product"
+                            ? "text-[#F97316]"
+                            : "text-zinc-400"
+                            }`}
+                        />
+
+                        <div>
+                          <p className="font-semibold text-sm">
+                            Single Product
+                          </p>
+
+                          <p className="text-xs text-zinc-500">
+                            Apply coupon to one product
+                          </p>
+                        </div>
+                      </Label>
+                    </RadioGroup>
+                  </div>
+
+                  {/* Category selection */}
+                  {targetMode === "Category" ? (
+                    <div className="space-y-2">
+                      <Label>Select Menu Category</Label>
+
+                      <div className="relative">
+                        <FolderTree className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-zinc-400 z-10 pointer-events-none" />
+
+                        <Select
+                          value={selectedMenuCategory}
+                          onValueChange={setSelectedMenuCategory}
+                        >
+                          <SelectTrigger className="h-11 pl-10 border-zinc-200">
+                            <SelectValue placeholder="Select Category" />
+                          </SelectTrigger>
+
+                          <SelectContent style={{ backgroundColor: PALETTE.canvas }}>
+                            <SelectItem value="Starters & Appetizers">
+                              Starters & Appetizers
+                            </SelectItem>
+
+                            <SelectItem value="Gourmet Hamburgers">
+                              Gourmet Hamburgers
+                            </SelectItem>
+
+                            <SelectItem value="Wood-Fired Pizzas">
+                              Wood-Fired Pizzas
+                            </SelectItem>
+
+                            <SelectItem value="Seasonal Desserts">
+                              Seasonal Desserts
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  ) : (
+                    /* Product selection */
+                    <div className="space-y-2">
+                      <Label>Select Product</Label>
+
+                      <div className="relative">
+                        <Package className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-zinc-400 z-10 pointer-events-none" />
+
+                        <Select
+                          value={selectedProduct}
+                          onValueChange={setSelectedProduct}
+                        >
+                          <SelectTrigger className="h-11 pl-10 border-zinc-200">
+                            <SelectValue placeholder="Select Product" />
+                          </SelectTrigger>
+
+                          <SelectContent style={{ backgroundColor: PALETTE.canvas }}>
+                            <SelectItem value="Spicy Garlic Shrimp">
+                              Spicy Garlic Shrimp
+                            </SelectItem>
+
+                            <SelectItem value="Classic Cheese Beef Burger">
+                              Classic Cheese Beef Burger
+                            </SelectItem>
+
+                            <SelectItem value="Bacon Truffle Burger">
+                              Bacon Truffle Burger
+                            </SelectItem>
+
+                            <SelectItem value="Margherita Supreme Pizza">
+                              Margherita Supreme Pizza
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  )}
+
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Sidebar Save Section */}
+            <div className="flex flex-col justify-end">
+              <Button
+                type="submit"
+                className="w-full h-12 text-[15px] font-bold text-white transition-transform hover:scale-[1.02] shadow-md"
+                style={{ backgroundColor: PALETTE.accent }}
+              >
+                Apply Coupon Target
+              </Button>
+            </div>
+
+          </form>
+
+          {/* Applied discounts table */}
+          <Card className="shadow-sm border-zinc-200 bg-white overflow-hidden mt-8">
+            <CardHeader className="px-6 py-5 border-b border-zinc-200">
+              <CardTitle className="text-[16px] font-bold text-zinc-900">Active Coupon Mappings Overview</CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader className="bg-zinc-50">
+                  <TableRow>
+                    <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6">
+                      <div className="flex items-center gap-1 cursor-pointer hover:text-zinc-700">
+                        <span>Promotion Code</span>
+                        <ArrowUpDown className="h-3 w-3" />
+                      </div>
+                    </TableHead>
+                    <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6 text-center">Apply On (Type)</TableHead>
+                    <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6">Target Name</TableHead>
+                    <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6 text-center">Status</TableHead>
+                    <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6 text-center">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {appliedDiscounts.length > 0 ? appliedDiscounts.map((ad) => (
+                    <TableRow key={ad.id} className="h-16 hover:bg-zinc-50 transition-colors">
+                      <TableCell className="px-6">
+                        <div className="flex items-center gap-2">
+                          <Tag className="w-4 h-4 text-zinc-400" />
+                          <span className="font-mono font-bold text-[15px] text-zinc-900 tracking-wide">{ad.code}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="px-6 text-center">
+                        <Badge variant="outline" className="bg-zinc-50 text-zinc-600 border-zinc-200 font-semibold px-2.5 py-1 text-[13px]">
+                          {ad.targetType}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="px-6">
+                        <span className="font-semibold text-[15px] text-zinc-800">{ad.targetName}</span>
+                      </TableCell>
+                      <TableCell className="px-6 text-center">
+                        <Badge className="bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border-none px-2.5 py-1 text-[13px] font-semibold inline-flex items-center gap-1">
+                          <CheckCircle2 className="h-3.5 w-3.5" />
+                          Active
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="px-6 text-center">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 border text-zinc-500 hover:text-zinc-900 cursor-pointer">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-40 bg-white">
+                            <DropdownMenuItem className="text-[14px] font-medium cursor-pointer">
+                             <Edit/> Edit Discount
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              className="text-[14px] font-medium text-red-600 focus:bg-red-500 focus:text-white cursor-pointer"
+                              onClick={() => handleDeleteApplication(ad.id)}
+                            >
+                            <Trash/>  Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  )) : (
+                    <TableRow>
+                      <TableCell colSpan={5} className="h-24 text-center text-zinc-500 text-[14px]">No coupon mappings found.</TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+
         </div>
       </div>
     </div>

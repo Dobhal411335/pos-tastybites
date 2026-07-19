@@ -1,11 +1,15 @@
 "use client";
 
 import React, { useState } from "react";
-import Link from "next/link";
-import { ArrowLeft, Trash2, Edit } from "lucide-react";
+import { Trash2, Edit, Utensils, MoreHorizontal, Table as TableIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { toast } from "sonner";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { toast, Toaster } from "sonner";
+import { PALETTE } from "@/utils/paletteeColor";
 
 export default function CreateTablePage() {
   const [tableNumber, setTableNumber] = useState("");
@@ -29,90 +33,134 @@ export default function CreateTablePage() {
   };
 
   return (
-    <div className="space-y-8 font-sans max-w-4xl">
-      {/* Top Header & Back Button */}
-      <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 border-b border-zinc-100 pb-5 bg-[#EAB308] p-4 rounded-xl shadow-sm">
-        <h2 className="text-xl font-bold tracking-tight text-zinc-900">
-          Create Diner Table
-        </h2>
-        
-        <Link href="/admin/dashboard">
-          <Button className="bg-[#B91C1C] hover:bg-red-700 text-white rounded-[10px] flex items-center gap-1.5 py-5 px-6 font-bold text-xs uppercase tracking-wider">
-            <ArrowLeft className="h-4 w-4" />
-            <span>Back To</span>
-          </Button>
-        </Link>
-      </div>
+    <div className="flex flex-col overflow-hidden min-h-screen" style={{ backgroundColor: PALETTE.canvas, color: PALETTE.ink }}>
+      <Toaster position="top-right" richColors />
+      
+      <div className="flex-1 overflow-y-auto p-8">
+        <div className="max-w-[1000px] mx-auto space-y-8 pb-16 font-sans">
+          
+          {/* Header */}
+          <div className="flex flex-col sm:flex-row justify-between sm:items-end gap-4 border-b border-zinc-200 pb-5">
+            <div>
+              <h1 className="text-[32px] font-bold leading-tight" style={{ color: PALETTE.ink }}>
+                Diner Tables
+              </h1>
+              <p className="text-[15px] mt-1" style={{ color: PALETTE.inkMuted }}>
+                Create and manage restaurant seating configurations.
+              </p>
+            </div>
+          </div>
 
-      {/* Form Section */}
-      <div className="space-y-4 max-w-xl mx-auto pt-4">
-        <h3 className="text-lg font-bold text-zinc-900">
-          Create Table Number
-        </h3>
-        
-        <form onSubmit={handleCreate} className="flex flex-col sm:flex-row gap-4">
-          <Input
-            type="text"
-            placeholder="Type Here"
-            value={tableNumber}
-            onChange={(e) => setTableNumber(e.target.value)}
-            className="flex-1 bg-white border-2 border-zinc-800 rounded-full h-14 px-8 text-center text-sm font-bold placeholder:text-zinc-400 focus:ring-0 focus:border-black"
-          />
-          <Button
-            type="submit"
-            className="flex-1 bg-white hover:bg-zinc-100 text-zinc-900 border-2 border-zinc-800 rounded-full h-14 px-8 font-bold text-lg"
-          >
-            Create
-          </Button>
-        </form>
-      </div>
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-8">
+            
+            {/* Form Section */}
+            <div className="md:col-span-5 space-y-6">
+              <Card className="shadow-sm border-zinc-200 bg-white overflow-hidden">
+                <CardHeader className="bg-zinc-50/50 border-b border-zinc-100 pb-4">
+                  <CardTitle className="text-[18px] font-bold text-zinc-900 flex items-center gap-2">
+                    <Utensils className="w-5 h-5 text-[#1e40af]" /> Add New Table
+                  </CardTitle>
+                  <CardDescription className="text-[14px]">Define a new table identifier.</CardDescription>
+                </CardHeader>
+                <CardContent className="p-6">
+                  <form onSubmit={handleCreate} className="space-y-4">
+                    <div className="space-y-2">
+                      <label className="text-[14px] font-semibold text-zinc-900">
+                        Table Number / Name <span className="text-red-500">*</span>
+                      </label>
+                      <Input
+                        type="text"
+                        placeholder="e.g. Table 1, VIP A..."
+                        value={tableNumber}
+                        onChange={(e) => setTableNumber(e.target.value)}
+                        className="h-11 text-[15px] bg-white border-zinc-200 focus:ring-[#1e40af]"
+                      />
+                    </div>
+                    <Button
+                      type="submit"
+                      className="w-full h-11 text-[15px] font-bold text-white transition-transform hover:scale-[1.02] shadow-sm mt-4"
+                      style={{ backgroundColor: "#1e40af" }}
+                    >
+                      Create Table
+                    </Button>
+                  </form>
+                </CardContent>
+              </Card>
+            </div>
 
-      <hr className="border-t-2 border-zinc-800 mt-12 mb-8" />
+            {/* Overview Table */}
+            <div className="md:col-span-7">
+              <Card className="shadow-sm border-zinc-200 bg-white overflow-hidden h-full flex flex-col">
+                <CardHeader className="bg-zinc-50/50 border-b border-zinc-100 pb-4 flex flex-row items-center justify-between gap-4">
+                  <CardTitle className="text-[18px] font-bold text-zinc-900 flex items-center gap-2">
+                    <TableIcon className="w-5 h-5 text-[#1e40af]" /> Current Tables
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-0 flex-1">
+                  <Table>
+                    <TableHeader className="bg-zinc-50">
+                      <TableRow>
+                        <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6 w-16 text-center">#</TableHead>
+                        <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6">Table Number</TableHead>
+                        <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6 text-center">Status</TableHead>
+                        <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6 text-center">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {tables.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={4} className="h-32 text-center text-zinc-400 font-medium text-[14px]">
+                            No tables created yet.
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        tables.map((t, index) => (
+                          <TableRow key={t.id} className="h-14 hover:bg-zinc-50 transition-colors">
+                            <TableCell className="px-6 text-center font-bold text-zinc-400 text-[13px]">{index + 1}</TableCell>
+                            <TableCell className="px-6">
+                              <span className="font-bold text-[15px] text-zinc-900 uppercase tracking-wide">{t.tableNumber}</span>
+                            </TableCell>
+                            <TableCell className="px-6 text-center">
+                              {t.status === "Active" ? (
+                                <Badge className="bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border-none px-2.5 py-1 text-[12px] font-bold uppercase tracking-wide">
+                                  Active
+                                </Badge>
+                              ) : (
+                                <Badge className="bg-red-50 text-red-600 hover:bg-red-100 border-none px-2.5 py-1 text-[12px] font-bold uppercase tracking-wide">
+                                  Inactive
+                                </Badge>
+                              )}
+                            </TableCell>
+                            <TableCell className="px-6 text-center">
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="icon" className="h-8 w-8 border text-zinc-500 hover:text-zinc-900 cursor-pointer">
+                                    <MoreHorizontal className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-40 bg-white">
+                                  <DropdownMenuItem className="text-[14px] font-medium cursor-pointer">
+                                    <Edit className="mr-2 h-4 w-4" /> Edit Table
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    className="text-[14px] font-medium text-red-600 focus:bg-red-500 focus:text-white cursor-pointer"
+                                    onClick={() => handleDelete(t.id)}
+                                  >
+                                    <Trash2 className="mr-2 h-4 w-4" /> Delete
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
 
-      {/* Overview Table */}
-      <div className="space-y-4">
-        <h3 className="text-md font-extrabold text-zinc-900">
-          Data Overview
-        </h3>
-
-        <div className="overflow-x-auto border border-[#ECECEC] rounded-none overflow-hidden max-w-2xl">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-[#0047AB] text-white uppercase text-[10px] tracking-widest font-black">
-                <th className="p-4 font-black border-r border-blue-900 w-16 text-center">
-                  <div className="flex justify-center items-center gap-1">
-                    <div className="h-1 w-1 bg-white rounded-full"></div>
-                    <div className="h-1 w-1 bg-white rounded-full"></div>
-                    <div className="h-1 w-1 bg-white rounded-full"></div>
-                  </div>
-                </th>
-                <th className="p-4 font-black border-r border-blue-900">Table Number</th>
-                <th className="p-4 font-black text-center border-r border-blue-900 w-32">Status</th>
-                <th className="p-4 font-black text-center w-24">Delete <Edit className="h-4 w-4 inline ml-1 bg-white text-black p-0.5 rounded-sm" /></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#ECECEC] bg-white text-xs text-zinc-800 font-bold">
-              {tables.length === 0 ? (
-                <tr>
-                  <td colSpan={4} className="p-8 text-center text-zinc-400 font-bold uppercase tracking-wider">
-                    No tables found.
-                  </td>
-                </tr>
-              ) : (
-                tables.map((t) => (
-                  <tr key={t.id} className="hover:bg-zinc-50 border-b border-zinc-200">
-                    <td className="p-4 border-r border-zinc-200"></td>
-                    <td className="p-4 border-r border-zinc-200 uppercase tracking-widest text-[#0047AB]">{t.tableNumber}</td>
-                    <td className="p-4 text-center border-r border-zinc-200 text-[#0047AB]">{t.status}</td>
-                    <td className="p-4 text-center text-zinc-400 hover:text-red-500 cursor-pointer transition-colors" onClick={() => handleDelete(t.id)}>
-                      {/* Empty block to match the visual of the form without an icon on every row if desired, but we'll put a trash icon for UX */}
-                      <Trash2 className="h-4 w-4 mx-auto" />
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
         </div>
       </div>
     </div>

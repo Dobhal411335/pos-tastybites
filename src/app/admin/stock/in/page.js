@@ -2,10 +2,13 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Trash2 } from "lucide-react";
+import { ArrowLeft, PackagePlus, PlusCircle, Receipt, ClipboardList, TrendingUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { toast } from "sonner";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { toast, Toaster } from "sonner";
+import { PALETTE } from "@/utils/paletteeColor";
 
 export default function StockInPage() {
   const [formData, setFormData] = useState({
@@ -24,160 +27,222 @@ export default function StockInPage() {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
+  const handleSelectChange = (field, value) => {
+    setFormData({ ...formData, [field]: value });
+  };
+
   const handleCreate = (e) => {
     e.preventDefault();
     toast.success("Stock In record created successfully.");
   };
 
   return (
-    <div className="space-y-8 font-sans max-w-4xl">
-      {/* Top Header & Back Button */}
-      <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 border-b border-zinc-100 pb-5">
-        <div className="space-y-1">
-          <h2 className="text-xl font-bold tracking-tight text-zinc-900 font-serif">
-            Create Stock In
-          </h2>
-          <p className="text-xs text-zinc-400">
-            Log new incoming stock to inventory.
-          </p>
-        </div>
-        
-        <Link href="/admin/dashboard">
-          <Button className="bg-[#B91C1C] hover:bg-red-700 text-white rounded-[10px] flex items-center gap-1.5 py-5 px-6 font-bold text-xs uppercase tracking-wider">
-            <ArrowLeft className="h-4 w-4" />
-            <span>Back To</span>
-          </Button>
-        </Link>
-      </div>
+    <div className="flex flex-col overflow-hidden min-h-screen" style={{ backgroundColor: PALETTE.canvas, color: PALETTE.ink }}>
+      <Toaster position="top-right" richColors />
 
-      {/* Form */}
-      <form onSubmit={handleCreate} className="space-y-6 max-w-2xl">
-        <div className="space-y-4">
-          
-          <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-            <label className="text-[10px] font-bold text-zinc-550 uppercase tracking-widest sm:w-1/3">
-              Stock Menu Head
-            </label>
-            <select
-              name="menuHead"
-              value={formData.menuHead}
-              onChange={handleChange}
-              className="bg-[#1e40af] text-white border-none rounded-[4px] h-11 px-4 text-xs font-bold appearance-none cursor-pointer focus:ring-2 focus:ring-[#F97316] sm:w-2/3"
-            >
-              <option value="">SELECT HERE</option>
-              <option value="Produce">Produce</option>
-              <option value="Dairy">Dairy</option>
-            </select>
+      <div className="flex-1 overflow-y-auto p-8">
+        <div className="max-w-[1200px] mx-auto space-y-8 pb-16 font-sans">
+
+          {/* Header */}
+          <div className="flex flex-col sm:flex-row justify-between sm:items-end gap-4 border-b border-zinc-200 pb-5">
+            <div>
+              <h1 className="text-[32px] font-bold leading-tight" style={{ color: PALETTE.ink }}>
+                Create Stock In
+              </h1>
+              <p className="text-[15px] mt-1" style={{ color: PALETTE.inkMuted }}>
+                Log new incoming stock to inventory and update balances.
+              </p>
+            </div>
+
           </div>
 
-          <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-            <label className="text-[10px] font-bold text-zinc-550 uppercase tracking-widest sm:w-1/3">
-              Product Name
-            </label>
-            <div className="sm:w-2/3 flex gap-2">
-              <select
-                name="productName"
-                value={formData.productName}
-                onChange={handleChange}
-                className="flex-1 bg-[#1e40af] text-white border-none rounded-[4px] h-11 px-4 text-xs font-bold appearance-none cursor-pointer focus:ring-2 focus:ring-[#F97316]"
+          <form onSubmit={handleCreate} className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+
+            {/* Main Form Section */}
+            <div className="lg:col-span-8 space-y-6">
+
+              {/* Product Details Card */}
+              <Card className="shadow-sm border-zinc-200 bg-white overflow-hidden">
+                <CardHeader className="bg-zinc-50/50 border-b border-zinc-100 pb-4">
+                  <CardTitle className="text-[18px] font-bold text-zinc-900 flex items-center gap-2">
+                    <ClipboardList className="w-5 h-5 text-[#1e40af]" /> Product Selection
+                  </CardTitle>
+                  <CardDescription className="text-[14px]">Choose the product and view its current opening balance.</CardDescription>
+                </CardHeader>
+                <CardContent className="p-6 space-y-6">
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <label className="text-[14px] font-semibold text-zinc-900">
+                        Stock Menu Head <span className="text-red-500">*</span>
+                      </label>
+                      <Select value={formData.menuHead} onValueChange={(val) => handleSelectChange("menuHead", val)}>
+                        <SelectTrigger className="h-11 text-[15px] border-zinc-200 focus:ring-2 focus:ring-[#F97316]">
+                          <SelectValue placeholder="Select Category" />
+                        </SelectTrigger>
+                        <SelectContent style={{ backgroundColor: PALETTE.canvas }}>
+                          <SelectItem value="Produce">Produce</SelectItem>
+                          <SelectItem value="Dairy">Dairy</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-[14px] font-semibold text-zinc-900">
+                        Product Name <span className="text-red-500">*</span>
+                      </label>
+                      <Select value={formData.productName} onValueChange={(val) => handleSelectChange("productName", val)}>
+                        <SelectTrigger className="h-11 text-[15px] border-zinc-200 focus:ring-2 focus:ring-[#F97316]">
+                          <SelectValue placeholder="Select Product" />
+                        </SelectTrigger>
+                        <SelectContent style={{ backgroundColor: PALETTE.canvas }}>
+                          <SelectItem value="Tomato">Tomato</SelectItem>
+                          <SelectItem value="Milk">Milk</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  {formData.productName && (
+                    <div className="flex flex-col sm:flex-row gap-4 pt-2">
+                      <div className="flex-1 bg-zinc-50 border border-zinc-200 rounded-lg p-4 flex flex-col justify-center">
+                        <span className="text-[12px] font-bold text-zinc-500 uppercase tracking-wider mb-1">Product Type / Measure</span>
+                        <div className="flex gap-2">
+                          <span className="px-3 py-1 bg-zinc-200 text-zinc-700 text-[12px] font-bold rounded-md">RAW MATERIAL</span>
+                          <span className="px-3 py-1 bg-zinc-200 text-zinc-700 text-[12px] font-bold rounded-md">KG / LTR</span>
+                        </div>
+                      </div>
+
+                      <div className="flex-1 bg-blue-50 border border-blue-100 rounded-lg p-4 flex flex-col justify-center relative overflow-hidden">
+                        <TrendingUp className="absolute right-[-10px] bottom-[-10px] w-24 h-24 text-blue-100 opacity-50" />
+                        <span className="text-[12px] font-bold text-blue-600 uppercase tracking-wider mb-1 relative z-10">Current Opening Balance</span>
+                        <span className="text-[24px] font-bold text-blue-900 relative z-10">${formData.openingBalance}</span>
+                      </div>
+                    </div>
+                  )}
+
+                </CardContent>
+              </Card>
+
+              {/* Stock In Entry Card */}
+              <Card className="shadow-sm border-zinc-200 bg-white overflow-hidden">
+                <CardHeader className="bg-zinc-50/50 border-b border-zinc-100 pb-4">
+                  <CardTitle className="text-[18px] font-bold text-zinc-900 flex items-center gap-2">
+                    <PackagePlus className="w-5 h-5 text-[#1e40af]" /> Stock Entry
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-6">
+
+                  <div className="flex flex-col sm:flex-row gap-4 items-end">
+                    <div className="space-y-2 flex-1">
+                      <label className="text-[14px] font-semibold text-zinc-900">Date Received</label>
+                      <Input
+                        type="date"
+                        name="stockDate"
+                        value={formData.stockDate}
+                        onChange={handleChange}
+                        className="h-11 text-[15px] bg-white border-zinc-200 focus:ring-[#F97316]"
+                      />
+                    </div>
+                    <div className="space-y-2 w-full sm:w-32">
+                      <label className="text-[14px] font-semibold text-zinc-900">Quantity</label>
+                      <Input
+                        type="number"
+                        name="qty"
+                        placeholder="QTY"
+                        value={formData.qty}
+                        onChange={handleChange}
+                        className="h-11 text-[15px] bg-white border-zinc-200 focus:ring-[#F97316] font-medium"
+                      />
+                    </div>
+                    <div className="space-y-2 flex-1">
+                      <label className="text-[14px] font-semibold text-zinc-900">Total Value ($)</label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        name="value"
+                        placeholder="0.00"
+                        value={formData.value}
+                        onChange={handleChange}
+                        className="h-11 text-[15px] bg-white border-zinc-200 focus:ring-[#F97316] font-medium"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end pt-6 border-t border-zinc-100 mt-6">
+                    <Button type="button" variant="outline" className="h-10 px-4 text-[14px] font-bold text-zinc-700 border-zinc-300 hover:bg-zinc-50 flex items-center gap-2">
+                      <PlusCircle className="w-4 h-4" /> Add Another Entry
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+
+            </div>
+
+            {/* Sidebar Invoice & Save Section */}
+            <div className="lg:col-span-4 space-y-6">
+
+              <Card className="shadow-sm border-zinc-200 bg-white overflow-hidden">
+                <CardHeader className="bg-zinc-50/50 border-b border-zinc-100 pb-4">
+                  <CardTitle className="text-[18px] font-bold text-zinc-900 flex items-center gap-2">
+                    <Receipt className="w-5 h-5 text-[#1e40af]" /> Purchase Invoice
+                  </CardTitle>
+                  <CardDescription className="text-[14px]">Optional invoice documentation.</CardDescription>
+                </CardHeader>
+                <CardContent className="p-6 space-y-4">
+                  <div className="space-y-2">
+                    <label className="text-[14px] font-semibold text-zinc-900">Invoice Number</label>
+                    <Input
+                      type="text"
+                      name="invoiceNumber"
+                      placeholder="e.g. INV-2026-892"
+                      value={formData.invoiceNumber}
+                      onChange={handleChange}
+                      className="h-11 text-[15px] bg-white border-zinc-200 focus:ring-[#F97316] uppercase font-mono"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label className="text-[14px] font-semibold text-zinc-900">Tax ($)</label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        name="tax"
+                        placeholder="0.00"
+                        value={formData.tax}
+                        onChange={handleChange}
+                        className="h-11 text-[15px] bg-white border-zinc-200 focus:ring-[#F97316]"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[14px] font-semibold text-zinc-900">Amount ($)</label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        name="invoiceAmount"
+                        placeholder="0.00"
+                        value={formData.invoiceAmount}
+                        onChange={handleChange}
+                        className="h-11 text-[15px] bg-white border-zinc-200 focus:ring-[#F97316]"
+                      />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Button
+                type="submit"
+                className="w-full h-14 text-[16px] font-bold text-white transition-transform hover:scale-[1.02] shadow-md"
+                style={{ backgroundColor: "#1e40af" }}
               >
-                <option value="">SELECT HERE</option>
-                <option value="Tomato">Tomato</option>
-                <option value="Milk">Milk</option>
-              </select>
-              <div className="flex gap-1">
-                <div className="bg-[#4b5563] text-white text-[10px] uppercase font-bold tracking-widest flex items-center justify-center px-4 rounded-[4px]">TYPE</div>
-                <div className="bg-[#4b5563] text-white text-[10px] uppercase font-bold tracking-widest flex items-center justify-center px-4 rounded-[4px]">MEASURE</div>
-              </div>
+                Submit Stock Entry
+              </Button>
             </div>
-          </div>
 
-          <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-            <label className="text-[10px] font-bold text-zinc-550 uppercase tracking-widest sm:w-1/3">
-              Opening Balance
-            </label>
-            <div className="sm:w-2/3 bg-[#1e40af] text-white rounded-[4px] h-11 flex items-center px-4 text-xs font-bold uppercase tracking-wider opacity-90">
-              {formData.openingBalance ? `$${formData.openingBalance}` : "OPENING BALANCE"}
-            </div>
-          </div>
+          </form>
 
-          <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-            <label className="text-[10px] font-bold text-zinc-550 uppercase tracking-widest sm:w-1/3">
-              Stock In
-            </label>
-            <div className="sm:w-2/3 flex gap-2">
-              <Input
-                type="date"
-                name="stockDate"
-                value={formData.stockDate}
-                onChange={handleChange}
-                className="flex-1 bg-[#1e40af] text-white placeholder:text-blue-200 border-none rounded-[4px] h-11 focus:ring-2 focus:ring-[#F97316] uppercase text-[10px] font-bold"
-              />
-              <Input
-                type="text"
-                name="qty"
-                placeholder="QTY"
-                value={formData.qty}
-                onChange={handleChange}
-                className="w-20 bg-[#1e40af] text-white placeholder:text-blue-200 border-none rounded-[4px] h-11 focus:ring-2 focus:ring-[#F97316] text-center uppercase text-xs font-bold"
-              />
-              <Input
-                type="text"
-                name="value"
-                placeholder=". VALUE"
-                value={formData.value}
-                onChange={handleChange}
-                className="flex-1 bg-[#1e40af] text-white placeholder:text-blue-200 border-none rounded-[4px] h-11 focus:ring-2 focus:ring-[#F97316] text-center uppercase text-xs font-bold"
-              />
-            </div>
-          </div>
-
-          <div className="flex justify-end pt-2 border-b border-zinc-200 pb-6">
-            <Button type="button" className="bg-[#ff0000] hover:bg-red-700 text-white rounded-[4px] h-10 px-6 font-bold text-xs uppercase tracking-widest">
-              + ADD MORE
-            </Button>
-          </div>
-
-          <div className="flex flex-col sm:flex-row sm:items-center gap-4 pt-4">
-            <label className="text-[10px] font-bold text-zinc-550 uppercase tracking-widest sm:w-1/3 leading-tight">
-              Purchase Invoice<br/><span className="text-[8px] text-zinc-400 font-medium">OPTIONAL</span>
-            </label>
-            <div className="sm:w-2/3 flex gap-2">
-              <Input
-                type="text"
-                name="invoiceNumber"
-                placeholder="INVOICE NUMBER"
-                value={formData.invoiceNumber}
-                onChange={handleChange}
-                className="flex-[2] bg-[#1e40af] text-white placeholder:text-blue-200 border-none rounded-[4px] h-11 focus:ring-2 focus:ring-[#F97316] text-center uppercase text-[10px] font-bold"
-              />
-              <Input
-                type="text"
-                name="tax"
-                placeholder="TAX"
-                value={formData.tax}
-                onChange={handleChange}
-                className="flex-1 bg-[#1e40af] text-white placeholder:text-blue-200 border-none rounded-[4px] h-11 focus:ring-2 focus:ring-[#F97316] text-center uppercase text-[10px] font-bold"
-              />
-              <Input
-                type="text"
-                name="invoiceAmount"
-                placeholder="AMOUNT"
-                value={formData.invoiceAmount}
-                onChange={handleChange}
-                className="flex-1 bg-[#1e40af] text-white placeholder:text-blue-200 border-none rounded-[4px] h-11 focus:ring-2 focus:ring-[#F97316] text-center uppercase text-[10px] font-bold"
-              />
-            </div>
-          </div>
         </div>
-
-        <Button
-          type="submit"
-          className="w-full bg-[#1e40af] hover:bg-blue-900 text-white rounded-[4px] h-14 font-bold text-lg uppercase tracking-widest mt-8"
-        >
-          Create Stock
-        </Button>
-      </form>
+      </div>
     </div>
   );
 }

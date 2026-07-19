@@ -2,11 +2,15 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Trash2, Edit, CheckCircle2, XCircle, ArrowUpDown } from "lucide-react";
+import { ArrowLeft, Trash2, Calendar, ArrowUpDown, Tag,MoreHorizontal, Edit } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { toast } from "sonner";
-
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { toast, Toaster } from "sonner";
+import { PALETTE } from "@/utils/paletteeColor";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 export default function CouponsConfigPage() {
   const [coupons, setCoupons] = useState([
     { id: 1, code: "TASTY15", discountType: "percent", value: 15, start: "2026-07-01", end: "2026-08-31", active: true },
@@ -47,6 +51,8 @@ export default function CouponsConfigPage() {
     setCode("");
     setAmountValue("");
     setPercentValue("");
+    setStartDate("");
+    setEndDate("");
     toast.success("Coupon created successfully!");
   };
 
@@ -63,186 +69,248 @@ export default function CouponsConfigPage() {
   };
 
   return (
-    <div className="space-y-8 font-sans max-w-5xl">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 border-b border-zinc-100 pb-5">
-        <div className="space-y-1">
-          <h2 className="text-xl font-bold tracking-tight text-zinc-900 font-serif">
-            Create Discount & Coupon Offer
-          </h2>
-          <p className="text-xs text-zinc-400">
-            Define promotional discount codes, validity dates, and flat or percent deductions.
-          </p>
-        </div>
-        <Link href="/admin/menu/products">
-          <Button className="bg-[#B91C1C] hover:bg-red-700 text-white rounded-[10px] flex items-center gap-1.5 py-5 px-6 font-bold text-xs uppercase tracking-wider">
-            <ArrowLeft className="h-4 w-4" />
-            <span>Back To Products</span>
-          </Button>
-        </Link>
-      </div>
+    <div className="flex flex-col overflow-hidden min-h-screen" style={{ backgroundColor: PALETTE.canvas, color: PALETTE.ink }}>
+      <Toaster position="top-right" richColors />
 
-      {/* Form Card */}
-      <form onSubmit={handleCreateCoupon} className="space-y-5 bg-zinc-50/50 p-6 rounded-xl border border-zinc-200 max-w-2xl">
-        
-        {/* Code Input */}
-        <div className="space-y-2">
-          <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest block">
-            Discount Offer Coupon Code
-          </label>
-          <Input
-            type="text"
-            placeholder="e.g. SUMMER25"
-            value={code}
-            onChange={(e) => setCode(e.target.value)}
-            className="bg-white border-zinc-200 rounded-[10px] h-11 focus:ring-[#F97316] text-sm uppercase font-mono font-bold"
-          />
-        </div>
+      <div className="flex-1 overflow-y-auto p-8">
+        <div className="max-w-[1200px] mx-auto space-y-8 pb-16 font-sans">
 
-        {/* Date inputs */}
-        <div className="grid grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest block">
-              Start Date
-            </label>
-            <Input
-              type="date"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              className="bg-white border-zinc-200 rounded-[10px] h-11 text-xs"
-            />
-          </div>
-          <div className="space-y-2">
-            <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest block">
-              End Date
-            </label>
-            <Input
-              type="date"
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-              className="bg-white border-zinc-200 rounded-[10px] h-11 text-xs"
-            />
-          </div>
-        </div>
-
-        {/* Price deduction types */}
-        <div className="space-y-2">
-          <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest block">
-            Deduction Type
-          </label>
-          <div className="flex gap-4 items-center">
-            
-            {/* Flat Amount option */}
-            <div className="flex-1 flex gap-2 items-center">
-              <input
-                type="radio"
-                id="type-amount"
-                name="deduction-type"
-                checked={selectedType === "amount"}
-                onChange={() => setSelectedType("amount")}
-                className="h-4 w-4 text-[#F97316] focus:ring-[#F97316]"
-              />
-              <Input
-                type="number"
-                step="0.01"
-                placeholder="Price $ Amount"
-                disabled={selectedType !== "amount"}
-                value={amountValue}
-                onChange={(e) => setAmountValue(e.target.value)}
-                className="bg-white border-zinc-200 rounded-[10px] h-11 text-xs"
-              />
+          {/* Header */}
+          <div className="flex flex-col sm:flex-row justify-between sm:items-end gap-4 border-b border-zinc-200 pb-5">
+            <div>
+              <h1 className="text-[32px] font-bold leading-tight" style={{ color: PALETTE.ink }}>
+                Create Discount & Coupon Offer
+              </h1>
+              <p className="text-[15px] mt-1" style={{ color: PALETTE.inkMuted }}>
+                Define promotional discount codes, validity dates, and flat or percent deductions.
+              </p>
             </div>
-
-            <span className="text-xs font-bold text-zinc-400">OR</span>
-
-            {/* Percentage option */}
-            <div className="flex-1 flex gap-2 items-center">
-              <input
-                type="radio"
-                id="type-percent"
-                name="deduction-type"
-                checked={selectedType === "percent"}
-                onChange={() => setSelectedType("percent")}
-                className="h-4 w-4 text-[#F97316] focus:ring-[#F97316]"
-              />
-              <Input
-                type="number"
-                placeholder="Percentage % Value"
-                disabled={selectedType !== "percent"}
-                value={percentValue}
-                onChange={(e) => setPercentValue(e.target.value)}
-                className="bg-white border-zinc-200 rounded-[10px] h-11 text-xs"
-              />
-            </div>
-
           </div>
-        </div>
 
-        <Button
-          type="submit"
-          className="w-full bg-[#12A594] hover:bg-[#0f8b7b] text-white rounded-[10px] py-6 text-xs uppercase tracking-widest font-black"
-        >
-          Create Coupon Offer
-        </Button>
-      </form>
+          <form onSubmit={handleCreateCoupon} className="grid grid-cols-1 gap-8">
 
-      {/* Coupon List Table */}
-      <div className="space-y-4">
-        <h3 className="text-xs font-extrabold uppercase tracking-widest text-[#6B7280]">
-          Coupon Offer Overview
-        </h3>
-        
-        <div className="overflow-x-auto border border-[#ECECEC] rounded-[12px] overflow-hidden">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-blue-800 text-white uppercase text-[9px] tracking-widest font-black">
-                <th className="p-4 font-black">
-                  <div className="flex items-center gap-1 cursor-pointer">
-                    <span>Promotion Code</span>
-                    <ArrowUpDown className="h-3 w-3" />
+            {/* Form Section */}
+            <div className="space-y-6">
+              <Card className="shadow-sm border-zinc-200 bg-white overflow-hidden">
+                <CardHeader className="bg-zinc-50/50 border-b border-zinc-100 pb-4">
+                  <CardTitle className="text-[18px] font-bold text-zinc-900">Coupon Details</CardTitle>
+                  <CardDescription className="text-[14px]">Configure the code, deduction, and validity.</CardDescription>
+                </CardHeader>
+                <CardContent className="p-6 space-y-6">
+
+                  {/* Code Input */}
+                  <div className="space-y-2">
+                    <label className="text-[14px] font-semibold text-zinc-900">
+                      Discount Offer Coupon Code <span className="text-red-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <Tag className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-400" />
+                      <Input
+                        type="text"
+                        placeholder="e.g. SUMMER25"
+                        value={code}
+                        onChange={(e) => setCode(e.target.value)}
+                        className="pl-10 h-11 text-[16px] bg-white uppercase font-mono font-bold tracking-wider"
+                      />
+                    </div>
                   </div>
-                </th>
-                <th className="p-4 font-black text-center w-36">Discount Value</th>
-                <th className="p-4 font-black text-center w-40">Validity Period</th>
-                <th className="p-4 font-black text-center w-28">Status</th>
-                <th className="p-4 font-black text-center w-24">Delete</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#ECECEC] bg-white text-xs text-zinc-800">
-              {coupons.map((c) => (
-                <tr key={c.id} className="hover:bg-zinc-50">
-                  <td className="p-4 font-mono font-bold text-zinc-900">{c.code}</td>
-                  <td className="p-4 text-center font-extrabold text-[#F97316]">
-                    {c.discountType === "percent" ? `${c.value}% OFF` : `$${c.value.toFixed(2)} OFF`}
-                  </td>
-                  <td className="p-4 text-center text-zinc-400 font-bold">
-                    <span className="bg-zinc-100 text-zinc-650 px-2 py-0.5 rounded text-[10px]">
-                      {c.start} to {c.end}
-                    </span>
-                  </td>
-                  <td className="p-4 text-center">
-                    <button
-                      type="button"
-                      onClick={() => handleToggleStatus(c.id)}
-                      className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-[10px] text-[8px] font-black uppercase tracking-wider ${
-                        c.active ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"
-                      }`}
-                    >
-                      {c.active ? "Active" : "Inactive"}
-                    </button>
-                  </td>
-                  <td className="p-4 text-center">
-                    <button
-                      onClick={() => handleDeleteCoupon(c.id)}
-                      className="text-zinc-400 hover:text-red-550 p-1"
-                    >
-                      <Trash2 className="h-4 w-4 mx-auto" />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+
+                  {/* Date inputs */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <label className="text-[14px] font-semibold text-zinc-900">
+                        Start Date
+                      </label>
+                      <Input
+                        type="date"
+                        value={startDate}
+                        onChange={(e) => setStartDate(e.target.value)}
+                        className="h-11 text-[15px] bg-white"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[14px] font-semibold text-zinc-900">
+                        End Date
+                      </label>
+                      <Input
+                        type="date"
+                        value={endDate}
+                        onChange={(e) => setEndDate(e.target.value)}
+                        className="h-11 text-[15px] bg-white"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Deduction Section */}
+                  <div className="space-y-3 pt-2 border-t border-zinc-100">
+                    <label className="text-[14px] font-semibold text-zinc-900 mt-4 block">
+                      Deduction Type & Value <span className="text-red-500">*</span>
+                    </label>
+                    <div className="flex flex-col sm:flex-row gap-6">
+
+                      {/* Flat Amount Option */}
+                      <label
+                        className={`flex-1 flex flex-col gap-3 p-4 rounded-xl border-2 cursor-pointer transition-colors ${selectedType === "amount" ? "border-[#F97316] bg-orange-50/30" : "border-zinc-200 hover:border-zinc-300 bg-white"
+                          }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${selectedType === "amount" ? "border-[#F97316]" : "border-zinc-300"}`}>
+                            {selectedType === "amount" && <div className="w-2 h-2 rounded-full bg-[#F97316]" />}
+                          </div>
+                          <span className="text-[14px] font-bold text-zinc-900">Flat Amount ($)</span>
+                        </div>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          placeholder="0.00"
+                          disabled={selectedType !== "amount"}
+                          value={amountValue}
+                          onChange={(e) => {
+                            setAmountValue(e.target.value);
+                            setSelectedType("amount");
+                          }}
+                          onClick={() => setSelectedType("amount")}
+                          className="h-11 text-[16px] bg-white font-medium"
+                        />
+                      </label>
+
+                      {/* Percentage Option */}
+                      <label
+                        className={`flex-1 flex flex-col gap-3 p-4 rounded-xl border-2 cursor-pointer transition-colors ${selectedType === "percent" ? "border-[#F97316] bg-orange-50/30" : "border-zinc-200 hover:border-zinc-300 bg-white"
+                          }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${selectedType === "percent" ? "border-[#F97316]" : "border-zinc-300"}`}>
+                            {selectedType === "percent" && <div className="w-2 h-2 rounded-full bg-[#F97316]" />}
+                          </div>
+                          <span className="text-[14px] font-bold text-zinc-900">Percentage (%)</span>
+                        </div>
+                        <Input
+                          type="number"
+                          placeholder="0"
+                          disabled={selectedType !== "percent"}
+                          value={percentValue}
+                          onChange={(e) => {
+                            setPercentValue(e.target.value);
+                            setSelectedType("percent");
+                          }}
+                          onClick={() => setSelectedType("percent")}
+                          className="h-11 text-[16px] bg-white font-medium"
+                        />
+                      </label>
+
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+              {/* Sidebar Save Section */}
+              <div className="lg:col-span-4 flex flex-col justify-end">
+                <Button
+                  type="submit"
+                  className="w-full h-12 text-[15px] font-bold text-white transition-transform hover:scale-[1.02] shadow-md"
+                  style={{ backgroundColor: PALETTE.accent }}
+                >
+                  Create Coupon Offer
+                </Button>
+              </div>
+            </div>
+
+          </form>
+
+          {/* Coupon List Table */}
+          <Card className="shadow-sm border-zinc-200 bg-white overflow-hidden mt-8">
+            <CardHeader className="px-6 py-5 border-b border-zinc-200">
+              <CardTitle className="text-[16px] font-bold text-zinc-900">Coupon Offer Overview</CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader className="bg-zinc-50">
+                  <TableRow>
+                    <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6">
+                      <div className="flex items-center gap-1 cursor-pointer hover:text-zinc-700">
+                        <span>Promotion Code</span>
+                        <ArrowUpDown className="h-3 w-3" />
+                      </div>
+                    </TableHead>
+                    <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6 text-center">Discount Value</TableHead>
+                    <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6 text-center">Validity Period</TableHead>
+                    <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6 text-center">Status</TableHead>
+                    <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6 text-center">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {coupons.length > 0 ? coupons.map((c) => (
+                    <TableRow key={c.id} className="h-16 hover:bg-zinc-50 transition-colors">
+                      <TableCell className="px-6">
+                        <div className="flex items-center gap-2">
+                          <Tag className="w-4 h-4 text-zinc-400" />
+                          <span className="font-mono font-bold text-[15px] text-zinc-900 tracking-wide">{c.code}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="px-6 text-center font-bold text-[15px] text-[#F97316]">
+                        {c.discountType === "percent" ? `${c.value}% OFF` : `$${c.value.toFixed(2)} OFF`}
+                      </TableCell>
+                      <TableCell className="px-6 text-center">
+                        <div className="inline-flex items-center gap-1.5 bg-zinc-100 text-zinc-700 px-2.5 py-1 rounded-md text-[13px] font-medium">
+                          <Calendar className="w-3.5 h-3.5 text-zinc-400" />
+                          {c.start} to {c.end}
+                        </div>
+                      </TableCell>
+                      <TableCell className="px-6 text-center">
+                        <button
+                          type="button"
+                          onClick={() => handleToggleStatus(c.id)}
+                          className="cursor-pointer transition-transform hover:scale-105"
+                        >
+                          {c.active ? (
+                            <Badge className="bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border-none px-2.5 py-1 text-[13px] font-semibold">
+                              Active
+                            </Badge>
+                          ) : (
+                            <Badge className="bg-zinc-100 text-zinc-600 hover:bg-zinc-200 border-none px-2.5 py-1 text-[13px] font-semibold">
+                              Inactive
+                            </Badge>
+                          )}
+                        </button>
+                      </TableCell>
+                      <TableCell className="px-6 text-center">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 border text-zinc-500 hover:text-zinc-900 cursor-pointer">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-40 bg-white">
+                            <DropdownMenuItem className="text-[14px] font-medium cursor-pointer">
+                             <Edit/> Edit Discount
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              className="text-[14px] font-medium text-red-600 focus:bg-red-500 focus:text-white cursor-pointer"
+                              onClick={() => handleDeleteCoupon(c.id)}
+                            >
+                        <Trash2/> Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleDeleteCoupon(c.id)}
+                          className="h-8 w-8 text-zinc-400 hover:text-red-500 hover:bg-red-50"
+                        >
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  )) : (
+                    <TableRow>
+                      <TableCell colSpan={5} className="h-24 text-center text-zinc-500 text-[14px]">No coupons found.</TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+
         </div>
       </div>
     </div>

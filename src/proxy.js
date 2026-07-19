@@ -11,7 +11,8 @@ export async function proxy(request) {
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set('x-request-id', reqId);
 
-  const token = request.cookies.get('token')?.value;
+  const adminToken = request.cookies.get('token')?.value;
+  const employeeToken = request.cookies.get('employee-token')?.value;
   const { pathname } = request.nextUrl;
 
   const isAdminPage = pathname.startsWith('/admin');
@@ -19,49 +20,43 @@ export async function proxy(request) {
   const isEmployeePage = pathname.startsWith('/employee');
   const isEmployeeAuthPage = pathname === '/employee/login';
 
-  // Verify token
-  let payload = null;
-  if (token) {
+  let adminPayload = null;
+  if (adminToken) {
     try {
-      const verified = await jwtVerify(token, JWT_SECRET);
-      payload = verified.payload;
-    } catch (err) {
-      // Invalid token
-    }
+      const verified = await jwtVerify(adminToken, JWT_SECRET);
+      adminPayload = verified.payload;
+    } catch (err) {}
+  }
+
+  let employeePayload = null;
+  if (employeeToken) {
+    try {
+      const verified = await jwtVerify(employeeToken, JWT_SECRET);
+      employeePayload = verified.payload;
+    } catch (err) {}
   }
 
   let response;
 
   // Route protection
-  if (!payload) {
-    if (isAdminPage && !isAdminAuthPage) {
+  if (isAdminPage) {
+    if (!adminPayload && !isAdminAuthPage) {
       response = NextResponse.redirect(new URL('/admin/login', request.url));
-    } else if (isEmployeePage && !isEmployeeAuthPage) {
-      response = NextResponse.redirect(new URL('/employee/login', request.url));
+    } else if (adminPayload && isAdminAuthPage) {
+      response = NextResponse.redirect(new URL('/admin/dashboard', request.url));
     } else {
-      response = NextResponse.next({
-        request: {
-          headers: requestHeaders,
-        },
-      });
+      response = NextResponse.next({ request: { headers: requestHeaders } });
+    }
+  } else if (isEmployeePage) {
+    if (!employeePayload && !isEmployeeAuthPage) {
+      response = NextResponse.redirect(new URL('/employee/login', request.url));
+    } else if (employeePayload && isEmployeeAuthPage) {
+      response = NextResponse.redirect(new URL('/employee/orders/create', request.url));
+    } else {
+      response = NextResponse.next({ request: { headers: requestHeaders } });
     }
   } else {
-    // Authenticated
-    if (isAdminAuthPage || isEmployeeAuthPage) {
-      if (payload.role === 'ADMIN') {
-        response = NextResponse.redirect(new URL('/admin/dashboard', request.url));
-      } else {
-        response = NextResponse.redirect(new URL('/employee', request.url));
-      }
-    } else if (isAdminPage && payload.role !== 'ADMIN') {
-      response = NextResponse.redirect(new URL('/unauthorized', request.url));
-    } else {
-      response = NextResponse.next({
-        request: {
-          headers: requestHeaders,
-        },
-      });
-    }
+    response = NextResponse.next({ request: { headers: requestHeaders } });
   }
 
   // 2. Set the Request ID on response headers

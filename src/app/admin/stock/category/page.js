@@ -2,10 +2,15 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Trash2, Edit } from "lucide-react";
+import { ArrowLeft, Trash2, Edit, MoreHorizontal, LayoutList, Trash, Tag } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { toast } from "sonner";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { toast, Toaster } from "sonner";
+import { PALETTE } from "@/utils/paletteeColor";
 
 export default function StockCategoryPage() {
   const [categories, setCategories] = useState([
@@ -23,7 +28,7 @@ export default function StockCategoryPage() {
     if (!menuHead.trim()) return;
     setCategories([...categories, { id: Date.now(), name: menuHead, status: "Active" }]);
     setMenuHead("");
-    toast.success("Stock menu head created successfully.");
+    toast.success("Stock category created successfully.");
   };
 
   const handleDelete = (id) => {
@@ -32,95 +37,132 @@ export default function StockCategoryPage() {
   };
 
   return (
-    <div className="space-y-8 font-sans max-w-4xl">
-      {/* Top Header & Back Button */}
-      <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 border-b border-zinc-100 pb-5">
-        <div className="space-y-1">
-          <h2 className="text-xl font-bold tracking-tight text-zinc-900 font-serif">
-            Stock Type Category
-          </h2>
-          <p className="text-xs text-zinc-400">
-            Define main categories for your stock products.
-          </p>
-        </div>
-        
-        <Link href="/admin/dashboard">
-          <Button className="bg-[#B91C1C] hover:bg-red-700 text-white rounded-[10px] flex items-center gap-1.5 py-5 px-6 font-bold text-xs uppercase tracking-wider">
-            <ArrowLeft className="h-4 w-4" />
-            <span>Back To</span>
-          </Button>
-        </Link>
-      </div>
+    <div className="flex flex-col overflow-hidden min-h-screen" style={{ backgroundColor: PALETTE.canvas, color: PALETTE.ink }}>
+      <Toaster position="top-right" richColors />
 
-      {/* Form */}
-      <form onSubmit={handleCreate} className="space-y-6 max-w-xl">
-        <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-          <label className="text-[10px] font-bold text-zinc-550 uppercase tracking-widest sm:w-1/3">
-            Stock Menu Head
-          </label>
-          <Input
-            type="text"
-            placeholder="Type Here"
-            value={menuHead}
-            onChange={(e) => setMenuHead(e.target.value)}
-            className="bg-white border-zinc-200 rounded-[10px] h-11 focus:ring-[#12A594] sm:w-2/3"
-          />
-        </div>
+      <div className="flex-1 overflow-y-auto p-8">
+        <div className="max-w-[1200px] mx-auto space-y-8 pb-16 font-sans">
 
-        <Button
-          type="submit"
-          className="w-full bg-[#1e40af] hover:bg-blue-900 text-white rounded-[10px] h-12 font-bold text-sm uppercase tracking-widest"
-        >
-          Create Menu Head
-        </Button>
-      </form>
+          {/* Header */}
+          <div className="flex flex-col sm:flex-row justify-between sm:items-end gap-4 border-b border-zinc-200 pb-5">
+            <div>
+              <h1 className="text-[32px] font-bold leading-tight" style={{ color: PALETTE.ink }}>
+                Stock Type Category
+              </h1>
+              <p className="text-[15px] mt-1" style={{ color: PALETTE.inkMuted }}>
+                Define main categories for your stock products.
+              </p>
+            </div>
 
-      {/* Overview Table */}
-      <div className="space-y-4 pt-4">
-        <h3 className="text-sm font-extrabold text-zinc-900">
-          Overview
-        </h3>
+          </div>
 
-        <div className="overflow-x-auto border border-[#ECECEC] rounded-[12px] overflow-hidden">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-[#1e40af] text-white uppercase text-[9px] tracking-widest font-black">
-                <th className="p-4 font-black">Menu Head</th>
-                <th className="p-4 font-black text-center w-32">Status</th>
-                <th className="p-4 font-black text-center w-24">Delete <Edit className="h-3 w-3 inline ml-1" /></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#ECECEC] bg-white text-xs text-zinc-800">
-              {categories.length === 0 ? (
-                <tr>
-                  <td colSpan={3} className="p-8 text-center text-zinc-400 font-bold uppercase tracking-wider">
-                    No categories found.
-                  </td>
-                </tr>
-              ) : (
-                categories.map((c) => (
-                  <tr key={c.id} className="hover:bg-zinc-50">
-                    <td className="p-4 font-bold text-zinc-900">{c.name}</td>
-                    <td className="p-4 text-center">
-                      <span className={`inline-flex items-center px-2 py-1 rounded-[6px] text-[9px] font-black uppercase tracking-wider ${
-                        c.status === 'Active' ? 'bg-[#ECFDF5] text-[#059669]' : 'bg-red-50 text-red-600'
-                      }`}>
-                        {c.status}
-                      </span>
-                    </td>
-                    <td className="p-4 text-center">
-                      <button
-                        onClick={() => handleDelete(c.id)}
-                        className="text-zinc-400 hover:text-red-550 p-1"
-                      >
-                        <Trash2 className="h-4 w-4 mx-auto" />
-                      </button>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+          <form onSubmit={handleCreate} className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+            {/* Form Section */}
+            <div className="lg:col-span-8 space-y-6">
+              <Card className="shadow-sm border-zinc-200 bg-white overflow-hidden">
+                <CardHeader className="bg-zinc-50/50 border-b border-zinc-100 pb-4">
+                  <CardTitle className="text-[18px] font-bold text-zinc-900">Add New Category</CardTitle>
+                  <CardDescription className="text-[14px]">Create a new organizational category for stock tracking.</CardDescription>
+                </CardHeader>
+                <CardContent className="p-6">
+                  <div className="space-y-2">
+                    <label className="text-[14px] font-semibold text-zinc-900">
+                      Stock Menu Head <span className="text-red-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <LayoutList className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-400" />
+                      <Input
+                        type="text"
+                        placeholder="e.g. Beverages, Seafood, Packaging..."
+                        value={menuHead}
+                        onChange={(e) => setMenuHead(e.target.value)}
+                        className="pl-10 h-11 text-[16px] bg-white border-zinc-200 focus:ring-[#12A594]"
+                      />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Sidebar Save Section */}
+            <div className="lg:col-span-4 flex flex-col justify-end">
+              <Button
+                type="submit"
+                className="w-full h-12 text-[15px] font-bold text-white transition-transform hover:scale-[1.02] shadow-md"
+                style={{ backgroundColor: "#1e40af" }}
+              >
+                Create Category
+              </Button>
+            </div>
+          </form>
+
+          {/* Overview Table */}
+          <Card className="shadow-sm border-zinc-200 bg-white overflow-hidden mt-8">
+            <CardHeader className="px-6 py-5 border-b border-zinc-200 flex flex-row items-center justify-between">
+              <CardTitle className="text-[16px] font-bold text-zinc-900">Categories Overview</CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader className="bg-zinc-50">
+                  <TableRow>
+                    <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6">Menu Head</TableHead>
+                    <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6 text-center">Status</TableHead>
+                    <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6 text-center">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {categories.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={3} className="h-24 text-center text-zinc-500 text-[14px]">No categories found.</TableCell>
+                    </TableRow>
+                  ) : (
+                    categories.map((c) => (
+                      <TableRow key={c.id} className="h-16 hover:bg-zinc-50 transition-colors">
+                        <TableCell className="px-6">
+                          <div className="flex items-center gap-3">
+                            <Tag className="w-4 h-4 text-zinc-400" />
+                            <span className="font-semibold text-[15px] text-zinc-900">{c.name}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="px-6 text-center">
+                          {c.status === "Active" ? (
+                            <Badge className="bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border-none px-2.5 py-1 text-[13px] font-semibold">
+                              Active
+                            </Badge>
+                          ) : (
+                            <Badge className="bg-red-50 text-red-600 hover:bg-red-100 border-none px-2.5 py-1 text-[13px] font-semibold">
+                              Inactive
+                            </Badge>
+                          )}
+                        </TableCell>
+                        <TableCell className="px-6 text-center">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-8 w-8 border text-zinc-500 hover:text-zinc-900 cursor-pointer">
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-40 bg-white">
+                              <DropdownMenuItem className="text-[14px] font-medium cursor-pointer">
+                                <Edit className="mr-2 h-4 w-4" /> Edit Category
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                className="text-[14px] font-medium text-red-600 focus:bg-red-500 focus:text-white cursor-pointer"
+                                onClick={() => handleDelete(c.id)}
+                              >
+                                <Trash className="mr-2 h-4 w-4" /> Delete
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+
         </div>
       </div>
     </div>

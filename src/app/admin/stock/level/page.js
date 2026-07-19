@@ -2,9 +2,15 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Trash2, Edit } from "lucide-react";
+import { ArrowLeft, Trash2, Edit, Search, MoreHorizontal, Trash, CalendarClock } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { toast } from "sonner";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { toast, Toaster } from "sonner";
+import { PALETTE } from "@/utils/paletteeColor";
 
 export default function StockLevelPage() {
   const [searchMenuHead, setSearchMenuHead] = useState("");
@@ -20,94 +26,117 @@ export default function StockLevelPage() {
   };
 
   return (
-    <div className="space-y-8 font-sans max-w-5xl">
-      {/* Top Header & Back Button */}
-      <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 border-b border-zinc-100 pb-5">
-        <div className="space-y-1">
-          <h2 className="text-xl font-bold tracking-tight text-zinc-900 font-serif">
-            Current Stock Level
-          </h2>
-          <p className="text-xs text-zinc-400">
-            View total inventory balances.
-          </p>
-        </div>
-        
-        <Link href="/admin/dashboard">
-          <Button className="bg-[#B91C1C] hover:bg-red-700 text-white rounded-[10px] flex items-center gap-1.5 py-5 px-6 font-bold text-xs uppercase tracking-wider">
-            <ArrowLeft className="h-4 w-4" />
-            <span>Back To</span>
-          </Button>
-        </Link>
-      </div>
+    <div className="flex flex-col overflow-hidden min-h-screen" style={{ backgroundColor: PALETTE.canvas, color: PALETTE.ink }}>
+      <Toaster position="top-right" richColors />
 
-      {/* Overview Table */}
-      <div className="space-y-4 pt-4">
-        <h3 className="text-sm font-extrabold text-zinc-900">
-          Overview
-        </h3>
-        
-        <div className="flex flex-col sm:flex-row justify-between items-end gap-4 max-w-5xl">
-          <div className="w-full sm:w-1/2">
-            <select
-              value={searchMenuHead}
-              onChange={(e) => setSearchMenuHead(e.target.value)}
-              className="w-full bg-[#1e40af] text-white border-none rounded-none rounded-t-[4px] h-11 px-4 text-xs font-bold appearance-none cursor-pointer focus:ring-2 focus:ring-[#F97316] uppercase"
-            >
-              <option value="">SEARCH MENU HEAD</option>
-              <option value="Produce">Produce</option>
-              <option value="Dairy">Dairy</option>
-            </select>
-          </div>
-          
-          <div className="text-zinc-900 font-extrabold text-sm mb-2">
-            Current Date Status
-          </div>
-        </div>
+      <div className="flex-1 overflow-y-auto p-8">
+        <div className="max-w-[1200px] mx-auto space-y-8 pb-16 font-sans">
 
-        <div className="overflow-x-auto border border-[#ECECEC] rounded-[4px] rounded-tl-none overflow-hidden mt-0">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-[#1e40af] text-white uppercase text-[9px] tracking-widest font-black">
-                <th className="p-4 font-black border-r border-blue-900">Product Name</th>
-                <th className="p-4 font-black text-center border-r border-blue-900">
-                  <div className="leading-tight">
-                    HIGH VALUE<br/>IN - OUT
-                  </div>
-                </th>
-                <th className="p-4 font-black text-center border-r border-blue-900">Current Balance</th>
-                <th className="p-4 font-black text-center border-r border-blue-900">Measure</th>
-                <th className="p-4 font-black text-center w-24 border-r border-blue-900">Status</th>
-                <th className="p-4 font-black text-center w-20">Delete <Edit className="h-3 w-3 inline ml-1" /></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#ECECEC] bg-zinc-400 text-xs text-white font-bold">
-              {stockLevels.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="p-8 text-center text-zinc-100 font-bold uppercase tracking-wider">
-                    No records found.
-                  </td>
-                </tr>
-              ) : (
-                stockLevels.map((s, idx) => (
-                  <tr key={s.id} className={`${idx % 2 === 0 ? 'bg-zinc-600' : 'bg-zinc-400'} hover:bg-zinc-500 border-b border-zinc-500`}>
-                    <td className="p-4 border-r border-white/20">{s.name}</td>
-                    <td className="p-4 text-center border-r border-white/20">{s.highValue}</td>
-                    <td className="p-4 text-center border-r border-white/20">{s.currentBalance}</td>
-                    <td className="p-4 text-center border-r border-white/20">{s.measure}</td>
-                    <td className="p-4 text-center border-r border-white/20">{s.status}</td>
-                    <td className="p-4 text-center">
-                      <button
-                        onClick={() => handleDelete(s.id)}
-                        className="text-white hover:text-red-300 p-1"
-                      >
-                        <Trash2 className="h-4 w-4 mx-auto" />
-                      </button>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+          {/* Header */}
+          <div className="flex flex-col sm:flex-row justify-between sm:items-end gap-4 border-b border-zinc-200 pb-5">
+            <div>
+              <h1 className="text-[32px] font-bold leading-tight" style={{ color: PALETTE.ink }}>
+                Current Stock Level
+              </h1>
+              <p className="text-[15px] mt-1" style={{ color: PALETTE.inkMuted }}>
+                View total inventory balances and filter by category.
+              </p>
+            </div>
+
+          </div>
+
+          <Card className="shadow-sm border-zinc-200 bg-white overflow-hidden mt-8">
+            <CardHeader className="bg-zinc-50/50 border-b border-zinc-100 pb-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="flex-1 w-full max-w-sm">
+                <Select value={searchMenuHead} onValueChange={setSearchMenuHead}>
+                  <SelectTrigger className="w-full h-10 text-[14px] bg-white border-zinc-200 focus:ring-2 focus:ring-[#F97316]">
+                    <SelectValue placeholder="Search Menu Head" />
+                  </SelectTrigger>
+                  <SelectContent style={{ backgroundColor: PALETTE.canvas }}>
+                    <SelectItem value="all">All Categories</SelectItem>
+                    <SelectItem value="Produce">Produce</SelectItem>
+                    <SelectItem value="Dairy">Dairy</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="text-[13px] font-semibold text-zinc-500 flex items-center gap-2">
+                <CalendarClock className="w-4 h-4" />
+                Current Date Status
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader className="bg-zinc-50">
+                  <TableRow>
+                    <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6">Product Name</TableHead>
+                    <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6 text-center">High Value<br />(In - Out)</TableHead>
+                    <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6 text-center">Current Balance</TableHead>
+                    <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6 text-center">Measure</TableHead>
+                    <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6 text-center">Status</TableHead>
+                    <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6 text-center">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {stockLevels.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={6} className="h-24 text-center text-zinc-500 text-[14px]">No records found.</TableCell>
+                    </TableRow>
+                  ) : (
+                    stockLevels.map((s) => (
+                      <TableRow key={s.id} className="h-16 hover:bg-zinc-50 transition-colors">
+                        <TableCell className="px-6">
+                          <span className="font-semibold text-[15px] text-zinc-900">{s.name}</span>
+                        </TableCell>
+                        <TableCell className="px-6 text-center font-mono text-[14px] text-zinc-600">
+                          {s.highValue}
+                        </TableCell>
+                        <TableCell className="px-6 text-center">
+                          <span className="inline-flex items-center justify-center bg-blue-50 text-blue-700 px-3 py-1 rounded-md text-[15px] font-extrabold border border-blue-100">
+                            {s.currentBalance}
+                          </span>
+                        </TableCell>
+                        <TableCell className="px-6 text-center text-[14px] font-bold text-zinc-500 uppercase">
+                          {s.measure}
+                        </TableCell>
+                        <TableCell className="px-6 text-center">
+                          {s.status === "Active" ? (
+                            <Badge className="bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border-none px-2.5 py-1 text-[13px] font-semibold">
+                              Active
+                            </Badge>
+                          ) : (
+                            <Badge className="bg-red-50 text-red-600 hover:bg-red-100 border-none px-2.5 py-1 text-[13px] font-semibold">
+                              Inactive
+                            </Badge>
+                          )}
+                        </TableCell>
+                        <TableCell className="px-6 text-center">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-8 w-8 border text-zinc-500 hover:text-zinc-900 cursor-pointer">
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-40 bg-white">
+                              <DropdownMenuItem className="text-[14px] font-medium cursor-pointer">
+                                <Edit className="mr-2 h-4 w-4" /> Edit Record
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                className="text-[14px] font-medium text-red-600 focus:bg-red-500 focus:text-white cursor-pointer"
+                                onClick={() => handleDelete(s.id)}
+                              >
+                                <Trash className="mr-2 h-4 w-4" /> Delete
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+
         </div>
       </div>
     </div>

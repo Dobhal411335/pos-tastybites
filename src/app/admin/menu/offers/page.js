@@ -2,11 +2,15 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Plus, Edit, Trash2, CheckCircle2, Upload, Calendar } from "lucide-react";
+import { ArrowLeft, Plus, Edit, Trash2, MoreHorizontal, Calendar, Image as ImageIcon, Trash } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { toast } from "sonner";
-
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { toast, Toaster } from "sonner";
+import { PALETTE } from "@/utils/paletteeColor";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 export default function CreatePromoOfferPage() {
   const [offers, setOffers] = useState([
     {
@@ -33,6 +37,7 @@ export default function CreatePromoOfferPage() {
   const [choice1, setChoice1] = useState("");
   const [choice2, setChoice2] = useState("");
   const [choice3, setChoice3] = useState("");
+  const [drinkInclusion, setDrinkInclusion] = useState("");
   const [priceAmount, setPriceAmount] = useState("");
   const [description, setDescription] = useState("");
   const [validFrom, setValidFrom] = useState("");
@@ -61,7 +66,10 @@ export default function CreatePromoOfferPage() {
     setChoice1("");
     setChoice2("");
     setChoice3("");
+    setDrinkInclusion("");
     setDescription("");
+    setValidFrom("");
+    setValidTo("");
     toast.success("Promotional offer created successfully!");
   };
 
@@ -80,247 +88,294 @@ export default function CreatePromoOfferPage() {
   };
 
   return (
-    <div className="space-y-8 font-sans max-w-5xl">
-      {/* Top Header & Back Button */}
-      <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 border-b border-zinc-100 pb-5">
-        <div className="space-y-1">
-          <h2 className="text-xl font-bold tracking-tight text-zinc-900 font-serif">
-            Create Promotional Offer
-          </h2>
-          <p className="text-xs text-zinc-400">
-            Define special seasonal bundles, happy hour packages, and active coupons.
-          </p>
-        </div>
-        <Link href="/admin/menu/products">
-          <Button className="bg-[#B91C1C] hover:bg-red-700 text-white rounded-[10px] flex items-center gap-1.5 py-5 px-6 font-bold text-xs uppercase tracking-wider">
-            <ArrowLeft className="h-4 w-4" />
-            <span>Back To Products</span>
-          </Button>
-        </Link>
-      </div>
+    <div className="flex flex-col overflow-hidden min-h-screen" style={{ backgroundColor: PALETTE.canvas, color: PALETTE.ink }}>
+      <Toaster position="top-right" richColors />
 
-      {/* Main Forms Section */}
-      <form onSubmit={handleCreateOffer} className="space-y-6 bg-zinc-50/50 p-6 rounded-xl border border-zinc-200">
-        
-        {/* Name input */}
-        <div className="space-y-2">
-          <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest block">
-            Type Offer Name
-          </label>
-          <Input
-            type="text"
-            placeholder="Gourmet Burger + Shake Combo"
-            value={offerName}
-            onChange={(e) => setOfferName(e.target.value)}
-            className="bg-white border-zinc-200 rounded-[10px] h-11 focus:ring-[#F97316] text-sm"
-          />
-        </div>
+      <div className="flex-1 overflow-y-auto p-8">
+        <div className="max-w-[1200px] mx-auto space-y-8 pb-16 font-sans">
 
-        {/* Dynamic inclusions & choices */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Offer Include */}
-          <div className="space-y-2">
-            <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest block">
-              Offer Includes (Products)
-            </label>
-            <div className="flex gap-2">
-              <Input
-                type="text"
-                placeholder="Type Product Name"
-                value={offerInclude}
-                onChange={(e) => setOfferInclude(e.target.value)}
-                className="bg-white border-zinc-200 rounded-[10px] h-11"
-              />
-              <Button type="button" variant="outline" className="h-11 rounded-[10px] px-4 font-bold text-xs uppercase">
-                + Add More
-              </Button>
+          {/* Top Header & Back Button */}
+          <div className="flex flex-col sm:flex-row justify-between sm:items-end gap-4 border-b border-zinc-200 pb-5">
+            <div>
+              <h1 className="text-[32px] font-bold leading-tight" style={{ color: PALETTE.ink }}>
+                Create Promotional Offer
+              </h1>
+              <p className="text-[15px] mt-1" style={{ color: PALETTE.inkMuted }}>
+                Define special seasonal bundles, happy hour packages, and active coupons.
+              </p>
             </div>
           </div>
 
-          {/* Choice Off */}
-          <div className="space-y-2">
-            <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest block">
-              Choice Off (Pick up to 3)
-            </label>
-            <div className="flex gap-2 items-center">
-              <Input
-                type="text"
-                placeholder="Type 1"
-                value={choice1}
-                onChange={(e) => setChoice1(e.target.value)}
-                className="bg-white border-zinc-200 rounded-[10px] h-11 text-xs"
-              />
-              <span className="text-[9px] font-extrabold text-zinc-400">OR</span>
-              <Input
-                type="text"
-                placeholder="Type 2"
-                value={choice2}
-                onChange={(e) => setChoice2(e.target.value)}
-                className="bg-white border-zinc-200 rounded-[10px] h-11 text-xs"
-              />
-              <span className="text-[9px] font-extrabold text-zinc-400">OR</span>
-              <Input
-                type="text"
-                placeholder="Type 3"
-                value={choice3}
-                onChange={(e) => setChoice3(e.target.value)}
-                className="bg-white border-zinc-200 rounded-[10px] h-11 text-xs"
-              />
-              <Button type="button" variant="outline" className="h-11 rounded-[10px] px-3 font-bold text-xs uppercase">
-                + Add
-              </Button>
+          <form onSubmit={handleCreateOffer} className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+
+            {/* Left Column */}
+            <div className="lg:col-span-8 space-y-6">
+
+              {/* Basic Information */}
+              <Card className="shadow-sm border-zinc-200 bg-white overflow-hidden">
+                <CardHeader className="bg-zinc-50/50 border-b border-zinc-100 pb-4">
+                  <CardTitle className="text-[18px] font-bold text-zinc-900">Basic Information</CardTitle>
+                  <CardDescription className="text-[14px]">Give your offer a name and description.</CardDescription>
+                </CardHeader>
+                <CardContent className="p-6 space-y-5">
+                  <div className="space-y-2">
+                    <label className="text-[14px] font-semibold text-zinc-900">
+                      Offer Name <span className="text-red-500">*</span>
+                    </label>
+                    <Input
+                      type="text"
+                      placeholder="e.g. Gourmet Burger + Shake Combo"
+                      value={offerName}
+                      onChange={(e) => setOfferName(e.target.value)}
+                      className="h-11 text-[16px] bg-white"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[14px] font-semibold text-zinc-900">
+                      Offer Description
+                    </label>
+                    <textarea
+                      rows={3}
+                      placeholder="Describe what's included..."
+                      value={description}
+                      onChange={(e) => setDescription(e.target.value)}
+                      className="w-full h-auto bg-white border border-zinc-200 rounded-md p-3 text-[16px] focus:outline-none focus:ring-2 focus:ring-[#F97316] focus:border-transparent transition-shadow"
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Offer Contents */}
+              <Card className="shadow-sm border-zinc-200 bg-white overflow-hidden">
+                <CardHeader className="bg-zinc-50/50 border-b border-zinc-100 pb-4">
+                  <CardTitle className="text-[18px] font-bold text-zinc-900">Offer Contents</CardTitle>
+                  <CardDescription className="text-[14px]">Specify the items and choices included in this offer.</CardDescription>
+                </CardHeader>
+                <CardContent className="p-6 space-y-6">
+                  <div className="space-y-2">
+                    <label className="text-[14px] font-semibold text-zinc-900">
+                      Includes (Products)
+                    </label>
+                    <div className="flex gap-2">
+                      <Input
+                        type="text"
+                        placeholder="Type Product Name"
+                        value={offerInclude}
+                        onChange={(e) => setOfferInclude(e.target.value)}
+                        className="h-11 text-[16px] bg-white flex-1"
+                      />
+                      <Button type="button" variant="outline" className="h-11 px-4 font-semibold shrink-0 text-zinc-700">
+                        <Plus className="w-4 h-4 mr-2" /> Add
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-[14px] font-semibold text-zinc-900">
+                      Choice Of (Pick up to 3)
+                    </label>
+                    <div className="flex flex-col sm:flex-row gap-2 items-center">
+                      <Input
+                        type="text"
+                        placeholder="Choice 1"
+                        value={choice1}
+                        onChange={(e) => setChoice1(e.target.value)}
+                        className="h-11 text-[15px] bg-white"
+                      />
+                      <span className="text-[12px] font-bold text-zinc-400">OR</span>
+                      <Input
+                        type="text"
+                        placeholder="Choice 2"
+                        value={choice2}
+                        onChange={(e) => setChoice2(e.target.value)}
+                        className="h-11 text-[15px] bg-white"
+                      />
+                      <span className="text-[12px] font-bold text-zinc-400">OR</span>
+                      <Input
+                        type="text"
+                        placeholder="Choice 3"
+                        value={choice3}
+                        onChange={(e) => setChoice3(e.target.value)}
+                        className="h-11 text-[15px] bg-white"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-[14px] font-semibold text-zinc-900">
+                      Drink / Liqueur Inclusions
+                    </label>
+                    <Input
+                      type="text"
+                      placeholder="Type Drink Names"
+                      value={drinkInclusion}
+                      onChange={(e) => setDrinkInclusion(e.target.value)}
+                      className="h-11 text-[16px] bg-white"
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+
             </div>
-          </div>
-        </div>
 
-        {/* Liqueur Choice & Pricing */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="space-y-2">
-            <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest block">
-              Liqueur Choice / Drink inclusions
-            </label>
-            <Input
-              type="text"
-              placeholder="Type Drink Names"
-              className="bg-white border-zinc-200 rounded-[10px] h-11"
-            />
-          </div>
+            {/* Right Column */}
+            <div className="lg:col-span-4 space-y-6">
 
-          <div className="space-y-2">
-            <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest block">
-              Price Amount ($)
-            </label>
-            <div className="flex gap-2">
-              <Input
-                type="number"
-                step="0.01"
-                placeholder="Amount / Value"
-                value={priceAmount}
-                onChange={(e) => setPriceAmount(e.target.value)}
-                className="bg-white border-zinc-200 rounded-[10px] h-11"
-              />
-              <Button type="button" variant="outline" className="h-11 rounded-[10px] px-4 font-bold text-xs uppercase">
-                + Add More
-              </Button>
-            </div>
-          </div>
-        </div>
+              {/* Pricing & Validity */}
+              <Card className="shadow-sm border-zinc-200 bg-white overflow-hidden">
+                <CardHeader className="bg-zinc-50/50 border-b border-zinc-100 pb-4">
+                  <CardTitle className="text-[18px] font-bold text-zinc-900">Pricing & Validity</CardTitle>
+                </CardHeader>
+                <CardContent className="p-6 space-y-6">
+                  <div className="space-y-2">
+                    <label className="text-[14px] font-semibold text-zinc-900">
+                      Price Amount ($) <span className="text-red-500">*</span>
+                    </label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      placeholder="0.00"
+                      value={priceAmount}
+                      onChange={(e) => setPriceAmount(e.target.value)}
+                      className="h-11 text-[16px] bg-white font-medium"
+                    />
+                  </div>
 
-        {/* Description textarea */}
-        <div className="space-y-2">
-          <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest block">
-            Offer Description
-          </label>
-          <textarea
-            rows={3}
-            placeholder="Offer Description Here"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            className="w-full bg-white border border-zinc-200 rounded-[10px] p-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#F97316] font-medium"
-          />
-        </div>
+                  <div className="space-y-2">
+                    <label className="text-[14px] font-semibold text-zinc-900">
+                      Valid From
+                    </label>
+                    <Input
+                      type="date"
+                      value={validFrom}
+                      onChange={(e) => setValidFrom(e.target.value)}
+                      className="h-11 text-[15px] bg-white"
+                    />
+                  </div>
 
-        {/* Validity dates & Tax */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-end">
-          <div className="space-y-2">
-            <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest block">
-              Validity From
-            </label>
-            <Input
-              type="date"
-              value={validFrom}
-              onChange={(e) => setValidFrom(e.target.value)}
-              className="bg-white border-zinc-200 rounded-[10px] h-11 text-xs"
-            />
-          </div>
+                  <div className="space-y-2">
+                    <label className="text-[14px] font-semibold text-zinc-900">
+                      Valid To
+                    </label>
+                    <Input
+                      type="date"
+                      value={validTo}
+                      onChange={(e) => setValidTo(e.target.value)}
+                      className="h-11 text-[15px] bg-white"
+                    />
+                  </div>
 
-          <div className="space-y-2">
-            <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest block">
-              Validity To
-            </label>
-            <Input
-              type="date"
-              value={validTo}
-              onChange={(e) => setValidTo(e.target.value)}
-              className="bg-white border-zinc-200 rounded-[10px] h-11 text-xs"
-            />
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => toast.success("Promo Image uploaded!")}
-              className="flex-1 bg-yellow-950 text-white rounded-[10px] h-11 px-4 text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 hover:bg-zinc-800 transition-all"
-            >
-              <Upload className="h-4 w-4" />
-              <span>Upload Offer Image</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Action Button */}
-        <Button
-          type="submit"
-          className="w-full bg-[#12A594] hover:bg-[#0f8b7b] text-white rounded-[10px] py-6 text-xs uppercase tracking-widest font-black"
-        >
-          Create Promotional Offer
-        </Button>
-
-      </form>
-
-      {/* Offers Over View Table */}
-      <div className="space-y-4">
-        <h3 className="text-xs font-extrabold uppercase tracking-widest text-[#6B7280]">
-          Product Detail Over View (Promotions & Offers)
-        </h3>
-        
-        <div className="overflow-x-auto border border-[#ECECEC] rounded-[12px] overflow-hidden">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-blue-800 text-white uppercase text-[9px] tracking-widest font-black">
-                <th className="p-4 font-black">Offer / Promotion Name</th>
-                <th className="p-4 font-black text-center w-24">Price</th>
-                <th className="p-4 font-black text-center w-36">Duration Dates</th>
-                <th className="p-4 font-black text-center w-28">Status</th>
-                <th className="p-4 font-black text-center w-24">Delete</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#ECECEC] bg-white text-xs text-zinc-800">
-              {offers.map((off) => (
-                <tr key={off.id} className="hover:bg-zinc-50">
-                  <td className="p-4 font-bold text-zinc-900">{off.name}</td>
-                  <td className="p-4 text-center font-extrabold text-[#F97316]">${off.price.toFixed(2)}</td>
-                  <td className="p-4 text-center text-zinc-400 font-bold">
-                    <span className="bg-zinc-100 text-zinc-650 px-2 py-0.5 rounded text-[10px]">
-                      {off.validFrom} to {off.validTo}
-                    </span>
-                  </td>
-                  <td className="p-4 text-center">
+                  <div className="space-y-2 pt-2">
+                    <label className="text-[14px] font-semibold text-zinc-900">
+                      Offer Image
+                    </label>
                     <button
                       type="button"
-                      onClick={() => handleToggleStatus(off.id)}
-                      className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider ${
-                        off.status ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"
-                      }`}
+                      onClick={() => toast.success("Mock upload: promo image selected!")}
+                      className="w-full flex flex-col items-center justify-center gap-2 border-2 border-dashed border-zinc-300 rounded-lg h-28 hover:border-[#F97316] hover:bg-orange-50/50 transition-colors cursor-pointer group"
                     >
-                      {off.status ? "Active" : "Inactive"}
+                      <div className="h-10 w-10 rounded-full bg-zinc-100 group-hover:bg-orange-100 flex items-center justify-center transition-colors">
+                        <ImageIcon className="h-5 w-5 text-zinc-500 group-hover:text-[#F97316]" />
+                      </div>
+                      <span className="text-[13px] font-medium text-zinc-600 group-hover:text-zinc-900">Upload Image</span>
                     </button>
-                  </td>
-                  <td className="p-4 text-center">
-                    <button
-                      onClick={() => handleDeleteOffer(off.id)}
-                      className="text-zinc-400 hover:text-red-550 p-1"
-                    >
-                      <Trash2 className="h-4 w-4 mx-auto" />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  </div>
+
+                </CardContent>
+              </Card>
+
+              <Button
+                type="submit"
+                className="w-full h-12 text-[15px] font-bold text-white transition-transform hover:scale-[1.02]"
+                style={{ backgroundColor: PALETTE.accent }}
+              >
+                Create Offer
+              </Button>
+
+            </div>
+          </form>
+
+          {/* Table Overview */}
+          <Card className="shadow-sm border-zinc-200 bg-white overflow-hidden mt-8">
+            <CardHeader className="px-6 py-5 border-b border-zinc-200">
+              <CardTitle className="text-[16px] font-bold text-zinc-900">Active Promotions & Offers</CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader className="bg-zinc-50">
+                  <TableRow>
+                    <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6">Offer Name</TableHead>
+                    <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6 text-center">Price</TableHead>
+                    <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6 text-center">Duration Dates</TableHead>
+                    <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6 text-center">Status</TableHead>
+                    <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6 text-center">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {offers.length > 0 ? offers.map((off) => (
+                    <TableRow key={off.id} className="h-16 hover:bg-zinc-50 transition-colors">
+                      <TableCell className="px-6">
+                        <span className="text-[15px] font-semibold text-zinc-900">{off.name}</span>
+                      </TableCell>
+                      <TableCell className="px-6 text-center font-bold text-[15px] text-[#F97316]">
+                        ${off.price.toFixed(2)}
+                      </TableCell>
+                      <TableCell className="px-6 text-center">
+                        <div className="inline-flex items-center gap-1.5 bg-zinc-200 text-zinc-900 px-2.5 py-1 rounded-md text-[13px] font-medium">
+                          <Calendar className="w-3.5 h-3.5 text-zinc-400" />
+                          {off.validFrom} to {off.validTo}
+                        </div>
+                      </TableCell>
+                      <TableCell className="px-6 text-center">
+                        <button
+                          type="button"
+                          onClick={() => handleToggleStatus(off.id)}
+                          className="cursor-pointer transition-transform hover:scale-105"
+                        >
+                          {off.status ? (
+                            <Badge className="bg-emerald-100 text-emerald-600 hover:bg-emerald-100 border-none px-2.5 py-1 text-[13px] font-semibold">
+                              Active
+                            </Badge>
+                          ) : (
+                            <Badge className="bg-zinc-100 text-zinc-600 hover:bg-zinc-200 border-none px-2.5 py-1 text-[13px] font-semibold">
+                              Inactive
+                            </Badge>
+                          )}
+                        </button>
+                      </TableCell>
+                      <TableCell className="px-6 text-center">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 border text-zinc-500 hover:text-zinc-900 cursor-pointer">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-40 bg-white">
+                            <DropdownMenuItem className="text-[14px] font-medium cursor-pointer">
+                              <Edit/> Edit Promotions
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              className="text-[14px] font-medium text-red-600 focus:bg-red-500 focus:text-white cursor-pointer"
+                              onClick={() => handleDeleteOffer(off.id)}
+                            >
+                             <Trash/> Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  )) : (
+                    <TableRow>
+                      <TableCell colSpan={5} className="h-24 text-center text-zinc-500 text-[14px]">No offers found.</TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+
         </div>
       </div>
-
     </div>
   );
 }
