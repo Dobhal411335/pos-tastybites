@@ -1,30 +1,34 @@
 "use client";
 
 import React, { useState } from "react";
-import { Trash2, Edit, List, LogIn } from "lucide-react";
+import Link from "next/link";
+import { ArrowLeft, Trash2, Edit, List, LogIn, ShoppingCart, Tag, UtensilsCrossed, Receipt, Plus, Users, CheckCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { toast } from "sonner";
-import { useRouter } from "next/navigation";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+import { toast, Toaster } from "sonner";
+import { PALETTE } from "@/utils/paletteeColor";
 
 export default function EmployeeCreateOrderPage() {
-  const router = useRouter();
   const [cart, setCart] = useState([]);
   const [isOptionModalOpen, setIsOptionModalOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
-  
+  const [menuCategory, setMenuCategory] = useState("all");
+
   const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
   const [guestName, setGuestName] = useState("");
   const [callNumber, setCallNumber] = useState("");
   const [tableNo, setTableNo] = useState("");
 
   const menuItems = [
-    { id: 1, name: "Pizza Margherita", price: 20.54, tax: 4.30, hasOptions: true },
-    { id: 2, name: "Bolognese Pasta", price: 20.54, tax: 4.30, hasOptions: true },
-    { id: 3, name: "Garlic Bread", price: 20.54, tax: 4.30, hasOptions: false },
-    { id: 4, name: "Caesar Salad", price: 20.54, tax: 4.30, hasOptions: false },
-    { id: 5, name: "Tiramisu", price: 20.54, tax: 4.30, hasOptions: true },
+    { id: 1, name: "Pizza Margherita", price: 20.54, tax: 4.30, hasOptions: true, category: "Pizza" },
+    { id: 2, name: "Bolognese Pasta", price: 20.54, tax: 4.30, hasOptions: true, category: "Pasta" },
+    { id: 3, name: "Garlic Bread", price: 20.54, tax: 4.30, hasOptions: false, category: "Sides" },
+    { id: 4, name: "Caesar Salad", price: 20.54, tax: 4.30, hasOptions: false, category: "Sides" },
+    { id: 5, name: "Tiramisu", price: 20.54, tax: 4.30, hasOptions: true, category: "Dessert" },
   ];
 
   const handleOpenOptions = (item) => {
@@ -61,281 +65,421 @@ export default function EmployeeCreateOrderPage() {
       return;
     }
     
-    // In a real app, this would post to /api/employee/orders
     toast.success("Order confirmed and sent to kitchen!");
     setIsConfirmModalOpen(false);
     setCart([]);
     setGuestName("");
     setCallNumber("");
     setTableNo("");
-    // router.push("/employee/orders/today");
   };
 
-  const totalAmount = cart.reduce((sum, item) => sum + item.price + item.tax, 0);
+  const totalAmount = cart.reduce((acc, item) => acc + item.price * item.qty, 0);
+  const totalTax = cart.reduce((acc, item) => acc + item.tax * item.qty, 0);
+  const grandTotal = totalAmount + totalTax;
 
   return (
-    <div className="space-y-6 pb-20">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-semibold tracking-tight text-zinc-900">Create Order</h1>
-          <p className="text-sm text-zinc-500 mt-1">Select items and build the guest&apos;s order</p>
-        </div>
-      </div>
-
-      <div className="bg-white rounded-[14px] shadow-sm border border-zinc-200 overflow-hidden">
-        {/* Menu Header */}
-        <div className="bg-zinc-50 border-b border-zinc-200 px-6 py-4 flex justify-between items-center">
-          <span className="font-semibold text-zinc-800">Menu Category</span>
-          <select className="bg-white border border-zinc-200 text-zinc-800 text-sm rounded-md px-3 py-1.5 outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition-all">
-            <option>All Categories</option>
-            <option>Mains</option>
-            <option>Appetizers</option>
-          </select>
-        </div>
-
-        {/* Menu List */}
-        <div className="divide-y divide-zinc-100">
-          {menuItems.map((item) => (
-            <div key={item.id} className="flex items-center hover:bg-zinc-50 transition-colors">
-              <div className="flex-1 px-6 py-4 font-medium text-sm text-zinc-900">{item.name}</div>
-              <div className="w-32 px-4 py-4 text-sm text-zinc-600 border-l border-zinc-100">${item.price.toFixed(2)}</div>
-              <div className="w-32 px-4 py-4 text-sm text-zinc-500 border-l border-zinc-100">Tax: ${item.tax.toFixed(2)}</div>
-              
-              <div 
-                className="w-40 px-4 py-4 border-l border-zinc-100 cursor-pointer hover:bg-zinc-100 transition-colors flex items-center gap-2"
-                onClick={() => handleOpenOptions(item)}
-              >
-                {item.hasOptions ? (
-                  <><LogIn className="h-4 w-4 text-zinc-400" /> <span className="text-sm font-medium text-zinc-700">Item Option</span></>
-                ) : (
-                  <><List className="h-4 w-4 text-zinc-400" /> <span className="text-sm font-medium text-zinc-500">No Option</span></>
-                )}
-              </div>
-              
-              <div className="w-36 border-l border-zinc-100">
-                <button 
-                  onClick={() => handleAddToCart(item)}
-                  className="w-full h-full py-4 text-sm font-medium text-orange-600 hover:bg-orange-50 hover:text-orange-700 transition-colors"
-                >
-                  Add to Cart
-                </button>
-              </div>
+    <div className="flex flex-col overflow-hidden min-h-screen" style={{ backgroundColor: PALETTE.canvas, color: PALETTE.ink }}>
+      <Toaster position="top-right" richColors />
+      
+      <div className="flex-1 overflow-y-auto p-8">
+        <div className="max-w-[1400px] mx-auto space-y-8 pb-16 font-sans">
+          
+          {/* Header */}
+          <div className="flex flex-col sm:flex-row justify-between sm:items-end gap-4 border-b border-zinc-200 pb-5">
+            <div>
+              <h1 className="text-[32px] font-bold leading-tight" style={{ color: PALETTE.ink }}>
+                Create Order
+              </h1>
+              <p className="text-[15px] mt-1" style={{ color: PALETTE.inkMuted }}>
+                Select items from the menu and build the guest&apos;s order.
+              </p>
             </div>
-          ))}
-        </div>
-      </div>
-
-      <div className="bg-white rounded-[14px] shadow-sm border border-zinc-200 overflow-hidden mt-8">
-        <div className="bg-zinc-50 border-b border-zinc-200 px-6 py-4">
-          <h2 className="font-semibold text-zinc-800">Order Cart</h2>
-        </div>
-        
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-sm">
-            <thead>
-              <tr className="bg-white text-zinc-500 border-b border-zinc-100">
-                <th className="px-6 py-3 font-medium">Item Name</th>
-                <th className="px-6 py-3 font-medium text-center">Size</th>
-                <th className="px-6 py-3 font-medium text-center">Qty</th>
-                <th className="px-6 py-3 font-medium text-right">Price</th>
-                <th className="px-6 py-3 font-medium text-right">Tax & Fee</th>
-                <th className="px-6 py-3 font-medium text-right">Discount</th>
-                <th className="px-6 py-3 font-medium text-right">Total</th>
-                <th className="px-6 py-3 w-20"></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-100">
-              {cart.length === 0 ? (
-                <tr>
-                  <td colSpan={8} className="px-6 py-8 text-center text-zinc-400">Cart is empty</td>
-                </tr>
-              ) : (
-                cart.map((c) => (
-                  <tr key={c.cartId} className="hover:bg-zinc-50">
-                    <td className="px-6 py-4 font-medium text-zinc-900">{c.name}</td>
-                    <td className="px-6 py-4 text-zinc-600 text-center">{c.size}</td>
-                    <td className="px-6 py-4 text-zinc-600 text-center">{c.qty}</td>
-                    <td className="px-6 py-4 text-zinc-600 text-right">${c.price.toFixed(2)}</td>
-                    <td className="px-6 py-4 text-zinc-600 text-right">${c.tax.toFixed(2)}</td>
-                    <td className="px-6 py-4 text-zinc-600 text-right">-</td>
-                    <td className="px-6 py-4 font-semibold text-zinc-900 text-right">${(c.price + c.tax).toFixed(2)}</td>
-                    <td className="px-6 py-4 flex items-center justify-end gap-3">
-                      <button className="text-zinc-400 hover:text-zinc-600 transition-colors"><Edit className="h-4 w-4" /></button>
-                      <button className="text-zinc-400 hover:text-red-600 transition-colors" onClick={() => setCart(cart.filter(x => x.cartId !== c.cartId))}><Trash2 className="h-4 w-4" /></button>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {cart.length > 0 && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mt-6 items-start">
-          <div className="bg-white rounded-[14px] shadow-sm border border-zinc-200 p-6 space-y-4">
-            <Label className="text-zinc-700 font-medium text-base">Any Special Note</Label>
-            <textarea 
-              className="w-full bg-zinc-50 border border-zinc-200 rounded-[10px] min-h-[120px] p-4 text-sm focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none transition-all resize-none placeholder:text-zinc-400"
-              placeholder="e.g. No onions, extra spicy..."
-            ></textarea>
           </div>
 
-          <div className="bg-white rounded-[14px] shadow-sm border border-zinc-200 p-6 space-y-6">
-            <div className="space-y-4">
-              <Label className="text-zinc-700 font-medium text-base">Discount & Coupons</Label>
-              <div className="flex gap-3">
-                <Input placeholder="Promo code" className="flex-1 rounded-[10px] bg-zinc-50" />
-                <Button variant="outline" className="rounded-[10px]">Apply</Button>
-              </div>
+          <div className="flex flex-col items-center w-full gap-8">
+            
+            {/* Left Column: Menu Selection */}
+            <div className="w-full space-y-6">
+              <Card className="shadow-sm border-zinc-200 bg-white overflow-hidden h-full flex flex-col">
+                <CardHeader className="bg-zinc-50/50 border-b border-zinc-100 pb-4 flex flex-row items-center justify-between gap-4">
+                  <div className="flex items-center gap-2">
+                    <UtensilsCrossed className="w-5 h-5 text-[#1e40af]" />
+                    <CardTitle className="text-[18px] font-bold text-zinc-900">Menu List</CardTitle>
+                  </div>
+                  <div className="w-40">
+                    <Select value={menuCategory} onValueChange={setMenuCategory}>
+                      <SelectTrigger className="h-9 text-[13px] bg-white border-zinc-200 focus:ring-2 focus:ring-[#F97316]">
+                        <SelectValue placeholder="All Items" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Items</SelectItem>
+                        <SelectItem value="Pizza">Pizza</SelectItem>
+                        <SelectItem value="Pasta">Pasta</SelectItem>
+                        <SelectItem value="Sides">Sides</SelectItem>
+                        <SelectItem value="Dessert">Dessert</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </CardHeader>
+                <CardContent className="p-0 flex-1 overflow-y-auto">
+                  <div className="divide-y divide-zinc-100">
+                    {menuItems
+                      .filter(item => menuCategory === "all" || item.category === menuCategory)
+                      .map((item) => (
+                        <div key={item.id} className="p-4 flex items-center justify-between hover:bg-zinc-50 transition-colors">
+                          <div className="space-y-1">
+                            <h4 className="font-bold text-[15px] text-zinc-900">{item.name}</h4>
+                            <div className="flex items-center gap-3 text-[13px]">
+                              <span className="font-bold text-[#F97316]">${item.price.toFixed(2)}</span>
+                              <span className="text-zinc-500">Tax: ${item.tax.toFixed(2)}</span>
+                            </div>
+                          </div>
+                          
+                          <div className="flex items-center gap-2">
+                            {item.hasOptions ? (
+                              <Button 
+                                variant="outline" 
+                                size="sm" 
+                                className="h-8 text-[12px] font-bold border-zinc-200 text-zinc-700 hover:bg-zinc-100"
+                                onClick={() => handleOpenOptions(item)}
+                              >
+                                <LogIn className="w-3.5 h-3.5 mr-1" /> Options
+                              </Button>
+                            ) : (
+                              <Badge variant="secondary" className="h-8 text-[12px] font-bold bg-zinc-100 text-zinc-500 hover:bg-zinc-100 border-none shadow-none">
+                                <List className="w-3.5 h-3.5 mr-1" /> Std
+                              </Badge>
+                            )}
+                            <Button 
+                              size="sm" 
+                              className="h-8 text-[12px] font-bold bg-[#1e40af] hover:bg-blue-900 text-white"
+                              onClick={() => handleAddToCart(item)}
+                            >
+                              <Plus className="w-3.5 h-3.5 mr-1" /> Add
+                            </Button>
+                          </div>
+                        </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
             </div>
 
-            <div className="border-t border-zinc-100 pt-6 space-y-3">
-              <div className="flex justify-between text-zinc-600 text-sm">
-                <span>Subtotal</span>
-                <span>${(totalAmount - cart.reduce((s, i) => s + i.tax, 0)).toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between text-zinc-600 text-sm">
-                <span>Tax</span>
-                <span>${cart.reduce((s, i) => s + i.tax, 0).toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between text-xl font-semibold text-zinc-900 pt-3 border-t border-zinc-100 mt-3">
-                <span>Total Amount</span>
-                <span>${totalAmount.toFixed(2)}</span>
-              </div>
-            </div>
+            {/* Right Column: Cart & Billing */}
+            <div className="w-full space-y-6">
+              
+              {/* Cart Table */}
+              <Card className="shadow-sm border-zinc-200 bg-white overflow-hidden">
+                <CardHeader className="bg-zinc-50/50 border-b border-zinc-100 pb-4 flex flex-row items-center justify-between gap-4">
+                  <div className="flex items-center gap-2">
+                    <ShoppingCart className="w-5 h-5 text-[#1e40af]" />
+                    <CardTitle className="text-[18px] font-bold text-zinc-900">Current Order</CardTitle>
+                  </div>
+                  <Badge className="bg-blue-50 text-blue-700 hover:bg-blue-100 border-none px-3 py-1 text-[13px] font-bold uppercase">
+                    Order #001
+                  </Badge>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <Table>
+                    <TableHeader className="bg-zinc-50">
+                      <TableRow>
+                        <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-3 px-4">Item</TableHead>
+                        <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-3 px-4 text-center">Size</TableHead>
+                        <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-3 px-4 text-center">Qty</TableHead>
+                        <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-3 px-4 text-center">Total</TableHead>
+                        <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-3 px-4 text-center">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {cart.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={5} className="h-32 text-center text-zinc-400 font-medium text-[14px]">
+                            Cart is empty. Add items from the menu.
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        cart.map((c) => (
+                          <TableRow key={c.cartId} className="hover:bg-zinc-50 transition-colors h-14">
+                            <TableCell className="px-4">
+                              <span className="font-bold text-[14px] text-zinc-900">{c.name}</span>
+                              <div className="text-[11px] text-zinc-500 font-medium">${c.price.toFixed(2)} + ${c.tax.toFixed(2)} tax</div>
+                            </TableCell>
+                            <TableCell className="px-4 text-center">
+                              <Badge variant="outline" className="text-[11px] font-semibold text-zinc-600 bg-white border-zinc-200">
+                                {c.size}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="px-4 text-center font-bold text-[14px] text-zinc-700">{c.qty}</TableCell>
+                            <TableCell className="px-4 text-center font-bold text-[14px] text-[#F97316]">
+                              ${((c.price + c.tax) * c.qty).toFixed(2)}
+                            </TableCell>
+                            <TableCell className="px-4 text-center">
+                              <div className="flex items-center justify-center gap-2">
+                                <button className="text-zinc-400 hover:text-zinc-800 transition-colors p-1">
+                                  <Edit className="h-4 w-4" />
+                                </button>
+                                <button 
+                                  className="text-red-400 hover:text-red-600 transition-colors p-1"
+                                  onClick={() => setCart(cart.filter(x => x.cartId !== c.cartId))}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
 
-            <Button 
-              onClick={handlePlaceOrderClick}
-              className="w-full h-12 bg-orange-500 hover:bg-orange-600 text-white rounded-[10px] text-lg font-medium transition-colors"
-            >
-              Place Order
-            </Button>
+              {/* Billing Summary */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                
+                {/* Notes & Discounts */}
+                <Card className="shadow-sm border-zinc-200 bg-white overflow-hidden">
+                  <CardContent className="p-6 space-y-6">
+                    <div className="space-y-2">
+                      <label className="text-[14px] font-semibold text-zinc-900">Special Note</label>
+                      <textarea 
+                        placeholder="Add any special instructions here..."
+                        className="w-full bg-zinc-50 border border-zinc-200 rounded-md min-h-[80px] p-3 text-[14px] text-zinc-700 focus:outline-none focus:ring-2 focus:ring-[#F97316]"
+                      />
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <label className="text-[14px] font-semibold text-zinc-900 flex items-center gap-2">
+                        <Tag className="w-4 h-4 text-zinc-500" /> Discount Code
+                      </label>
+                      <div className="flex gap-2">
+                        <Input placeholder="Enter Code" className="h-10 text-[14px] border-zinc-200 bg-white focus:ring-[#F97316]" />
+                        <Button variant="outline" className="h-10 px-4 font-bold text-zinc-700 hover:bg-zinc-50 border-zinc-200">
+                          Apply
+                        </Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Totals & Checkout */}
+                <Card className="shadow-sm border-zinc-200 bg-zinc-900 text-white overflow-hidden flex flex-col">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-[18px] font-bold flex items-center gap-2">
+                      <Receipt className="w-5 h-5 text-[#F97316]" /> Order Summary
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-6 flex-1 flex flex-col justify-between space-y-6">
+                    <div className="space-y-3 border-b border-zinc-700 pb-4">
+                      <div className="flex justify-between items-center text-[14px] text-zinc-300 font-medium">
+                        <span>Subtotal</span>
+                        <span>${totalAmount.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between items-center text-[14px] text-zinc-300 font-medium">
+                        <span>Tax & Fees</span>
+                        <span>${totalTax.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between items-center text-[14px] text-green-400 font-medium">
+                        <span>Discount</span>
+                        <span>-$0.00</span>
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <div className="flex justify-between items-center mb-6">
+                        <span className="text-[18px] font-bold text-zinc-100">Total Amount</span>
+                        <span className="text-[28px] font-black text-[#F97316]">${grandTotal.toFixed(2)}</span>
+                      </div>
+                      <Button 
+                        onClick={handlePlaceOrderClick}
+                        className="w-full h-14 text-[16px] font-bold bg-[#F97316] hover:bg-[#e06510] text-white rounded-md shadow-lg transition-transform hover:scale-[1.02]"
+                      >
+                        Place Order
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+
+              </div>
+
+            </div>
           </div>
+
         </div>
-      )}
+      </div>
 
       {/* Item Option Modal */}
       {isOptionModalOpen && selectedItem && (
-        <div className="fixed inset-0 bg-zinc-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-[16px] shadow-xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-            <div className="flex justify-between items-center p-5 border-b border-zinc-100">
-              <h3 className="text-lg font-semibold text-zinc-900">{selectedItem.name}</h3>
-              <button onClick={() => setIsOptionModalOpen(false)} className="text-zinc-400 hover:text-zinc-600 transition-colors">
-                <Trash2 className="h-5 w-5" style={{display: 'none'}} />
-                <span className="text-2xl leading-none">&times;</span>
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+          <Card className="w-full max-w-lg shadow-2xl border-none overflow-hidden bg-white animate-in zoom-in-95 duration-200">
+            <CardHeader className="bg-zinc-50 border-b border-zinc-100 px-6 py-4 flex flex-row items-center justify-between">
+              <div>
+                <CardTitle className="text-[20px] font-bold text-zinc-900">{selectedItem.name}</CardTitle>
+                <CardDescription className="text-[13px]">Select variations and extras</CardDescription>
+              </div>
+              <button 
+                onClick={() => setIsOptionModalOpen(false)} 
+                className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-zinc-200 text-zinc-500 transition-colors"
+              >
+                ×
               </button>
-            </div>
+            </CardHeader>
             
-            <div className="p-5 space-y-4">
-              <div className="flex text-xs font-medium text-zinc-500 mb-2 px-3">
-                <div className="flex-1">Options</div>
-                <div className="w-24 text-right">Discount</div>
-                <div className="w-24 text-right">Price</div>
+            <CardContent className="p-6 space-y-4">
+              <div className="flex text-[11px] font-bold uppercase tracking-wider text-zinc-400 mb-2 border-b border-zinc-100 pb-2 px-3">
+                <div className="flex-1">Option</div>
+                <div className="w-24 text-center">Discount</div>
+                <div className="w-24 text-center">Price</div>
               </div>
 
               {/* Radio Options */}
-              {['Small: 26cm', 'Medium: 32cm', 'Large: 45cm'].map((size, idx) => (
-                <label key={idx} className="flex items-center border border-zinc-200 p-3 rounded-[10px] cursor-pointer hover:border-orange-500 transition-colors has-checked:border-orange-500">
-                  <div className="flex-1 flex items-center gap-3 text-sm font-medium text-zinc-700">
-                    <input type="radio" name="size" defaultChecked={idx === 1} className="w-4 h-4 accent-orange-500" />
-                    <span>{size}</span>
+              <div className="space-y-2">
+                <label className="flex items-center border border-zinc-200 p-3 rounded-lg cursor-pointer hover:border-[#F97316] transition-colors group">
+                  <div className="flex-1 flex items-center gap-3 text-[14px] font-bold text-zinc-700 group-hover:text-zinc-900">
+                    <input type="radio" name="size" className="w-4 h-4 accent-[#F97316]" />
+                    <span>Small: 26cm</span>
                   </div>
-                  <div className="w-24 text-right text-emerald-600 font-medium text-sm">
-                    {idx === 0 ? 'None' : '10% Off'}
-                  </div>
-                  <div className="w-24 text-right font-medium text-zinc-900 text-sm">
-                    ${selectedItem.price.toFixed(2)}
-                  </div>
+                  <div className="w-24 text-center text-zinc-400 font-medium text-[13px]">-</div>
+                  <div className="w-24 text-center font-bold text-[14px] text-zinc-900">${selectedItem.price.toFixed(2)}</div>
                 </label>
-              ))}
 
-              <label className="flex items-center border border-zinc-200 p-3 rounded-[10px] cursor-pointer hover:border-orange-500 transition-colors mt-4">
-                <div className="flex-1 flex items-center gap-3 text-sm font-medium text-zinc-700">
-                  <input type="checkbox" className="w-4 h-4 accent-orange-500 rounded" />
-                  <span>Extra Cheese (+$2.00)</span>
-                </div>
-              </label>
-            </div>
+                <label className="flex items-center border-2 border-[#F97316] bg-orange-50/30 p-3 rounded-lg cursor-pointer">
+                  <div className="flex-1 flex items-center gap-3 text-[14px] font-bold text-zinc-900">
+                    <input type="radio" name="size" defaultChecked className="w-4 h-4 accent-[#F97316]" />
+                    <span>Medium: 32cm</span>
+                  </div>
+                  <div className="w-24 text-center text-emerald-600 font-bold text-[12px] bg-emerald-50 py-1 rounded-md">10% OFF</div>
+                  <div className="w-24 text-center font-bold text-[14px] text-zinc-900">${selectedItem.price.toFixed(2)}</div>
+                </label>
 
-            <div className="p-5 border-t border-zinc-100 flex gap-3 bg-zinc-50/50">
-              <Button variant="outline" className="flex-1 rounded-[10px]" onClick={() => setIsOptionModalOpen(false)}>
+                <label className="flex items-center border border-zinc-200 p-3 rounded-lg cursor-pointer hover:border-[#F97316] transition-colors group">
+                  <div className="flex-1 flex items-center gap-3 text-[14px] font-bold text-zinc-700 group-hover:text-zinc-900">
+                    <input type="radio" name="size" className="w-4 h-4 accent-[#F97316]" />
+                    <span>Large: 45cm</span>
+                  </div>
+                  <div className="w-24 text-center text-emerald-600 font-bold text-[12px] bg-emerald-50 py-1 rounded-md">10% OFF</div>
+                  <div className="w-24 text-center font-bold text-[14px] text-zinc-900">${selectedItem.price.toFixed(2)}</div>
+                </label>
+              </div>
+
+              {/* Extras */}
+              <div className="pt-4 mt-4 border-t border-zinc-100">
+                <span className="text-[13px] font-bold text-zinc-900 mb-3 block">Extras</span>
+                <label className="flex items-center border border-zinc-200 p-3 rounded-lg cursor-pointer hover:border-[#F97316] transition-colors group">
+                  <div className="flex-1 flex items-center gap-3 text-[14px] font-bold text-zinc-700 group-hover:text-zinc-900">
+                    <input type="checkbox" className="w-4 h-4 accent-[#F97316] rounded" />
+                    <span>Extra Cheese</span>
+                  </div>
+                  <div className="w-24 text-center text-zinc-400 font-medium text-[13px]">-</div>
+                  <div className="w-24 text-center font-bold text-[14px] text-zinc-900">+$2.00</div>
+                </label>
+              </div>
+            </CardContent>
+            
+            <div className="p-4 border-t border-zinc-100 flex gap-3 bg-zinc-50/50">
+              <Button variant="outline" className="flex-1 h-11 border-zinc-300 font-bold text-zinc-700 hover:bg-white" onClick={() => setIsOptionModalOpen(false)}>
                 Cancel
               </Button>
-              <Button className="flex-1 bg-orange-500 hover:bg-orange-600 rounded-[10px]" onClick={addOptionToCart}>
+              <Button className="flex-1 h-11 bg-[#F97316] hover:bg-[#e06510] text-white font-bold" onClick={addOptionToCart}>
                 Add to Cart
               </Button>
             </div>
-          </div>
+          </Card>
         </div>
       )}
 
-      {/* Final Confirm Modal */}
+      {/* Final Confirm Modal for Guest/Table */}
       {isConfirmModalOpen && (
-        <div className="fixed inset-0 bg-zinc-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-[16px] shadow-xl w-full max-w-md p-6 relative animate-in fade-in zoom-in-95 duration-200">
-            <button onClick={() => setIsConfirmModalOpen(false)} className="absolute top-4 right-4 text-zinc-400 hover:text-zinc-600">
-               <span className="text-2xl leading-none">&times;</span>
-            </button>
-            
-            <div className="text-center mb-8">
-              <h3 className="text-xl font-semibold text-zinc-900 mb-2">Confirm Order</h3>
-              <div className="text-sm text-zinc-500 flex justify-center gap-4">
-                <span>Order ID: #ORD-089</span>
-                <span>{new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+          <Card className="w-full max-w-md shadow-2xl border-none overflow-hidden bg-white animate-in zoom-in-95 duration-200 p-2">
+            <CardHeader className="text-center pb-2 relative">
+              <button 
+                onClick={() => setIsConfirmModalOpen(false)} 
+                className="absolute top-2 right-2 w-8 h-8 flex items-center justify-center rounded-full hover:bg-zinc-200 text-zinc-500 transition-colors"
+              >
+                ×
+              </button>
+              <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                <CheckCircle className="w-8 h-8 text-[#1e40af]" />
               </div>
-            </div>
-
-            <div className="space-y-5 mb-8">
-              <div className="space-y-2">
-                <Label className="text-zinc-700 font-medium">Guest Name</Label>
-                <Input 
-                  value={guestName}
-                  onChange={(e) => setGuestName(e.target.value)}
-                  placeholder="Enter guest name" 
-                  className="rounded-[10px] h-11"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label className="text-zinc-700 font-medium">Call Number / Phone</Label>
-                <Input 
-                  value={callNumber}
-                  onChange={(e) => setCallNumber(e.target.value)}
-                  placeholder="Optional" 
-                  className="rounded-[10px] h-11"
-                />
-              </div>
+              <CardTitle className="text-[22px] font-bold text-zinc-900">Confirm Order</CardTitle>
+              <CardDescription className="text-[14px]">Assign to guest or table.</CardDescription>
+            </CardHeader>
+            <CardContent className="p-6 pt-2 space-y-6">
               
-              <div className="flex items-center gap-4 my-2">
-                <div className="flex-1 h-px bg-zinc-200"></div>
-                <span className="text-xs font-medium text-zinc-400 uppercase tracking-wider">OR</span>
-                <div className="flex-1 h-px bg-zinc-200"></div>
+              <div className="bg-zinc-50 p-4 rounded-xl border border-zinc-100 flex justify-between items-center">
+                <div className="space-y-1">
+                  <span className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider block">Order ID</span>
+                  <span className="font-bold text-[15px] text-zinc-900">#001</span>
+                </div>
+                <div className="text-right space-y-1">
+                  <span className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider block">Amount</span>
+                  <span className="font-bold text-[18px] text-[#F97316]">${grandTotal.toFixed(2)}</span>
+                </div>
               </div>
 
-              <div className="space-y-2">
-                <Label className="text-zinc-700 font-medium">Table No.</Label>
-                <select 
-                  value={tableNo}
-                  onChange={(e) => setTableNo(e.target.value)}
-                  className="w-full bg-white border border-zinc-200 text-zinc-900 rounded-[10px] px-3 h-11 outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500"
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <label className="text-[13px] font-semibold text-zinc-900">Guest Name</label>
+                  <Input 
+                    value={guestName}
+                    onChange={(e) => setGuestName(e.target.value)}
+                    placeholder="e.g. John Doe"
+                    className="h-11 bg-white border-zinc-200 focus:ring-[#1e40af]"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[13px] font-semibold text-zinc-900">Call Number</label>
+                  <Input 
+                    value={callNumber}
+                    onChange={(e) => setCallNumber(e.target.value)}
+                    placeholder="e.g. +1 234 567 8900"
+                    className="h-11 bg-white border-zinc-200 focus:ring-[#1e40af]"
+                  />
+                </div>
+
+                <div className="flex items-center gap-4 my-2">
+                  <div className="flex-1 h-px bg-zinc-200"></div>
+                  <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">OR</span>
+                  <div className="flex-1 h-px bg-zinc-200"></div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[13px] font-semibold text-zinc-900">Table No.</label>
+                  <Select value={tableNo} onValueChange={setTableNo}>
+                    <SelectTrigger className="w-full h-11 text-[14px] border-zinc-200 focus:ring-[#1e40af]">
+                      <SelectValue placeholder="Select Table" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="T1">Table 1 (Window)</SelectItem>
+                      <SelectItem value="T2">Table 2 (Center)</SelectItem>
+                      <SelectItem value="T3">Table 3 (Patio)</SelectItem>
+                      <SelectItem value="VIP">VIP Room</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="flex gap-3 pt-4 border-t border-zinc-100">
+                <Button 
+                  variant="outline" 
+                  className="flex-1 h-12 font-bold text-zinc-700 border-zinc-200 hover:bg-zinc-50"
+                  onClick={() => setIsConfirmModalOpen(false)}
                 >
-                  <option value="">Select Table</option>
-                  <option value="1">Table 1</option>
-                  <option value="2">Table 2</option>
-                  <option value="3">Table 3</option>
-                  <option value="VIP">VIP Room</option>
-                </select>
+                  Cancel
+                </Button>
+                <Button 
+                  className="flex-1 h-12 font-bold text-white shadow-sm transition-transform hover:scale-[1.02]"
+                  style={{ backgroundColor: "#1e40af" }}
+                  onClick={handleFinalConfirm}
+                >
+                  Submit Order
+                </Button>
               </div>
-            </div>
 
-            <Button 
-              onClick={handleFinalConfirm}
-              className="w-full h-12 bg-orange-500 hover:bg-orange-600 text-white font-medium rounded-[10px] text-base"
-            >
-              Submit Order to Kitchen
-            </Button>
-          </div>
+            </CardContent>
+          </Card>
         </div>
       )}
 

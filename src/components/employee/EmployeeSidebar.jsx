@@ -35,11 +35,11 @@ export default function EmployeeSidebar() {
     <aside className="w-72 shrink-0 border-r border-zinc-200 bg-white h-full overflow-y-auto">
       {/* Header */}
       <div className="sticky top-0 z-10 bg-white border-b border-zinc-200 px-6 py-5">
-        <h2 className="text-lg font-semibold text-zinc-900">
+        <h2 className="text-[18px] font-bold text-zinc-900">
           Staff Dashboard
         </h2>
-        <p className="mt-1 text-xs text-zinc-500">
-          Restaurant Order Management
+        <p className="mt-1 text-[13px] text-zinc-500 font-medium">
+          Manage your daily operations
         </p>
       </div>
 
@@ -53,40 +53,53 @@ export default function EmployeeSidebar() {
               key={groupIdx}
               className="rounded-xl border border-zinc-200 overflow-hidden bg-white shadow-sm"
             >
+              {/* Group Header */}
               <button
                 onClick={() => toggleGroup(groupIdx)}
                 className="flex w-full items-center justify-between px-5 py-4 hover:bg-zinc-50 transition-colors"
               >
                 <div className="flex items-center gap-3">
-                  <div className={`h-2.5 w-2.5 rounded-full ${group.color}`} />
-                  <span className="text-sm font-semibold text-zinc-800">
+                  <div
+                    className={`h-2.5 w-2.5 rounded-full ${
+                      group.color || "bg-orange-500"
+                    }`}
+                  />
+
+                  <span className="text-base font-semibold text-zinc-800">
                     {group.title}
                   </span>
                 </div>
-                {isOpen ? <ChevronDown className="h-4 w-4 text-zinc-500" /> : <ChevronRight className="h-4 w-4 text-zinc-500" />}
+
+                {isOpen ? (
+                  <ChevronDown className="h-4 w-4 text-zinc-500" />
+                ) : (
+                  <ChevronRight className="h-4 w-4 text-zinc-500" />
+                )}
               </button>
 
+              {/* Links */}
               {isOpen && (
                 <div className="border-t border-zinc-100 py-2">
                   {group.items.map((item, index) => {
-                    const active = pathname === item.href || pathname.startsWith(item.href + "/");
-                    const Icon = item.icon;
+                    const active =
+                      pathname === item.href ||
+                      pathname.startsWith(item.href + "/");
 
                     return (
-                      <Link
+                     <Link
                         key={index}
                         href={item.href}
-                        className={`group mx-2 mb-1 flex items-center justify-between rounded-lg px-4 py-3 text-sm transition-all duration-200 ${
+                        className={`group mx-2 mb-1 flex items-center justify-between rounded-lg px-4 py-3 text-base transition-all duration-200 ${
                           active
-                            ? "bg-orange-50 text-orange-600 font-semibold"
+                            ? "bg-orange-200 text-orange-600 font-semibold"
                             : "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900"
                         }`}
                       >
-                        <div className="flex items-center gap-3">
-                          <Icon className={`h-4 w-4 ${active ? "text-orange-500" : "text-zinc-400 group-hover:text-zinc-600"}`} />
-                          <span>{item.label}</span>
-                        </div>
-                        {active && <span className="h-2 w-2 rounded-full bg-orange-500" />}
+                        <span>{item.label}</span>
+
+                        {active && (
+                          <span className="h-2 w-2 rounded-full bg-orange-500" />
+                        )}
                       </Link>
                     );
                   })}

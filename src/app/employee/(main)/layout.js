@@ -6,6 +6,7 @@ import EmployeeSidebar from "@/components/employee/EmployeeSidebar";
 import EmployeeTopNav from "@/components/employee/EmployeeTopNav";
 import { Toaster } from "sonner";
 import { Loader2 } from "lucide-react";
+import { EmployeeFooter } from "@/components/employee/EmployeeFooter";
 
 export default function EmployeeMainLayout({ children }) {
   const router = useRouter();
@@ -28,7 +29,7 @@ export default function EmployeeMainLayout({ children }) {
       } catch (err) {
         router.replace("/employee/login");
       } finally {
-        setLoading(false);
+    setLoading(false);
       }
     };
     verifyAuth();
@@ -71,6 +72,7 @@ export default function EmployeeMainLayout({ children }) {
           </div>
         </main>
       </div>
+      <EmployeeFooter/>
     </div>
   );
 }

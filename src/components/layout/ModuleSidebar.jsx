@@ -26,10 +26,10 @@ export default function ModuleSidebar({ groups = [] }) {
     <aside className="w-72 shrink-0 border-r border-zinc-200 bg-white h-full overflow-y-auto">
       {/* Header */}
       <div className="sticky top-0 z-10 bg-white border-b border-zinc-200 px-6 py-5">
-        <h2 className="text-lg font-semibold text-zinc-900">
+        <h2 className="text-[18px] font-bold text-zinc-900">
           Module Navigation
         </h2>
-        <p className="mt-1 text-xs text-zinc-500">
+        <p className="mt-1 text-[13px] text-zinc-500 font-medium">
           Manage module sections
         </p>
       </div>
@@ -82,7 +82,7 @@ export default function ModuleSidebar({ groups = [] }) {
                         href={item.href}
                         className={`group mx-2 mb-1 flex items-center justify-between rounded-lg px-4 py-3 text-base transition-all duration-200 ${
                           active
-                            ? "bg-orange-50 text-orange-600 font-semibold"
+                            ? "bg-orange-200 text-orange-600 font-semibold"
                             : "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900"
                         }`}
                       >

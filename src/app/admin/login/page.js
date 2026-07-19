@@ -4,15 +4,18 @@ import React, { useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
-import { Lock, Mail, Loader2, ArrowRight } from "lucide-react";
+import { Lock, Mail, Loader2, ArrowRight, Eye, EyeOff } from "lucide-react";
+import NotificationBell from "@/components/common/NotificationBell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { toast, Toaster } from "sonner";
+import { toast } from "sonner";
+import Link from "next/link";
 
 export default function AdminLoginPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const {
     register,
@@ -40,7 +43,7 @@ export default function AdminLoginPage() {
       }
 
       toast.success("Login successful! Redirecting...");
-      
+
       setTimeout(() => {
         router.push("/admin/dashboard");
       }, 1000);
@@ -52,37 +55,30 @@ export default function AdminLoginPage() {
   };
 
   return (
-    <div className="min-h-screen w-full bg-[#FAF9F6] flex flex-col md:flex-row antialiased text-[#1F2937] font-sans">
-      <Toaster position="top-right" richColors />
+    <div className="min-h-screen w-full bg-[#FAF9F6] flex flex-col md:flex-row antialiased text-[#1F2937] font-sans relative">
+
+      {/* Mini Navbar */}
+      <div className="absolute top-0 right-0 p-6 z-50 flex items-center justify-end w-full pointer-events-none">
+        <div className="pointer-events-auto">
+          <NotificationBell />
+        </div>
+      </div>
 
       {/* Left side: Premium food background image */}
-      <div className="relative w-full md:w-1/2 h-[300px] md:h-auto bg-zinc-950 flex items-center justify-center overflow-hidden shrink-0">
+      <div className="hidden md:flex relative w-full md:w-1/2 h-[300px] md:h-auto bg-zinc-950 items-center justify-center overflow-hidden shrink-0">
         <Image
-          src="https://images.unsplash.com/photo-1544025162-d76694265947?q=80&w=1000&auto=format&fit=crop"
+          src="/AdminLoginImage.png"
           alt="Tasty Bites Gourmet Preparation"
           fill
           priority
-          className="object-cover opacity-70"
+          className="object-cover"
         />
-        <div className="absolute inset-0 bg-linear-to-t from-zinc-950/80 via-zinc-950/20 to-transparent"></div>
-        
-        <div className="relative z-10 text-center md:text-left px-8 md:px-12 space-y-3 max-w-lg text-white">
-          <span className="text-xs font-bold uppercase tracking-widest text-[#F97316]">
-            Tasty Bites Management
-          </span>
-          <h2 className="text-3xl md:text-5xl font-normal leading-tight font-serif">
-            Crafting Premium Experiences.
-          </h2>
-          <p className="text-xs sm:text-sm text-zinc-300 font-light leading-relaxed max-w-sm">
-            Access settings, billing reports, staffing charts, and full menu details.
-          </p>
-        </div>
       </div>
 
       {/* Right side: Login Panel */}
       <div className="flex-1 flex items-center justify-center p-8 md:p-12 lg:p-16">
         <div className="w-full max-w-md space-y-8 bg-white border border-[#ECECEC] p-8 md:p-10 rounded-2xl shadow-sm">
-          
+
           <div className="text-center space-y-2">
             <span className="text-3xl font-extrabold italic tracking-wide text-yellow-500 font-serif block select-none">
               Tasty Bites
@@ -97,7 +93,7 @@ export default function AdminLoginPage() {
 
           {/* Form */}
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
-            
+
             {/* Email Field */}
             <div className="space-y-1.5">
               <Label htmlFor="email" className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-1.5 pl-1">
@@ -130,13 +126,22 @@ export default function AdminLoginPage() {
                 <Lock className="h-3.5 w-3.5 text-[#F97316]" />
                 Password
               </Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="••••••••"
-                className="bg-white border-zinc-200 rounded-none h-11 focus:ring-[#F97316] text-sm"
-                {...register("password", { required: "Password is required" })}
-              />
+              <div className="relative">
+                <Input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  placeholder="••••••••"
+                  className="bg-white border-zinc-200 rounded-none h-11 focus:ring-[#F97316] text-sm pr-10"
+                  {...register("password", { required: "Password is required" })}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 transition-colors focus:outline-none"
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
               {errors.password && (
                 <span className="text-xs text-rose-500 font-medium pl-1 block">
                   {errors.password.message}
@@ -163,6 +168,9 @@ export default function AdminLoginPage() {
                   </>
                 )}
               </Button>
+            </div>
+            <div className="mt-6 text-center text-sm text-zinc-500">
+              Not a Admin? <Link href="/employee/login" className="text-orange-600 hover:underline">Employee Login</Link>
             </div>
 
           </form>

@@ -17,7 +17,6 @@ import {
   Percent,
   Boxes,
   LayoutGrid,
-  TableProperties,
   LogOut,
   DollarSign,
   ClipboardList,
@@ -28,42 +27,47 @@ import {
   Tag,
   Users,
   Package,
-  Utensils,
   BookOpen,
   CreditCard,
   Store,
   CircleDot,
+  ArrowRight,
+  UserCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
-  CardHeader,
-  CardTitle,
-  CardFooter,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { toast, Toaster } from "sonner";
+import Image from "next/image";
+import { AreaChart, Area, ResponsiveContainer, BarChart, Bar, Cell } from "recharts";
+import { PALETTE } from "@/utils/paletteeColor";
+import DateTimeDisplay from "@/components/common/DateTimeDisplay";
+import NotificationBell from "@/components/common/NotificationBell";
 
-/* ─────────────────────────────────────────────────
-   shadcn/ui components used in this page:
-   - Card, CardContent, CardHeader, CardTitle, CardFooter
-   - Button
-   - Badge
-   ───────────────────────────────────────────────── */
+// --- Mock Data for Charts ---
+const revenueData = [
+  { time: "8AM", val: 100 }, { time: "10AM", val: 300 },
+  { time: "12PM", val: 800 }, { time: "2PM", val: 650 },
+  { time: "4PM", val: 900 }, { time: "6PM", val: 1250 },
+];
+const orderData = [
+  { time: "8AM", val: 5 }, { time: "10AM", val: 12 },
+  { time: "12PM", val: 35 }, { time: "2PM", val: 20 },
+  { time: "4PM", val: 18 }, { time: "6PM", val: 84 },
+];
 
 export default function AdminDashboardPage() {
   const router = useRouter();
   const [adminUser, setAdminUser] = useState(null);
 
-  // Authenticate user on mount
   useEffect(() => {
     const verifyAuth = async () => {
       try {
         const res = await fetch("/api/auth/me");
-        if (!res.ok) {
-          throw new Error("Unauthorized");
-        }
+        if (!res.ok) throw new Error("Unauthorized");
         const data = await res.json();
         if (data.success && data.data) {
           setAdminUser(data.data);
@@ -84,7 +88,7 @@ export default function AdminDashboardPage() {
       const res = await fetch("/api/auth/logout", { method: "POST" });
       if (res.ok) {
         toast.success("Logged out successfully.");
-        router.replace("/admin/login");
+        window.location.href = "/admin/login";
       }
     } catch (err) {
       toast.error("Logout failed. Please try again.");
@@ -93,164 +97,217 @@ export default function AdminDashboardPage() {
 
   const today = new Date();
   const formattedDate = today.toLocaleDateString("en-US", {
-    weekday: "long",
-    year: "numeric",
-    month: "long",
-    day: "numeric",
+    weekday: "long", year: "numeric", month: "long", day: "numeric",
   });
 
   return (
-    <div className="min-h-screen flex flex-col" style={{ backgroundColor: "#FAFAFA", color: "#18181B" }}>
+    <div className="min-h-screen flex flex-col bg-[#F8FAFC] text-slate-900 selection:bg-blue-100 antialiased font-sans">
       <Toaster position="top-right" richColors />
 
-      {/* ═══════════════════════════════════════════════════════
-          TOP BAR
-          64px, white, clean, enterprise
-         ═══════════════════════════════════════════════════════ */}
-      <header className="sticky top-0 z-50 bg-white" style={{ borderBottom: "1px solid #E5E7EB" }}>
-        <div className="h-16 max-w-[1440px] mx-auto flex items-center justify-between px-8">
-          <div className="flex items-center gap-3">
-            <span className="text-[20px] font-bold tracking-tight" style={{ color: "#18181B" }}>
-              Tasty Bites
-            </span>
-            <Badge
-              className="border-none text-[11px] font-bold uppercase tracking-wider px-2.5 py-0.5"
-              style={{ backgroundColor: "#FFF7ED", color: "#F97316" }}
-            >
-              Admin
-            </Badge>
-          </div>
+      {/* ──────────────────────────────────────────
+          HEADER (Glassmorphic)
+         ────────────────────────────────────────── */}
+      <header className="sticky top-0 z-50 border-b border-stone-200 bg-[#F7F6F3]/95 backdrop-blur-md">
+        <div className="mx-auto flex h-18 max-w-[1440px] items-center justify-between px-6 lg:px-8">
 
-          <div className="flex items-center gap-6">
-            <span className="text-[15px]" style={{ color: "#71717A" }}>
-              {adminUser?.name || "Admin"}
-            </span>
-            <Button
-              onClick={handleLogout}
-              variant="ghost"
-              className="text-[15px] font-medium gap-2 cursor-pointer"
-              style={{ color: "#71717A" }}
-            >
-              <LogOut className="h-4 w-4" />
-              Logout
-            </Button>
-          </div>
-        </div>
-      </header>
-
-      {/* ═══════════════════════════════════════════════════════
-          MAIN CONTENT
-         ═══════════════════════════════════════════════════════ */}
-      <main className="flex-1">
-        <div className="max-w-[1440px] mx-auto px-8 py-10 space-y-10">
-
-          {/* ──────────────────────────────────────────
-              SECTION 1 — Welcome Header
-             ────────────────────────────────────────── */}
-          <div className="flex items-end justify-between">
-            <div>
-              <h1 className="text-[40px] font-bold leading-tight" style={{ color: "#18181B" }}>
-                Good {today.getHours() < 12 ? "Morning" : today.getHours() < 17 ? "Afternoon" : "Evening"},{" "}
-                {adminUser?.name || "Admin"}
-              </h1>
-              <div className="flex items-center gap-3 mt-2">
-                <CalendarDays className="w-4 h-4" style={{ color: "#71717A" }} />
-                <span className="text-[15px]" style={{ color: "#71717A" }}>
-                  {formattedDate}
-                </span>
+          {/* Left */}
+          <div className="flex items-center gap-4">
+            <Link href="/admin/dashboard">
+              <div className="relative h-14 w-36">
+                <Image
+                  src="/BannerImage.png"
+                  alt="Logo"
+                  fill
+                  priority
+                  className="object-contain"
+                />
               </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <CircleDot className="w-3 h-3" style={{ color: "#22C55E" }} />
-              <span className="text-[15px] font-medium" style={{ color: "#22C55E" }}>
-                Restaurant Open
+            </Link>
+
+            <div className="hidden lg:block h-8 w-px bg-stone-300" />
+
+            <div className="hidden lg:flex flex-col">
+              <span className="text-sm font-semibold text-zinc-900">
+                Restaurant Dashboard
+              </span>
+
+              <span className="text-xs text-zinc-500">
+                Manage your restaurant operations
               </span>
             </div>
           </div>
 
+          {/* Center */}
+          <div className="hidden xl:flex">
+            <DateTimeDisplay />
+          </div>
+
+          {/* Right */}
+          <div className="flex items-center gap-4">
+
+            <NotificationBell />
+
+            <div className="hidden lg:flex items-center gap-3 rounded-xl border border-stone-200 bg-white px-3 py-2 shadow-sm">
+
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-orange-100">
+                <UserCircle className="h-5 w-5 text-orange-600" />
+              </div>
+
+              <div className="leading-tight">
+                <p className="text-xs text-zinc-500">
+                  Administrator
+                </p>
+
+                <p className="text-sm font-semibold text-zinc-900">
+                  {adminUser?.name || "System Admin"}
+                </p>
+              </div>
+
+              <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">
+                Online
+              </Badge>
+
+            </div>
+
+            <Button
+              onClick={handleLogout}
+              variant="outline"
+              className="h-10 border-red-200 bg-white text-red-600 hover:border-red-300 hover:bg-red-50 hover:text-red-700"
+            >
+              <LogOut className="mr-2 h-4 w-4" />
+              Logout
+            </Button>
+
+          </div>
+
+        </div>
+      </header>
+
+      {/* ──────────────────────────────────────────
+          MAIN CONTENT
+         ────────────────────────────────────────── */}
+      <main className="flex-1 overflow-x-hidden">
+        <div className="max-w-[1440px] mx-auto px-8 py-12 space-y-12">
+
+          {/* WELCOME BANNER */}
+          <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-6">
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 mb-2">
+                <Badge className="bg-blue-50 text-blue-700 border-none px-3 py-1 text-xs font-bold uppercase tracking-widest shadow-sm">
+                  Dashboard Overview
+                </Badge>
+              </div>
+              <h1 className="text-4xl md:text-5xl font-black tracking-tight text-slate-900 drop-shadow-sm">
+                Good {today.getHours() < 12 ? "Morning" : today.getHours() < 17 ? "Afternoon" : "Evening"}, {adminUser?.name?.split(' ')[0] || "Admin"}
+              </h1>
+              <div className="flex items-center gap-3 pt-2 text-slate-500 font-medium text-sm">
+                <CalendarDays className="w-4 h-4 text-blue-500" />
+                {formattedDate}
+                <span className="w-1.5 h-1.5 rounded-full bg-slate-300 mx-1"></span>
+                <span className="flex items-center gap-1.5 text-emerald-600 font-bold">
+                  <CircleDot className="w-3.5 h-3.5 animate-pulse" />
+                  Restaurant Online
+                </span>
+              </div>
+            </div>
+          </div>
+
           {/* ──────────────────────────────────────────
-              SECTION 2 — Two Large KPI Cards
+              PREMIUM KPI CARDS WITH CHARTS
              ────────────────────────────────────────── */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Today's Orders */}
-            <Card className="bg-white border-0 rounded-xl" style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.06)", border: "1px solid #E5E7EB" }}>
-              <CardContent className="p-8">
-                <div className="flex items-start justify-between">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+            {/* Orders KPI */}
+            <Card className="bg-white border border-slate-200/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)] rounded-2xl overflow-hidden relative group">
+              <CardContent className="p-8 pb-4">
+                <div className="flex justify-between items-start z-10 relative">
                   <div>
-                    <p className="text-[15px] font-medium" style={{ color: "#71717A" }}>
-                      Today&apos;s Orders
-                    </p>
-                    <p className="text-[48px] font-bold leading-none mt-3 tabular-nums" style={{ color: "#18181B", fontVariantNumeric: "tabular-nums" }}>
-                      84
-                    </p>
-                    <div className="flex items-center gap-1.5 mt-3">
-                      <TrendingUp className="w-4 h-4" style={{ color: "#22C55E" }} />
-                      <span className="text-[14px] font-medium" style={{ color: "#22C55E" }}>
-                        +12% vs yesterday
-                      </span>
+                    <div className="flex items-center gap-2 text-slate-500 font-bold tracking-wide uppercase text-xs mb-3">
+                      <ClipboardList className="w-4 h-4 text-orange-500" /> Today&apos;s Volume
+                    </div>
+                    <div className="text-5xl font-black text-slate-900 tracking-tighter">84</div>
+                    <div className="flex items-center gap-2 mt-3 text-sm font-bold text-emerald-600 bg-emerald-50 w-max px-2.5 py-1 rounded-lg">
+                      <TrendingUp className="w-4 h-4" /> +12% from yesterday
                     </div>
                   </div>
-                  <div
-                    className="w-14 h-14 rounded-2xl flex items-center justify-center"
-                    style={{ backgroundColor: "#FFF7ED" }}
-                  >
-                    <ClipboardList className="w-7 h-7" style={{ color: "#F97316" }} />
+
+                  {/* Miniature Chart in Header */}
+                  <div className="w-[120px] h-[60px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={orderData}>
+                        <Bar dataKey="val" radius={[4, 4, 0, 0]}>
+                          {orderData.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={index === orderData.length - 1 ? "#F97316" : "#FED7AA"} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
                   </div>
                 </div>
-                <div
-                  className="mt-6 pt-5 flex items-center gap-4"
-                  style={{ borderTop: "1px solid #E5E7EB" }}
-                >
-                  <Badge className="border-none text-[13px] font-semibold px-3 py-1" style={{ backgroundColor: "#FFF7ED", color: "#F97316" }}>
-                    4 New
-                  </Badge>
-                  <Badge className="border-none text-[13px] font-semibold px-3 py-1" style={{ backgroundColor: "#F0FDF4", color: "#15803D" }}>
-                    35 Pending
-                  </Badge>
-                  <Badge className="border-none text-[13px] font-semibold px-3 py-1" style={{ backgroundColor: "#F4F4F5", color: "#18181B" }}>
-                    45 Confirmed
-                  </Badge>
+
+                <div className="mt-8 pt-6 border-t border-slate-100 flex gap-4">
+                  <div className="flex-1">
+                    <div className="text-slate-400 text-xs font-bold uppercase mb-1">New</div>
+                    <div className="text-slate-900 font-bold">4</div>
+                  </div>
+                  <div className="w-px h-8 bg-slate-100"></div>
+                  <div className="flex-1">
+                    <div className="text-slate-400 text-xs font-bold uppercase mb-1">Pending</div>
+                    <div className="text-orange-600 font-bold">35</div>
+                  </div>
+                  <div className="w-px h-8 bg-slate-100"></div>
+                  <div className="flex-1">
+                    <div className="text-slate-400 text-xs font-bold uppercase mb-1">Confirmed</div>
+                    <div className="text-emerald-600 font-bold">45</div>
+                  </div>
                 </div>
               </CardContent>
             </Card>
 
-            {/* Today's Revenue */}
-            <Card className="bg-white border-0 rounded-xl" style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.06)", border: "1px solid #E5E7EB" }}>
-              <CardContent className="p-8">
-                <div className="flex items-start justify-between">
+            {/* Revenue KPI */}
+            <Card className="bg-white border border-slate-200/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)] rounded-2xl overflow-hidden relative group">
+              <CardContent className="p-8 pb-4">
+                <div className="flex justify-between items-start z-10 relative">
                   <div>
-                    <p className="text-[15px] font-medium" style={{ color: "#71717A" }}>
-                      Today&apos;s Revenue
-                    </p>
-                    <p className="text-[48px] font-bold leading-none mt-3" style={{ color: "#18181B", fontVariantNumeric: "tabular-nums" }}>
-                      $1,250
-                    </p>
-                    <div className="flex items-center gap-1.5 mt-3">
-                      <TrendingUp className="w-4 h-4" style={{ color: "#22C55E" }} />
-                      <span className="text-[14px] font-medium" style={{ color: "#22C55E" }}>
-                        +8% vs yesterday
-                      </span>
+                    <div className="flex items-center gap-2 text-slate-500 font-bold tracking-wide uppercase text-xs mb-3">
+                      <DollarSign className="w-4 h-4 text-emerald-500" /> Today&apos;s Revenue
+                    </div>
+                    <div className="text-5xl font-black text-slate-900 tracking-tighter">$1,250</div>
+                    <div className="flex items-center gap-2 mt-3 text-sm font-bold text-emerald-600 bg-emerald-50 w-max px-2.5 py-1 rounded-lg">
+                      <TrendingUp className="w-4 h-4" /> +8% from yesterday
                     </div>
                   </div>
-                  <div
-                    className="w-14 h-14 rounded-2xl flex items-center justify-center"
-                    style={{ backgroundColor: "#F0FDF4" }}
-                  >
-                    <DollarSign className="w-7 h-7" style={{ color: "#15803D" }} />
+
+                  {/* Miniature Area Chart */}
+                  <div className="w-[140px] h-[60px] translate-y-2">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={revenueData}>
+                        <defs>
+                          <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#10B981" stopOpacity={0.3} />
+                            <stop offset="95%" stopColor="#10B981" stopOpacity={0} />
+                          </linearGradient>
+                        </defs>
+                        <Area type="monotone" dataKey="val" stroke="#10B981" strokeWidth={3} fillOpacity={1} fill="url(#colorRev)" />
+                      </AreaChart>
+                    </ResponsiveContainer>
                   </div>
                 </div>
-                <div
-                  className="mt-6 pt-5 flex items-center gap-6"
-                  style={{ borderTop: "1px solid #E5E7EB" }}
-                >
-                  <div>
-                    <span className="text-[13px]" style={{ color: "#71717A" }}>Total Tax</span>
-                    <span className="text-[15px] font-semibold ml-2" style={{ color: "#18181B", fontVariantNumeric: "tabular-nums" }}>$162.50</span>
+
+                <div className="mt-8 pt-6 border-t border-slate-100 flex gap-4">
+                  <div className="flex-1">
+                    <div className="text-slate-400 text-xs font-bold uppercase mb-1">Taxes</div>
+                    <div className="text-slate-900 font-bold">$162.50</div>
                   </div>
-                  <div style={{ width: "1px", height: "16px", backgroundColor: "#E5E7EB" }} />
-                  <div>
-                    <span className="text-[13px]" style={{ color: "#71717A" }}>Avg Order</span>
-                    <span className="text-[15px] font-semibold ml-2" style={{ color: "#18181B", fontVariantNumeric: "tabular-nums" }}>$14.88</span>
+                  <div className="w-px h-8 bg-slate-100"></div>
+                  <div className="flex-1">
+                    <div className="text-slate-400 text-xs font-bold uppercase mb-1">Avg Order</div>
+                    <div className="text-blue-600 font-bold">$14.88</div>
+                  </div>
+                  <div className="w-px h-8 bg-slate-100"></div>
+                  <div className="flex-1">
+                    <div className="text-slate-400 text-xs font-bold uppercase mb-1">Tips</div>
+                    <div className="text-emerald-600 font-bold">$42.00</div>
                   </div>
                 </div>
               </CardContent>
@@ -258,411 +315,151 @@ export default function AdminDashboardPage() {
           </div>
 
           {/* ──────────────────────────────────────────
-              SECTION 3 — Main Modules
+              CORE MODULES (Bento Grid Style)
              ────────────────────────────────────────── */}
           <section>
-            <h2 className="text-[28px] font-bold mb-5" style={{ color: "#18181B" }}>
-              Main Modules
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-black text-slate-900">Core Modules</h2>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
               <ModuleCard
-                href="/admin/menu"
-                icon={UtensilsCrossed}
-                iconBg="#FFF7ED"
-                iconColor="#F97316"
-                title="Menu Management"
-                stat="20 Categories · 65 Products"
-                description="Manage food items, categories, pricing, offers, and special bundles."
-                action="View Menu"
+                href="/admin/menu" icon={UtensilsCrossed}
+                color="orange" title="Menu Manager" stat="20 Categories"
+                desc="Curate your menu items, set pricing, and manage special offers."
               />
               <ModuleCard
-                href="/admin/orders"
-                icon={ShoppingCart}
-                iconBg="#FFF7ED"
-                iconColor="#F97316"
-                title="Food Orders"
-                stat="84 Orders Today"
-                description="Review active guest cart orders, cashier payments, and order tracking."
-                action="View Orders"
+                href="/admin/orders" icon={ShoppingCart}
+                color="blue" title="Order Tracking" stat="Live Orders"
+                desc="Monitor kitchen tickets, track delivery dispatch, and review history."
               />
               <ModuleCard
-                href="/admin/staff"
-                icon={HeartHandshake}
-                iconBg="#F0FDF4"
-                iconColor="#15803D"
-                title="Staff & Employees"
-                stat="6 Active Staff"
-                description="Monitor employee schedules, restaurant operations, and cashier logs."
-                action="View Staff"
+                href="/admin/staff" icon={Users}
+                color="indigo" title="Staff Portal" stat="6 Active"
+                desc="Manage schedules, roles, permissions, and payroll data."
               />
               <ModuleCard
-                href="/admin/reports"
-                icon={BarChart3}
-                iconBg="#EFF6FF"
-                iconColor="#2563EB"
-                title="Reports & Analytics"
-                stat="Daily · Weekly · Monthly"
-                description="Analyze sales statistics, billing summaries, and tax report outputs."
-                action="View Reports"
+                href="/admin/reports" icon={BarChart3}
+                color="emerald" title="Analytics" stat="Real-time"
+                desc="Deep dive into sales metrics, performance graphs, and tax exports."
               />
               <ModuleCard
-                href="/admin/guests"
-                icon={UserSearch}
-                iconBg="#FFFBEB"
-                iconColor="#D97706"
-                title="Guest Records"
-                stat="20 Guests Today"
-                description="Maintain guest records, online reservations, and special feedback."
-                action="View Guests"
+                href="/admin/guests" icon={UserSearch}
+                color="rose" title="Guest Directory" stat="CRM"
+                desc="Track guest preferences, order history, and loyalty programs."
               />
               <ModuleCard
-                href="/admin/stock"
-                icon={Boxes}
-                iconBg="#F0FDF4"
-                iconColor="#15803D"
-                title="Inventory"
-                stat="Stock Tracking"
-                description="Track ingredient stock levels, low stock alerts, and supply orders."
-                action="View Stock"
+                href="/admin/stock" icon={Boxes}
+                color="amber" title="Inventory" stat="Stock Alerts"
+                desc="Monitor ingredient levels and automated supplier purchase orders."
               />
             </div>
           </section>
 
           {/* ──────────────────────────────────────────
-              SECTION 4 — Restaurant Operations
+              RESTAURANT OPERATIONS
              ────────────────────────────────────────── */}
           <section>
-            <h2 className="text-[28px] font-bold mb-5" style={{ color: "#18181B" }}>
-              Restaurant Operations
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-              <OperationCard
-                href="/admin/billing/admin"
-                icon={Receipt}
-                iconBg="#F0FDF4"
-                iconColor="#15803D"
-                title="Admin Billing"
-                stat="10"
-                statLabel="invoices"
-                description="Manage administrator billing records and payment tracking."
-              />
-              <OperationCard
-                href="/admin/billing/server"
-                icon={CreditCard}
-                iconBg="#F5F3FF"
-                iconColor="#7C3AED"
-                title="Server Billing"
-                stat="35"
-                statLabel="invoices"
-                description="Review server-processed billing records and transaction logs."
-              />
-              <OperationCard
-                href="/admin/orders/online"
-                icon={Globe}
-                iconBg="#EFF6FF"
-                iconColor="#2563EB"
-                title="Online Orders"
-                stat="10"
-                statLabel="active"
-                description="Track and manage orders placed through the online ordering system."
-              />
-              <OperationCard
-                href="/admin/orders/staff"
-                icon={ChefHat}
-                iconBg="#FFF7ED"
-                iconColor="#F97316"
-                title="Staff Orders"
-                stat="5"
-                statLabel="orders"
-                description="Monitor internal staff meal orders and kitchen preparation queue."
-              />
-              <OperationCard
-                href="/admin/users"
-                icon={UserCheck}
-                iconBg="#F0FDFA"
-                iconColor="#0D9488"
-                title="Admin Users"
-                stat="3"
-                statLabel="admins"
-                description="Configure master administrators and restaurant owner credentials."
-              />
-              <OperationCard
-                href="/admin/tables"
-                icon={TableProperties}
-                iconBg="#F4F4F5"
-                iconColor="#18181B"
-                title="Table Management"
-                stat="—"
-                statLabel="tables"
-                description="View and manage restaurant table layout, seating, and status."
-              />
+            <h2 className="text-2xl font-black text-slate-900 mb-6">Restaurant Operations</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <ModuleCard href="/admin/billing/admin" icon={Receipt} color="indigo" title="Admin Billing" stat="Invoices" desc="Manage administrator billing records and payment tracking." />
+              <ModuleCard href="/admin/billing/server" icon={CreditCard} color="blue" title="Server Billing" stat="Records" desc="Review server-processed billing records." />
+              <ModuleCard href="/admin/orders/online" icon={Globe} color="emerald" title="Online Orders" stat="Active" desc="Track and manage orders placed through the online system." />
+              <ModuleCard href="/admin/orders/staff" icon={ChefHat} color="orange" title="Staff Orders" stat="Queue" desc="Monitor internal staff meal orders and kitchen prep queue." />
+              <ModuleCard href="/admin/users" icon={UserCheck} color="rose" title="Admin Users" stat="Admins" desc="Configure master administrators and owner credentials." />
+              <ModuleCard href="/admin/floor-plan" icon={LayoutGrid} color="amber" title="Floor Management" stat="Tables" desc="View and manage restaurant table layout and seating status." />
             </div>
           </section>
 
           {/* ──────────────────────────────────────────
-              SECTION 5 — Quick Actions (Full-Width Operations Panel)
+              QUICK ACTIONS
              ────────────────────────────────────────── */}
           <section>
-            <h2 className="text-[28px] font-bold mb-5" style={{ color: "#18181B" }}>
-              Quick Actions
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-              <OperationCard
-                href="/admin/menu"
-                icon={Plus}
-                iconBg="#FFF7ED"
-                iconColor="#F97316"
-                title="Add Product"
-                stat="+"
-                statLabel="new"
-                action="View Product"
-                description="Create a new menu product with pricing, category, and availability."
-              />
-              <OperationCard
-                href="/admin/menu"
-                icon={Tag}
-                iconBg="#EFF6FF"
-                iconColor="#2563EB"
-                title="Add Category"
-                stat="+"
-                statLabel="new"
-                action="View Category"
-                description="Add a new menu category to organize your food items and dishes."
-              />
-              <OperationCard
-                href="/admin/menu"
-                icon={BookOpen}
-                iconBg="#FFF1F2"
-                iconColor="#E11D48"
-                title="Create Offer"
-                stat="5"
-                statLabel="active"
-                action="Create Offer"
-                description="Launch promotional offers, bundles, and limited-time discounts."
-              />
-              <OperationCard
-                href="/admin/orders"
-                icon={ClipboardList}
-                iconBg="#FFFBEB"
-                iconColor="#D97706"
-                title="New Order"
-                stat="84"
-                statLabel="today"
-                action="Start New Order"
-                description="Start a new food order for dine-in, takeaway, or delivery service."
-              />
-              <OperationCard
-                href="/admin/staff"
-                icon={Users}
-                iconBg="#F0FDF4"
-                iconColor="#15803D"
-                title="Add Employee"
-                stat="6"
-                statLabel="staff"
-                action="Add Employee"
-                description="Register a new employee with role, schedule, and access settings."
-              />
-              <OperationCard
-                href="/admin/tax"
-                icon={Percent}
-                iconBg="#F5F3FF"
-                iconColor="#7C3AED"
-                title="Configure Tax"
-                stat="—"
-                statLabel="rules"
-                action="Configure Tax"
-                description="Set up tax rates, exemptions, and regional tax configurations."
-              />
-              <OperationCard
-                href="/admin/tables"
-                icon={LayoutGrid}
-                iconBg="#F0FDFA"
-                iconColor="#0D9488"
-                title="Manage Tables"
-                stat="—"
-                statLabel="tables"
-                action="Manage Tables"
-                description="View and update table layout, seating capacity, and reservations."
-              />
-              <OperationCard
-                href="/admin/stock"
-                icon={Package}
-                iconBg="#F4F4F5"
-                iconColor="#18181B"
-                title="Update Inventory"
-                stat="—"
-                statLabel="items"
-                action="Update Inventory"
-                description="Update stock levels, add new supply items, and track ingredients."
-              />
-              <OperationCard
-                href="/admin/emails"
-                icon={Mail}
-                iconBg="#FFF7ED"
-                iconColor="#F97316"
-                title="Promotions"
-                stat="—"
-                statLabel="active"
-                action="Promotions"
-                description="Send promotional emails, manage campaigns, and track engagement."
-              />
-              <OperationCard
-                href="/admin/web"
-                icon={Store}
-                iconBg="#F4F4F5"
-                iconColor="#18181B"
-                title="Web Console"
-                stat="—"
-                statLabel="settings"
-                action="Web Console"
-                description="Manage your restaurant website, online menu display, and SEO settings."
-              />
-              <OperationCard
-                href="/admin/stock"
-                icon={Boxes}
-                iconBg="#F0FDF4"
-                iconColor="#15803D"
-                title="Stock Control"
-                stat="—"
-                statLabel="alerts"
-                action="Stock Control"
-                description="Monitor low stock alerts, reorder points, and supplier inventory."
-              />
-
-              {/* Sign Out card */}
-              <button onClick={handleLogout} className="text-left w-full cursor-pointer group">
-                <Card
-                  className="bg-white border-0 rounded-xl h-full transition-shadow group-hover:shadow-md"
-                  style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.06)", border: "1px solid #E5E7EB" }}
-                >
-                  <CardContent className="p-6">
-                    <div className="flex items-start justify-between">
-                      <div
-                        className="w-11 h-11 rounded-xl flex items-center justify-center"
-                        style={{ backgroundColor: "#FEF2F2" }}
-                      >
-                        <LogOut className="w-5 h-5" style={{ color: "#EF4444" }} />
-                      </div>
-                    </div>
-                    <h3 className="text-[16px] font-bold mt-4" style={{ color: "#EF4444" }}>
-                      Sign Out
-                    </h3>
-                    <p className="text-[14px] mt-1 leading-relaxed" style={{ color: "#71717A" }}>
-                      Log out of the admin panel and return to the login screen.
-                    </p>
-                  </CardContent>
-                </Card>
-              </button>
+            <h2 className="text-2xl font-black text-slate-900 mb-6">Quick Actions</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <ModuleCard href="/admin/menu" icon={Plus} color="emerald" title="Add Product" stat="New" desc="Create a new menu product with pricing and availability." />
+              <ModuleCard href="/admin/menu" icon={Tag} color="indigo" title="Add Category" stat="New" desc="Organize food items and dishes into new categories." />
+              <ModuleCard href="/admin/menu" icon={BookOpen} color="rose" title="Create Offer" stat="Promo" desc="Launch promotional offers, bundles, and discounts." />
+              <ModuleCard href="/admin/orders" icon={ClipboardList} color="blue" title="New Order" stat="Start" desc="Start a new food order for dine-in, takeaway, or delivery." />
+              <ModuleCard href="/admin/staff" icon={Users} color="orange" title="Add Employee" stat="Staff" desc="Register a new employee with role and schedule." />
+              <ModuleCard href="/admin/tax" icon={Percent} color="amber" title="Configure Tax" stat="Rules" desc="Set up tax rates, exemptions, and regional settings." />
+              <ModuleCard href="/admin/stock" icon={Package} color="indigo" title="Update Inventory" stat="Items" desc="Update stock levels, add supply items, and track ingredients." />
+              <ModuleCard href="/admin/emails" icon={Mail} color="emerald" title="Promotions" stat="Active" desc="Send promotional emails and manage marketing campaigns." />
+              <ModuleCard href="/admin/web" icon={Store} color="blue" title="Web Console" stat="Settings" desc="Manage your restaurant website and SEO settings." />
+              <ModuleCard href="/admin/stock" icon={Boxes} color="emerald" title="Stock Control" stat="Alerts" desc="Monitor low stock alerts, reorder points, and supplier inventory." />
+              <ModuleCard onClick={handleLogout} icon={LogOut} color="rose" title="Sign Out" stat="Action" desc="Log out of the admin panel and return to the login screen." actionLabel="Sign Out" />
             </div>
           </section>
-
         </div>
       </main>
-
-      {/* ═══════════════════════════════════════════════════════
-          FOOTER
-         ═══════════════════════════════════════════════════════ */}
-      <footer
-        className="py-5 text-center text-[14px] text-white font-medium"
-        style={{ backgroundColor: "#18181B" }}
-      >
-        &copy; {new Date().getFullYear()} Tasty Bites. All Rights Reserved.
-      </footer>
     </div>
   );
 }
 
 /* ─────────────────────────────────────────────────────────────────────
-   SUB-COMPONENTS — kept in same file (dashboard-specific)
+   SUB-COMPONENTS (Pro Max Styled)
    ───────────────────────────────────────────────────────────────────── */
 
 /**
- * Module Card — Medium size
- * Icon · Title · Stat · Description · Footer action
+ * Module Card — Large Bento Box style
  */
-function ModuleCard({ href, icon: Icon, iconBg, iconColor, title, stat, description, action }) {
-  return (
-    <Link href={href} className="block group">
-      <Card
-        className="bg-white border-0 rounded-xl h-full transition-shadow group-hover:shadow-md"
-        style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.06)", border: "1px solid #E5E7EB" }}
-      >
-        <CardContent className="p-6 flex flex-col justify-between h-full min-h-[220px]">
-          <div>
-            <div className="flex items-start justify-between mb-4">
-              <div
-                className="w-12 h-12 rounded-xl flex items-center justify-center"
-                style={{ backgroundColor: iconBg }}
-              >
-                <Icon className="w-6 h-6" style={{ color: iconColor }} />
-              </div>
-            </div>
-            <h3 className="text-[18px] font-bold" style={{ color: "#18181B" }}>
-              {title}
-            </h3>
-            <p className="text-[13px] font-semibold mt-1" style={{ color: "#F97316", fontVariantNumeric: "tabular-nums" }}>
-              {stat}
-            </p>
-            <p className="text-[15px] mt-2 leading-relaxed" style={{ color: "#71717A" }}>
-              {description}
-            </p>
-          </div>
-          <div className="mt-5 pt-4" style={{ borderTop: "1px solid #E5E7EB" }}>
-            <span className="inline-flex items-center gap-1 text-[14px] font-semibold group-hover:gap-2 transition-all" style={{ color: "#F97316" }}>
-              {action}
-              <ArrowUpRight className="w-4 h-4" />
-            </span>
-          </div>
-        </CardContent>
-      </Card>
-    </Link>
-  );
-}
+function ModuleCard({ href, icon: Icon, color, title, stat, desc, onClick, actionLabel = "Access Module" }) {
+  const colorMap = {
+    orange: "text-orange-600 bg-orange-100 group-hover:bg-orange-600",
+    blue: "text-blue-600 bg-blue-100 group-hover:bg-blue-600",
+    indigo: "text-indigo-600 bg-indigo-100 group-hover:bg-indigo-600",
+    emerald: "text-emerald-600 bg-emerald-100 group-hover:bg-emerald-600",
+    rose: "text-rose-600 bg-rose-100 group-hover:bg-rose-600",
+    amber: "text-amber-600 bg-amber-100 group-hover:bg-amber-600",
+  };
 
-/**
- * Operation Card — Small size
- * Icon · Title · Stat + Label · Description
- */
-function OperationCard({ href, icon: Icon, iconBg, iconColor, title, stat, statLabel,action, description }) {
+  const textHoverMap = {
+    orange: "group-hover:text-orange-50",
+    blue: "group-hover:text-blue-50",
+    indigo: "group-hover:text-indigo-50",
+    emerald: "group-hover:text-emerald-50",
+    rose: "group-hover:text-rose-50",
+    amber: "group-hover:text-amber-50",
+  };
+
+  const Inner = (
+    <Card className="bg-white border border-slate-200/60 rounded-2xl h-full transition-all duration-300 hover:shadow-[0_20px_40px_-15px_rgba(0,0,0,0.1)] hover:-translate-y-1 relative overflow-hidden text-left w-full cursor-pointer">
+      {/* Subtle hover gradient background */}
+      <div className="absolute inset-0 bg-linear-to-br from-transparent to-slate-50/50 opacity-0 group-hover:opacity-100 transition-opacity" />
+
+      <CardContent className="p-8 relative z-10 flex flex-col h-full">
+        <div className="flex justify-between items-start mb-6">
+          <div className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-colors duration-300 ${colorMap[color]}`}>
+            <Icon className={`w-7 h-7 transition-colors duration-300 ${textHoverMap[color] || 'group-hover:text-white'}`} />
+          </div>
+          <Badge variant="secondary" className="bg-slate-100 text-slate-600 font-bold tracking-wide uppercase text-[10px] px-2.5 py-1">
+            {stat}
+          </Badge>
+        </div>
+
+        <h3 className="text-xl font-black text-slate-900 mb-2">{title}</h3>
+        <p className="text-slate-500 font-medium text-sm leading-relaxed flex-1">
+          {desc}
+        </p>
+
+        <div className="mt-6 flex items-center text-sm font-bold text-slate-900 group-hover:text-blue-600 transition-colors">
+          {actionLabel}
+          <ArrowRight className="w-4 h-4 ml-2 transition-transform duration-300 group-hover:translate-x-1" />
+        </div>
+      </CardContent>
+    </Card>
+  );
+
+  if (onClick) {
+    return (
+      <button type="button" onClick={onClick} className="block group outline-none h-full w-full">
+        {Inner}
+      </button>
+    );
+  }
+
   return (
-    <Link href={href} className="block group">
-      <Card
-        className="bg-white border-0 rounded-xl h-full transition-all duration-200 group-hover:shadow-md group-hover:-translate-y-0.5"
-        style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.06)", border: "1px solid #E5E7EB" }}
-      >
-        <CardContent className="p-6 flex flex-col justify-between h-full min-h-[180px]">
-          <div>
-            <div className="flex items-start justify-between">
-              <div
-                className="w-11 h-11 rounded-xl flex items-center justify-center transition-transform duration-200 group-hover:scale-110"
-                style={{ backgroundColor: iconBg }}
-              >
-                <Icon className="w-5 h-5" style={{ color: iconColor }} />
-              </div>
-              <div className="text-right">
-                <span className="text-[28px] font-bold leading-none" style={{ color: "#18181B", fontVariantNumeric: "tabular-nums" }}>
-                  {stat}
-                </span>
-                <p className="text-[13px] mt-0.5" style={{ color: "#71717A" }}>
-                  {statLabel}
-                </p>
-              </div>
-            </div>
-            <h3 className="text-[16px] font-bold mt-4" style={{ color: "#18181B" }}>
-              {title}
-            </h3>
-            <p className="text-[14px] mt-1 leading-relaxed" style={{ color: "#71717A" }}>
-              {description}
-            </p>
-          </div>
-          <div className="mt-4 pt-3" style={{ borderTop: "1px solid #E5E7EB" }}>
-            <span className="inline-flex items-center gap-1 text-[14px] font-semibold group-hover:gap-2 transition-all duration-200" style={{ color: "#F97316" }}>
-              {action}
-              <ArrowUpRight className="w-4 h-4 transition-transform duration-200 group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
-            </span>
-          </div>
-        </CardContent>
-      </Card>
+    <Link href={href} className="block group outline-none h-full">
+      {Inner}
     </Link>
   );
 }

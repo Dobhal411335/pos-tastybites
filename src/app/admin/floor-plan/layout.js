@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import TopNavbar from "@/components/layout/TopNavbar";
 import ModuleSidebar from "@/components/layout/ModuleSidebar";
 import { Toaster } from "sonner";
@@ -9,8 +9,12 @@ import { FooterBar } from "@/components/layout/FooterBar";
 
 export default function TablesModuleLayout({ children }) {
   const router = useRouter();
+  const pathname = usePathname();
   const [adminUser, setAdminUser] = useState(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  
+  // Check if we are in the floor plan editor
+  const isEditor = pathname?.includes("/admin/floor-plan/floor/") && pathname !== "/admin/floor-plan/floor";
 
   useEffect(() => {
     const verifyAuth = async () => {
@@ -37,7 +41,8 @@ export default function TablesModuleLayout({ children }) {
       title: "Create Table",
       color: "bg-[#1e40af]",
       items: [
-        { label: "Create Table", href: "/admin/tables" },
+        { label: "Create Table", href: "/admin/floor-plan/new" },
+        { label: "Create Floor", href: "/admin/floor-plan/floor" },
       ],
     },
   ];
@@ -52,9 +57,11 @@ export default function TablesModuleLayout({ children }) {
       />
 
       <div className="flex-1 flex overflow-hidden relative">
-        <div className="hidden md:block">
-          <ModuleSidebar groups={sidebarGroups} />
-        </div>
+        {!isEditor && (
+          <div className="hidden md:block">
+            <ModuleSidebar groups={sidebarGroups} />
+          </div>
+        )}
 
         {isMobileMenuOpen && (
           <div className="fixed inset-0 z-50 flex md:hidden">
@@ -65,11 +72,17 @@ export default function TablesModuleLayout({ children }) {
           </div>
         )}
 
-        <main className="flex-1 overflow-y-auto p-6 sm:p-8 md:p-12">
-          <div className="mx-auto max-w-5xl bg-white border border-zinc-200 p-6 sm:p-10 rounded-xl shadow-xs min-h-[500px]">
+        {isEditor ? (
+          <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
             {children}
-          </div>
-        </main>
+          </main>
+        ) : (
+          <main className="flex-1 overflow-y-auto p-6">
+            <div className="mx-auto max-w-5xl bg-white border border-zinc-200 p-6 sm:p-10 rounded-xl shadow-xs">
+              {children}
+            </div>
+          </main>
+        )}
       </div>
       <FooterBar />
 

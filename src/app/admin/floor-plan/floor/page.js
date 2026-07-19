@@ -1,35 +1,39 @@
 "use client";
 
 import React, { useState } from "react";
-import { Trash2, Edit, Utensils, MoreHorizontal, Table as TableIcon } from "lucide-react";
+import { Trash2, Edit, LayoutGrid, MoreHorizontal, Check, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { toast, Toaster } from "sonner";
 import { PALETTE } from "@/utils/paletteeColor";
+import { useRouter } from "next/navigation";
 
-export default function CreateTablePage() {
-  const [tableNumber, setTableNumber] = useState("");
-  const [tables, setTables] = useState([
-    { id: 1, tableNumber: "Table 1", status: "Active" },
-    { id: 2, tableNumber: "Table 2", status: "Active" },
-    { id: 3, tableNumber: "Table 3", status: "Inactive" },
+export default function CreateFloorPage() {
+  const router = useRouter();
+  const [floorName, setFloorName] = useState("");
+  const [floors, setFloors] = useState([
+    { id: "f1", floorName: "Ground Floor", tableCount: 12 },
+    { id: "f2", floorName: "Patio", tableCount: 5 },
   ]);
 
   const handleCreate = (e) => {
     e.preventDefault();
-    if (!tableNumber.trim()) return;
-    setTables([...tables, { id: Date.now(), tableNumber: tableNumber.trim(), status: "Active" }]);
-    setTableNumber("");
-    toast.success("Table created successfully.");
+    if (!floorName.trim()) return;
+    setFloors([...floors, { id: `f${Date.now()}`, floorName: floorName.trim(), tableCount: 0 }]);
+    setFloorName("");
+    toast.success("Floor created successfully.");
   };
 
   const handleDelete = (id) => {
-    setTables(tables.filter((t) => t.id !== id));
-    toast.success("Table deleted successfully.");
+    setFloors(floors.filter((f) => f.id !== id));
+    toast.success("Floor deleted successfully.");
+  };
+
+  const handleEdit = (id) => {
+    router.push(`/admin/floor-plan/floor/${id}`);
   };
 
   return (
@@ -43,10 +47,10 @@ export default function CreateTablePage() {
           <div className="flex flex-col sm:flex-row justify-between sm:items-end gap-4 border-b border-zinc-200 pb-5">
             <div>
               <h1 className="text-[32px] font-bold leading-tight" style={{ color: PALETTE.ink }}>
-                Diner Tables
+                Restaurant Floors
               </h1>
               <p className="text-[15px] mt-1" style={{ color: PALETTE.inkMuted }}>
-                Create and manage restaurant seating configurations.
+                Create and manage different floors and areas of your restaurant.
               </p>
             </div>
           </div>
@@ -58,21 +62,21 @@ export default function CreateTablePage() {
               <Card className="shadow-sm border-zinc-200 bg-white overflow-hidden">
                 <CardHeader className="bg-zinc-50/50 border-b border-zinc-100 pb-4">
                   <CardTitle className="text-[18px] font-bold text-zinc-900 flex items-center gap-2">
-                    <Utensils className="w-5 h-5 text-[#1e40af]" /> Add New Table
+                    <Plus className="w-5 h-5 text-[#1e40af]" /> Add New Floor
                   </CardTitle>
-                  <CardDescription className="text-[14px]">Define a new table identifier.</CardDescription>
+                  <CardDescription className="text-[14px]">Define a new physical space or dining area.</CardDescription>
                 </CardHeader>
                 <CardContent className="p-6">
                   <form onSubmit={handleCreate} className="space-y-4">
                     <div className="space-y-2">
                       <label className="text-[14px] font-semibold text-zinc-900">
-                        Table Number / Name <span className="text-red-500">*</span>
+                        Floor Name <span className="text-red-500">*</span>
                       </label>
                       <Input
                         type="text"
-                        placeholder="e.g. Table 1, VIP A..."
-                        value={tableNumber}
-                        onChange={(e) => setTableNumber(e.target.value)}
+                        placeholder="e.g. Ground Floor, Terrace, VIP Lounge..."
+                        value={floorName}
+                        onChange={(e) => setFloorName(e.target.value)}
                         className="h-11 text-[15px] bg-white border-zinc-200 focus:ring-[#1e40af]"
                       />
                     </div>
@@ -81,7 +85,7 @@ export default function CreateTablePage() {
                       className="w-full h-11 text-[15px] font-bold text-white transition-transform hover:scale-[1.02] shadow-sm mt-4"
                       style={{ backgroundColor: "#1e40af" }}
                     >
-                      Create Table
+                      Create Floor
                     </Button>
                   </form>
                 </CardContent>
@@ -93,7 +97,7 @@ export default function CreateTablePage() {
               <Card className="shadow-sm border-zinc-200 bg-white overflow-hidden h-full flex flex-col">
                 <CardHeader className="bg-zinc-50/50 border-b border-zinc-100 pb-4 flex flex-row items-center justify-between gap-4">
                   <CardTitle className="text-[18px] font-bold text-zinc-900 flex items-center gap-2">
-                    <TableIcon className="w-5 h-5 text-[#1e40af]" /> Current Tables
+                    <LayoutGrid className="w-5 h-5 text-[#1e40af]" /> Active Floors
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-0 flex-1">
@@ -101,35 +105,27 @@ export default function CreateTablePage() {
                     <TableHeader className="bg-zinc-50">
                       <TableRow>
                         <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6 w-16 text-center">#</TableHead>
-                        <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6">Table Number</TableHead>
-                        <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6 text-center">Status</TableHead>
+                        <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6">Floor Name</TableHead>
+                        <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6 text-center">Tables Assigned</TableHead>
                         <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6 text-center">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {tables.length === 0 ? (
+                      {floors.length === 0 ? (
                         <TableRow>
                           <TableCell colSpan={4} className="h-32 text-center text-zinc-400 font-medium text-[14px]">
-                            No tables created yet.
+                            No floors created yet.
                           </TableCell>
                         </TableRow>
                       ) : (
-                        tables.map((t, index) => (
-                          <TableRow key={t.id} className="h-14 hover:bg-zinc-50 transition-colors">
+                        floors.map((f, index) => (
+                          <TableRow key={f.id} className="h-14 hover:bg-zinc-50 transition-colors">
                             <TableCell className="px-6 text-center font-bold text-zinc-400 text-[13px]">{index + 1}</TableCell>
                             <TableCell className="px-6">
-                              <span className="font-bold text-[15px] text-zinc-900 uppercase tracking-wide">{t.tableNumber}</span>
+                              <span className="font-bold text-[15px] text-zinc-900">{f.floorName}</span>
                             </TableCell>
-                            <TableCell className="px-6 text-center">
-                              {t.status === "Active" ? (
-                                <Badge className="bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border-none px-2.5 py-1 text-[12px] font-bold uppercase tracking-wide">
-                                  Active
-                                </Badge>
-                              ) : (
-                                <Badge className="bg-red-50 text-red-600 hover:bg-red-100 border-none px-2.5 py-1 text-[12px] font-bold uppercase tracking-wide">
-                                  Inactive
-                                </Badge>
-                              )}
+                            <TableCell className="px-6 text-center text-[14px] text-zinc-600 font-medium">
+                              {f.tableCount} Tables
                             </TableCell>
                             <TableCell className="px-6 text-center">
                               <DropdownMenu>
@@ -139,12 +135,12 @@ export default function CreateTablePage() {
                                   </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end" className="w-40 bg-white">
-                                  <DropdownMenuItem className="text-[14px] font-medium cursor-pointer">
-                                    <Edit className="mr-2 h-4 w-4" /> Edit Table
+                                  <DropdownMenuItem className="text-[14px] font-medium cursor-pointer text-blue-600 focus:bg-blue-50 focus:text-blue-700" onClick={() => handleEdit(f.id)}>
+                                    <LayoutGrid className="mr-2 h-4 w-4" /> Edit Layout
                                   </DropdownMenuItem>
                                   <DropdownMenuItem
                                     className="text-[14px] font-medium text-red-600 focus:bg-red-500 focus:text-white cursor-pointer"
-                                    onClick={() => handleDelete(t.id)}
+                                    onClick={() => handleDelete(f.id)}
                                   >
                                     <Trash2 className="mr-2 h-4 w-4" /> Delete
                                   </DropdownMenuItem>
