@@ -33,6 +33,7 @@ import {
   CircleDot,
   ArrowRight,
   UserCircle,
+  Tablet,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -113,17 +114,18 @@ export default function AdminDashboardPage() {
           {/* Left */}
           <div className="flex items-center gap-4">
             <Link href="/admin/dashboard">
-              <div className="relative h-14 w-36">
+              <div className="relative w-48">
                 <Image
                   src="/BannerImage.png"
                   alt="Logo"
-                  fill
+                  height={200}
+                  width={300}
                   priority
                   className="object-contain"
                 />
               </div>
             </Link>
-
+ 
             <div className="hidden lg:block h-8 w-px bg-stone-300" />
 
             <div className="hidden lg:flex flex-col">
@@ -367,6 +369,7 @@ export default function AdminDashboardPage() {
               <ModuleCard href="/admin/orders/staff" icon={ChefHat} color="orange" title="Staff Orders" stat="Queue" desc="Monitor internal staff meal orders and kitchen prep queue." />
               <ModuleCard href="/admin/users" icon={UserCheck} color="rose" title="Admin Users" stat="Admins" desc="Configure master administrators and owner credentials." />
               <ModuleCard href="/admin/floor-plan" icon={LayoutGrid} color="amber" title="Floor Management" stat="Tables" desc="View and manage restaurant table layout and seating status." />
+              <ModuleCard href="/admin/devices" icon={Tablet} color="indigo" title="Device Setup" stat="Tablets" desc="Register and manage POS tablets and hardware devices." />
             </div>
           </section>
 
@@ -376,13 +379,9 @@ export default function AdminDashboardPage() {
           <section>
             <h2 className="text-2xl font-black text-slate-900 mb-6">Quick Actions</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              <ModuleCard href="/admin/menu" icon={Plus} color="emerald" title="Add Product" stat="New" desc="Create a new menu product with pricing and availability." />
-              <ModuleCard href="/admin/menu" icon={Tag} color="indigo" title="Add Category" stat="New" desc="Organize food items and dishes into new categories." />
-              <ModuleCard href="/admin/menu" icon={BookOpen} color="rose" title="Create Offer" stat="Promo" desc="Launch promotional offers, bundles, and discounts." />
               <ModuleCard href="/admin/orders" icon={ClipboardList} color="blue" title="New Order" stat="Start" desc="Start a new food order for dine-in, takeaway, or delivery." />
               <ModuleCard href="/admin/staff" icon={Users} color="orange" title="Add Employee" stat="Staff" desc="Register a new employee with role and schedule." />
               <ModuleCard href="/admin/tax" icon={Percent} color="amber" title="Configure Tax" stat="Rules" desc="Set up tax rates, exemptions, and regional settings." />
-              <ModuleCard href="/admin/stock" icon={Package} color="indigo" title="Update Inventory" stat="Items" desc="Update stock levels, add supply items, and track ingredients." />
               <ModuleCard href="/admin/emails" icon={Mail} color="emerald" title="Promotions" stat="Active" desc="Send promotional emails and manage marketing campaigns." />
               <ModuleCard href="/admin/web" icon={Store} color="blue" title="Web Console" stat="Settings" desc="Manage your restaurant website and SEO settings." />
               <ModuleCard href="/admin/stock" icon={Boxes} color="emerald" title="Stock Control" stat="Alerts" desc="Monitor low stock alerts, reorder points, and supplier inventory." />

@@ -1,22 +1,39 @@
-import { NextResponse } from "next/server";
-import { jwtVerify } from "jose";
+import { NextResponse } from 'next/server';
+import { withEmployeeAuth } from '@/utils/employeeAuth';
+import EmployeeShift from '@/models/EmployeeShift';
 
-export async function GET(request) {
+const getMeHandler = async (request) => {
   try {
-    const token = request.cookies.get("employee-token")?.value;
+    const employee = request.employee;
+    const session = request.session;
 
-    if (!token) {
-      return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
-    }
-
-    const secret = new TextEncoder().encode(process.env.JWT_SECRET || 'fallback-secret-key-for-development');
-    const { payload } = await jwtVerify(token, secret);
+    // Fetch the currently active shift to return to the client
+    const activeShift = await EmployeeShift.findById(session.shift).populate('assignedFloor assignedSection');
 
     return NextResponse.json({
       success: true,
-      data: payload,
+      data: {
+        employee: {
+          id: employee.employeeId,
+          firstName: employee.firstName,
+          lastName: employee.lastName,
+          email: employee.email,
+          role: employee.role,
+          profileImage: employee.profileImage,
+          permissions: employee.permissionGroup?.permissions || []
+        },
+        shift: activeShift ? {
+          id: activeShift._id,
+          startTime: activeShift.startTime,
+          assignedFloor: activeShift.assignedFloor?.name || null,
+          assignedSection: activeShift.assignedSection?.name || null
+        } : null
+      }
     });
   } catch (error) {
-    return NextResponse.json({ success: false, message: "Invalid token" }, { status: 401 });
+    console.error('Get Me Error:', error);
+    return NextResponse.json({ success: false, message: 'Internal Server Error' }, { status: 500 });
   }
-}
+};
+
+export const GET = withEmployeeAuth(getMeHandler);

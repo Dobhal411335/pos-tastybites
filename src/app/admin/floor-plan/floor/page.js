@@ -39,10 +39,10 @@ export default function CreateFloorPage() {
   return (
     <div className="flex flex-col overflow-hidden min-h-screen" style={{ backgroundColor: PALETTE.canvas, color: PALETTE.ink }}>
       <Toaster position="top-right" richColors />
-      
+
       <div className="flex-1 overflow-y-auto p-8">
         <div className="max-w-[1000px] mx-auto space-y-8 pb-16 font-sans">
-          
+
           {/* Header */}
           <div className="flex flex-col sm:flex-row justify-between sm:items-end gap-4 border-b border-zinc-200 pb-5">
             <div>
@@ -56,7 +56,7 @@ export default function CreateFloorPage() {
           </div>
 
           <div className="flex flex-col items-center w-full gap-8">
-            
+
             {/* Form Section */}
             <div className="w-full space-y-6">
               <Card className="shadow-sm border-zinc-200 bg-white overflow-hidden">
@@ -127,25 +127,28 @@ export default function CreateFloorPage() {
                             <TableCell className="px-6 text-center text-[14px] text-zinc-600 font-medium">
                               {f.tableCount} Tables
                             </TableCell>
-                            <TableCell className="px-6 text-center">
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="h-8 w-8 border text-zinc-500 hover:text-zinc-900 cursor-pointer">
-                                    <MoreHorizontal className="h-4 w-4" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end" className="w-40 bg-white">
-                                  <DropdownMenuItem className="text-[14px] font-medium cursor-pointer text-blue-600 focus:bg-blue-50 focus:text-blue-700" onClick={() => handleEdit(f.id)}>
-                                    <LayoutGrid className="mr-2 h-4 w-4" /> Edit Layout
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem
-                                    className="text-[14px] font-medium text-red-600 focus:bg-red-500 focus:text-white cursor-pointer"
-                                    onClick={() => handleDelete(f.id)}
-                                  >
-                                    <Trash2 className="mr-2 h-4 w-4" /> Delete
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
+                            <TableCell className="px-6">
+                              <div className="flex items-center justify-center gap-2">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleEdit(f.id)}
+                                  className="h-9 px-3 text-white bg-orange-500 hover:bg-blue-50 hover:text-blue-700"
+                                >
+                                  <LayoutGrid className="mr-2 h-4 w-4" />
+                                  Edit Layout
+                                </Button>
+
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleDelete(f.id)}
+                                  className="h-9 px-3 text-white bg-red-500 hover:bg-red-600 hover:text-white"
+                                >
+                                  <Trash2 className="mr-2 h-4 w-4" />
+                                  Delete
+                                </Button>
+                              </div>
                             </TableCell>
                           </TableRow>
                         ))

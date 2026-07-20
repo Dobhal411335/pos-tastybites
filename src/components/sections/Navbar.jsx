@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import { Phone, Menu } from "lucide-react";
+import { Phone, Menu, UserCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 
@@ -43,8 +43,18 @@ export default function Navbar() {
           ))}
         </nav>
 
-        {/* Phone Button */}
-        <div className="hidden md:flex items-center">
+        {/* Login & Phone Buttons */}
+        <div className="hidden md:flex items-center gap-3">
+          <Button
+            asChild
+            variant="ghost"
+            className="text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100 flex gap-2 items-center px-4 py-5 text-xs font-bold tracking-wider uppercase transition-colors"
+          >
+            <Link href="/login">
+              <UserCircle className="h-4 w-4" />
+              <span>Login</span>
+            </Link>
+          </Button>
           <Button
             asChild
             variant="outline"
@@ -85,15 +95,27 @@ export default function Navbar() {
                   ))}
                 </nav>
 
-                <Button
-                  asChild
-                  className="bg-zinc-900 hover:bg-zinc-800 text-white w-full py-6 rounded-full flex gap-2 justify-center text-xs font-bold tracking-wider"
-                >
-                  <a href="tel:5192150050" onClick={() => setIsOpen(false)}>
-                    <Phone className="h-4 w-4" />
-                    <span>Call (519) 215-0050</span>
-                  </a>
-                </Button>
+                <div className="flex flex-col gap-3">
+                  <Button
+                    asChild
+                    variant="outline"
+                    className="border-zinc-200 text-zinc-800 hover:bg-zinc-50 w-full py-6 rounded-full flex gap-2 justify-center text-xs font-bold tracking-wider uppercase"
+                  >
+                    <Link href="/login" onClick={() => setIsOpen(false)}>
+                      <UserCircle className="h-4 w-4" />
+                      <span>Staff Login</span>
+                    </Link>
+                  </Button>
+                  <Button
+                    asChild
+                    className="bg-zinc-900 hover:bg-zinc-800 text-white w-full py-6 rounded-full flex gap-2 justify-center text-xs font-bold tracking-wider uppercase"
+                  >
+                    <a href="tel:5192150050" onClick={() => setIsOpen(false)}>
+                      <Phone className="h-4 w-4" />
+                      <span>Call (519) 215-0050</span>
+                    </a>
+                  </Button>
+                </div>
               </div>
             </SheetContent>
           </Sheet>

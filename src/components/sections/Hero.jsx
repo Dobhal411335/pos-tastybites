@@ -33,14 +33,14 @@ export default function Hero() {
           Executives face compounding complexity — market disruption, organisational inertia, data overload. Without a structured framework, the highest-stakes decisions rely on instinct alone.
         </p>
 
-        <div className="pt-4">
+        {/* <div className="pt-4">
           <Button
             asChild
             className="bg-white hover:bg-zinc-100 text-zinc-950 font-bold px-8 py-6 rounded-none text-xs uppercase tracking-widest transition-all"
           >
             <a href="#booking">Pay With Cash</a>
           </Button>
-        </div>
+        </div> */}
       </div>
     </section>
   );
