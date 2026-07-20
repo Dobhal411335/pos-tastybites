@@ -48,13 +48,15 @@ export default function TablesModuleLayout({ children }) {
   ];
 
   return (
-    <div className="min-h-screen bg-[#FAF9F6] flex flex-col antialiased text-[#1F2937] font-sans">
+    <div className={`${isEditor ? "h-screen overflow-hidden" : "min-h-screen"} bg-[#FAF9F6] flex flex-col antialiased text-[#1F2937] font-sans`}>
       <Toaster position="top-right" richColors />
 
-      <TopNavbar
-        adminName={adminUser?.name}
-        onMenuToggle={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-      />
+      {!isEditor && (
+        <TopNavbar
+          adminName={adminUser?.name}
+          onMenuToggle={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+        />
+      )}
 
       <div className="flex-1 flex overflow-hidden relative">
         {!isEditor && (
@@ -84,8 +86,10 @@ export default function TablesModuleLayout({ children }) {
           </main>
         )}
       </div>
-      <FooterBar />
-
+      {!isEditor && (
+        <FooterBar />
+      )}
+      
     </div>
   );
 }

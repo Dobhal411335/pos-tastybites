@@ -40,7 +40,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import { toast, Toaster } from "sonner";
+import { toast } from "sonner";
 import {
   DndContext,
   useDraggable,
@@ -146,7 +146,7 @@ function ToolItem({ tool }) {
       {...listeners}
       {...attributes}
       className={`
-        group flex w-full items-center gap-4 rounded-xl border border-transparent bg-white px-4 py-3 text-left 
+        group flex w-full items-center gap-4 rounded-xl border bg-white px-4 py-3 text-left 
         transition-colors duration-200 cursor-grab active:cursor-grabbing
         hover:border-orange-200 hover:bg-orange-50 hover:shadow-sm
         ${isDragging ? "opacity-50" : ""}
@@ -171,11 +171,11 @@ function ToolItem({ tool }) {
 // CANVAS TABLE COMPONENT
 // ---------------------------------------------------------------------------
 
-function CanvasTable({ table, isSelected, onSelect, zoom }) {
+function CanvasTable({ table, isSelected, onSelect, onResizeStart, zoom, isPreviewMode }) {
   const { attributes, listeners, setNodeRef, isDragging, transform } = useDraggable({
     id: `table-${table.id}`,
     data: { type: "table", table },
-    disabled: table.locked,
+    disabled: table.locked || isPreviewMode,
   });
 
   const style = {
@@ -200,13 +200,14 @@ function CanvasTable({ table, isSelected, onSelect, zoom }) {
         ${table.type === "round" ? "rounded-full" : "rounded-[10px]"}
         ${isSelected ? "ring-2 ring-orange-500 ring-offset-2 shadow-lg" : "border border-stone-200 shadow-sm hover:shadow-md hover:border-stone-300"}
         ${isDragging ? "opacity-80 scale-105 shadow-xl ring-2 ring-orange-500" : ""}
-        ${table.locked ? "cursor-default" : "cursor-grab active:cursor-grabbing"}
+        ${table.locked || isPreviewMode ? "cursor-default" : "cursor-grab active:cursor-grabbing"}
       `}
-      {...(table.locked ? {} : listeners)}
-      {...(table.locked ? {} : attributes)}
+      {...(table.locked || isPreviewMode ? {} : listeners)}
+      {...(table.locked || isPreviewMode ? {} : attributes)}
       onPointerDown={(e) => {
+        e.stopPropagation();
         onSelect(table.id);
-        if (!table.locked && listeners?.onPointerDown) {
+        if (!table.locked && !isPreviewMode && listeners?.onPointerDown) {
           listeners.onPointerDown(e);
         }
       }}
@@ -215,11 +216,13 @@ function CanvasTable({ table, isSelected, onSelect, zoom }) {
         <div className={`absolute -top-1.5 -right-1.5 h-3.5 w-3.5 rounded-full border-2 border-white shadow-sm ${statusColor}`} />
       )}
 
-      {/* Resize Handles (Visual only mockup for selected state) */}
-      {isSelected && !table.locked && (
+      {/* Resize Handles */}
+      {isSelected && !table.locked && !isPreviewMode && (
         <>
-          <div className="absolute -top-1.5 -left-1.5 w-3 h-3 bg-white border-2 border-orange-500 rounded-sm cursor-nwse-resize" />
-          <div className="absolute -bottom-1.5 -right-1.5 w-3 h-3 bg-white border-2 border-orange-500 rounded-sm cursor-nwse-resize" />
+          <div 
+            onPointerDown={(e) => onResizeStart(e, table)}
+            className="absolute -bottom-2 -right-2 h-4 w-4 rounded-full border-2 border-orange-500 bg-white cursor-se-resize z-20 shadow-sm" 
+          />
         </>
       )}
 
@@ -251,15 +254,46 @@ export default function FloorPlanEditorPage({ params }) {
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [snapToGrid, setSnapToGrid] = useState(true);
   const [showGrid, setShowGrid] = useState(true);
+  const [isPreviewMode, setIsPreviewMode] = useState(false);
+  const [history, setHistory] = useState({ past: [], future: [] });
   const [currentSection, setCurrentSection] = useState("Dining Hall");
+
+  const tablesRef = useRef(tables);
+  useEffect(() => { tablesRef.current = tables; }, [tables]);
+
+  const saveHistory = () => {
+    setHistory(h => ({
+      past: [...h.past, tablesRef.current],
+      future: []
+    }));
+  };
+
+  const undo = () => {
+    if (history.past.length === 0) return;
+    const previous = history.past[history.past.length - 1];
+    setHistory(h => ({
+      past: h.past.slice(0, -1),
+      future: [tablesRef.current, ...h.future]
+    }));
+    setTables(previous);
+    setSelectedTableId(null);
+  };
+
+  const redo = () => {
+    if (history.future.length === 0) return;
+    const next = history.future[0];
+    setHistory(h => ({
+      past: [...h.past, tablesRef.current],
+      future: h.future.slice(1)
+    }));
+    setTables(next);
+    setSelectedTableId(null);
+  };
 
   // Computed
   const currentFloor = MOCK_FLOORS.find((f) => f.id === floorId) || MOCK_FLOORS[0];
   const currentFloorTables = tables.filter((t) => t.floorId === currentFloor.id);
   const selectedTable = tables.find((t) => t.id === selectedTableId);
-  const gridBackground = showGrid
-    ? `radial-gradient(circle, #E7E5E4 1px, transparent 1px)`
-    : "none";
 
   // DnD Sensors
   const sensors = useSensors(
@@ -278,9 +312,48 @@ export default function FloorPlanEditorPage({ params }) {
   }, []);
 
   // --- Handlers: Editor Actions ---
+  const handleResizeStart = (e, table) => {
+    e.stopPropagation();
+    e.preventDefault();
+    
+    saveHistory(); // Save state before resizing begins
+
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const startW = table.w;
+    const startH = table.h;
+
+    const onPointerMove = (moveEvent) => {
+      let newW = startW + (moveEvent.clientX - startX) / zoom;
+      let newH = startH + (moveEvent.clientY - startY) / zoom;
+
+      // Minimum size
+      newW = Math.max(20, newW);
+      newH = Math.max(20, newH);
+
+      // Snap logic
+      if (snapToGrid) {
+        newW = Math.round(newW / 20) * 20;
+        newH = Math.round(newH / 20) * 20;
+      }
+
+      setTables((prev) => prev.map((t) => (t.id === table.id ? { ...t, w: newW, h: newH } : t)));
+    };
+
+    const onPointerUp = () => {
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+    };
+
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp);
+  };
+
   const handleDragEnd = (event) => {
     const { active, delta } = event;
     if (!active) return;
+
+    saveHistory(); // Save state before drop
 
     const snap = (val) => (snapToGrid ? Math.round(val / 20) * 20 : Math.round(val));
 
@@ -327,6 +400,7 @@ export default function FloorPlanEditorPage({ params }) {
 
   const updateSelectedTable = (updates) => {
     if (!selectedTableId) return;
+    saveHistory();
     setTables((prev) =>
       prev.map((t) => (t.id === selectedTableId ? { ...t, ...updates } : t))
     );
@@ -334,6 +408,7 @@ export default function FloorPlanEditorPage({ params }) {
 
   const duplicateTable = () => {
     if (!selectedTable) return;
+    saveHistory();
     const newTable = {
       ...selectedTable,
       id: `t${Date.now()}`,
@@ -347,77 +422,94 @@ export default function FloorPlanEditorPage({ params }) {
 
   const deleteTable = () => {
     if (!selectedTableId) return;
+    saveHistory();
     setTables(tables.filter((t) => t.id !== selectedTableId));
     setSelectedTableId(null);
   };
 
   return (
-    <div className="flex flex-col h-screen overflow-hidden bg-stone-50 font-sans text-stone-900 w-full">
-      <Toaster position="top-right" richColors />
+    <div className="flex flex-col h-full overflow-hidden bg-stone-50 font-sans text-stone-900 w-full">
 
       {/* ─── TOP TOOLBAR ────────────────────────────────────────────── */}
       <header className="h-16 bg-white border-b border-stone-200 flex items-center justify-between px-6 shrink-0 sticky top-0 z-50">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" onClick={() => router.push("/admin/floor-plan/floor")} className="text-stone-600 hover:bg-stone-100 h-10 px-3">
-            <ChevronLeft className="mr-2 h-4 w-4" /> Back
-          </Button>
-
-          <Separator orientation="vertical" className="h-8 mx-2 bg-stone-200" />
-
-          <div className="flex items-center gap-3">
-            <select
-              className="h-10 rounded-lg border border-stone-200 bg-white px-3 py-2 text-[14px] font-bold outline-none focus:ring-2 focus:ring-[#1e40af]"
-              value={currentFloor.id}
-              onChange={() => { }} // Mock read-only for now
-            >
-              {MOCK_FLOORS.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
-            </select>
-
-            <select
-              className="h-10 rounded-lg border border-stone-200 bg-white px-3 py-2 text-[14px] font-medium text-stone-600 outline-none focus:ring-2 focus:ring-[#1e40af]"
-              value={currentSection}
-              onChange={(e) => setCurrentSection(e.target.value)}
-            >
-              {currentFloor.sections.map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <div className="flex items-center bg-stone-50 border border-stone-200 rounded-lg p-1">
-            <Button variant="ghost" size="icon" className="h-8 w-8 text-stone-600 hover:text-stone-900 rounded-md"><Undo className="h-4 w-4" /></Button>
-            <Button variant="ghost" size="icon" className="h-8 w-8 text-stone-600 hover:text-stone-900 rounded-md"><Redo className="h-4 w-4" /></Button>
-          </div>
-
-          <Separator orientation="vertical" className="h-8 mx-2 bg-stone-200" />
-
-          <div className="flex items-center bg-stone-50 border border-stone-200 rounded-lg p-1">
-            <Button variant="ghost" size="icon" onClick={() => setZoom(z => Math.max(0.3, z - 0.1))} className="h-8 w-8 text-stone-600 hover:text-stone-900 rounded-md"><ZoomOut className="h-4 w-4" /></Button>
-            <span className="text-[13px] font-bold text-stone-700 w-14 text-center">{Math.round(zoom * 100)}%</span>
-            <Button variant="ghost" size="icon" onClick={() => setZoom(z => Math.min(3, z + 0.1))} className="h-8 w-8 text-stone-600 hover:text-stone-900 rounded-md"><ZoomIn className="h-4 w-4" /></Button>
-            <Button variant="ghost" size="icon" onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }) }} className="h-8 w-8 text-stone-600 hover:text-stone-900 rounded-md" title="Reset Zoom"><Maximize className="h-4 w-4" /></Button>
-          </div>
-
-          <Separator orientation="vertical" className="h-8 mx-2 bg-stone-200" />
-
-          <div className="flex items-center gap-1 bg-stone-50 border border-stone-200 rounded-lg p-1">
-            <Button variant={snapToGrid ? "secondary" : "ghost"} size="sm" onClick={() => setSnapToGrid(!snapToGrid)} className={`h-8 px-3 rounded-md text-[13px] font-semibold ${snapToGrid ? 'bg-white shadow-sm text-stone-900' : 'text-stone-500 hover:text-stone-900'}`}>
-              Snap
-            </Button>
-            <Button variant={showGrid ? "secondary" : "ghost"} size="sm" onClick={() => setShowGrid(!showGrid)} className={`h-8 px-3 rounded-md text-[13px] font-semibold ${showGrid ? 'bg-white shadow-sm text-stone-900' : 'text-stone-500 hover:text-stone-900'}`}>
-              Grid
+        
+        {isPreviewMode ? (
+          <div className="w-full flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <span className="text-[15px] font-bold text-[#1e40af] bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-100">
+                <Eye className="inline-block mr-2 h-4 w-4" /> Preview Mode
+              </span>
+              <span className="text-[13px] text-stone-500 font-medium">Read-only view of the current floor plan layout.</span>
+            </div>
+            <Button onClick={() => setIsPreviewMode(false)} className="h-10 px-6 font-bold text-white transition-transform hover:scale-[1.02] shadow-sm bg-stone-900 hover:bg-stone-800">
+              Exit Preview
             </Button>
           </div>
-        </div>
+        ) : (
+          <>
+            <div className="flex items-center gap-4">
+              <Button variant="ghost" onClick={() => router.push("/admin/floor-plan/floor")} className="text-stone-600 hover:bg-stone-100 h-10 px-3">
+                <ChevronLeft className="mr-2 h-4 w-4" /> Back
+              </Button>
 
-        <div className="flex items-center gap-3">
-          <Button variant="outline" className="h-10 px-4 text-stone-700 border-stone-300 font-bold bg-white hover:bg-stone-50">
-            <Eye className="mr-2 h-4 w-4" /> Preview
-          </Button>
-          <Button onClick={() => toast.success("Layout saved successfully.")} className="h-10 px-6 font-bold text-white transition-transform hover:scale-[1.02] shadow-sm" style={{ backgroundColor: "#1e40af" }}>
-            <Save className="mr-2 h-4 w-4" /> Save Layout
-          </Button>
-        </div>
+              <Separator orientation="vertical" className="h-8 mx-2 bg-stone-200" />
+
+              <div className="flex items-center gap-3">
+                <select
+                  className="h-10 rounded-lg border border-stone-200 bg-white px-3 py-2 text-[14px] font-bold outline-none focus:ring-2 focus:ring-[#1e40af]"
+                  value={currentFloor.id}
+                  onChange={() => { }} // Mock read-only for now
+                >
+                  {MOCK_FLOORS.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+                </select>
+
+                <select
+                  className="h-10 rounded-lg border border-stone-200 bg-white px-3 py-2 text-[14px] font-medium text-stone-600 outline-none focus:ring-2 focus:ring-[#1e40af]"
+                  value={currentSection}
+                  onChange={(e) => setCurrentSection(e.target.value)}
+                >
+                  {currentFloor.sections.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <div className="flex items-center bg-stone-50 border border-stone-200 rounded-lg p-1">
+                <Button variant="ghost" size="icon" onClick={undo} disabled={history.past.length === 0} className="h-8 w-8 text-stone-600 hover:text-stone-900 rounded-md disabled:opacity-30"><Undo className="h-4 w-4" /></Button>
+                <Button variant="ghost" size="icon" onClick={redo} disabled={history.future.length === 0} className="h-8 w-8 text-stone-600 hover:text-stone-900 rounded-md disabled:opacity-30"><Redo className="h-4 w-4" /></Button>
+              </div>
+
+              <Separator orientation="vertical" className="h-8 mx-2 bg-stone-200" />
+
+              <div className="flex items-center bg-stone-50 border border-stone-200 rounded-lg p-1">
+                <Button variant="ghost" size="icon" onClick={() => setZoom(z => Math.max(0.3, z - 0.1))} className="h-8 w-8 text-stone-600 hover:text-stone-900 rounded-md"><ZoomOut className="h-4 w-4" /></Button>
+                <span className="text-[13px] font-bold text-stone-700 w-14 text-center">{Math.round(zoom * 100)}%</span>
+                <Button variant="ghost" size="icon" onClick={() => setZoom(z => Math.min(3, z + 0.1))} className="h-8 w-8 text-stone-600 hover:text-stone-900 rounded-md"><ZoomIn className="h-4 w-4" /></Button>
+                <Button variant="ghost" size="icon" onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }) }} className="h-8 w-8 text-stone-600 hover:text-stone-900 rounded-md" title="Reset Zoom"><Maximize className="h-4 w-4" /></Button>
+              </div>
+
+              <Separator orientation="vertical" className="h-8 mx-2 bg-stone-200" />
+
+              <div className="flex items-center gap-1 bg-stone-50 border border-stone-200 rounded-lg p-1">
+                <Button variant={snapToGrid ? "secondary" : "ghost"} size="sm" onClick={() => setSnapToGrid(!snapToGrid)} className={`h-8 px-3 rounded-md text-[13px] font-semibold ${snapToGrid ? 'bg-orange-600 shadow-sm text-stone-900' : 'text-stone-500 hover:text-stone-900'}`}>
+                  Snap
+                </Button>
+                <Button variant={showGrid ? "secondary" : "ghost"} size="sm" onClick={() => setShowGrid(!showGrid)} className={`h-8 px-3 rounded-md text-[13px] font-semibold ${showGrid ? 'bg-orange-600 shadow-sm text-stone-900' : 'text-stone-500 hover:text-stone-900'}`}>
+                  Grid
+                </Button>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <Button onClick={() => { setIsPreviewMode(true); setSelectedTableId(null); }} variant="outline" className="h-10 px-4 text-stone-700 border-stone-300 font-bold bg-white hover:bg-stone-50">
+                <Eye className="mr-2 h-4 w-4" /> Preview
+              </Button>
+              <Button onClick={() => toast.success("Layout saved successfully.")} className="h-10 px-6 font-bold text-white transition-transform hover:scale-[1.02] shadow-sm" style={{ backgroundColor: "#1e40af" }}>
+                <Save className="mr-2 h-4 w-4" /> Save Layout
+              </Button>
+            </div>
+          </>
+        )}
       </header>
 
       {/* ─── WORKSPACE (3 COLUMNS) ────────────────────────────────────────── */}
@@ -425,111 +517,105 @@ export default function FloorPlanEditorPage({ params }) {
         <div className="flex flex-1 items-stretch w-full overflow-hidden">
 
           {/* LEFT SIDEBAR */}
-          <aside className="w-72 shrink-0 border-r border-stone-200 bg-[#FCFBF8] flex flex-col h-full overflow-hidden">
-
-            {/* Header */}
-            <div className="border-b border-stone-200 px-6 py-5">
-              <h2 className="text-lg font-semibold text-stone-900">
-                Layout Tools
-              </h2>
-
-              <p className="mt-1 text-sm leading-6 text-stone-500">
-                Add restaurant elements and build your floor layout.
-              </p>
-            </div>
-
-            {/* Tool Categories */}
-            <div className="flex-1 overflow-y-auto px-4 py-5">
-
-              <Accordion
-                type="multiple"
-                defaultValue={["Tables & Seating", "Structural Elements"]}
-                className="space-y-4"
-              >
-
-                {TOOL_CATEGORIES.map((category) => (
-                  <AccordionItem
-                    key={category.name}
-                    value={category.name}
-                    className="overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm"
-                  >
-
-                    <AccordionTrigger
-                      className="
-              px-5
-              py-4
-              hover:no-underline
-              hover:bg-stone-50
-              [&>svg]:h-4
-              [&>svg]:w-4
-            "
-                    >
-                      <div className="flex items-center gap-3">
-
-                        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-orange-50">
-                          <category.icon className="h-5 w-5 text-orange-600" />
-                        </div>
-
-                        <div className="text-left">
-                          <p className="text-[15px] font-semibold text-stone-900">
-                            {category.name}
-                          </p>
-
-                          <p className="text-xs text-stone-500">
-                            {category.items.length} Tools
-                          </p>
-                        </div>
-
-                      </div>
-                    </AccordionTrigger>
-
-                    <AccordionContent className="border-t border-stone-100 bg-stone-50/50 px-3 py-3">
-                      <div className="space-y-2">
-                        {category.items.map((tool) => (
-                          <ToolItem key={tool.id} tool={tool} />
-                        ))}
-                      </div>
-                    </AccordionContent>
-
-                  </AccordionItem>
-                ))}
-
-              </Accordion>
-
-            </div>
-
-            {/* Footer */}
-            <div className="border-t border-stone-200 bg-white px-6 py-5">
-
-              <div className="rounded-2xl border border-orange-200 bg-orange-50 p-4">
-
-                <p className="text-sm font-semibold text-stone-900">
-                  💡 Quick Tip
+          {!isPreviewMode && (
+            <aside className="w-80 shrink-0 border-r border-stone-200 bg-[#FCFBF8] flex flex-col h-full overflow-hidden">
+              {/* Header */}
+              <div className="border-b border-stone-200 px-5 py-2">
+                <h2 className="text-lg font-semibold text-stone-900">
+                  Layout Tools
+                </h2>
+                <p className="mt-1 text-xs leading-6 text-stone-500">
+                  Add restaurant elements and build your floor layout.
                 </p>
-
-                <p className="mt-2 text-xs leading-5 text-stone-600">
-                  Drag tables onto the canvas, then select them to edit seats,
-                  sections, rotation, size and other properties.
-                </p>
-
               </div>
 
-            </div>
+              {/* Tool Categories */}
+              <div className="flex-1 overflow-y-auto px-2 py-5">
+                <Accordion
+                  type="multiple"
+                  defaultValue={["Tables & Seating", "Structural Elements"]}
+                  className="space-y-4"
+                >
+                  {TOOL_CATEGORIES.map((category) => (
+                    <AccordionItem
+                      key={category.name}
+                      value={category.name}
+                      className="overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm"
+                    >
+                      <AccordionTrigger
+                        className="
+                px-5
+                py-4
+                hover:no-underline
+                hover:bg-stone-50
+                [&>svg]:h-4
+                [&>svg]:w-4
+              "
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-orange-50">
+                            <category.icon className="h-5 w-5 text-orange-600" />
+                          </div>
+                          <div className="text-left">
+                            <p className="text-[15px] font-semibold text-stone-900">
+                              {category.name}
+                            </p>
+                            <p className="text-xs text-stone-500">
+                              {category.items.length} Tools
+                            </p>
+                          </div>
+                        </div>
+                      </AccordionTrigger>
 
-          </aside>
+                      <AccordionContent className="border-t border-stone-100 bg-stone-100 px-3 py-3">
+                        <div className="space-y-2">
+                          {category.items.map((tool) => (
+                            <ToolItem key={tool.id} tool={tool} />
+                          ))}
+                        </div>
+                      </AccordionContent>
+                    </AccordionItem>
+                  ))}
+                </Accordion>
+              </div>
+
+              {/* Footer */}
+              <div className="border-t border-stone-200 bg-white px-6 py-2">
+                <div className="rounded-2xl border border-orange-200 bg-orange-50 p-2">
+                  <p className="text-xs font-semibold text-stone-900">
+                    💡 Quick Tip
+                  </p>
+                  <p className="mt-2 text-xs leading-5 text-stone-600">
+                    Drag tables onto the canvas, then select them to edit seats,
+                    sections, rotation, size and other properties.
+                  </p>
+                </div>
+              </div>
+            </aside>
+          )}
 
           {/* CENTER CANVAS */}
           <main
-            className="flex-1 relative bg-[#FCFBF8] min-h-[800px] shadow-inner overflow-hidden"
+            className="flex-1 relative bg-[#FCFBF8] shadow-inner overflow-hidden"
             onPointerDown={() => setSelectedTableId(null)}
           >
+            {/* Grid Pattern */}
+            {showGrid && !isPreviewMode && (
+              <div
+                className="absolute inset-0 z-0 opacity-20 pointer-events-none"
+                style={{
+                  backgroundImage: "radial-gradient(#1e40af 1px, transparent 1px)",
+                  backgroundSize: "20px 20px",
+                  transform: `scale(${zoom}) translate(${pan.x}px, ${pan.y}px)`,
+                  transformOrigin: "0 0"
+                }}
+              />
+            )}
+
             <div
               className="absolute inset-0 transition-transform duration-75 origin-top-left"
               style={{
                 transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
-                backgroundImage: gridBackground,
-                backgroundSize: '20px 20px',
-                backgroundPosition: '0 0'
               }}
             >
               {currentFloorTables.map(table => (
@@ -538,22 +624,25 @@ export default function FloorPlanEditorPage({ params }) {
                   table={table}
                   isSelected={selectedTableId === table.id}
                   onSelect={setSelectedTableId}
+                  onResizeStart={handleResizeStart}
                   zoom={zoom}
+                  isPreviewMode={isPreviewMode}
                 />
               ))}
             </div>
           </main>
 
           {/* RIGHT SIDEBAR: Properties Panel */}
-          <aside className="w-[300px] bg-white border-l border-stone-200 shrink-0 z-10 shadow-sm flex flex-col h-full overflow-hidden">
-            <div className="p-5 border-b border-stone-200 bg-stone-50/50">
-              <h2 className="text-[16px] font-bold text-stone-900">Properties</h2>
-              <p className="text-[13px] text-stone-500 mt-1">Configure selected element</p>
-            </div>
+          {!isPreviewMode && (
+            <aside className="w-[300px] bg-white border-l border-stone-200 shrink-0 z-10 shadow-sm flex flex-col h-full overflow-hidden">
+              <div className="p-5 border-b border-stone-200 bg-stone-50/50">
+                <h2 className="text-[16px] font-bold text-stone-900">Properties</h2>
+                <p className="text-[13px] text-stone-500 mt-1">Configure selected element</p>
+              </div>
 
             <div className="flex-1 overflow-y-auto">
               {!selectedTable ? (
-                <div className="p-10 text-center flex flex-col items-center justify-center h-full text-stone-400">
+                <div className="p-5 text-center flex flex-col items-center justify-center h-full text-stone-400">
                   <div className="w-16 h-16 bg-stone-50 border border-stone-100 rounded-full flex items-center justify-center mb-4 shadow-sm">
                     <MousePointer2 className="h-6 w-6 text-stone-300" />
                   </div>
@@ -626,20 +715,17 @@ export default function FloorPlanEditorPage({ params }) {
                         {selectedTable.locked ? <Unlock className="mr-2 h-4 w-4 text-stone-400" /> : <Lock className="mr-2 h-4 w-4 text-stone-400" />}
                         {selectedTable.locked ? "Unlock" : "Lock"}
                       </Button>
+                      <Button variant="outline" onClick={deleteTable} className="w-full h-10 justify-start text-[14px] font-bold text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700">
+                        <Trash2 className="mr-2 h-4 w-4" /> Delete Element
+                      </Button>
                     </AccordionContent>
                   </AccordionItem>
-
                 </Accordion>
               )}
-              {/* Delete Button (Outside Accordion for prominence) */}
-              <div className="p-5 border-t border-stone-200 bg-stone-50/50 mt-auto">
-                <Button variant="outline" onClick={deleteTable} className="w-full h-10 justify-start text-[14px] font-bold text-red-600 border-red-200 bg-white hover:bg-red-50 hover:text-red-700 shadow-sm transition-colors">
-                  <Trash2 className="mr-2 h-4 w-4" /> Delete Element
-                </Button>
-              </div>
             </div>
 
           </aside>
+          )}
 
         </div>
       </DndContext>
