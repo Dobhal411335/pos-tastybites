@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { toast, Toaster } from "sonner";
+import { toast } from "sonner";
 import { PALETTE } from "@/utils/paletteeColor";
 
 export default function ListOfServerAccountsPage() {
@@ -114,11 +114,10 @@ export default function ListOfServerAccountsPage() {
 
   return (
     <div className="flex flex-col overflow-hidden min-h-screen" style={{ backgroundColor: PALETTE.canvas, color: PALETTE.ink }}>
-      <Toaster position="top-right" richColors />
-      
+
       <div className="flex-1 overflow-y-auto p-8">
         <div className="max-w-[1200px] mx-auto space-y-8 pb-16 font-sans">
-          
+
           {/* Header */}
           <div className="flex flex-col sm:flex-row justify-between sm:items-end gap-4 border-b border-zinc-200 pb-5">
             <div>
@@ -138,7 +137,7 @@ export default function ListOfServerAccountsPage() {
           </div>
 
           <div className="flex flex-col items-center w-full gap-8">
-            
+
             {/* Action Panel */}
             <div className="w-full space-y-6">
               <Card className="shadow-sm border-zinc-200 bg-white overflow-hidden">
@@ -256,7 +255,7 @@ export default function ListOfServerAccountsPage() {
                                   </DropdownMenuTrigger>
                                   <DropdownMenuContent align="end" className="w-48 bg-white">
                                     <DropdownMenuItem className="text-[14px] font-medium cursor-pointer" onClick={() => handleToggleStatus(emp._id, emp.status)}>
-                                      <ShieldAlert className="mr-2 h-4 w-4" /> 
+                                      <ShieldAlert className="mr-2 h-4 w-4" />
                                       {emp.status === "APPROVED" ? "Suspend User" : "Approve User"}
                                     </DropdownMenuItem>
                                     <DropdownMenuItem
@@ -286,9 +285,9 @@ export default function ListOfServerAccountsPage() {
         <div className="fixed inset-0 bg-zinc-900/40 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200">
           <Card className="w-full max-w-sm shadow-2xl border-none overflow-hidden bg-white animate-in zoom-in-95 slide-in-from-bottom-4 duration-300">
             <CardHeader className="bg-zinc-50 border-b border-zinc-100 pb-4 relative text-center">
-              <button 
+              <button
                 type="button"
-                onClick={() => setIsLoginModalOpen(false)} 
+                onClick={() => setIsLoginModalOpen(false)}
                 className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-full hover:bg-zinc-200 text-zinc-500 transition-colors"
               >
                 <XCircle className="w-5 h-5" />
@@ -337,7 +336,7 @@ export default function ListOfServerAccountsPage() {
                     Create Credentials
                   </Button>
                 </div>
-                
+
                 <div className="text-center pt-2">
                   <button type="button" className="text-[13px] font-semibold text-zinc-500 hover:text-[#1e40af] transition-colors underline decoration-zinc-300 hover:decoration-[#1e40af]">
                     Email these credentials securely

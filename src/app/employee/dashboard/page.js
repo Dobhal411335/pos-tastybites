@@ -6,7 +6,7 @@ import {
   UserCircle, LogOut, Clock, MapPin, Coffee, CheckCircle2, 
   Clock3, ChefHat, BellRing, ChevronRight
 } from "lucide-react";
-import { toast, Toaster } from "sonner";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -83,7 +83,6 @@ export default function EmployeeDashboard() {
 
   return (
     <div className="min-h-screen bg-zinc-50 font-sans">
-      <Toaster richColors />
 
       {/* Top Navbar */}
       <header className="bg-white border-b border-zinc-200 sticky top-0 z-30">

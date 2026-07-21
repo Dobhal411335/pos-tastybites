@@ -2,11 +2,11 @@
 
 import React, { useState, useEffect } from "react";
 import { format } from "date-fns";
-import { 
-  Users, Search, Filter, RefreshCcw, Wifi, MapPin, 
+import {
+  Users, Search, Filter, RefreshCcw, Wifi, MapPin,
   Smartphone, Tablet, Monitor, MoreHorizontal, Clock, ArrowUpDown
 } from "lucide-react";
-import { toast, Toaster } from "sonner";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -72,7 +72,7 @@ export default function LiveEmployeesPage() {
       // Add slight randomness to "lastActivity" to simulate live data
       const updatedMock = MOCK_LIVE_EMPLOYEES.map(emp => ({
         ...emp,
-        lastActivity: new Date(Date.now() - Math.floor(Math.random() * 600000)) 
+        lastActivity: new Date(Date.now() - Math.floor(Math.random() * 600000))
       }));
       setEmployees(updatedMock);
       setLastRefreshed(new Date());
@@ -100,8 +100,8 @@ export default function LiveEmployeesPage() {
   };
 
   const filteredEmployees = employees.filter(emp => {
-    const matchesSearch = emp.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                          emp.id.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSearch = emp.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      emp.id.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesFloor = floorFilter === "All" || emp.floor === floorFilter;
     return matchesSearch && matchesFloor;
   });
@@ -124,10 +124,9 @@ export default function LiveEmployeesPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 p-6 md:p-8 font-sans">
-      <Toaster richColors />
-      
-      <div className="max-w-[1400px] mx-auto space-y-6">
-        
+
+      <div className="max-w-350 mx-auto space-y-6">
+
         {/* Header */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
           <div className="flex items-center gap-4">
@@ -147,19 +146,19 @@ export default function LiveEmployeesPage() {
               </p>
             </div>
           </div>
-          
+
           <div className="flex items-center gap-6">
             <div className="flex items-center space-x-2">
-              <Switch 
-                id="auto-refresh" 
-                checked={autoRefresh} 
+              <Switch
+                id="auto-refresh"
+                checked={autoRefresh}
                 onCheckedChange={setAutoRefresh}
                 className="data-[state=checked]:bg-blue-600"
               />
               <Label htmlFor="auto-refresh" className="text-sm font-medium text-slate-600 cursor-pointer">Auto-Refresh (30s)</Label>
             </div>
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               onClick={handleManualRefresh}
               disabled={isLoading}
               className="bg-white"
@@ -174,8 +173,8 @@ export default function LiveEmployeesPage() {
         <div className="flex flex-col sm:flex-row gap-4">
           <div className="relative flex-1 max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
-            <Input 
-              placeholder="Search employee name or ID..." 
+            <Input
+              placeholder="Search employee name or ID..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-9 bg-white border-slate-200 h-11 rounded-xl shadow-sm"
@@ -249,7 +248,7 @@ export default function LiveEmployeesPage() {
                           </div>
                         </div>
                       </TableCell>
-                      
+
                       <TableCell>
                         <div className="flex items-center gap-2">
                           <span className={`w-2.5 h-2.5 rounded-full ${getStatusColor(emp.lastActivity)} shadow-sm border border-white`} />
@@ -259,7 +258,7 @@ export default function LiveEmployeesPage() {
                           </div>
                         </div>
                       </TableCell>
-                      
+
                       <TableCell>
                         <div>
                           <p className="font-semibold text-slate-900 flex items-center gap-1.5">
@@ -270,7 +269,7 @@ export default function LiveEmployeesPage() {
                           </p>
                         </div>
                       </TableCell>
-                      
+
                       <TableCell>
                         <div className="flex flex-wrap gap-1">
                           {emp.tables.map(t => (
@@ -280,14 +279,14 @@ export default function LiveEmployeesPage() {
                           ))}
                         </div>
                       </TableCell>
-                      
+
                       <TableCell>
                         <div className="flex items-center gap-2 bg-slate-50 border border-slate-100 rounded-lg px-2.5 py-1.5 w-max">
                           {getDeviceIcon(emp.device.type)}
                           <span className="text-xs font-medium text-slate-700">{emp.device.name}</span>
                         </div>
                       </TableCell>
-                      
+
                       <TableCell className="text-right">
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
@@ -311,7 +310,7 @@ export default function LiveEmployeesPage() {
               </TableBody>
             </Table>
           </div>
-          
+
           <div className="p-4 border-t border-slate-200 bg-slate-50 text-xs font-medium text-slate-500 flex justify-between items-center">
             <span>Showing {filteredEmployees.length} active sessions</span>
             <span className="flex items-center gap-2">

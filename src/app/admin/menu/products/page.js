@@ -23,7 +23,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { toast, Toaster } from "sonner";
+import { toast } from "sonner";
 import { PALETTE } from "@/utils/paletteeColor"
 
 export default function ProductsPage() {
@@ -73,7 +73,6 @@ export default function ProductsPage() {
 
   return (
     <div className="h-screen flex flex-col overflow-hidden" style={{ backgroundColor: PALETTE.canvas, color: PALETTE.ink }}>
-      <Toaster position="top-right" richColors />
       {/* MAIN CONTENT AREA */}
       <div className="flex-1 flex overflow-hidden">
 
@@ -223,13 +222,13 @@ export default function ProductsPage() {
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end" className="w-40 bg-white">
                                   <DropdownMenuItem className="text-[14px] font-medium cursor-pointer">
-                                    <Edit/> Edit Category
+                                    <Edit /> Edit Category
                                   </DropdownMenuItem>
                                   <DropdownMenuItem
                                     className="text-[14px] font-medium text-red-600 focus:bg-red-500 focus:text-white cursor-pointer"
                                     onClick={() => handleDeleteCategory(cat.id)}
                                   >
-                                   <Trash/> Delete
+                                    <Trash /> Delete
                                   </DropdownMenuItem>
                                 </DropdownMenuContent>
                               </DropdownMenu>

@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { toast, Toaster } from "sonner";
+import { toast } from "sonner";
 import { PALETTE } from "@/utils/paletteeColor"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
@@ -125,7 +125,6 @@ export default function ProductDetailsConfigPage() {
 
   return (
     <div className="flex flex-col overflow-hidden" style={{ backgroundColor: PALETTE.canvas, color: PALETTE.ink }}>
-      <Toaster position="top-right" richColors />
       <div className="flex-1 flex overflow-hidden">
 
         <main className="flex-1 overflow-y-auto p-8">
@@ -386,13 +385,13 @@ export default function ProductDetailsConfigPage() {
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end" className="w-40 bg-white">
                                 <DropdownMenuItem className="text-[14px] font-medium cursor-pointer">
-                                 <Edit/> Edit Product
+                                  <Edit /> Edit Product
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
                                   className="text-[14px] font-medium text-red-600 focus:bg-red-500 focus:text-white cursor-pointer"
                                   onClick={() => handleDeleteItem(det.id, productDetails, setProductDetails)}
                                 >
-                                 <Trash/> Delete
+                                  <Trash /> Delete
                                 </DropdownMenuItem>
                               </DropdownMenuContent>
                             </DropdownMenu>

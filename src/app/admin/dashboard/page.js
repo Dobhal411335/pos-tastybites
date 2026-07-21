@@ -41,7 +41,7 @@ import {
   CardContent,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { toast, Toaster } from "sonner";
+import { toast } from "sonner";
 import Image from "next/image";
 import { AreaChart, Area, ResponsiveContainer, BarChart, Bar, Cell } from "recharts";
 import { PALETTE } from "@/utils/paletteeColor";
@@ -103,13 +103,12 @@ export default function AdminDashboardPage() {
 
   return (
     <div className="min-h-screen flex flex-col bg-[#F8FAFC] text-slate-900 selection:bg-blue-100 antialiased font-sans">
-      <Toaster position="top-right" richColors />
 
       {/* ──────────────────────────────────────────
           HEADER (Glassmorphic)
          ────────────────────────────────────────── */}
       <header className="sticky top-0 z-50 border-b border-stone-200 bg-[#F7F6F3]/95 backdrop-blur-md">
-        <div className="mx-auto flex h-18 max-w-[1440px] items-center justify-between px-6 lg:px-8">
+        <div className="mx-auto flex h-18 max-w-360 items-center justify-between px-6 lg:px-8">
 
           {/* Left */}
           <div className="flex items-center gap-4">
@@ -189,7 +188,7 @@ export default function AdminDashboardPage() {
           MAIN CONTENT
          ────────────────────────────────────────── */}
       <main className="flex-1 overflow-x-hidden">
-        <div className="max-w-[1440px] mx-auto px-8 py-12 space-y-12">
+        <div className="max-w-360 mx-auto px-8 py-12 space-y-12">
 
           {/* WELCOME BANNER */}
           <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-6">
@@ -234,7 +233,7 @@ export default function AdminDashboardPage() {
                   </div>
 
                   {/* Miniature Chart in Header */}
-                  <div className="w-[120px] h-[60px]">
+                  <div className="w-60 h-30">
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={orderData}>
                         <Bar dataKey="val" radius={[4, 4, 0, 0]}>
@@ -281,7 +280,7 @@ export default function AdminDashboardPage() {
                   </div>
 
                   {/* Miniature Area Chart */}
-                  <div className="w-[140px] h-[60px] translate-y-2">
+                  <div className="w-35 h-15 translate-y-2">
                     <ResponsiveContainer width="100%" height="100%">
                       <AreaChart data={revenueData}>
                         <defs>
@@ -335,7 +334,7 @@ export default function AdminDashboardPage() {
                 desc="Monitor kitchen tickets, track delivery dispatch, and review history."
               />
               <ModuleCard
-                href="/admin/staff" icon={Users}
+                href="/admin/employee" icon={Users}
                 color="indigo" title="Staff Portal" stat="6 Active"
                 desc="Manage schedules, roles, permissions, and payroll data."
               />
@@ -380,7 +379,6 @@ export default function AdminDashboardPage() {
             <h2 className="text-2xl font-black text-slate-900 mb-6">Quick Actions</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               <ModuleCard href="/admin/orders" icon={ClipboardList} color="blue" title="New Order" stat="Start" desc="Start a new food order for dine-in, takeaway, or delivery." />
-              <ModuleCard href="/admin/staff" icon={Users} color="orange" title="Add Employee" stat="Staff" desc="Register a new employee with role and schedule." />
               <ModuleCard href="/admin/tax" icon={Percent} color="amber" title="Configure Tax" stat="Rules" desc="Set up tax rates, exemptions, and regional settings." />
               <ModuleCard href="/admin/emails" icon={Mail} color="emerald" title="Promotions" stat="Active" desc="Send promotional emails and manage marketing campaigns." />
               <ModuleCard href="/admin/web" icon={Store} color="blue" title="Web Console" stat="Settings" desc="Manage your restaurant website and SEO settings." />

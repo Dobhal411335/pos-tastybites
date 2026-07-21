@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { toast, Toaster } from "sonner";
+import { toast } from "sonner";
 import { PALETTE } from "@/utils/paletteeColor";
 
 export default function CreateOrderPage() {
@@ -52,10 +52,9 @@ export default function CreateOrderPage() {
 
   return (
     <div className="flex flex-col overflow-hidden min-h-screen" style={{ backgroundColor: PALETTE.canvas, color: PALETTE.ink }}>
-      <Toaster position="top-right" richColors />
       
       <div className="flex-1 overflow-y-auto p-8">
-        <div className="max-w-[1400px] mx-auto space-y-8 pb-16 font-sans">
+        <div className="max-w-360 mx-auto space-y-8 pb-16 font-sans">
           
           {/* Header */}
           <div className="flex flex-col sm:flex-row justify-between sm:items-end gap-4 border-b border-zinc-200 pb-5">

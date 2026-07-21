@@ -9,12 +9,10 @@ import DealsCarousel from "@/components/sections/DealsCarousel";
 import PromoGrid from "@/components/sections/PromoGrid";
 import BookingForm from "@/components/sections/BookingForm";
 import Footer from "@/components/sections/Footer";
-import { Toaster } from "sonner";
 
 export default function Home() {
   return (
     <div className="flex flex-col min-h-screen bg-[#F7F8FA] font-sans overflow-x-hidden antialiased">
-      <Toaster position="top-right" richColors />
       
       {/* Navigation */}
       <Navbar />

@@ -4,7 +4,6 @@ import React, { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import EmployeeSidebar from "@/components/employee/EmployeeSidebar";
 import EmployeeTopNav from "@/components/employee/EmployeeTopNav";
-import { Toaster } from "sonner";
 import { Loader2 } from "lucide-react";
 import { EmployeeFooter } from "@/components/employee/EmployeeFooter";
 
@@ -45,7 +44,6 @@ export default function EmployeeMainLayout({ children }) {
 
   return (
     <div className="min-h-screen bg-[#FAFAFA] flex flex-col antialiased text-zinc-900 font-sans">
-      <Toaster position="top-right" richColors />
       
       <EmployeeTopNav
         employeeName={employeeUser?.name || employeeUser?.firstName || "Employee"}

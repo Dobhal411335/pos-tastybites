@@ -2,12 +2,12 @@
 
 import React, { useState, useEffect } from "react";
 import { format, subDays } from "date-fns";
-import { 
-  FileSpreadsheet, FileIcon, FileText, Download, 
-  Filter, Calendar as CalendarIcon, TrendingUp, Clock, 
+import {
+  FileSpreadsheet, FileIcon, FileText, Download,
+  Filter, Calendar as CalendarIcon, TrendingUp, Clock,
   CheckCircle, XCircle, DollarSign, Activity
 } from "lucide-react";
-import { toast, Toaster } from "sonner";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -101,16 +101,16 @@ export default function EmployeeReportsPage() {
   return (
     <div className="min-h-screen bg-[#F8FAFC] p-6 md:p-8 font-sans">
       <Toaster richColors />
-      
+
       <div className="max-w-[1400px] mx-auto space-y-6">
-        
+
         {/* Header & Export Actions */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
           <div>
             <h1 className="text-2xl font-black text-slate-900 tracking-tight">Staff Performance Reports</h1>
             <p className="text-slate-500 font-medium mt-1">Analyze attendance, order volume, and generated revenue.</p>
           </div>
-          
+
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button className="bg-blue-600 hover:bg-blue-700 text-white font-bold h-11 px-6 rounded-xl shadow-sm transition-all">
@@ -174,7 +174,7 @@ export default function EmployeeReportsPage() {
               </div>
             </CardContent>
           </Card>
-          
+
           <div className="bg-slate-900 rounded-xl p-4 flex flex-col justify-center text-white shadow-md relative overflow-hidden">
             <div className="absolute -right-6 -bottom-6 w-24 h-24 bg-white/10 rounded-full blur-2xl"></div>
             <p className="text-slate-400 text-sm font-semibold uppercase tracking-wider mb-1">Total Revenue</p>
@@ -189,11 +189,11 @@ export default function EmployeeReportsPage() {
               <TableHeader className="bg-slate-50/80">
                 <TableRow className="hover:bg-transparent border-slate-200">
                   <TableHead className="font-bold text-slate-900 h-14 pl-6">Employee</TableHead>
-                  <TableHead className="font-bold text-slate-900 h-14"><Clock className="inline w-4 h-4 mr-1 text-slate-400"/> Attendance & Hours</TableHead>
-                  <TableHead className="font-bold text-slate-900 h-14"><CheckCircle className="inline w-4 h-4 mr-1 text-emerald-500"/> Order Success</TableHead>
-                  <TableHead className="font-bold text-slate-900 h-14"><XCircle className="inline w-4 h-4 mr-1 text-red-500"/> Cancelled</TableHead>
-                  <TableHead className="font-bold text-slate-900 h-14"><Activity className="inline w-4 h-4 mr-1 text-blue-500"/> Avg Time</TableHead>
-                  <TableHead className="font-bold text-slate-900 h-14 text-right pr-6"><DollarSign className="inline w-4 h-4 mr-1 text-emerald-600"/> Revenue</TableHead>
+                  <TableHead className="font-bold text-slate-900 h-14"><Clock className="inline w-4 h-4 mr-1 text-slate-400" /> Attendance & Hours</TableHead>
+                  <TableHead className="font-bold text-slate-900 h-14"><CheckCircle className="inline w-4 h-4 mr-1 text-emerald-500" /> Order Success</TableHead>
+                  <TableHead className="font-bold text-slate-900 h-14"><XCircle className="inline w-4 h-4 mr-1 text-red-500" /> Cancelled</TableHead>
+                  <TableHead className="font-bold text-slate-900 h-14"><Activity className="inline w-4 h-4 mr-1 text-blue-500" /> Avg Time</TableHead>
+                  <TableHead className="font-bold text-slate-900 h-14 text-right pr-6"><DollarSign className="inline w-4 h-4 mr-1 text-emerald-600" /> Revenue</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -228,7 +228,7 @@ export default function EmployeeReportsPage() {
                           </div>
                         </div>
                       </TableCell>
-                      
+
                       <TableCell>
                         <div className="space-y-1">
                           <div className="flex items-center gap-2">
@@ -242,32 +242,32 @@ export default function EmployeeReportsPage() {
                           )}
                         </div>
                       </TableCell>
-                      
+
                       <TableCell>
                         <span className="text-sm font-black text-slate-900 bg-slate-100 px-3 py-1 rounded-full">
                           {report.completedOrders}
                         </span>
                       </TableCell>
-                      
+
                       <TableCell>
                         <span className={`text-sm font-bold ${report.cancelledOrders > 10 ? 'text-red-600' : 'text-slate-600'}`}>
                           {report.cancelledOrders}
                         </span>
                       </TableCell>
-                      
+
                       <TableCell>
                         <span className="text-sm font-semibold text-slate-700">{report.avgOrderTime}</span>
                       </TableCell>
-                      
+
                       <TableCell className="text-right pr-6">
                         <span className="text-base font-black text-emerald-600">
-                          ${report.revenue.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                          ${report.revenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </span>
                       </TableCell>
                     </TableRow>
                   ))
                 )}
-                
+
                 {/* Summary Row */}
                 {!isLoading && reports.length > 0 && (
                   <TableRow className="bg-slate-50 border-t-2 border-slate-200">
@@ -277,7 +277,7 @@ export default function EmployeeReportsPage() {
                     <TableCell className="font-bold text-slate-900">{reports.reduce((acc, curr) => acc + curr.cancelledOrders, 0)}</TableCell>
                     <TableCell></TableCell>
                     <TableCell className="text-right pr-6 font-black text-slate-900 text-lg">
-                      ${calculateTotalRevenue().toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                      ${calculateTotalRevenue().toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </TableCell>
                   </TableRow>
                 )}

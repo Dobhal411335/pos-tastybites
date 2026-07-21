@@ -4,8 +4,6 @@ import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import TopNavbar from "@/components/layout/TopNavbar";
 import ModuleSidebar from "@/components/layout/ModuleSidebar";
-import { Loader2 } from "lucide-react";
-import { Toaster } from "sonner";
 import { FooterBar } from "@/components/layout/FooterBar";
 
 export default function TaxModuleLayout({ children }) {

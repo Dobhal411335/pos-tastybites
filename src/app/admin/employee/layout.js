@@ -4,8 +4,6 @@ import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import TopNavbar from "@/components/layout/TopNavbar";
 import ModuleSidebar from "@/components/layout/ModuleSidebar";
-import { Loader2 } from "lucide-react";
-import { Toaster } from "sonner";
 import { FooterBar } from "@/components/layout/FooterBar";
 
 export default function UsersModuleLayout({ children }) {
@@ -39,14 +37,14 @@ export default function UsersModuleLayout({ children }) {
       color: "bg-[#0F6B7A]",
       items: [
         { label: "Create Server Account", href: "/admin/users/create" },
-        { label: "List Of Server Account", href: "/admin/users/list" },
+        { label: "List Of Server Account", href: "/admin/users/list" }, 
+        { label: "Staff Management", href: "/admin/users/staff" },
       ],
     },
   ];
 
   return (
     <div className="min-h-screen bg-[#FAF9F6] flex flex-col antialiased text-[#1F2937] font-sans">
-      <Toaster position="top-right" richColors />
 
       <TopNavbar
         adminName={adminUser?.name}
@@ -67,8 +65,8 @@ export default function UsersModuleLayout({ children }) {
           </div>
         )}
 
-        <main className="flex-1 overflow-y-auto p-6 sm:p-8 md:p-12">
-          <div className="mx-auto max-w-5xl bg-white border border-zinc-200 p-6 sm:p-10 rounded-xl shadow-xs min-h-[500px]">
+        <main className="flex-1 overflow-y-auto p-6">
+          <div className="mx-auto max-w-6xl bg-white border border-zinc-200 p-6 rounded-xl shadow-xs min-h-125">
             {children}
           </div>
         </main>

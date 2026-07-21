@@ -2,13 +2,13 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Trash2, Calendar, ArrowUpDown, Tag,MoreHorizontal, Edit } from "lucide-react";
+import { ArrowLeft, Trash2, Calendar, ArrowUpDown, Tag, MoreHorizontal, Edit } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { toast, Toaster } from "sonner";
+import { toast } from "sonner";
 import { PALETTE } from "@/utils/paletteeColor";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 export default function CouponsConfigPage() {
@@ -70,7 +70,6 @@ export default function CouponsConfigPage() {
 
   return (
     <div className="flex flex-col overflow-hidden min-h-screen" style={{ backgroundColor: PALETTE.canvas, color: PALETTE.ink }}>
-      <Toaster position="top-right" richColors />
 
       <div className="flex-1 overflow-y-auto p-8">
         <div className="max-w-[1200px] mx-auto space-y-8 pb-16 font-sans">
@@ -282,13 +281,13 @@ export default function CouponsConfigPage() {
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className="w-40 bg-white">
                             <DropdownMenuItem className="text-[14px] font-medium cursor-pointer">
-                             <Edit/> Edit Discount
+                              <Edit /> Edit Discount
                             </DropdownMenuItem>
                             <DropdownMenuItem
                               className="text-[14px] font-medium text-red-600 focus:bg-red-500 focus:text-white cursor-pointer"
                               onClick={() => handleDeleteCoupon(c.id)}
                             >
-                        <Trash2/> Delete
+                              <Trash2 /> Delete
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>

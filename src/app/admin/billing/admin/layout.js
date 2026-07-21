@@ -4,7 +4,6 @@ import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import TopNavbar from "@/components/layout/TopNavbar";
 import ModuleSidebar from "@/components/layout/ModuleSidebar";
-import { Toaster } from "sonner";
 import { FooterBar } from "@/components/layout/FooterBar";
 
 export default function AdminBillingLayout({ children }) {
@@ -46,7 +45,6 @@ export default function AdminBillingLayout({ children }) {
 
   return (
     <div className="min-h-screen bg-[#FAF9F6] flex flex-col antialiased text-[#1F2937] font-sans">
-      <Toaster position="top-right" richColors />
       
       <TopNavbar
         adminName={adminUser?.name}

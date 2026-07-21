@@ -13,7 +13,6 @@ import CartDrawer from "@/components/menu/CartDrawer";
 import MobileCart from "@/components/menu/MobileCart";
 import { mockProducts } from "@/components/menu/mockProducts";
 import { CartProvider } from "@/context/CartContext";
-import { Toaster } from "sonner";
 
 const ITEMS_PER_PAGE = 20;
 
@@ -69,7 +68,6 @@ function MenuContent() {
 
   return (
     <div className="flex flex-col min-h-screen bg-[#FAFAFA] font-sans antialiased text-[#1F2937] pb-16 md:pb-0">
-      <Toaster position="top-right" richColors />
       
       {/* Navbar (reused, White background) */}
       <Navbar />

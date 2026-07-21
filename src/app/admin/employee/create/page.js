@@ -6,14 +6,14 @@ import { ArrowLeft, Loader2, UserPlus, Mail, Phone, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { toast, Toaster } from "sonner";
+import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { PALETTE } from "@/utils/paletteeColor";
 
 export default function CreateServerAccountPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
-  
+
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
@@ -64,11 +64,10 @@ export default function CreateServerAccountPage() {
 
   return (
     <div className="flex flex-col overflow-hidden min-h-screen" style={{ backgroundColor: PALETTE.canvas, color: PALETTE.ink }}>
-      <Toaster position="top-right" richColors />
-      
-      <div className="flex-1 overflow-y-auto p-8">
-        <div className="max-w-[800px] mx-auto space-y-8 pb-16 font-sans">
-          
+
+      <div className="flex-1 overflow-y-auto p-4">
+        <div className="max-w-200 mx-auto space-y-8 font-sans">
+
           {/* Header */}
           <div className="flex flex-col sm:flex-row justify-between sm:items-end gap-4 border-b border-zinc-200 pb-5">
             <div>
@@ -90,7 +89,7 @@ export default function CreateServerAccountPage() {
             </CardHeader>
             <CardContent className="p-6 md:p-8">
               <form onSubmit={handleSubmit} className="space-y-6">
-                
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">
                     <label className="text-[14px] font-semibold text-zinc-900">
@@ -180,7 +179,7 @@ export default function CreateServerAccountPage() {
               </form>
             </CardContent>
           </Card>
-          
+
         </div>
       </div>
     </div>

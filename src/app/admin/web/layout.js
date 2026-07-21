@@ -4,8 +4,6 @@ import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import TopNavbar from "@/components/layout/TopNavbar";
 import ModuleSidebar from "@/components/layout/ModuleSidebar";
-import { Loader2 } from "lucide-react";
-import { Toaster } from "sonner";
 import { FooterBar } from "@/components/layout/FooterBar";
 
 export default function UsersModuleLayout({ children }) {
@@ -52,7 +50,6 @@ export default function UsersModuleLayout({ children }) {
 
   return (
     <div className="min-h-screen bg-[#FAF9F6] flex flex-col antialiased text-[#1F2937] font-sans">
-      <Toaster position="top-right" richColors />
 
       <TopNavbar
         adminName={adminUser?.name}

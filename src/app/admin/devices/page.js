@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { format } from "date-fns";
-import { toast, Toaster } from "sonner";
+import { toast } from "sonner";
 
 // Shadcn UI Components
 import { Button } from "@/components/ui/button";
@@ -191,7 +191,6 @@ export default function DeviceManagementPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 p-6 md:p-8 lg:p-10 font-sans">
-      <Toaster richColors />
       
       <div className="max-w-7xl mx-auto space-y-8">
         {/* Header */}

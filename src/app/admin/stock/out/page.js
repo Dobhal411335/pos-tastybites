@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { toast, Toaster } from "sonner";
+import { toast } from "sonner";
 import { PALETTE } from "@/utils/paletteeColor";
 
 export default function StockOutPage() {
@@ -185,16 +185,16 @@ export default function StockOutPage() {
                 </CardContent>
               </Card>
 
-            {/* Sidebar Save Section */}
-            <div className="flex flex-col justify-end">
-              <Button
-                type="submit"
-                className="w-full h-14 text-[16px] font-bold text-white transition-transform hover:scale-[1.02] shadow-md"
-                style={{ backgroundColor: "#1e40af" }}
-              >
-                Balance Stock
-              </Button>
-            </div>
+              {/* Sidebar Save Section */}
+              <div className="flex flex-col justify-end">
+                <Button
+                  type="submit"
+                  className="w-full h-14 text-[16px] font-bold text-white transition-transform hover:scale-[1.02] shadow-md"
+                  style={{ backgroundColor: "#1e40af" }}
+                >
+                  Balance Stock
+                </Button>
+              </div>
 
             </div>
           </form>

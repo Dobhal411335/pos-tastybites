@@ -1,14 +1,14 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { 
-  Users, UserPlus, Search, Filter, ShieldAlert, MoreVertical, 
-  Settings2, Activity, CalendarClock, TabletSmartphone, KeyRound, 
+import {
+  Users, UserPlus, Search, Filter, ShieldAlert, MoreVertical,
+  Settings2, Activity, CalendarClock, TabletSmartphone, KeyRound,
   MapPin, CheckCircle2, Clock, Smartphone, ChevronRight
 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { format } from "date-fns";
-import { toast, Toaster } from "sonner";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -76,17 +76,8 @@ export default function StaffManagementPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState("All");
-  
+
   const [selectedEmployee, setSelectedEmployee] = useState(null);
-  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
-
-  // Form for Add Employee
-  const form = useForm({
-    defaultValues: {
-      firstName: "", lastName: "", email: "", phone: "", role: "", status: "Active"
-    }
-  });
-
   // Load Mock Data
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -95,25 +86,11 @@ export default function StaffManagementPage() {
     }, 800);
     return () => clearTimeout(timer);
   }, []);
-
-  const handleAddEmployee = (data) => {
-    const newEmployee = {
-      id: `EMP-00${employees.length + 1}`,
-      ...data,
-      shifts: [], devices: [], sessions: [],
-      permissions: { processRefunds: false, voidItems: false, manageShifts: false, viewReports: false }
-    };
-    setEmployees([...employees, newEmployee]);
-    toast.success(`${data.firstName} ${data.lastName} added successfully.`);
-    setIsAddDialogOpen(false);
-    form.reset();
-  };
-
   const filteredEmployees = employees.filter(emp => {
     const search = searchQuery.toLowerCase();
-    const matchesSearch = emp.firstName.toLowerCase().includes(search) || 
-                          emp.lastName.toLowerCase().includes(search) ||
-                          emp.id.toLowerCase().includes(search);
+    const matchesSearch = emp.firstName.toLowerCase().includes(search) ||
+      emp.lastName.toLowerCase().includes(search) ||
+      emp.id.toLowerCase().includes(search);
     const matchesRole = roleFilter === "All" || emp.role === roleFilter;
     return matchesSearch && matchesRole;
   });
@@ -130,68 +107,15 @@ export default function StaffManagementPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 p-6 md:p-8 lg:p-10 font-sans">
-      <Toaster richColors />
-      
+
       <div className="max-w-7xl mx-auto space-y-8">
-        
+
         {/* Header section */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
             <h1 className="text-3xl font-black text-slate-900 tracking-tight">Staff Portal</h1>
             <p className="text-slate-500 mt-1">Manage employees, shifts, permissions, and view active sessions.</p>
           </div>
-          
-          <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-            <DialogTrigger asChild>
-              <Button className="bg-orange-600 hover:bg-orange-700 text-white shadow-sm font-semibold rounded-lg px-6">
-                <UserPlus className="w-4 h-4 mr-2" />
-                Add Employee
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-[500px]">
-              <DialogHeader>
-                <DialogTitle>Register New Employee</DialogTitle>
-                <DialogDescription>Create a new staff profile. You can configure their permissions later.</DialogDescription>
-              </DialogHeader>
-              <Form {...form}>
-                <form onSubmit={form.handleSubmit(handleAddEmployee)} className="space-y-4 py-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <FormField control={form.control} name="firstName" rules={{ required: true }} render={({ field }) => (
-                      <FormItem><FormLabel>First Name</FormLabel><FormControl><Input {...field} /></FormControl></FormItem>
-                    )} />
-                    <FormField control={form.control} name="lastName" rules={{ required: true }} render={({ field }) => (
-                      <FormItem><FormLabel>Last Name</FormLabel><FormControl><Input {...field} /></FormControl></FormItem>
-                    )} />
-                  </div>
-                  <FormField control={form.control} name="email" rules={{ required: true }} render={({ field }) => (
-                    <FormItem><FormLabel>Email</FormLabel><FormControl><Input type="email" {...field} /></FormControl></FormItem>
-                  )} />
-                  <div className="grid grid-cols-2 gap-4">
-                    <FormField control={form.control} name="phone" render={({ field }) => (
-                      <FormItem><FormLabel>Phone Number</FormLabel><FormControl><Input {...field} /></FormControl></FormItem>
-                    )} />
-                    <FormField control={form.control} name="role" rules={{ required: true }} render={({ field }) => (
-                      <FormItem><FormLabel>Role</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
-                          <FormControl><SelectTrigger><SelectValue placeholder="Role" /></SelectTrigger></FormControl>
-                          <SelectContent>
-                            <SelectItem value="Manager">Manager</SelectItem>
-                            <SelectItem value="Server">Server</SelectItem>
-                            <SelectItem value="Bartender">Bartender</SelectItem>
-                            <SelectItem value="Chef">Chef</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </FormItem>
-                    )} />
-                  </div>
-                  <DialogFooter className="pt-4">
-                    <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)}>Cancel</Button>
-                    <Button type="submit" className="bg-orange-600 hover:bg-orange-700">Add Employee</Button>
-                  </DialogFooter>
-                </form>
-              </Form>
-            </DialogContent>
-          </Dialog>
         </div>
 
         {/* Dashboard Stats */}
@@ -222,8 +146,8 @@ export default function StaffManagementPage() {
         <div className="flex flex-col sm:flex-row gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
-            <Input 
-              placeholder="Search by employee name or ID..." 
+            <Input
+              placeholder="Search by employee name or ID..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-9 bg-slate-50 border-slate-200"
@@ -273,7 +197,7 @@ export default function StaffManagementPage() {
                       </div>
                       <h3 className="text-xl font-bold text-slate-900">{emp.firstName} {emp.lastName}</h3>
                       <p className="text-sm text-slate-500 mt-1 mb-4">{emp.id}</p>
-                      
+
                       <div className="pt-4 border-t border-slate-100 flex items-center justify-between">
                         <div className="flex items-center gap-2">
                           <span className={`w-2 h-2 rounded-full ${emp.status === 'Active' ? 'bg-emerald-500' : 'bg-slate-300'}`} />
@@ -300,7 +224,7 @@ export default function StaffManagementPage() {
                           <div>
                             <h2 className="text-2xl font-black text-slate-900">{emp.firstName} {emp.lastName}</h2>
                             <p className="text-slate-500 font-medium flex items-center gap-2 mt-1">
-                              {emp.id} <span className="w-1 h-1 rounded-full bg-slate-300"/> {emp.role}
+                              {emp.id} <span className="w-1 h-1 rounded-full bg-slate-300" /> {emp.role}
                             </p>
                           </div>
                         </div>
@@ -325,12 +249,12 @@ export default function StaffManagementPage() {
                             </section>
 
                             <section>
-                              <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-2"><CalendarClock className="w-4 h-4"/> Upcoming / Active Shift</h3>
+                              <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-2"><CalendarClock className="w-4 h-4" /> Upcoming / Active Shift</h3>
                               {emp.shifts.length > 0 ? (
                                 <div className="bg-blue-50 rounded-xl border border-blue-100 p-4">
                                   <div className="flex items-center gap-2 mb-2"><Badge className="bg-blue-600 hover:bg-blue-700">Scheduled</Badge></div>
                                   <p className="font-bold text-slate-900">{emp.shifts[0].date} • {emp.shifts[0].startTime} - {emp.shifts[0].endTime}</p>
-                                  <p className="text-sm text-slate-500 mt-1 flex items-center gap-1"><MapPin className="w-3.5 h-3.5"/> {emp.shifts[0].floor}</p>
+                                  <p className="text-sm text-slate-500 mt-1 flex items-center gap-1"><MapPin className="w-3.5 h-3.5" /> {emp.shifts[0].floor}</p>
                                 </div>
                               ) : (
                                 <div className="bg-white rounded-xl border border-slate-200 p-4 text-center text-sm text-slate-500 font-medium">No active or upcoming shifts assigned.</div>
@@ -388,7 +312,7 @@ export default function StaffManagementPage() {
                                 {emp.devices.length === 0 && <p className="text-sm text-slate-500 italic">No devices used yet.</p>}
                               </div>
                             </section>
-                            
+
                             <section>
                               <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-3">Recent Session Logs</h3>
                               <div className="space-y-3">
