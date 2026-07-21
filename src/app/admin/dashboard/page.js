@@ -366,7 +366,6 @@ export default function AdminDashboardPage() {
               <ModuleCard href="/admin/billing/server" icon={CreditCard} color="blue" title="Server Billing" stat="Records" desc="Review server-processed billing records." />
               <ModuleCard href="/admin/orders/online" icon={Globe} color="emerald" title="Online Orders" stat="Active" desc="Track and manage orders placed through the online system." />
               <ModuleCard href="/admin/orders/staff" icon={ChefHat} color="orange" title="Staff Orders" stat="Queue" desc="Monitor internal staff meal orders and kitchen prep queue." />
-              <ModuleCard href="/admin/users" icon={UserCheck} color="rose" title="Admin Users" stat="Admins" desc="Configure master administrators and owner credentials." />
               <ModuleCard href="/admin/floor-plan" icon={LayoutGrid} color="amber" title="Floor Management" stat="Tables" desc="View and manage restaurant table layout and seating status." />
               <ModuleCard href="/admin/devices" icon={Tablet} color="indigo" title="Device Setup" stat="Tablets" desc="Register and manage POS tablets and hardware devices." />
             </div>

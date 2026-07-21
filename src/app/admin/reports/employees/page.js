@@ -7,7 +7,7 @@ import {
   Filter, Calendar as CalendarIcon, TrendingUp, Clock,
   CheckCircle, XCircle, DollarSign, Activity
 } from "lucide-react";
-import { toast } from "sonner";
+import { toast , Toaster} from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -100,9 +100,7 @@ export default function EmployeeReportsPage() {
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] p-6 md:p-8 font-sans">
-      <Toaster richColors />
-
-      <div className="max-w-[1400px] mx-auto space-y-6">
+      <div className="max-w-350 mx-auto space-y-6">
 
         {/* Header & Export Actions */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
