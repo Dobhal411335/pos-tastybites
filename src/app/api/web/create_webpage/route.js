@@ -12,8 +12,7 @@ const sanitizeTemplateType = (templateType) => {
 export async function GET(req) {
   try {
     await connectDB();
-    const query = {};
-    const webpages = await Webpage.find(query).sort({ createdAt: -1 });
+    const webpages = await Webpage.find().sort({ createdAt: -1 });
     return NextResponse.json(webpages, { status: 200 });
   } catch (error) {
     return NextResponse.json({ error: "Failed to fetch webpages", message: error.message }, { status: 500 });
@@ -80,7 +79,7 @@ export async function PATCH(request) {
   }
 }
 
-import { deleteFileFromCloudinary } from "@/utils/cloudinary";
+import { deleteImage } from "@/lib/cloudinary/deleteImage";
 
 export async function DELETE(request) {
   try {
@@ -140,7 +139,7 @@ export async function DELETE(request) {
     // Delete images from Cloudinary
     for (const key of imageKeys) {
       try {
-        await deleteFileFromCloudinary(key);
+        await deleteImage(key);
       } catch (err) {
         console.error(`Failed to delete Cloudinary image with key ${key}:`, err);
       }

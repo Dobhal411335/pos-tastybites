@@ -43,7 +43,7 @@ export default function UsersModuleLayout({ children }) {
         { label: "Banner Section 1st", href: "/admin/web/banner1st" },
         { label: "Banner Section 2nd", href: "/admin/web/banner2nd" },
         { label: "Banner Section 3rd", href: "/admin/web/banner3rd" },
-        { label: "Manage Menu Section", href: "/admin/web/menu-section" },
+        { label: "Navbar Section", href: "/admin/web/navbar-section" },
         { label: "Create WebPages", href: "/admin/web/create-webpages" },
         { label: "Manage WebPages", href: "/admin/web/manage-webpages" },
       ],

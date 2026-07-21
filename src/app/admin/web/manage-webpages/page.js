@@ -26,7 +26,7 @@ const ManageWebpages = () => {
         const fetchPages = async () => {
             setLoading(true);
             try {
-                const response = await fetch("/api/getAllPages");
+                const response = await fetch("/api/web/getAllPages");
                 const data = await response.json();
                 setWebpages(data.pages || []);
             } catch (error) {
@@ -57,7 +57,7 @@ const ManageWebpages = () => {
         if (!confirm("Are you sure you want to delete this webpage?")) return;
         
         try {
-            const response = await fetch("/api/getAllPages", {
+            const response = await fetch("/api/web/getAllPages", {
                 method: "DELETE",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ id }),
@@ -84,7 +84,7 @@ const ManageWebpages = () => {
                 url: data.url,
             };
             
-            const response = await fetch("/api/getAllPages", {
+            const response = await fetch("/api/web/getAllPages", {
                 method,
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload),
@@ -96,7 +96,7 @@ const ManageWebpages = () => {
                 toast.success(`Webpage ${editItem ? "updated" : "created"} successfully`, { style: { borderRadius: "10px", border: "1px solid #dcfce7", background: "#f0fdf4", color: "#166534" } });
                 
                 // Fetch updated list instead of reload for smoother UX
-                const updatedPages = await fetch("/api/getAllPages").then((res) => res.json());
+                const updatedPages = await fetch("/api/web/getAllPages").then((res) => res.json());
                 setWebpages(updatedPages.pages || []);
                 
                 setEditItem(null);

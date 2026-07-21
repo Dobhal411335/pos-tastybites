@@ -1,20 +1,23 @@
 "use client"
 import { ArrowLeftIcon, Trash2 } from 'lucide-react';
 import React from 'react'
-
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { useState } from 'react';
 import { useRef } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
-import TextStyle from '@tiptap/extension-text-style';
+import { TextStyle } from '@tiptap/extension-text-style';
 import { FontFamily } from '@tiptap/extension-font-family';
-import Typography from '@tiptap/extension-typography';
-import TextAlign from '@tiptap/extension-text-align';
-import Underline from '@tiptap/extension-underline';
-import Link from '@tiptap/extension-link';
+import { Typography } from '@tiptap/extension-typography';
+import { TextAlign } from '@tiptap/extension-text-align';
+import { Underline } from '@tiptap/extension-underline';
+import { Link } from '@tiptap/extension-link';
 import { Color } from '@tiptap/extension-color';
-import ListItem from '@tiptap/extension-list-item';
-import toast from "react-hot-toast"
+import { ListItem } from '@tiptap/extension-list-item';
+import {toast} from "sonner"
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
 import {
@@ -112,10 +115,11 @@ const InlineRichTextEditor = ({ value, onChange }) => {
   );
 };
 
-const EditWebpagesContent = () => {
+const EditWebpagesContent = ({params}) => {
+  const { id } = React.use(params);
   const router = useRouter();
   const searchParams = useSearchParams();
-  const activityId = searchParams.get('id');
+  const activityId = id;
 
   const imageFirstInputRef = useRef(null);
   const bannerImageInputRef = useRef(null);
@@ -170,6 +174,9 @@ const EditWebpagesContent = () => {
     design6MidHeading: '',
     design6MidLink: '',
     teamCards: initialTeamCards,
+    design7Chip: '',
+    design7ExploreLink: '',
+    design7MainHeading: '',
   };
 
   const [form, setForm] = useState(initialForm);
@@ -196,11 +203,10 @@ const EditWebpagesContent = () => {
   React.useEffect(() => {
     if (!activityId) return;
     setLoading(true);
-    fetch(`/api/create_webpage/${activityId}`)
+    fetch(`/api/web/create_webpage/${activityId}`)
       .then(res => res.json())
       .then(data => {
-        if (data && !data.error) {
-          // Defensive: ensure all fields exist
+        if (data && !data.error) {          // Defensive: ensure all fields exist
           setForm(prev => ({
             ...prev,
             ...data,
@@ -247,6 +253,9 @@ const EditWebpagesContent = () => {
             design6MidHeading: data.design6MidHeading || '',
             design6MidLink: data.design6MidLink || '',
             teamCards: Array.isArray(data.teamCards) && data.teamCards.length > 0 ? data.teamCards : initialTeamCards,
+            design7Chip: data.design7Chip || '',
+            design7ExploreLink: data.design7ExploreLink || '',
+            design7MainHeading: data.design7MainHeading || '',
           }));
         } else {
           setError(data.error || 'Could not load webpage');
@@ -616,7 +625,7 @@ const EditWebpagesContent = () => {
       }
 
 
-      const res = await fetch(`/api/create_webpage/${activityId}`, {
+      const res = await fetch(`/api/web/create_webpage/${activityId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -625,7 +634,7 @@ const EditWebpagesContent = () => {
       if (res.ok) {
         toast.success('webpage updated successfully!');
         // Refetch webpage data so form stays in sync
-        fetch(`/api/create_webpage/${activityId}`)
+        fetch(`/api/web/create_webpage/${activityId}`)
           .then(res => res.json())
           .then(data => {
             if (data && !data.error) {
@@ -687,23 +696,28 @@ const EditWebpagesContent = () => {
           </h1>
           <p className="text-slate-500 font-medium text-sm mt-2">Update the content and configuration for this webpage.</p>
         </div>
-        <button
+        <Button
+          type="button"
           onClick={() => router.back()}
-          className="h-11 flex items-center px-6 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors font-bold"
+          variant="outline"
+          className="h-11 flex items-center px-6 rounded-xl border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors font-bold shadow-sm"
         >
           <ArrowLeftIcon className="w-4 h-4 mr-2" />
           Back to Webpages
-        </button>
+        </Button>
       </div>
 
-      <form className="bg-white p-8 md:p-10 border border-slate-200/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)] rounded-2xl" onSubmit={handleSubmit}>
-        <div className="border-b border-slate-100 pb-6 mb-8">
-          <h2 className="text-2xl font-semibold text-slate-800 tracking-tight">Editing: <span className="text-blue-600">{form.title}</span></h2>
-        </div>
+      <Card className="rounded-[20px] border-slate-100 shadow-sm bg-white overflow-hidden">
+        <CardHeader className="border-b border-slate-50 bg-white/50 pb-6">
+          <CardTitle className="text-2xl font-semibold text-slate-800 tracking-tight">
+            Editing: <span className="text-blue-600">{form.title}</span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-8 md:p-10">
+          <form onSubmit={handleSubmit} className="space-y-8">
         <div className="mb-4">
-          <label className="block mb-1 font-semibold">Frontend Design</label>
-
-          <input type="text" value={form.templateType} disabled readOnly className="w-full rounded-md p-3 bg-gray-200 font-semibold text-black" />
+          <Label className="text-sm font-medium text-slate-700 mb-2 block">Frontend Design</Label>
+          <Input type="text" value={form.templateType} disabled readOnly className="h-11 rounded-xl border-slate-200 bg-slate-100 text-slate-500 font-medium" />
         </div>
         {(isDesignOneOrTwo || isDesignThree || isDesignFour || isDesignFive || isDesignSix || isDesignSeven) && (
           <>
@@ -733,14 +747,14 @@ const EditWebpagesContent = () => {
               <>
                 {/* Main Top Title Tag Line */}
                 <div className="mb-4">
-                  <label className="block mb-1 font-semibold">Main Top Title Tag Line</label>
-                  <input type="text" name="secondTitle" value={form.secondTitle} onChange={handleChange} placeholder="Type Here" className="w-full rounded-md p-3 bg-gray-200 font-semibold" />
+                  <Label className="text-sm font-medium text-slate-700 mb-2 block">Main Top Title Tag Line</Label>
+                  <Input type="text" name="secondTitle" value={form.secondTitle} onChange={handleChange} placeholder="Type Here" className="h-11 rounded-xl border-slate-200 focus-visible:ring-blue-500 bg-slate-50/50 text-slate-700" />
                 </div>
 
                 {/* Main Top Image (Cloudinary Upload) */}
                 {!isDesignThree && (
                   <div className="mb-4">
-                    <label className="block mb-1 font-semibold">Main Top Image</label>
+                    <Label className="text-sm font-medium text-slate-700 mb-2 block">Main Top Image</Label>
                     <input
                       type="file"
                       accept="image/*"
@@ -1779,17 +1793,21 @@ const EditWebpagesContent = () => {
 
         {/* Data Save Button */}
         <div className="pt-6 mt-8 border-t border-slate-100 flex justify-end">
-          <button type="submit" className="bg-blue-600 text-white font-semibold py-3 px-8 rounded hover:bg-blue-700 transition">Save Changes</button>
+          <Button type="submit" className="h-11 px-8 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-medium transition-all shadow-sm">
+            Save Changes
+          </Button>
         </div>
-      </form>
+          </form>
+        </CardContent>
+      </Card>
     </div>
   );
 };
 
-export default function EditWebpages() {
+export default function EditWebpages({ params }) {
   return (
     <Suspense fallback={<div className="p-8 text-center text-slate-500">Loading...</div>}>
-      <EditWebpagesContent />
+      <EditWebpagesContent params={params} />
     </Suspense>
   )
 }

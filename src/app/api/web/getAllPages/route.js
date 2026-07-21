@@ -1,9 +1,8 @@
 import connectDB from "@/lib/db";
 import Page from "@/models/Web/Page";
 import { NextResponse } from "next/server";
-import { authOptions } from "../auth/[...nextauth]/route";
 import { getServerSession } from "next-auth";
-import { deleteFileFromCloudinary } from "@/utils/cloudinary";
+import { deleteImage } from "@/lib/cloudinary/deleteImage";
 
 
 // GET all webpages
@@ -30,12 +29,6 @@ const generateSlug = (title) => {
 export async function POST(req) {
     try {
         await connectDB();
-        const session = await getServerSession(authOptions);
-
-        if (!session || !session.user.isAdmin) {
-            return NextResponse.json({ message: "Unauthorized access!" }, { status: 403 });
-        }
-
         const { title, url } = await req.json();
 
         if (!title || !url) {
@@ -57,12 +50,6 @@ export async function POST(req) {
 export async function PATCH(req) {
     try {
         await connectDB();
-        const session = await getServerSession(authOptions);
-
-        if (!session || !session.user.isAdmin) {
-            return NextResponse.json({ message: "Unauthorized access!" }, { status: 403 });
-        }
-
         const { id, title, url } = await req.json();
 
         if (!id || !title || !url) {
@@ -93,12 +80,6 @@ export async function PATCH(req) {
 export async function DELETE(req) {
     try {
         await connectDB();
-        const session = await getServerSession(authOptions);
-
-        if (!session || !session.user.isAdmin) {
-            return NextResponse.json({ message: "Unauthorized access!" }, { status: 403 });
-        }
-
         const { id } = await req.json();
 
         if (!id) {
@@ -114,7 +95,7 @@ export async function DELETE(req) {
 
         // Delete image from Cloudinary before deleting from database
         if (pageToDelete.images?.key) {
-            await deleteFileFromCloudinary(pageToDelete.images.key);
+            await deleteImage(pageToDelete.images.key);
         }
 
         // Now delete the page from the database

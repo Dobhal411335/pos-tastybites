@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
 import { useEffect, useState, useRef } from "react"
-import {toast} from "sonner"
+import { toast } from "sonner"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import Link from "next/link"
 import { Loader2, Pencil, Trash2, QrCode, Copy, FileText, Settings, X, Plus } from "lucide-react"
@@ -73,12 +73,12 @@ const CreateWebpages = () => {
     // Slugify utility (copied from ProductProfile)
     function slugify(str) {
         return str
-          .toString()
-          .toLowerCase()
-          .trim()
-          .replace(/[\s\W-]+/g, '-') // Replace spaces and non-word chars with dash
-          .replace(/^-+|-+$/g, '');  // Remove leading/trailing dashes
-      }
+            .toString()
+            .toLowerCase()
+            .trim()
+            .replace(/[\s\W-]+/g, '-') // Replace spaces and non-word chars with dash
+            .replace(/^-+|-+$/g, '');  // Remove leading/trailing dashes
+    }
 
     // Copy to clipboard helper
     function copyToClipboard(text) {
@@ -93,7 +93,7 @@ const CreateWebpages = () => {
             return;
         }
         try {
-            const response = await fetch('/api/create_webpage', {
+            const response = await fetch('/api/web/create_webpage', {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ id: productId, active: !currentActive }),
@@ -125,7 +125,7 @@ const CreateWebpages = () => {
             setLoading(true);
             try {
                 // Always fetch all activities from the new API
-                const response = await fetch(`/api/create_webpage`);
+                const response = await fetch(`/api/web/create_webpage`);
                 const data = await response.json();
                 if (Array.isArray(data)) {
                     setActivities(data);
@@ -145,7 +145,7 @@ const CreateWebpages = () => {
         if (!confirm("Are you sure you want to delete this webpage?")) return;
         setDeletingId(id);
         try {
-            const response = await fetch('/api/create_webpage', {
+            const response = await fetch('/api/web/create_webpage', {
                 method: 'DELETE',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ id }),
@@ -169,7 +169,7 @@ const CreateWebpages = () => {
             toast.error("Title is required", { style: { borderRadius: "10px", border: "1px solid #fee2e2", background: "#fef2f2", color: "#991b1b" } });
             return;
         }
-        
+
         setIsLoading(true);
         const slug = slugify(title);
         try {
@@ -181,7 +181,7 @@ const CreateWebpages = () => {
             };
             let response, res;
             if (isEditing && editId) {
-                response = await fetch('/api/create_webpage', {
+                response = await fetch('/api/web/create_webpage', {
                     method: 'PATCH',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ id: editId, ...payload })
@@ -195,7 +195,7 @@ const CreateWebpages = () => {
                     toast.error(res.error || "Failed to update WebPage", { style: { borderRadius: "10px", border: "1px solid #fee2e2", background: "#fef2f2", color: "#991b1b" } });
                 }
             } else {
-                response = await fetch('/api/create_webpage', {
+                response = await fetch('/api/web/create_webpage', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
@@ -226,7 +226,6 @@ const CreateWebpages = () => {
             setIsLoading(false);
         }
     };
-    
     return (
         <div className="w-full max-w-360 mx-auto space-y-8 p-6 font-sans pb-24 mt-8">
             <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-6 mb-8">
@@ -255,9 +254,9 @@ const CreateWebpages = () => {
                                 </CardTitle>
                             </div>
                             {isEditing && (
-                                <Button 
-                                    variant="ghost" 
-                                    size="sm" 
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
                                     onClick={handleCancelEdit}
                                     className="h-8 text-slate-500 hover:text-slate-700"
                                 >
@@ -269,18 +268,18 @@ const CreateWebpages = () => {
                             {isEditing ? "Update the details of the selected webpage." : "Create a new webpage with a selected template."}
                         </CardDescription>
                     </CardHeader>
-                    
+
                     <form onSubmit={handleSubmit(onSubmit)}>
                         <CardContent className="pt-6">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div className="space-y-3">
                                     <Label htmlFor="productTitle" className="text-slate-700 font-medium">WebPage Title <span className="text-red-500">*</span></Label>
-                                    <Input 
-                                        name="productTitle" 
-                                        placeholder="Enter Page Title..." 
-                                        className="h-11 rounded-xl border-slate-200 focus-visible:ring-blue-500 bg-slate-50/50" 
-                                        value={title} 
-                                        onChange={e => setTitle(e.target.value)} 
+                                    <Input
+                                        name="productTitle"
+                                        placeholder="Enter Page Title..."
+                                        className="h-11 rounded-xl border-slate-200 focus-visible:ring-blue-500 bg-slate-50/50"
+                                        value={title}
+                                        onChange={e => setTitle(e.target.value)}
                                     />
                                 </div>
 
@@ -303,10 +302,10 @@ const CreateWebpages = () => {
                                 </div>
                             </div>
                         </CardContent>
-                        
+
                         <CardFooter className="bg-slate-50/80 border-t border-slate-100 p-6 flex justify-end">
-                            <Button 
-                                type="submit" 
+                            <Button
+                                type="submit"
                                 disabled={isLoading}
                                 className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl h-11 px-8 shadow-sm transition-all"
                             >
@@ -329,7 +328,7 @@ const CreateWebpages = () => {
                         </div>
                         <CardDescription className="text-slate-500 mt-1">Manage all created webpages and their statuses.</CardDescription>
                     </CardHeader>
-                    
+
                     <CardContent className="p-0">
                         <div className="overflow-x-auto">
                             <Table>
@@ -395,14 +394,14 @@ const CreateWebpages = () => {
                                                                 />
                                                             </div>
                                                             <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-                                                                <Button 
-                                                                    size="icon" 
-                                                                    variant="ghost" 
+                                                                <Button
+                                                                    size="icon"
+                                                                    variant="ghost"
                                                                     asChild
                                                                     className="h-8 w-8 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl"
                                                                     title="Manage Content"
                                                                 >
-                                                                    <Link href={`/admin/web/create-webpages/edit?id=${activity._id}`}>
+                                                                    <Link href={`/admin/web/edit_webpages/${activity._id}`}>
                                                                         <FileText className="w-4 h-4" />
                                                                     </Link>
                                                                 </Button>
@@ -437,8 +436,8 @@ const CreateWebpages = () => {
                                                 <div className="flex flex-col items-center justify-center text-slate-500">
                                                     <FileText className="w-8 h-8 mb-2 text-slate-300" />
                                                     <p>No webpages available.</p>
-                                                    <Button 
-                                                        variant="link" 
+                                                    <Button
+                                                        variant="link"
                                                         onClick={() => {
                                                             if (formRef.current) {
                                                                 formRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
