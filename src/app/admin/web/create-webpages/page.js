@@ -8,6 +8,8 @@ import { useEffect, useState, useRef } from "react"
 import { toast } from "sonner"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import Link from "next/link"
+import dynamic from 'next/dynamic';
+import DeleteDialog from "@/components/common/DeleteDialog";
 import { Loader2, Pencil, Trash2, QrCode, Copy, FileText, Settings, X, Plus } from "lucide-react"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
@@ -34,6 +36,7 @@ const CreateWebpages = () => {
     const [isEditing, setIsEditing] = useState(false);
     const [editId, setEditId] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [pageToDelete, setPageToDelete] = useState(null);
 
     // Scroll ref for form
     const formRef = useRef(null);
@@ -141,26 +144,31 @@ const CreateWebpages = () => {
         fetchProducts();
     }, []);
 
-    const deletePackage = async (id) => {
-        if (!confirm("Are you sure you want to delete this webpage?")) return;
-        setDeletingId(id);
+    const handleDeleteClick = (id) => {
+        setPageToDelete(id);
+    };
+
+    const confirmDelete = async () => {
+        if (!pageToDelete) return;
+        setDeletingId(pageToDelete);
         try {
             const response = await fetch('/api/web/create_webpage', {
                 method: 'DELETE',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ id }),
+                body: JSON.stringify({ id: pageToDelete }),
             });
             const result = await response.json();
             if (response.ok) {
-                setActivities((prev) => prev.filter((prod) => prod._id !== id));
+                setActivities((prev) => prev.filter((prod) => prod._id !== pageToDelete));
                 toast.success('WebPage deleted successfully!', { style: { borderRadius: "10px", border: "1px solid #dcfce7", background: "#f0fdf4", color: "#166534" } });
             } else {
                 toast.error(result.message || 'Failed to delete WebPage.', { style: { borderRadius: "10px", border: "1px solid #fee2e2", background: "#fef2f2", color: "#991b1b" } });
             }
         } catch (error) {
-            toast.error('Failed to delete WebPage.', { style: { borderRadius: "10px", border: "1px solid #fee2e2", background: "#fef2f2", color: "#991b1b" } });
+            toast.error('An error occurred while deleting the WebPage.', { style: { borderRadius: "10px", border: "1px solid #fee2e2", background: "#fef2f2", color: "#991b1b" } });
         } finally {
             setDeletingId(null);
+            setPageToDelete(null);
         }
     };
 
@@ -417,7 +425,7 @@ const CreateWebpages = () => {
                                                                 <Button
                                                                     size="icon"
                                                                     disabled={deletingId === activity._id}
-                                                                    onClick={() => deletePackage(activity._id)}
+                                                                    onClick={() => handleDeleteClick(activity._id)}
                                                                     variant="ghost"
                                                                     className="h-8 w-8 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl"
                                                                     title="Delete Webpage"
@@ -457,6 +465,14 @@ const CreateWebpages = () => {
                     </CardContent>
                 </Card>
             </div>
+
+            <DeleteDialog 
+                isOpen={!!pageToDelete} 
+                onOpenChange={(isOpen) => { if (!isOpen) setPageToDelete(null); }} 
+                onConfirm={confirmDelete} 
+                title="Delete Webpage"
+                description="Are you sure you want to delete this webpage? This action cannot be undone."
+            />
         </div>
     )
 

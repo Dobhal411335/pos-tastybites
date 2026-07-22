@@ -9,6 +9,7 @@ import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Pencil, Plus, Trash2, LayoutTemplate, ListTree, RefreshCcw } from "lucide-react";
+import DeleteDialog from "@/components/common/DeleteDialog";
 
 const createSubSection = () => ({
   title: "",
@@ -44,6 +45,7 @@ const NavbarSection = () => {
   const [sections, setSections] = useState([]);
   const [formState, setFormState] = useState(createFormState());
   const [editingId, setEditingId] = useState(null);
+  const [sectionToDelete, setSectionToDelete] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
   const fetchSections = async () => {
@@ -142,12 +144,17 @@ const NavbarSection = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleDelete = async (id) => {
+  const handleDeleteClick = (id) => {
+    setSectionToDelete(id);
+  };
+
+  const confirmDelete = async () => {
+    if (!sectionToDelete) return;
     try {
       const response = await fetch("/api/web/navbar-sections", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id }),
+        body: JSON.stringify({ id: sectionToDelete }),
       });
 
       if (!response.ok) {
@@ -159,6 +166,8 @@ const NavbarSection = () => {
       window.dispatchEvent(new Event("navbarSectionsUpdated"));
     } catch (error) {
       toast.error(error.message || "Something went wrong", { style: { borderRadius: "10px", border: "1px solid #fee2e2", background: "#fef2f2", color: "#991b1b" } });
+    } finally {
+      setSectionToDelete(null);
     }
   };
 
@@ -395,7 +404,7 @@ const NavbarSection = () => {
                           <Button type="button" size="icon" variant="ghost" className="h-9 w-9 text-slate-400 hover:text-slate-900 hover:bg-slate-200/50 rounded-xl transition-colors" onClick={() => handleEdit(section)}>
                             <Pencil className="size-4" />
                           </Button>
-                          <Button type="button" size="icon" variant="ghost" className="h-9 w-9 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors" onClick={() => handleDelete(section._id)}>
+                          <Button type="button" size="icon" variant="ghost" className="h-9 w-9 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors" onClick={() => handleDeleteClick(section._id)}>
                             <Trash2 className="size-4" />
                           </Button>
                         </div>
@@ -414,6 +423,14 @@ const NavbarSection = () => {
           </Card>
         </div>
       </div>
+      
+      <DeleteDialog 
+          isOpen={!!sectionToDelete} 
+          onOpenChange={(isOpen) => { if (!isOpen) setSectionToDelete(null); }} 
+          onConfirm={confirmDelete} 
+          title="Delete Navbar Section"
+          description="Are you sure you want to delete this navbar section? This action cannot be undone."
+      />
     </div>
   );
 };

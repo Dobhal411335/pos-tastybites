@@ -67,6 +67,13 @@ export const PUT = withAuth(async (request) => {
     const table = await Table.findOne({ _id, restaurant: request.restaurant });
     if (!table) return sendError(new Error("Not Found"), "Table not found", 404);
 
+    if (tableNumber !== undefined) {
+      const existingNum = await Table.findOne({ tableNumber, restaurant: request.restaurant, _id: { $ne: _id } });
+      if (existingNum) {
+        return sendError(new Error("Duplicate Table"), "A table with this number already exists.", 400);
+      }
+      table.tableNumber = tableNumber;
+    }
     if (floor !== undefined) table.floor = floor;
     if (x !== undefined) table.x = x;
     if (y !== undefined) table.y = y;
@@ -82,13 +89,15 @@ export const PUT = withAuth(async (request) => {
 
     await table.save();
 
-    await FloorHistory.create({
-      restaurant: request.restaurant,
-      floor: table.floor,
-      action: "UPDATE_TABLE",
-      details: { tableId: table._id, tableNumber: table.tableNumber },
-      performedBy: request.user.id,
-    });
+    if (table.floor) {
+      await FloorHistory.create({
+        restaurant: request.restaurant,
+        floor: table.floor,
+        action: "UPDATE_TABLE",
+        details: { tableId: table._id, tableNumber: table.tableNumber },
+        performedBy: request.user.id,
+      });
+    }
 
     logger.info(`Table ${table._id} updated`);
     return sendSuccess(table, "Table updated successfully");

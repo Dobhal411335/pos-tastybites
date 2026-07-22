@@ -73,6 +73,43 @@ export const POST = withAuth(async (request) => {
   }
 }, ["ADMIN", "MANAGER"]);
 
+// PUT - Update Floor
+export const PUT = withAuth(async (request) => {
+  try {
+    const data = await request.json();
+    const { _id, name } = data;
+
+    if (!_id) return sendError(new Error("Missing ID"), "Floor ID is required", 400);
+
+    const floor = await Floor.findOne({ _id, restaurant: request.restaurant });
+    if (!floor) return sendError(new Error("Not Found"), "Floor not found", 404);
+
+    if (name) {
+      const existingFloor = await Floor.findOne({ name: name.trim(), restaurant: request.restaurant, _id: { $ne: _id } });
+      if (existingFloor) {
+        return sendError(new Error("Conflict"), "Floor with this name already exists", 409);
+      }
+      floor.name = name.trim();
+    }
+
+    await floor.save();
+
+    await FloorHistory.create({
+      restaurant: request.restaurant,
+      floor: floor._id,
+      action: "UPDATE_FLOOR",
+      details: { name: floor.name },
+      performedBy: request.user.id,
+    });
+
+    logger.info(`Floor updated: ${floor.name}`);
+    return sendSuccess(floor, "Floor updated successfully");
+  } catch (error) {
+    logger.error("Failed to update floor", error);
+    return sendError(error, "Failed to update floor", 500);
+  }
+}, ["ADMIN", "MANAGER"]);
+
 // DELETE - Delete Floor
 export const DELETE = withAuth(async (request) => {
   try {

@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
-import { Trash2, Edit, LayoutGrid, MoreHorizontal, Check, Plus } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { Trash2, Edit, LayoutGrid, MoreHorizontal, Check, Plus, Edit2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -10,16 +10,16 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { toast } from "sonner";
 import { PALETTE } from "@/utils/paletteeColor";
 import { useRouter } from "next/navigation";
+import DeleteDialog from "@/components/common/DeleteDialog";
 
 export default function CreateFloorPage() {
   const router = useRouter();
   const [floorName, setFloorName] = useState("");
   const [floors, setFloors] = useState([]);
   const [loading, setLoading] = useState(true);
-
-  React.useEffect(() => {
-    fetchFloors();
-  }, []);
+  const [floorToDelete, setFloorToDelete] = useState(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editingId, setEditingId] = useState(null);
 
   const fetchFloors = async () => {
     try {
@@ -34,44 +34,88 @@ export default function CreateFloorPage() {
       setLoading(false);
     }
   };
+  useEffect(() => {
+    fetchFloors();
+  }, []);
 
-  const handleCreate = async (e) => {
+
+  const handleSave = async (e) => {
     e.preventDefault();
     if (!floorName.trim()) return;
 
     try {
-      const res = await fetch("/api/floor", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: floorName.trim() })
-      });
-      const json = await res.json();
-      
-      if (json.success) {
-        setFloors([...floors, { id: json.data._id, floorName: json.data.name, tableCount: 0 }]);
-        setFloorName("");
-        toast.success("Floor created successfully.");
+      if (isEditing) {
+        const res = await fetch("/api/floor", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ _id: editingId, name: floorName.trim() })
+        });
+        const json = await res.json();
+
+        if (json.success) {
+          setFloors(floors.map(f => f.id === editingId ? { ...f, floorName: floorName.trim() } : f));
+          setFloorName("");
+          setIsEditing(false);
+          setEditingId(null);
+          toast.success("Floor renamed successfully.");
+        } else {
+          toast.error(json.message || "Failed to rename floor");
+        }
       } else {
-        toast.error(json.message || "Failed to create floor");
+        const res = await fetch("/api/floor", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: floorName.trim() })
+        });
+        const json = await res.json();
+
+        if (json.success) {
+          setFloors([...floors, { id: json.data._id, floorName: json.data.name, tableCount: 0 }]);
+          setFloorName("");
+          toast.success("Floor created successfully.");
+        } else {
+          toast.error(json.message || "Failed to create floor");
+        }
       }
     } catch (err) {
       toast.error("An error occurred");
     }
   };
 
-  const handleDelete = async (id) => {
-    if (!confirm("Are you sure you want to delete this floor? All assigned tables will be unassigned.")) return;
+  const handleRenameClick = (id) => {
+    const floor = floors.find((f) => f.id === id);
+    if (floor) {
+      setIsEditing(true);
+      setEditingId(id);
+      setFloorName(floor.floorName);
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setIsEditing(false);
+    setEditingId(null);
+    setFloorName("");
+  };
+
+  const handleDeleteClick = (id) => {
+    setFloorToDelete(id);
+  };
+
+  const confirmDelete = async () => {
+    if (!floorToDelete) return;
     try {
-      const res = await fetch(`/api/floor?id=${id}`, { method: "DELETE" });
+      const res = await fetch(`/api/floor?id=${floorToDelete}`, { method: "DELETE" });
       const json = await res.json();
       if (json.success) {
-        setFloors(floors.filter(f => f.id !== id));
+        setFloors(floors.filter(f => f.id !== floorToDelete));
         toast.success("Floor deleted successfully.");
       } else {
         toast.error(json.message || "Failed to delete floor");
       }
     } catch (err) {
       toast.error("An error occurred");
+    } finally {
+      setFloorToDelete(null);
     }
   };
 
@@ -104,12 +148,14 @@ export default function CreateFloorPage() {
               <Card className="shadow-sm border-zinc-200 bg-white overflow-hidden">
                 <CardHeader className="bg-zinc-50/50 border-b border-zinc-100 pb-4">
                   <CardTitle className="text-[18px] font-bold text-zinc-900 flex items-center gap-2">
-                    <Plus className="w-5 h-5 text-[#1e40af]" /> Add New Floor
+                    <Plus className="w-5 h-5 text-[#1e40af]" /> {isEditing ? "Rename Floor" : "Add New Floor"}
                   </CardTitle>
-                  <CardDescription className="text-[14px]">Define a new physical space or dining area.</CardDescription>
+                  <CardDescription className="text-[14px]">
+                    {isEditing ? "Modify the name of this floor." : "Define a new physical space or dining area."}
+                  </CardDescription>
                 </CardHeader>
                 <CardContent className="p-6">
-                  <form onSubmit={handleCreate} className="space-y-4">
+                  <form onSubmit={handleSave} className="space-y-4">
                     <div className="space-y-2">
                       <label className="text-[14px] font-semibold text-zinc-900">
                         Floor Name <span className="text-red-500">*</span>
@@ -122,13 +168,25 @@ export default function CreateFloorPage() {
                         className="h-11 text-[15px] bg-white border-zinc-200 focus:ring-[#1e40af]"
                       />
                     </div>
-                    <Button
-                      type="submit"
-                      className="w-full h-11 text-[15px] font-bold text-white transition-transform hover:scale-[1.02] shadow-sm mt-4"
-                      style={{ backgroundColor: "#1e40af" }}
-                    >
-                      Create Floor
-                    </Button>
+                    <div className="flex gap-2 mt-4">
+                      <Button
+                        type="submit"
+                        className="flex-1 h-11 text-[15px] font-bold text-white transition-transform hover:scale-[1.02] shadow-sm"
+                        style={{ backgroundColor: "#1e40af" }}
+                      >
+                        {isEditing ? "Save Changes" : "Create Floor"}
+                      </Button>
+                      {isEditing && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={handleCancelEdit}
+                          className="h-11 text-[15px] font-bold"
+                        >
+                          Cancel
+                        </Button>
+                      )}
+                    </div>
                   </form>
                 </CardContent>
               </Card>
@@ -175,21 +233,29 @@ export default function CreateFloorPage() {
                                   variant="ghost"
                                   size="sm"
                                   onClick={() => handleEdit(f.id)}
-                                  className="h-9 px-3 text-white bg-orange-500 hover:bg-blue-50 hover:text-blue-700"
+                                  className="h-9 px-3 text-white bg-orange-500 hover:bg-orange-600 hover:text-white"
                                 >
                                   <LayoutGrid className="mr-2 h-4 w-4" />
                                   Edit Layout
                                 </Button>
-
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => handleDelete(f.id)}
-                                  className="h-9 px-3 text-white bg-red-500 hover:bg-red-600 hover:text-white"
-                                >
-                                  <Trash2 className="mr-2 h-4 w-4" />
-                                  Delete
-                                </Button>
+                                <div className="flex items-center justify-center">
+                                  <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                      <Button variant="ghost" className="h-8 w-8 p-0 text-white hover:text-zinc-600 bg-orange-500 hover:bg-orange-600">
+                                        <span className="sr-only">Open menu</span>
+                                        <MoreHorizontal className="h-4 w-4" />
+                                      </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end" className="w-40 p-2 bg-white rounded-xl shadow-lg border border-zinc-100">
+                                      <DropdownMenuItem className="text-[13px] font-semibold text-orange-600 focus:bg-orange-400 focus:text-white cursor-pointer p-2 rounded-md" onClick={() => handleRenameClick(f.id)}>
+                                        <Edit2 className="mr-2 h-4 w-4" /> Rename Floor
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem className="text-[13px] font-semibold text-red-600 focus:bg-orange-500 focus:text-white cursor-pointer p-2 rounded-md" onClick={() => handleDeleteClick(f.id)}>
+                                        <Trash2 className="mr-2 h-4 w-4" /> Delete Floor
+                                      </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
+                                </div>
                               </div>
                             </TableCell>
                           </TableRow>
@@ -201,9 +267,16 @@ export default function CreateFloorPage() {
               </Card>
             </div>
           </div>
-
         </div>
       </div>
+
+      <DeleteDialog
+        isOpen={!!floorToDelete}
+        onOpenChange={(isOpen) => { if (!isOpen) setFloorToDelete(null); }}
+        onConfirm={confirmDelete}
+        title="Delete Floor"
+        description="Are you sure you want to delete this floor? All assigned tables will be unassigned."
+      />
     </div>
   );
 }

@@ -40,6 +40,13 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { toast } from "sonner";
 import {
   DndContext,
@@ -50,51 +57,6 @@ import {
   useSensors,
 } from "@dnd-kit/core";
 import { restrictToWindowEdges } from "@dnd-kit/modifiers";
-
-// ---------------------------------------------------------------------------
-// MOCK DATA & CONSTANTS
-// ---------------------------------------------------------------------------
-
-const MOCK_FLOORS = [
-  { id: "f1", name: "Ground Floor", sections: ["Dining Hall", "Patio", "Bar", "Private Room", "VIP"] },
-  { id: "f2", name: "First Floor", sections: ["Main Area"] },
-  { id: "f3", name: "Patio", sections: ["Outdoor Standard"] },
-  { id: "f4", name: "VIP", sections: ["Lounge"] },
-  { id: "f5", name: "Terrace", sections: ["Rooftop"] },
-];
-
-const INITIAL_TABLES = [
-  {
-    id: "t1",
-    floorId: "f1",
-    name: "T-01",
-    type: "round",
-    seats: 4,
-    section: "Dining Hall",
-    status: "Available",
-    x: 100,
-    y: 100,
-    w: 80,
-    h: 80,
-    r: 0,
-    locked: false,
-  },
-  {
-    id: "t2",
-    floorId: "f1",
-    name: "B-01",
-    type: "booth",
-    seats: 6,
-    section: "Bar",
-    status: "Occupied",
-    x: 300,
-    y: 150,
-    w: 120,
-    h: 80,
-    r: 0,
-    locked: false,
-  },
-];
 
 const TOOL_CATEGORIES = [
   {
@@ -133,7 +95,7 @@ const STATUS_COLORS = {
 // DRAGGABLE TOOL COMPONENT (Left Sidebar)
 // ---------------------------------------------------------------------------
 
-function ToolItem({ tool }) {
+function ToolItem({ tool, onClick }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: `tool-${tool.id}`,
     data: { type: "tool", tool },
@@ -145,6 +107,7 @@ function ToolItem({ tool }) {
       ref={setNodeRef}
       {...listeners}
       {...attributes}
+      onClick={() => onClick && onClick(tool)}
       className={`
         group flex w-full items-center gap-4 rounded-xl border bg-white px-4 py-3 text-left 
         transition-colors duration-200 cursor-grab active:cursor-grabbing
@@ -254,16 +217,23 @@ export default function FloorPlanEditorPage({ params }) {
   const [tables, setTables] = useState([]);
   const [unassignedTables, setUnassignedTables] = useState([]);
   const [floorData, setFloorData] = useState(null);
+  const [allFloors, setAllFloors] = useState([]);
 
   useEffect(() => {
     const fetchLayoutAndTables = async () => {
       try {
-        const [layoutRes, tablesRes] = await Promise.all([
+        const [layoutRes, tablesRes, floorsRes] = await Promise.all([
           fetch(`/api/floor/layout?floorId=${floorId}`),
-          fetch(`/api/floor/tables`)
+          fetch(`/api/floor/tables`),
+          fetch(`/api/floor`)
         ]);
         const layoutJson = await layoutRes.json();
         const tablesJson = await tablesRes.json();
+        const floorsJson = await floorsRes.json();
+        
+        if (floorsJson.success) {
+          setAllFloors(floorsJson.data);
+        }
         
         if (layoutJson.success && layoutJson.data.length > 0) {
           const floor = layoutJson.data[0];
@@ -305,7 +275,7 @@ export default function FloorPlanEditorPage({ params }) {
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [snapToGrid, setSnapToGrid] = useState(true);
-  const [showGrid, setShowGrid] = useState(true);
+  const [gridMode, setGridMode] = useState("lines"); // "lines" | "dots" | "none"
   const [isPreviewMode, setIsPreviewMode] = useState(false);
   const [history, setHistory] = useState({ past: [], future: [] });
   const [currentSection, setCurrentSection] = useState("Dining Hall");
@@ -343,7 +313,7 @@ export default function FloorPlanEditorPage({ params }) {
   };
 
   // Computed
-  const currentFloor = floorData || MOCK_FLOORS.find((f) => f.id === floorId) || MOCK_FLOORS[0];
+  const currentFloor = floorData || [];
   const currentFloorTables = tables;
   const selectedTable = tables.find((t) => t.id === selectedTableId);
 
@@ -450,6 +420,35 @@ export default function FloorPlanEditorPage({ params }) {
         })
       );
     }
+  };
+
+  const handleToolClick = (tool) => {
+    saveHistory();
+    const snap = (val) => (snapToGrid ? Math.round(val / 20) * 20 : Math.round(val));
+    
+    // Calculate a position near the center of the current view
+    const x = snap((pan.x * -1 + 400) / zoom);
+    const y = snap((pan.y * -1 + 300) / zoom);
+
+    const newElement = {
+      id: `shape-${Date.now()}`,
+      floorId: currentFloor._id || currentFloor.id,
+      name: "Unassigned",
+      type: tool.id,
+      seats: tool.id.includes("round") ? 4 : 2,
+      section: currentSection,
+      status: "Available",
+      x,
+      y,
+      w: tool.w,
+      h: tool.h,
+      r: 0,
+      locked: false,
+      isShape: true,
+    };
+    
+    setTables([...tables, newElement]);
+    setSelectedTableId(newElement.id);
   };
 
   const deleteTable = () => {
@@ -572,28 +571,24 @@ export default function FloorPlanEditorPage({ params }) {
         ) : (
           <>
             <div className="flex items-center gap-4">
-              <Button variant="ghost" onClick={() => router.push("/admin/floor-plan/floor")} className="text-stone-600 hover:bg-stone-100 h-10 px-3">
-                <ChevronLeft className="mr-2 h-4 w-4" /> Back
+              <Button variant="ghost" onClick={() => router.push("/admin/floor-plan/floor")} className="text-white bg-[#1e40af] hover:bg-red-600 h-10 px-3">
+                <ChevronLeft className="mr-2 h-4 w-4" /> Back To Floor
               </Button>
 
               <Separator orientation="vertical" className="h-8 mx-2 bg-stone-200" />
 
               <div className="flex items-center gap-3">
-                <select
-                  className="h-10 rounded-lg border border-stone-200 bg-white px-3 py-2 text-[14px] font-bold outline-none focus:ring-2 focus:ring-[#1e40af]"
-                  value={currentFloor.id}
-                  onChange={() => { }} // Mock read-only for now
-                >
-                  {MOCK_FLOORS.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
-                </select>
-
-                <select
-                  className="h-10 rounded-lg border border-stone-200 bg-white px-3 py-2 text-[14px] font-medium text-stone-600 outline-none focus:ring-2 focus:ring-[#1e40af]"
-                  value={currentSection}
-                  onChange={(e) => setCurrentSection(e.target.value)}
-                >
-                  {(currentFloor.sections || ["Main"]).map(s => <option key={s} value={s}>{s}</option>)}
-                </select>
+                <Select value={currentFloor.id || currentFloor._id} onValueChange={(val) => router.push(`/admin/floor-plan/floor/${val}`)}>
+                  <SelectTrigger className="w-45 h-10 font-bold bg-white focus:ring-[#1e40af]">
+                    <SelectValue placeholder="Select Floor" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-white">
+                    {allFloors.length > 0
+                      ? allFloors.map(f => <SelectItem key={f.id} value={f.id}>{f.floorName}</SelectItem>)
+                      : <SelectItem value={currentFloor.id || currentFloor._id}>{currentFloor.name || currentFloor.floorName}</SelectItem>
+                    }
+                  </SelectContent>
+                </Select>
               </div>
             </div>
 
@@ -618,8 +613,13 @@ export default function FloorPlanEditorPage({ params }) {
                 <Button variant={snapToGrid ? "secondary" : "ghost"} size="sm" onClick={() => setSnapToGrid(!snapToGrid)} className={`h-8 px-3 rounded-md text-[13px] font-semibold ${snapToGrid ? 'bg-orange-600 shadow-sm text-stone-900' : 'text-stone-500 hover:text-stone-900'}`}>
                   Snap
                 </Button>
-                <Button variant={showGrid ? "secondary" : "ghost"} size="sm" onClick={() => setShowGrid(!showGrid)} className={`h-8 px-3 rounded-md text-[13px] font-semibold ${showGrid ? 'bg-orange-600 shadow-sm text-stone-900' : 'text-stone-500 hover:text-stone-900'}`}>
-                  Grid
+                <Button 
+                  variant={gridMode !== "none" ? "secondary" : "ghost"} 
+                  size="sm" 
+                  onClick={() => setGridMode(prev => prev === "lines" ? "dots" : prev === "dots" ? "none" : "lines")} 
+                  className={`h-8 px-3 rounded-md text-[13px] font-semibold ${gridMode !== "none" ? 'bg-orange-600 shadow-sm text-stone-900' : 'text-stone-500 hover:text-stone-900'}`}
+                >
+                  {gridMode === "lines" ? "Lines" : gridMode === "dots" ? "Dots" : "Grid Off"}
                 </Button>
               </div>
             </div>
@@ -694,7 +694,7 @@ export default function FloorPlanEditorPage({ params }) {
                       <AccordionContent className="border-t border-stone-100 bg-stone-100 px-3 py-3">
                         <div className="space-y-2">
                           {category.items.map((tool) => (
-                            <ToolItem key={tool.id} tool={tool} />
+                            <ToolItem key={tool.id} tool={tool} onClick={handleToolClick} />
                           ))}
                         </div>
                       </AccordionContent>
@@ -724,12 +724,15 @@ export default function FloorPlanEditorPage({ params }) {
             onPointerDown={() => setSelectedTableId(null)}
           >
             {/* Grid Pattern */}
-            {showGrid && !isPreviewMode && (
+            {gridMode !== "none" && !isPreviewMode && (
               <div
-                className="absolute inset-0 z-0 opacity-20 pointer-events-none"
+                className="absolute inset-0 z-0 pointer-events-none"
                 style={{
-                  backgroundImage: "radial-gradient(#1e40af 1px, transparent 1px)",
-                  backgroundSize: "20px 20px",
+                  opacity: gridMode === "lines" ? 0.6 : 0.8,
+                  backgroundImage: gridMode === "lines"
+                    ? "linear-gradient(to right, #9ca3af 1px, transparent 1px), linear-gradient(to bottom, #9ca3af 1px, transparent 1px)"
+                    : "radial-gradient(#64748b 2px, transparent 2px)",
+                  backgroundSize: gridMode === "lines" ? "40px 40px" : "20px 20px",
                   transform: `scale(${zoom}) translate(${pan.x}px, ${pan.y}px)`,
                   transformOrigin: "0 0"
                 }}
@@ -783,19 +786,21 @@ export default function FloorPlanEditorPage({ params }) {
                       <div className="space-y-2">
                         <label className="text-[13px] font-bold text-stone-700">Table Name / Assignment</label>
                         {selectedTable.isShape ? (
-                          <select
-                            className="w-full h-10 rounded-md border border-stone-200 bg-white px-3 py-1 text-[14px] outline-none focus:ring-2 focus:ring-[#1e40af] focus:border-[#1e40af]"
-                            onChange={(e) => {
-                              const t = unassignedTables.find(tbl => tbl._id === e.target.value);
+                          <Select
+                            onValueChange={(val) => {
+                              const t = unassignedTables.find(tbl => tbl._id === val);
                               if (t) assignTable(t);
                             }}
-                            defaultValue=""
                           >
-                            <option value="" disabled>Select a table...</option>
-                            {unassignedTables.map(t => (
-                              <option key={t._id} value={t._id}>{t.tableNumber}</option>
-                            ))}
-                          </select>
+                            <SelectTrigger className="w-full h-10 bg-white focus:ring-[#1e40af]">
+                              <SelectValue placeholder="Select a table..." />
+                            </SelectTrigger>
+                            <SelectContent className="bg-white">
+                              {unassignedTables.map(t => (
+                                <SelectItem key={t._id} value={t._id}>{t.tableNumber}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                         ) : (
                           <Input
                             value={selectedTable.name}
@@ -804,16 +809,6 @@ export default function FloorPlanEditorPage({ params }) {
                             disabled={!["kitchen", "door", "register", "bar", "wall", "divider"].includes(selectedTable.type)}
                           />
                         )}
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-[13px] font-bold text-stone-700">Section</label>
-                        <select
-                          className="w-full h-10 rounded-md border border-stone-200 bg-white px-3 py-1 text-[14px] outline-none focus:ring-2 focus:ring-[#1e40af] focus:border-[#1e40af]"
-                          value={selectedTable.section}
-                          onChange={(e) => updateSelectedTable({ section: e.target.value })}
-                        >
-                          {(currentFloor.sections || ["Main"]).map(s => <option key={s} value={s}>{s}</option>)}
-                        </select>
                       </div>
                       {!["kitchen", "door", "register", "bar", "wall", "divider"].includes(selectedTable.type) && (
                         <div className="space-y-2">

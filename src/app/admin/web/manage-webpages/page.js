@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { useForm } from "react-hook-form";
 import {toast} from "sonner"
 import { Pencil, Trash, Link as LinkIcon, Plus, FileText, Settings, ExternalLink, X } from "lucide-react";
+import DeleteDialog from "@/components/common/DeleteDialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
@@ -18,6 +19,7 @@ const ManageWebpages = () => {
     const [webpages, setWebpages] = useState([]);
     const [loading, setLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [pageToDelete, setPageToDelete] = useState(null);
     
     const formRef = useRef(null);
 
@@ -53,24 +55,30 @@ const ManageWebpages = () => {
         reset({ title: "", url: "" });
     };
 
-    const onDelete = async (id) => {
-        if (!confirm("Are you sure you want to delete this webpage?")) return;
+    const handleDeleteClick = (id) => {
+        setPageToDelete(id);
+    };
+
+    const confirmDelete = async () => {
+        if (!pageToDelete) return;
         
         try {
             const response = await fetch("/api/web/getAllPages", {
                 method: "DELETE",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ id }),
+                body: JSON.stringify({ id: pageToDelete }),
             });
 
             if (response.ok) {
                 toast.success("Webpage deleted successfully", { style: { borderRadius: "10px", border: "1px solid #dcfce7", background: "#f0fdf4", color: "#166534" } });
-                setWebpages(webpages.filter((page) => page._id !== id));
+                setWebpages(webpages.filter((page) => page._id !== pageToDelete));
             } else {
                 toast.error("Failed to delete webpage", { style: { borderRadius: "10px", border: "1px solid #fee2e2", background: "#fef2f2", color: "#991b1b" } });
             }
         } catch (error) {
             toast.error("Something went wrong", { style: { borderRadius: "10px", border: "1px solid #fee2e2", background: "#fef2f2", color: "#991b1b" } });
+        } finally {
+            setPageToDelete(null);
         }
     };
 
@@ -279,7 +287,7 @@ const ManageWebpages = () => {
                                                             <Pencil className="w-4 h-4" />
                                                         </Button>
                                                         <Button 
-                                                            onClick={() => onDelete(page._id)} 
+                                                            onClick={() => handleDeleteClick(page._id)} 
                                                             variant="ghost" 
                                                             size="icon"
                                                             className="h-9 w-9 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors"
@@ -318,6 +326,13 @@ const ManageWebpages = () => {
                     </CardContent>
                 </Card>
             </div>
+            <DeleteDialog 
+                isOpen={!!pageToDelete} 
+                onOpenChange={(isOpen) => { if (!isOpen) setPageToDelete(null); }} 
+                onConfirm={confirmDelete} 
+                title="Delete Webpage"
+                description="Are you sure you want to delete this webpage? This action cannot be undone."
+            />
         </div>
     );
 };

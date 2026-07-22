@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import Image from "next/image";
 import {toast} from "sonner";
 import { PencilIcon, Trash2Icon, LayoutTemplate, UploadCloud, Link as LinkIcon, Image as ImageIcon, Smartphone, Hash } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import DeleteDialog from "@/components/common/DeleteDialog";
 
 const BannerSection2nd = () => {
     const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -513,18 +513,13 @@ const BannerSection2nd = () => {
             </div>
 
             {/* Delete Confirmation Dialog */}
-            <Dialog open={showDeleteModal} onOpenChange={setShowDeleteModal}>
-                <DialogContent className="rounded-3xl p-6 border-slate-100 shadow-xl bg-white max-w-md font-sans gap-0">
-                    <DialogHeader className="mb-4">
-                        <DialogTitle className="text-xl font-semibold text-slate-800">Delete Banner</DialogTitle>
-                    </DialogHeader>
-                    <p className="text-slate-600 mb-6">Are you sure you want to delete this banner? This action cannot be undone.</p>
-                    <DialogFooter className="gap-2 sm:gap-0">
-                        <Button variant="ghost" onClick={cancelDelete} className="h-11 rounded-xl text-slate-600 hover:bg-slate-100 font-medium">Cancel</Button>
-                        <Button variant="destructive" onClick={confirmDelete} className="h-11 rounded-xl px-6 font-medium">Delete</Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
+            <DeleteDialog 
+                isOpen={showDeleteModal} 
+                onOpenChange={setShowDeleteModal} 
+                onConfirm={confirmDelete} 
+                title="Delete Banner"
+                description="Are you sure you want to delete this banner? This action cannot be undone."
+            />
         </div>
     );
 };
