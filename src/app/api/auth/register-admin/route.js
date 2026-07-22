@@ -1,4 +1,4 @@
-import dbConnect from "@/lib/db";
+import connectDB from "@/lib/db";
 import Restaurant from "@/models/Restaurant";
 import Admin from "@/models/Admin";
 import { hashPassword } from "@/utils/password";
@@ -6,7 +6,7 @@ import { sendError } from "@/utils/errorHandler";
 
 export async function POST(request) {
   try {
-    await dbConnect();
+    await connectDB();
     const { name, email, password, restaurantName } = await request.json();
 
     if (!name || !email || !password) {
@@ -28,7 +28,7 @@ export async function POST(request) {
     // Get or Create restaurant
     const rName = restaurantName || "Tasty Bites Master Branch";
     const rSlug = rName.toLowerCase().replace(/[^a-z0-9]+/g, "-");
-    
+
     let restaurant = await Restaurant.findOne({ slug: rSlug });
     if (!restaurant) {
       restaurant = await Restaurant.create({

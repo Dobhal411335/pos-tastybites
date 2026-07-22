@@ -1,15 +1,15 @@
 import { NextResponse } from 'next/server';
 import { verifyToken } from '@/utils/jwt';
 import { cookies } from 'next/headers';
-import dbConnect from '@/lib/db';
-import EmployeeSession from '@/models/EmployeeSession';
-import Employee from '@/models/Employee';
+import connectDB from '@/lib/db';
+import EmployeeSession from '@/models/employee/EmployeeSession';
+import Employee from '@/models/employee/Employee';
 
 export const withEmployeeAuth = (handler, allowedPermissions = []) => {
   return async (request, context) => {
     try {
-      await dbConnect();
-      
+      await connectDB();
+
       const cookieStore = await cookies();
       const token = cookieStore.get('employee_access_token')?.value;
 

@@ -295,7 +295,7 @@ export default function LiveEmployeesPage() {
                               <MoreHorizontal className="h-4 w-4" />
                             </Button>
                           </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-[160px]">
+                          <DropdownMenuContent align="end" className="h-40">
                             <DropdownMenuLabel>Actions</DropdownMenuLabel>
                             <DropdownMenuItem>View Profile</DropdownMenuItem>
                             <DropdownMenuItem>Reassign Tables</DropdownMenuItem>

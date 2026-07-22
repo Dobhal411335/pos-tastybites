@@ -1,16 +1,16 @@
 import { NextResponse } from 'next/server';
-import dbConnect from '@/lib/db';
-import Employee from '@/models/Employee';
+import connectDB from '@/lib/db';
+import Employee from '@/models/employee/Employee';
 import RegisteredDevice from '@/models/RegisteredDevice';
-import EmployeeShift from '@/models/EmployeeShift';
-import EmployeeSession from '@/models/EmployeeSession';
+import EmployeeShift from '@/models/employee/EmployeeShift';
+import EmployeeSession from '@/models/employee/EmployeeSession';
 import { comparePassword } from '@/utils/password';
 import { signToken } from '@/utils/jwt';
 
 export async function POST(request) {
   try {
-    await dbConnect();
-    
+    await connectDB();
+
     const body = await request.json();
     const { employeeId, password, browserFingerprint, ipAddress } = body;
 
@@ -40,7 +40,7 @@ export async function POST(request) {
     if (!device) {
       return NextResponse.json({ success: false, message: 'Unrecognized or inactive device' }, { status: 403 });
     }
-    
+
     // Update device last login
     device.lastLogin = new Date();
     await device.save();
@@ -59,7 +59,7 @@ export async function POST(request) {
     if (now < shiftStart) {
       return NextResponse.json({ success: false, message: 'Your shift has not started yet.' }, { status: 403 });
     }
-    
+
     if (shiftEnd && now > shiftEnd) {
       return NextResponse.json({ success: false, message: 'Your shift has already ended.' }, { status: 403 });
     }
@@ -110,7 +110,7 @@ export async function POST(request) {
       sameSite: 'strict',
       maxAge: 3600 // 1 hour
     });
-    
+
     response.cookies.set('employee_refresh_token', refreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',

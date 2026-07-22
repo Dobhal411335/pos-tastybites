@@ -34,8 +34,8 @@ export default function EmployeeSalesRecordPage() {
   return (
     <div className="flex flex-col overflow-hidden min-h-screen" style={{ backgroundColor: PALETTE.canvas, color: PALETTE.ink }}>
       <div className="flex-1 overflow-y-auto p-8">
-        <div className="max-w-[1200px] mx-auto space-y-8 pb-16 font-sans">
-          
+        <div className="max-w-300 mx-auto space-y-8 pb-16 font-sans">
+
           {/* Header */}
           <div className="flex flex-col sm:flex-row justify-between sm:items-end gap-4 border-b border-zinc-200 pb-5">
             <div>
@@ -115,19 +115,19 @@ export default function EmployeeSalesRecordPage() {
                 <CardDescription className="text-[13px] mt-1">Revenue trends over the selected period.</CardDescription>
               </div>
             </CardHeader>
-            <CardContent className="p-6 h-[400px]">
+            <CardContent className="p-6 h-100">
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                   <defs>
                     <linearGradient id="colorSales" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#1e40af" stopOpacity={0.3}/>
-                      <stop offset="95%" stopColor="#1e40af" stopOpacity={0}/>
+                      <stop offset="5%" stopColor="#1e40af" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="#1e40af" stopOpacity={0} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e4e4e7" />
                   <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#71717a', fontSize: 13, fontWeight: 600 }} dy={10} />
                   <YAxis axisLine={false} tickLine={false} tick={{ fill: '#71717a', fontSize: 13, fontWeight: 600 }} tickFormatter={(val) => `$${val}`} dx={-10} />
-                  <Tooltip 
+                  <Tooltip
                     contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)', fontWeight: 'bold' }}
                     itemStyle={{ color: '#1e40af' }}
                     formatter={(value) => [`$${value}`, 'Sales']}
@@ -146,7 +146,7 @@ export default function EmployeeSalesRecordPage() {
             </div>
             <div className="flex gap-3">
               <Select defaultValue="all">
-                <SelectTrigger className="w-[160px] h-10 border-zinc-200">
+                <SelectTrigger className="h-40 h-10 border-zinc-200">
                   <SelectValue placeholder="Payment Method" />
                 </SelectTrigger>
                 <SelectContent>

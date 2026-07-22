@@ -10,7 +10,7 @@ const EmployeeSchema = new mongoose.Schema(
     phoneNumber: { type: String, required: true },
     password: { type: String, required: true }, // Bcrypt hash
     profileImage: { type: String },
-    role: { type: String, enum: ['Admin', 'Manager', 'Staff'], required: true },
+    role: { type: String, required: true },
     status: { type: String, enum: ['Active', 'On_Leave', 'Terminated'], default: 'Active' },
     defaultFloor: { type: mongoose.Schema.Types.ObjectId, ref: 'Floor' },
     defaultSection: { type: mongoose.Schema.Types.ObjectId, ref: 'Section' },

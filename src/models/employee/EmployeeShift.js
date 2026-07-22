@@ -12,6 +12,9 @@ const EmployeeShiftSchema = new mongoose.Schema(
     assignedTables: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Table' }],
     assignedDevice: { type: mongoose.Schema.Types.ObjectId, ref: 'RegisteredDevice' },
     status: { type: String, enum: ['Scheduled', 'Active', 'Completed', 'Cancelled'], default: 'Scheduled' },
+    totalHours: { type: Number, default: 0 },
+    regularHours: { type: Number, default: 0 },
+    overtimeHours: { type: Number, default: 0 },
     notes: { type: String }
   },
   { timestamps: true }

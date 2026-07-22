@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import dbConnect from '@/lib/db';
-import EmployeeShift from '@/models/EmployeeShift';
+import connectDB from '@/lib/db';
+import EmployeeShift from '@/models/employee/EmployeeShift';
 import { withAuth } from '@/utils/auth'; // Using the standard auth for admins
 
 const getShiftsHandler = async (request) => {
@@ -19,7 +19,7 @@ const getShiftsHandler = async (request) => {
       endOfDay.setHours(23, 59, 59, 999);
       filter.date = { $gte: startOfDay, $lte: endOfDay };
     }
-    
+
     if (status) filter.status = status;
     if (employeeId) filter.employee = employeeId;
 

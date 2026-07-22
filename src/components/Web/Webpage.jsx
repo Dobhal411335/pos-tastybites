@@ -18,7 +18,7 @@ import {
   CarouselNext,
   CarouselPrevious,
 } from "@/components/ui/carousel";
-import {toast} from "sonner";
+import { toast } from "sonner";
 
 const isFilledText = (value) => typeof value === "string" && value.replace(/<[^>]*>/g, "").trim().length > 0;
 
@@ -221,84 +221,84 @@ const PopularDestinations = () => {
     <>
       {(filteredHotels.length > 0 || hotelsLoading) && (
         <section className="w-full border-t border-[#ece7df] bg-white px-2 py-10 md:px-20">
-      <h2 className="font-recoleta text-2xl font-bold text-gray-900 md:text-3xl">
-        Your style. These stays. A perfect match.
-      </h2>
-      <p className="mb-5 mt-1 font-sans text-sm text-gray-500">
-        Handpicked Popular Destination curated just for you
-      </p>
+          <h2 className="font-recoleta text-2xl font-bold text-gray-900 md:text-3xl">
+            Your style. These stays. A perfect match.
+          </h2>
+          <p className="mb-5 mt-1 font-sans text-sm text-gray-500">
+            Handpicked Popular Destination curated just for you
+          </p>
 
-      <div className="mb-6 flex gap-5 overflow-x-auto border-b border-gray-200">
-        <button
-          onClick={() => setActiveCategory("All")}
-          className={`whitespace-nowrap border-b-2 pb-2.5 px-1 text-sm font-medium transition-colors ${activeCategory === "All"
-            ? "border-gray-900 text-gray-900"
-            : "border-transparent text-gray-500 hover:text-gray-700"
-            }`}
-        >
-          All
-        </button>
-        {hotelCategories.map((cat, key) => (
-          <button
-            key={cat._id || key}
-            onClick={() => setActiveCategory(cat.name)}
-            className={`whitespace-nowrap border-b-2 pb-2.5 px-1 text-sm font-medium transition-colors ${activeCategory === cat.name
-              ? "border-gray-900 text-gray-900"
-              : "border-transparent text-gray-500 hover:text-gray-700"
-              }`}
-          >
-            {cat.name}
-          </button>
-        ))}
-      </div>
-
-      {hotelsLoading ? (
-        <div className="grid grid-cols-2 gap-5 md:grid-cols-4">
-          {Array.from({ length: 4 }).map((_, index) => (
-            <div key={index} className="animate-pulse">
-              <div className="mb-3 h-48 w-full rounded-xl bg-gray-200" />
-              <div className="mb-2 h-4 w-3/4 rounded bg-gray-200" />
-              <div className="h-3 w-1/2 rounded bg-gray-200" />
-            </div>
-          ))}
-        </div>
-      ) : filteredHotels.length > 0 ? (
-        <Carousel className="w-full" opts={{ align: "start" }}>
-          <CarouselContent className="-ml-3">
-            {filteredHotels.map((hotel) => (
-              <CarouselItem key={hotel._id} className="pl-3 md:basis-1/4">
-                <Link
-                  href={hotel.imageClickLink || "#"}
-                  target={hotel.imageClickLink ? "_blank" : "_self"}
-                  rel="noopener noreferrer"
-                  className="group block cursor-pointer"
-                >
-                  <div className="relative mb-3 md:h-60 h-80 w-full overflow-hidden rounded-xl">
-                    {hotel.image?.url ? (
-                      <img
-                        src={hotel.image.url}
-                        alt={hotel.name}
-                        className="h-full w-full object-contain md:object-contain transition-transform duration-500 group-hover:scale-110"
-                      />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center text-sm text-gray-400">
-                        No Image
-                      </div>
-                    )}
-                  </div>
-                  <h3 className="text-sm font-bold text-gray-900 md:text-base">{hotel.name}</h3>
-                  <p className="text-xs text-gray-500 md:text-sm">{hotel.location}</p>
-                </Link>
-              </CarouselItem>
+          <div className="mb-6 flex gap-5 overflow-x-auto border-b border-gray-200">
+            <button
+              onClick={() => setActiveCategory("All")}
+              className={`whitespace-nowrap border-b-2 pb-2.5 px-1 text-sm font-medium transition-colors ${activeCategory === "All"
+                ? "border-gray-900 text-gray-900"
+                : "border-transparent text-gray-500 hover:text-gray-700"
+                }`}
+            >
+              All
+            </button>
+            {hotelCategories.map((cat, key) => (
+              <button
+                key={cat._id || key}
+                onClick={() => setActiveCategory(cat.name)}
+                className={`whitespace-nowrap border-b-2 pb-2.5 px-1 text-sm font-medium transition-colors ${activeCategory === cat.name
+                  ? "border-gray-900 text-gray-900"
+                  : "border-transparent text-gray-500 hover:text-gray-700"
+                  }`}
+              >
+                {cat.name}
+              </button>
             ))}
-          </CarouselContent>
-          <CarouselPrevious className="!-left-3 !top-1/3 z-10 !-translate-y-1/2 rounded-full bg-white/90 shadow-md hover:bg-white" />
-          <CarouselNext className="!-right-3 !top-1/3 z-10 !-translate-y-1/2 rounded-full bg-white/90 shadow-md hover:bg-white" />
-        </Carousel>
-      ) : (
-        <p className="py-8 text-center text-gray-400">No popular destinations found in this category.</p>
-      )}
-    </section>
+          </div>
+
+          {hotelsLoading ? (
+            <div className="grid grid-cols-2 gap-5 md:grid-cols-4">
+              {Array.from({ length: 4 }).map((_, index) => (
+                <div key={index} className="animate-pulse">
+                  <div className="mb-3 h-48 w-full rounded-xl bg-gray-200" />
+                  <div className="mb-2 h-4 w-3/4 rounded bg-gray-200" />
+                  <div className="h-3 w-1/2 rounded bg-gray-200" />
+                </div>
+              ))}
+            </div>
+          ) : filteredHotels.length > 0 ? (
+            <Carousel className="w-full" opts={{ align: "start" }}>
+              <CarouselContent className="-ml-3">
+                {filteredHotels.map((hotel) => (
+                  <CarouselItem key={hotel._id} className="pl-3 md:basis-1/4">
+                    <Link
+                      href={hotel.imageClickLink || "#"}
+                      target={hotel.imageClickLink ? "_blank" : "_self"}
+                      rel="noopener noreferrer"
+                      className="group block cursor-pointer"
+                    >
+                      <div className="relative mb-3 md:h-60 h-80 w-full overflow-hidden rounded-xl">
+                        {hotel.image?.url ? (
+                          <img
+                            src={hotel.image.url}
+                            alt={hotel.name}
+                            className="h-full w-full object-contain md:object-contain transition-transform duration-500 group-hover:scale-110"
+                          />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center text-sm text-gray-400">
+                            No Image
+                          </div>
+                        )}
+                      </div>
+                      <h3 className="text-sm font-bold text-gray-900 md:text-base">{hotel.name}</h3>
+                      <p className="text-xs text-gray-500 md:text-sm">{hotel.location}</p>
+                    </Link>
+                  </CarouselItem>
+                ))}
+              </CarouselContent>
+              <CarouselPrevious className="!-left-3 !top-1/3 z-10 !-translate-y-1/2 rounded-full bg-white/90 shadow-md hover:bg-white" />
+              <CarouselNext className="!-right-3 !top-1/3 z-10 !-translate-y-1/2 rounded-full bg-white/90 shadow-md hover:bg-white" />
+            </Carousel>
+          ) : (
+            <p className="py-8 text-center text-gray-400">No popular destinations found in this category.</p>
+          )}
+        </section>
       )}
     </>
   );
@@ -361,27 +361,27 @@ const WebPage = ({ data }) => {
     return (
       <div className="min-h-screen bg-[#fcfcfc] font-geist text-gray-900">
         {/* Top Banner */}
-        <div 
-          className="relative h-[250px] md:h-[400px] w-full bg-cover bg-center flex items-end pb-10 pl-6 md:pl-20"
+        <div
+          className="relative h-[250px] md:h-100 w-full bg-cover bg-center flex items-end pb-10 pl-6 md:pl-20"
           style={{ backgroundImage: `url(${data.bannerImage?.url || data.imageFirst?.url || ''})` }}
         >
           <div className="absolute inset-0 bg-black/5"></div>
           <div className="relative z-10 text-white">
-            <h1 className="text-4xl md:text-5xl font-bold mb-2">{data.secondTitle||""}</h1>
-            <p className="text-md md:text-lg font-semibold">Home : {data.firstTitle ||""}</p>
+            <h1 className="text-4xl md:text-5xl font-bold mb-2">{data.secondTitle || ""}</h1>
+            <p className="text-md md:text-lg font-semibold">Home : {data.firstTitle || ""}</p>
           </div>
         </div>
 
         {/* Main Content Area */}
         <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8 grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-10">
-          
+
           {/* Left Column */}
           <div className="space-y-8 border-r border-gray-900 px-5">
             {/* Heading & Paragraph */}
             <div>
               <h2 className="text-xl md:text-2xl font-bold text-gray-900 mb-4">{design4Paragraph.title}</h2>
               <HtmlBlock html={design4Paragraph.description} className="text-gray-600 mb-6" />
-              
+
               {/* Bullet Points */}
               {design4Paragraph.bulletPoints?.length > 0 && (
                 <ul className="space-y-3 mt-4">
@@ -402,7 +402,7 @@ const WebPage = ({ data }) => {
               <div className="space-y-4">
                 {data.notices.map((notice, idx) => {
                   const getNoticeStyles = (type) => {
-                    switch(type) {
+                    switch (type) {
                       case 'warning': return 'border-orange-200 bg-orange-50 text-orange-800';
                       case 'info': return 'border-blue-200 bg-blue-50 text-blue-800';
                       case 'danger': return 'border-red-200 bg-red-50 text-red-800';
@@ -471,9 +471,9 @@ const WebPage = ({ data }) => {
           <div className="space-y-6">
             {/* Images */}
             {design4Images.map((imgUrl, idx) => (
-              <img key={idx} src={imgUrl} alt={`Section Image ${idx+1}`} className="w-full h-auto object-cover rounded-md" />
+              <img key={idx} src={imgUrl} alt={`Section Image ${idx + 1}`} className="w-full h-auto object-cover rounded-md" />
             ))}
-            
+
             {data.advertisementImage?.url && (
               <img src={data.advertisementImage.url} alt="Advertisement" className="w-full h-auto object-cover rounded-md mt-4" />
             )}
@@ -484,8 +484,8 @@ const WebPage = ({ data }) => {
                 <h3 className="font-bold text-gray-900 text-lg mb-2">Search Location</h3>
                 <div className="bg-white border-t border-black border-b">
                   <div className="flex justify-between items-center border-b border-black px-2 py-2 text-xs font-bold text-black">
-                     <span>Location 1</span>
-                     <span>Total Count &gt;</span>
+                    <span>Location 1</span>
+                    <span>Total Count &gt;</span>
                   </div>
                   {data.searchLocations.map((loc, idx) => (
                     <div key={idx} className="flex justify-between items-center border-b border-gray-300 last:border-b-0 px-2 py-2 text-xs font-semibold text-black">
@@ -510,20 +510,20 @@ const WebPage = ({ data }) => {
     return (
       <div className="min-h-screen bg-[#f9f9f9] font-geist text-gray-900">
         {/* Top Banner */}
-        <div 
-          className="relative h-[250px] md:h-[400px] w-full bg-cover bg-center flex items-end pb-10 pl-6 md:pl-20"
+        <div
+          className="relative h-[250px] md:h-100 w-full bg-cover bg-center flex items-end pb-10 pl-6 md:pl-20"
           style={{ backgroundImage: `url(${data.bannerImage?.url || data.imageFirst?.url || ''})` }}
         >
           <div className="absolute inset-0 bg-black/40"></div>
           <div className="relative z-10 text-white">
-        <h1 className="text-4xl md:text-5xl font-bold mb-2">{data.secondTitle||""}</h1>
-            <p className="text-md md:text-lg font-semibold">{data.firstTitle ||""}</p>
+            <h1 className="text-4xl md:text-5xl font-bold mb-2">{data.secondTitle || ""}</h1>
+            <p className="text-md md:text-lg font-semibold">{data.firstTitle || ""}</p>
           </div>
         </div>
 
         {/* Main Content Area */}
         <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
-          
+
           {/* Top Text Section */}
           <div className="mb-12 max-w-3xl">
             {isFilledText(data.design5Chip) && (
@@ -531,7 +531,7 @@ const WebPage = ({ data }) => {
                 {data.design5Chip}
               </div>
             )}
-            
+
             {isFilledText(data.design5MainHeading) && (
               <h2 className="text-2xl md:text-4xl font-serif text-gray-800 leading-snug">
                 {data.design5MainHeading}
@@ -546,10 +546,10 @@ const WebPage = ({ data }) => {
                 <div key={idx} className="group flex flex-col cursor-pointer">
                   <div className="w-full h-64 md:h-80 overflow-hidden mb-6">
                     {card.image?.url ? (
-                      <img 
-                        src={card.image.url} 
-                        alt={card.title} 
-                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" 
+                      <img
+                        src={card.image.url}
+                        alt={card.title}
+                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                       />
                     ) : (
                       <div className="w-full h-full bg-gray-200 flex items-center justify-center text-gray-400">
@@ -557,7 +557,7 @@ const WebPage = ({ data }) => {
                       </div>
                     )}
                   </div>
-                  
+
                   <div className="flex justify-between items-start">
                     <div>
                       {isFilledText(card.chipName) && (
@@ -565,12 +565,12 @@ const WebPage = ({ data }) => {
                           {card.chipName}
                         </div>
                       )}
-                      
+
                       <h3 className="text-xl md:text-2xl font-semibold text-gray-800">
                         {card.title}
                       </h3>
                     </div>
-                    
+
                     {isFilledText(card.link) && (
                       <a href={card.link} className="flex items-center gap-1 text-sm font-semibold text-gray-700 hover:text-black mt-2">
                         Explore More
@@ -584,7 +584,7 @@ const WebPage = ({ data }) => {
               ))}
             </div>
           )}
-          
+
         </div>
 
         {/* <PopularDestinations /> */}
@@ -596,20 +596,20 @@ const WebPage = ({ data }) => {
     return (
       <div className="min-h-screen bg-[#f9f9f9] font-geist text-gray-900">
         {/* Top Banner */}
-        <div 
-          className="relative h-[250px] md:h-[400px] w-full bg-cover bg-center flex items-end pb-10 pl-6 md:pl-20"
+        <div
+          className="relative h-[250px] md:h-100 w-full bg-cover bg-center flex items-end pb-10 pl-6 md:pl-20"
           style={{ backgroundImage: `url(${data.bannerImage?.url || data.imageFirst?.url || ''})` }}
         >
           <div className="absolute inset-0 bg-black/5"></div>
           <div className="relative z-10 text-white">
-            <h1 className="text-4xl md:text-5xl font-bold mb-2">{data.secondTitle||""}</h1>
-            <p className="text-md md:text-lg font-semibold">{data.firstTitle|""}</p>
+            <h1 className="text-4xl md:text-5xl font-bold mb-2">{data.secondTitle || ""}</h1>
+            <p className="text-md md:text-lg font-semibold">{data.firstTitle | ""}</p>
           </div>
         </div>
 
         {/* Main Content Area */}
         <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
-          
+
           {/* Top Section */}
           <div className="mb-12 max-w-7xl">
             <div className="flex justify-between items-start mb-6">
@@ -627,7 +627,7 @@ const WebPage = ({ data }) => {
                 </a>
               )}
             </div>
-            
+
             {isFilledText(data.design6MainHeading) && (
               <h2 className="text-3xl md:text-5xl font-serif text-gray-800 leading-tight mb-6">
                 {data.design6MainHeading}
@@ -673,10 +673,10 @@ const WebPage = ({ data }) => {
                 <div key={idx} className="bg-white border border-gray-200 rounded-sm overflow-hidden flex flex-col">
                   <div className="w-full aspect-[4/5] overflow-hidden bg-gray-100 hover:scale-105 duration-300 ease-in-out">
                     {card.image?.url ? (
-                      <img 
-                        src={card.image.url} 
-                        alt={card.name} 
-                        className="w-full h-full object-cover" 
+                      <img
+                        src={card.image.url}
+                        alt={card.name}
+                        className="w-full h-full object-cover"
                       />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center text-gray-400">
@@ -684,7 +684,7 @@ const WebPage = ({ data }) => {
                       </div>
                     )}
                   </div>
-                  
+
                   <div className="p-4 flex-grow flex flex-col justify-center text-start items-start">
                     <h3 className="text-lg font-bold text-gray-800 mb-1">
                       {card.name}
@@ -707,7 +707,7 @@ const WebPage = ({ data }) => {
                     ) : (
                       <div></div>
                     )}
-                    
+
                     <div className="flex gap-2">
                       {isFilledText(card.facebook) && (
                         <a href={card.facebook} target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-blue-600">
@@ -736,7 +736,7 @@ const WebPage = ({ data }) => {
               ))}
             </div>
           )}
-          
+
         </div>
 
         {/* <PopularDestinations /> */}
@@ -748,20 +748,20 @@ const WebPage = ({ data }) => {
     return (
       <div className="min-h-screen bg-[#fcfaf7] font-geist text-gray-900">
         {/* Top Banner */}
-        <div 
-          className="relative h-[250px] md:h-[400px] w-full bg-cover bg-center flex items-end pb-10 pl-6 md:pl-20"
+        <div
+          className="relative h-[250px] md:h-100 w-full bg-cover bg-center flex items-end pb-10 pl-6 md:pl-20"
           style={{ backgroundImage: `url(${data.bannerImage?.url || data.imageFirst?.url || ''})` }}
         >
           <div className="absolute inset-0 bg-black/40"></div>
           <div className="relative z-10 text-white">
-            <h1 className="text-4xl md:text-5xl font-bold mb-2">{data.secondTitle||""}</h1>
-            <p className="text-md md:text-lg font-semibold">{data.firstTitle ||""}</p>
+            <h1 className="text-4xl md:text-5xl font-bold mb-2">{data.secondTitle || ""}</h1>
+            <p className="text-md md:text-lg font-semibold">{data.firstTitle || ""}</p>
           </div>
         </div>
 
         {/* Main Content Area */}
         <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
-          
+
           {/* Top Section */}
           <div className="mb-12 max-w-7xl">
             <div className="flex justify-between items-start mb-6">
@@ -779,7 +779,7 @@ const WebPage = ({ data }) => {
                 </a>
               )}
             </div>
-            
+
             {isFilledText(data.design7MainHeading) && (
               <h2 className="text-3xl md:text-5xl font-serif text-gray-800 leading-tight mb-6 max-w-3xl">
                 {data.design7MainHeading}
@@ -796,17 +796,17 @@ const WebPage = ({ data }) => {
               {data.gridCards.map((card, idx) => (
                 <div key={idx} className="relative group overflow-hidden bg-gray-100 aspect-square">
                   {card.image?.url ? (
-                    <img 
-                      src={card.image.url} 
-                      alt={card.title} 
-                      className="w-full h-full object-cover transition-transform duration-500 ease-in-out group-hover:scale-110" 
+                    <img
+                      src={card.image.url}
+                      alt={card.title}
+                      className="w-full h-full object-cover transition-transform duration-500 ease-in-out group-hover:scale-110"
                     />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-gray-400">
                       No Image
                     </div>
                   )}
-                  
+
                   {/* Hover Overlay Box */}
                   <div className="absolute bottom-0 left-0 w-[90%] bg-white p-5 transform translate-y-[100%] transition-transform duration-500 ease-in-out group-hover:translate-y-0 shadow-lg">
                     {isFilledText(card.chipName) && (
@@ -824,7 +824,7 @@ const WebPage = ({ data }) => {
               ))}
             </div>
           )}
-          
+
         </div>
 
         {/* <PopularDestinations /> */}

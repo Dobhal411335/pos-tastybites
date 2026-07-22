@@ -1,5 +1,5 @@
 import { withAuth } from "@/utils/auth";
-import Employee from "@/models/Employee";
+import Employee from "@/models/employee/Employee";
 import { hashPassword } from "@/utils/password";
 import { sendSuccess } from "@/utils/apiResponse";
 import { sendError } from "@/utils/errorHandler";

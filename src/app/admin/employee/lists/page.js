@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { ArrowLeft, Trash2, Loader2, MoreHorizontal, UserCheck, Mail, Phone, ShieldAlert, Edit2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -10,28 +10,41 @@ import { Badge } from "@/components/ui/badge";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { PALETTE } from "@/utils/paletteeColor";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import DeleteDialog from "@/components/common/DeleteDialog";
 
 export default function EmployeeListPage() {
   const [employees, setEmployees] = useState([]);
+  const [roles, setRoles] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [employeeToDelete, setEmployeeToDelete] = useState(null);
 
-  const fetchEmployees = async () => {
+  const fetchInitialData = useCallback(async () => {
     try {
-      const res = await fetch("/api/employees");
-      const json = await res.json();
-      if (json.success) {
-        setEmployees(json.data);
+      const [empRes, rolesRes] = await Promise.all([
+        fetch("/api/employees"),
+        fetch("/api/roles")
+      ]);
+      const empJson = await empRes.json();
+      const rolesJson = await rolesRes.json();
+      
+      if (empJson.success) {
+        setEmployees(empJson.data);
+      }
+      if (rolesJson.success) {
+        setRoles(rolesJson.data);
       }
     } catch (err) {
-      toast.error("Failed to load employee records.");
+      toast.error("Failed to load records.");
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    fetchEmployees();
-  }, []);
+    fetchInitialData();
+  }, [fetchInitialData]);
 
   const handleToggleStatus = async (id, currentStatus) => {
     const nextStatus = currentStatus === "Active" ? "Terminated" : "Active";
@@ -44,7 +57,7 @@ export default function EmployeeListPage() {
       const json = await res.json();
       if (json.success) {
         toast.success(`Employee status updated to ${nextStatus}`);
-        fetchEmployees();
+        fetchInitialData();
       } else {
         toast.error(json.message || "Failed to update status.");
       }
@@ -53,30 +66,58 @@ export default function EmployeeListPage() {
     }
   };
 
-  const handleDeleteUser = async (id) => {
-    if (!confirm("Are you sure you want to delete this employee? This action cannot be undone.")) return;
+  const handleRoleChange = async (id, newRole) => {
+    try {
+      const res = await fetch("/api/employees", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ _id: id, role: newRole }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        toast.success("Role updated successfully.");
+        // Update local state without re-fetching everything
+        setEmployees(employees.map(emp => emp._id === id ? { ...emp, role: newRole } : emp));
+      } else {
+        toast.error(json.message || "Failed to update role.");
+      }
+    } catch (err) {
+      toast.error("Failed to update role.");
+    }
+  };
+
+  const handleDeleteUser = (id) => {
+    setEmployeeToDelete(id);
+    setIsDeleteDialogOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!employeeToDelete) return;
 
     try {
-      const res = await fetch(`/api/employees?id=${id}`, {
+      const res = await fetch(`/api/employees?id=${employeeToDelete}`, {
         method: "DELETE",
       });
       const json = await res.json();
       if (json.success) {
         toast.success("Employee record deleted.");
-        setEmployees(employees.filter((emp) => emp._id !== id));
+        setEmployees(employees.filter((emp) => emp._id !== employeeToDelete));
       } else {
         toast.error(json.message || "Failed to delete employee.");
       }
     } catch (err) {
       toast.error("Failed to delete employee.");
+    } finally {
+      setIsDeleteDialogOpen(false);
+      setEmployeeToDelete(null);
     }
   };
 
   return (
     <div className="flex flex-col overflow-hidden min-h-screen" style={{ backgroundColor: PALETTE.canvas, color: PALETTE.ink }}>
       <div className="flex-1 overflow-y-auto p-8">
-        <div className="max-w-[1200px] mx-auto space-y-8 pb-16 font-sans">
-          
+        <div className="max-w-300 mx-auto space-y-8 pb-16 font-sans">
+
           {/* Header */}
           <div className="flex flex-col sm:flex-row justify-between sm:items-end gap-4 border-b border-zinc-200 pb-5">
             <div>
@@ -88,12 +129,6 @@ export default function EmployeeListPage() {
               </p>
             </div>
             <div className="flex gap-2">
-              <Button variant="outline" asChild className="h-10 px-4 font-semibold text-[15px] gap-2 hover:bg-zinc-50 border-zinc-200 text-zinc-700">
-                <Link href="/admin/dashboard">
-                  <ArrowLeft className="w-5 h-5" />
-                  Dashboard
-                </Link>
-              </Button>
               <Button asChild className="h-10 px-4 font-bold text-white transition-transform hover:scale-[1.02] shadow-sm flex items-center justify-center gap-2" style={{ backgroundColor: "#1e40af" }}>
                 <Link href="/admin/employee/create">
                   + Add Employee
@@ -124,6 +159,7 @@ export default function EmployeeListPage() {
                           <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6">Employee Details</TableHead>
                           <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6 text-center">Role</TableHead>
                           <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6 text-center">Status</TableHead>
+                          <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6 text-center">Color</TableHead>
                           <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6 text-center">Actions</TableHead>
                         </TableRow>
                       </TableHeader>
@@ -154,9 +190,25 @@ export default function EmployeeListPage() {
                                 </div>
                               </TableCell>
                               <TableCell className="px-6 text-center">
-                                <span className="inline-flex items-center justify-center bg-zinc-100 text-zinc-700 px-3 py-1 rounded-md text-[13px] font-bold border border-zinc-200">
-                                  {emp.role}
-                                </span>
+                                <Select 
+                                  value={emp.role} 
+                                  onValueChange={(newRole) => handleRoleChange(emp._id, newRole)}
+                                >
+                                  <SelectTrigger className="w-32.5 h-9 mx-auto bg-zinc-50 border-zinc-200 text-[13px] font-bold text-zinc-700">
+                                    <SelectValue placeholder="Select role" />
+                                  </SelectTrigger>
+                                  <SelectContent className="bg-white">
+                                    {roles.map(r => (
+                                      <SelectItem key={r.name} value={r.name}>
+                                        {r.name}
+                                      </SelectItem>
+                                    ))}
+                                    {/* Fallback if their role doesn't exist in roles collection */}
+                                    {!roles.some(r => r.name === emp.role) && emp.role && (
+                                      <SelectItem value={emp.role}>{emp.role}</SelectItem>
+                                    )}
+                                  </SelectContent>
+                                </Select>
                               </TableCell>
                               <TableCell className="px-6 text-center">
                                 {emp.status === "Active" && (
@@ -174,6 +226,15 @@ export default function EmployeeListPage() {
                                     Terminated
                                   </Badge>
                                 )}
+                              </TableCell>
+                              <TableCell className="px-6 text-center">
+                                <div className="flex items-center gap-2">
+                                  <div
+                                    className="w-6 h-6 rounded border border-zinc-300"
+                                    style={{ backgroundColor: emp.employeeColor }}
+                                  ></div>
+                                  <span className="text-sm font-medium text-zinc-700 capitalize">{emp.employeeColor || '-'}</span>
+                                </div>
                               </TableCell>
                               <TableCell className="px-6 text-center">
                                 <DropdownMenu>
@@ -209,6 +270,14 @@ export default function EmployeeListPage() {
           </div>
         </div>
       </div>
+
+      <DeleteDialog
+        isOpen={isDeleteDialogOpen}
+        onOpenChange={setIsDeleteDialogOpen}
+        onConfirm={confirmDelete}
+        title="Delete Employee"
+        description="Are you sure you want to delete this employee? This action cannot be undone."
+      />
     </div>
   );
 }

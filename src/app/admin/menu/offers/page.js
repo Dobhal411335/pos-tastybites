@@ -91,7 +91,7 @@ export default function CreatePromoOfferPage() {
     <div className="flex flex-col overflow-hidden min-h-screen" style={{ backgroundColor: PALETTE.canvas, color: PALETTE.ink }}>
 
       <div className="flex-1 overflow-y-auto p-8">
-        <div className="max-w-[1200px] mx-auto space-y-8 pb-16 font-sans">
+        <div className="max-w-300 mx-auto space-y-8 pb-16 font-sans">
 
           {/* Top Header & Back Button */}
           <div className="flex flex-col sm:flex-row justify-between sm:items-end gap-4 border-b border-zinc-200 pb-5">
@@ -351,13 +351,13 @@ export default function CreatePromoOfferPage() {
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className="w-40 bg-white">
                             <DropdownMenuItem className="text-[14px] font-medium cursor-pointer">
-                              <Edit/> Edit Promotions
+                              <Edit /> Edit Promotions
                             </DropdownMenuItem>
                             <DropdownMenuItem
                               className="text-[14px] font-medium text-red-600 focus:bg-red-500 focus:text-white cursor-pointer"
                               onClick={() => handleDeleteOffer(off.id)}
                             >
-                             <Trash/> Delete
+                              <Trash /> Delete
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>

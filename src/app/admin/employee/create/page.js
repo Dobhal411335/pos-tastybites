@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState,useEffect } from "react";
 import Link from "next/link";
 import { ArrowLeft, Loader2, UserPlus, Mail, Phone, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { PALETTE } from "@/utils/paletteeColor";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 export default function CreateServerAccountPage() {
   const router = useRouter();
@@ -19,46 +20,33 @@ export default function CreateServerAccountPage() {
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
+  const [countryCode, setCountryCode] = useState("+1");
   const [role, setRole] = useState("Staff");
   const [employeeColor, setEmployeeColor] = useState("#4ade80");
-  const [assignedFloor, setAssignedFloor] = useState("");
-  const [assignedTables, setAssignedTables] = useState([]);
   
-  const [floors, setFloors] = useState([]);
-  const [floorTables, setFloorTables] = useState([]);
+  const [roles, setRoles] = useState([]);
+  const [isAddRoleOpen, setIsAddRoleOpen] = useState(false);
+  const [newRoleName, setNewRoleName] = useState("");
+  const [addingRole, setAddingRole] = useState(false);
 
-  React.useEffect(() => {
-    // Fetch available floors
-    const fetchFloors = async () => {
+  useEffect(() => {
+    // Fetch available roles
+    const fetchInitialData = async () => {
       try {
-        const res = await fetch("/api/floor");
-        const json = await res.json();
-        if (json.success) setFloors(json.data);
+        const rolesRes = await fetch("/api/roles");
+        const rolesJson = await rolesRes.json();
+        if (rolesJson.success) {
+          setRoles(rolesJson.data);
+          if (!rolesJson.data.find(r => r.name === role) && rolesJson.data.length > 0) {
+            setRole(rolesJson.data[0].name);
+          }
+        }
       } catch (err) {
-        toast.error("Failed to fetch floors");
+        toast.error("Failed to fetch roles");
       }
     };
-    fetchFloors();
+    fetchInitialData();
   }, []);
-
-  React.useEffect(() => {
-    // Fetch tables when a floor is selected
-    const fetchTables = async () => {
-      if (!assignedFloor) {
-        setFloorTables([]);
-        setAssignedTables([]);
-        return;
-      }
-      try {
-        const res = await fetch(`/api/floor/tables?floorId=${assignedFloor}`);
-        const json = await res.json();
-        if (json.success) setFloorTables(json.data);
-      } catch (err) {
-        toast.error("Failed to fetch tables for floor");
-      }
-    };
-    fetchTables();
-  }, [assignedFloor]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -69,6 +57,7 @@ export default function CreateServerAccountPage() {
 
     setLoading(true);
     try {
+      const fullPhone = `${countryCode} ${phoneNumber.trim()}`;
       const res = await fetch("/api/employees", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -76,11 +65,9 @@ export default function CreateServerAccountPage() {
           firstName: firstName.trim(),
           lastName: lastName.trim(),
           email: email.trim(),
-          phoneNumber: phoneNumber.trim(),
+          phoneNumber: fullPhone,
           role: role,
-          employeeColor: employeeColor,
-          assignedFloor: assignedFloor || null,
-          assignedTables: assignedTables
+          employeeColor: employeeColor
         }),
       });
 
@@ -96,17 +83,41 @@ export default function CreateServerAccountPage() {
       setPhoneNumber("");
       setRole("Staff");
       setEmployeeColor("#4ade80");
-      setAssignedFloor("");
-      setAssignedTables([]);
 
       // Redirect to list page
       setTimeout(() => {
         router.push("/admin/employee");
-      }, 1000);
+      }, 2000);
     } catch (err) {
       toast.error(err.message || "Something went wrong.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleAddRole = async () => {
+    if (!newRoleName.trim()) return;
+    setAddingRole(true);
+    try {
+      const res = await fetch("/api/roles", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: newRoleName.trim() })
+      });
+      const json = await res.json();
+      if (json.success) {
+        setRoles([...roles, json.data]);
+        setRole(json.data.name);
+        setIsAddRoleOpen(false);
+        setNewRoleName("");
+        toast.success("Role added successfully");
+      } else {
+        toast.error(json.message || "Failed to add role");
+      }
+    } catch (err) {
+      toast.error("An error occurred while adding role");
+    } finally {
+      setAddingRole(false);
     }
   };
 
@@ -154,6 +165,7 @@ export default function CreateServerAccountPage() {
                       <Input
                         type="text"
                         placeholder="e.g. John"
+                        required
                         value={firstName}
                         onChange={(e) => setFirstName(e.target.value)}
                         className="pl-10 h-12 text-[15px] bg-white border-zinc-200 focus:ring-[#1e40af]"
@@ -170,6 +182,7 @@ export default function CreateServerAccountPage() {
                       <Input
                         type="text"
                         placeholder="e.g. Doe"
+                        required
                         value={lastName}
                         onChange={(e) => setLastName(e.target.value)}
                         className="pl-10 h-12 text-[15px] bg-white border-zinc-200 focus:ring-[#1e40af]"
@@ -188,6 +201,7 @@ export default function CreateServerAccountPage() {
                       <Input
                         type="email"
                         placeholder="e.g. john.doe@example.com"
+                        required
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                         className="pl-10 h-12 text-[15px] bg-white border-zinc-200 focus:ring-[#1e40af]"
@@ -199,52 +213,63 @@ export default function CreateServerAccountPage() {
                     <label className="text-[14px] font-semibold text-zinc-900">
                       Contact Number <span className="text-red-500">*</span>
                     </label>
-                    <div className="relative">
-                      <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-400" />
+                    <div className="flex relative">
+                      <Select value={countryCode} onValueChange={setCountryCode}>
+                        <SelectTrigger className="w-32 text-xs h-12 rounded-r-none border-r-0 border-zinc-200 focus:ring-0 focus:border-zinc-200 bg-zinc-50 font-medium">
+                          <SelectValue placeholder="+1" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-white">
+                          <SelectItem value="+1">🇨🇦 +1 (Canada/US)</SelectItem>
+                          <SelectItem value="+44">🇬🇧 +44 (UK)</SelectItem>
+                          <SelectItem value="+91">🇮🇳 +91 (India)</SelectItem>
+                          <SelectItem value="+61">🇦🇺 +61 (Australia)</SelectItem>
+                          <SelectItem value="+33">🇫🇷 +33 (France)</SelectItem>
+                          <SelectItem value="+49">🇩🇪 +49 (Germany)</SelectItem>
+                          <SelectItem value="+81">🇯🇵 +81 (Japan)</SelectItem>
+                          <SelectItem value="+52">🇲🇽 +52 (Mexico)</SelectItem>
+                          <SelectItem value="+971">🇦🇪 +971 (UAE)</SelectItem>
+                        </SelectContent>
+                      </Select>
                       <Input
                         type="tel"
-                        placeholder="e.g. +1 555-0199"
+                        placeholder="e.g. 555-0199"
+                        required
                         value={phoneNumber}
                         onChange={(e) => setPhoneNumber(e.target.value)}
-                        className="pl-10 h-12 text-[15px] bg-white border-zinc-200 focus:ring-[#1e40af]"
+                        className="h-12 text-[15px] bg-white rounded-l-none border-zinc-200 focus:ring-[#1e40af] flex-1"
                       />
                     </div>
                   </div>
                 </div>
 
-                <div className="space-y-2">
+                <div className=" flex items-center w-full gap-5">
+                  <div className="w-full">
                   <label className="text-[14px] font-semibold text-zinc-900 block">
                     Role <span className="text-red-500">*</span>
                   </label>
-                  <Select value={role} onValueChange={setRole}>
-                    <SelectTrigger className="w-full h-12 text-[15px] border-zinc-200 focus:ring-2 focus:ring-[#1e40af]">
-                      <SelectValue placeholder="Select role..." />
-                    </SelectTrigger>
-                    <SelectContent style={{ backgroundColor: PALETTE.canvas }}>
-                      <SelectItem value="Admin">Admin</SelectItem>
-                      <SelectItem value="Manager">Manager</SelectItem>
-                      <SelectItem value="Staff">Staff</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-2">
-                    <label className="text-[14px] font-semibold text-zinc-900 block">
-                      Assigned Floor
-                    </label>
-                    <Select value={assignedFloor} onValueChange={(val) => { setAssignedFloor(val); setAssignedTables([]); }}>
-                      <SelectTrigger className="w-full h-12 text-[15px] border-zinc-200 focus:ring-2 focus:ring-[#1e40af]">
-                        <SelectValue placeholder="Select a floor..." />
+                  <div className="flex gap-2">
+                    <Select value={role} onValueChange={setRole}>
+                      <SelectTrigger className="w-full h-12 text-[15px] border-zinc-200 focus:ring-2 focus:ring-[#1e40af] bg-white">
+                        <SelectValue placeholder="Select role..." />
                       </SelectTrigger>
-                      <SelectContent style={{ backgroundColor: PALETTE.canvas }}>
-                        {floors.map(f => (
-                          <SelectItem key={f._id} value={f._id}>{f.name}</SelectItem>
+                      <SelectContent className="bg-white">
+                        {roles.map(r => (
+                          <SelectItem key={r.name} value={r.name}>{r.name}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
+                    <Button
+                      type="button"
+                      onClick={() => setIsAddRoleOpen(true)}
+                      className="h-12 w-12 shrink-0 bg-stone-100 text-stone-600 hover:bg-stone-200 border border-stone-200"
+                    >
+                      <UserPlus className="h-5 w-5" />
+                    </Button>
+                  </div>
                   </div>
 
+                <div className="w-full gap-6">
                   <div className="space-y-2">
                     <label className="text-[14px] font-semibold text-zinc-900 block">
                       Employee Color
@@ -260,41 +285,7 @@ export default function CreateServerAccountPage() {
                     </div>
                   </div>
                 </div>
-
-                {assignedFloor && (
-                  <div className="space-y-2">
-                    <label className="text-[14px] font-semibold text-zinc-900 block">
-                      Assign Tables on Floor
-                    </label>
-                    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3">
-                      {floorTables.length === 0 ? (
-                        <p className="text-[13px] text-zinc-500 col-span-full">No tables found on this floor.</p>
-                      ) : (
-                        floorTables.map(t => {
-                          const isSelected = assignedTables.includes(t._id);
-                          return (
-                            <button
-                              key={t._id}
-                              type="button"
-                              onClick={() => {
-                                setAssignedTables(prev => 
-                                  prev.includes(t._id) ? prev.filter(id => id !== t._id) : [...prev, t._id]
-                                );
-                              }}
-                              className={`h-10 text-[13px] font-bold rounded-lg transition-colors border ${
-                                isSelected 
-                                  ? 'bg-[#1e40af] text-white border-[#1e40af]' 
-                                  : 'bg-white text-zinc-700 border-zinc-200 hover:border-zinc-300'
-                              }`}
-                            >
-                              {t.tableNumber}
-                            </button>
-                          );
-                        })
-                      )}
-                    </div>
-                  </div>
-                )}
+                </div>
 
                 <div className="pt-4 flex justify-end">
                   <Button
@@ -321,6 +312,38 @@ export default function CreateServerAccountPage() {
           </Card>
 
         </div>
+        <Dialog open={isAddRoleOpen} onOpenChange={setIsAddRoleOpen}>
+          <DialogContent className="sm:max-w-106.25 bg-white">
+            <DialogHeader>
+              <DialogTitle>Add New Role</DialogTitle>
+              <DialogDescription>
+                Create a new custom role for your restaurant.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-4 items-center gap-4">
+                <label htmlFor="name" className="text-right text-[14px] font-semibold text-zinc-900">
+                  Name
+                </label>
+                <Input
+                  id="name"
+                  value={newRoleName}
+                  onChange={(e) => setNewRoleName(e.target.value)}
+                  placeholder="e.g. Bartender"
+                  className="col-span-3 h-10 border-zinc-200 focus:ring-[#1e40af]"
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setIsAddRoleOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="button" onClick={handleAddRole} disabled={addingRole || !newRoleName.trim()} className="bg-[#1e40af] text-white hover:bg-[#1e40af]/90">
+                {addingRole ? "Saving..." : "Save Role"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );

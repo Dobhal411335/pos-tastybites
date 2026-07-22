@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { withEmployeeAuth } from '@/utils/employeeAuth';
-import EmployeeShift from '@/models/EmployeeShift';
+import EmployeeShift from '@/models/employee/EmployeeShift';
 
 const getMeHandler = async (request) => {
   try {

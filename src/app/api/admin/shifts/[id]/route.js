@@ -1,15 +1,15 @@
 import { NextResponse } from 'next/server';
-import dbConnect from '@/lib/db';
-import EmployeeShift from '@/models/EmployeeShift';
+import connectDB from '@/lib/db';
+import EmployeeShift from '@/models/employee/EmployeeShift';
 import { withAuth } from '@/utils/auth';
 
 const updateShiftHandler = async (request, context) => {
   try {
     const { id } = context.params;
     const body = await request.json();
-    
-    await dbConnect();
-    
+
+    await connectDB();
+
     const shift = await EmployeeShift.findOne({ _id: id, restaurant: request.restaurant });
     if (!shift) {
       return NextResponse.json({ success: false, message: 'Shift not found' }, { status: 404 });
@@ -22,7 +22,7 @@ const updateShiftHandler = async (request, context) => {
         status: 'Active',
         _id: { $ne: shift._id }
       });
-      
+
       if (activeShift) {
         return NextResponse.json({ success: false, message: 'Employee already has an active shift' }, { status: 409 });
       }
@@ -52,8 +52,8 @@ const updateShiftHandler = async (request, context) => {
 const deleteShiftHandler = async (request, context) => {
   try {
     const { id } = context.params;
-    
-    await dbConnect();
+
+    await connectDB();
 
     const shift = await EmployeeShift.findOne({ _id: id, restaurant: request.restaurant });
     if (!shift) {
@@ -62,9 +62,9 @@ const deleteShiftHandler = async (request, context) => {
 
     // Business rule: Cannot delete Active or Completed shifts
     if (['Active', 'Completed'].includes(shift.status)) {
-      return NextResponse.json({ 
-        success: false, 
-        message: 'Cannot delete an active or completed shift. Please cancel it instead.' 
+      return NextResponse.json({
+        success: false,
+        message: 'Cannot delete an active or completed shift. Please cancel it instead.'
       }, { status: 403 });
     }
 

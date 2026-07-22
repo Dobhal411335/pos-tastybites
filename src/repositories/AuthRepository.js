@@ -1,5 +1,5 @@
 import Admin from '@/models/Admin';
-import Employee from '@/models/Employee';
+import Employee from '@/models/employee/Employee';
 
 export class AuthRepository {
   async findAdminByEmail(email) {

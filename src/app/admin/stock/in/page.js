@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { toast , Toaster} from "sonner";
+import { toast, Toaster } from "sonner";
 import { PALETTE } from "@/utils/paletteeColor";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -48,7 +48,7 @@ export default function StockInPage() {
       <Toaster position="top-right" richColors />
 
       <div className="flex-1 overflow-y-auto p-8">
-        <div className="max-w-[1200px] mx-auto space-y-8 pb-16 font-sans">
+        <div className="max-w-300 mx-auto space-y-8 pb-16 font-sans">
 
           {/* Header */}
           <div className="flex flex-col sm:flex-row justify-between sm:items-end gap-4 border-b border-zinc-200 pb-5">

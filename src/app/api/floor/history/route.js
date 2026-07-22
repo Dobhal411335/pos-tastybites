@@ -1,5 +1,5 @@
 import { withAuth } from "@/utils/auth";
-import FloorHistory from "@/models/FloorHistory";
+import FloorHistory from "@/models/floor/FloorHistory";
 import { sendSuccess } from "@/utils/apiResponse";
 import { sendError } from "@/utils/errorHandler";
 import { logger } from "@/utils/logger";

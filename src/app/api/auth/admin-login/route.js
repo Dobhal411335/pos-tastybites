@@ -1,12 +1,12 @@
 import { AuthService } from '@/services/AuthService';
 import { sendSuccess } from '@/utils/apiResponse';
 import { sendError } from '@/utils/errorHandler';
-import dbConnect from '@/lib/db';
+import connectDB from '@/lib/db';
 import { setCookie } from '@/utils/cookies';
 
 export async function POST(request) {
   try {
-    await dbConnect();
+    await connectDB();
     const { email, password } = await request.json();
 
     if (!email || !password) {
@@ -19,7 +19,7 @@ export async function POST(request) {
     // Hardcode 1 day expiry, match with jwt.js if needed.
     // Assuming next/headers cookies are used in the app, but setCookie is a client/server wrapper.
     // In App Router API routes, we can just return a Set-Cookie header.
-    
+
     return Response.json(
       { success: true, message: 'Login successful', data: user },
       {

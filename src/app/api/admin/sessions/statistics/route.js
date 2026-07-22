@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server';
-import dbConnect from '@/lib/db';
-import EmployeeSession from '@/models/EmployeeSession';
+import connectDB from '@/lib/db';
+import EmployeeSession from '@/models/employee/EmployeeSession';
 import { withAuth } from '@/utils/auth';
 
 const getSessionStatistics = async (request) => {
   try {
-    await dbConnect();
+    await connectDB();
     const restaurantId = request.restaurant;
 
     const today = new Date();
@@ -41,8 +41,8 @@ const getSessionStatistics = async (request) => {
       }
     ]);
 
-    const averageSessionDuration = avgDurationResult.length > 0 
-      ? Math.round(avgDurationResult[0].avgDuration) 
+    const averageSessionDuration = avgDurationResult.length > 0
+      ? Math.round(avgDurationResult[0].avgDuration)
       : 0;
 
     return NextResponse.json({

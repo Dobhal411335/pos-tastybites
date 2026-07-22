@@ -1,7 +1,7 @@
 import { withAuth } from "@/utils/auth";
-import Table from "@/models/Table";
-import Floor from "@/models/Floor";
-import FloorHistory from "@/models/FloorHistory";
+import Table from "@/models/floor/Table";
+import Floor from "@/models/floor/Floor";
+import FloorHistory from "@/models/floor/FloorHistory";
 import { sendSuccess } from "@/utils/apiResponse";
 import { sendError } from "@/utils/errorHandler";
 import { logger } from "@/utils/logger";

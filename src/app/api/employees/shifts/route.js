@@ -1,10 +1,69 @@
 import { withAuth } from "@/utils/auth";
-import EmployeeShift from "@/models/EmployeeShift";
-import Employee from "@/models/Employee";
+import EmployeeShift from "@/models/employee/EmployeeShift";
+import Employee from "@/models/employee/Employee";
 import { sendSuccess } from "@/utils/apiResponse";
 import { sendError } from "@/utils/errorHandler";
 import { logger } from "@/utils/logger";
 import mongoose from "mongoose";
+
+// Helper function to recalculate all shifts for an employee in a given week
+async function calculateWeeklyHours(employeeId, restaurantId, targetDate) {
+  const d = new Date(targetDate);
+  const day = d.getDay();
+  // Set to previous Monday (or today if Monday). If Sunday (0), go back 6 days.
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1); 
+  const startOfWeek = new Date(d);
+  startOfWeek.setDate(diff);
+  startOfWeek.setHours(0, 0, 0, 0);
+
+  const endOfWeek = new Date(startOfWeek);
+  endOfWeek.setDate(startOfWeek.getDate() + 6);
+  endOfWeek.setHours(23, 59, 59, 999);
+
+  const shifts = await EmployeeShift.find({
+    employee: employeeId,
+    restaurant: restaurantId,
+    date: { $gte: startOfWeek, $lte: endOfWeek }
+  }).sort({ startTime: 1 });
+
+  let cumulativeHours = 0;
+  const bulkOps = [];
+
+  for (const shift of shifts) {
+    if (!shift.endTime) continue; // Can't calculate without end time
+
+    const durationMs = shift.endTime.getTime() - shift.startTime.getTime();
+    const shiftTotalHours = durationMs / (1000 * 60 * 60);
+
+    let reg = shiftTotalHours;
+    let ot = 0;
+
+    if (cumulativeHours >= 40) {
+      ot = shiftTotalHours;
+      reg = 0;
+    } else if (cumulativeHours + shiftTotalHours > 40) {
+      reg = 40 - cumulativeHours;
+      ot = shiftTotalHours - reg;
+    }
+
+    cumulativeHours += shiftTotalHours;
+
+    bulkOps.push({
+      updateOne: {
+        filter: { _id: shift._id },
+        update: { 
+          totalHours: Number(shiftTotalHours.toFixed(2)), 
+          regularHours: Number(reg.toFixed(2)), 
+          overtimeHours: Number(ot.toFixed(2)) 
+        }
+      }
+    });
+  }
+
+  if (bulkOps.length > 0) {
+    await EmployeeShift.bulkWrite(bulkOps);
+  }
+}
 
 // GET - List all shifts
 export const GET = withAuth(async (request) => {
@@ -79,8 +138,14 @@ export const POST = withAuth(async (request) => {
       notes: notes || "",
     });
 
+    await calculateWeeklyHours(employeeId, request.restaurant, new Date(date));
+
+    // Fetch the updated shift to return
+    const finalShift = await EmployeeShift.findById(newShift._id)
+      .populate("employee", "firstName lastName email role");
+
     logger.info(`Shift created for employee ${employeeId}`);
-    return sendSuccess(newShift, "Shift created successfully", 201);
+    return sendSuccess(finalShift, "Shift created successfully", 201);
   } catch (error) {
     logger.error("Failed to create shift", error);
     return sendError(error, "Failed to create shift", 500);
@@ -122,7 +187,12 @@ export const PUT = withAuth(async (request) => {
     if (status) updateData.status = status;
     if (notes !== undefined) updateData.notes = notes;
 
-    const updatedShift = await EmployeeShift.findByIdAndUpdate(_id, updateData, { new: true })
+    await EmployeeShift.findByIdAndUpdate(_id, updateData);
+    
+    // Recalculate hours for the week containing this shift
+    await calculateWeeklyHours(existingShift.employee, request.restaurant, existingShift.date);
+
+    const updatedShift = await EmployeeShift.findById(_id)
       .populate("employee", "firstName lastName email role");
 
     logger.info(`Shift updated for employee ${existingShift.employee}`);
@@ -148,6 +218,9 @@ export const DELETE = withAuth(async (request) => {
     if (!deletedShift) {
       return sendError(new Error("Not Found"), "Shift not found", 404);
     }
+
+    // Recalculate hours for the week to remove this shift's hours from the totals
+    await calculateWeeklyHours(deletedShift.employee, request.restaurant, deletedShift.date);
 
     logger.info(`Shift deleted: ${id}`);
     return sendSuccess(null, "Shift deleted successfully");

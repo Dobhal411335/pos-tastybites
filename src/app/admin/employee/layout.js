@@ -46,7 +46,7 @@ export default function UsersModuleLayout({ children }) {
       color: "bg-[#1E3A8A]",
       items: [
         { label: "Shifts & Scheduling", href: "/admin/employee/shifts" },
-        { label: "Table Assignment", href: "/admin/employee/table-assignment" },
+        { label: "Floor & Table Assignment", href: "/admin/employee/floor-table-assignment" },
         { label: "Device Assignment", href: "/admin/employee/device-assignment" },
       ],
     }

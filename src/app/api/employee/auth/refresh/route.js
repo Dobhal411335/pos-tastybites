@@ -1,14 +1,14 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import dbConnect from '@/lib/db';
+import connectDB from '@/lib/db';
 import { verifyToken, signToken } from '@/utils/jwt';
-import EmployeeSession from '@/models/EmployeeSession';
-import Employee from '@/models/Employee';
+import EmployeeSession from '@/models/employee/EmployeeSession';
+import Employee from '@/models/employee/Employee';
 
 export async function POST(request) {
   try {
-    await dbConnect();
-    
+    await connectDB();
+
     const cookieStore = await cookies();
     const refreshToken = cookieStore.get('employee_refresh_token')?.value;
 

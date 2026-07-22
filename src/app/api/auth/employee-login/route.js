@@ -1,10 +1,10 @@
 import { AuthService } from '@/services/AuthService';
 import { sendError } from '@/utils/errorHandler';
-import dbConnect from '@/lib/db';
+import connectDB from '@/lib/db';
 
 export async function POST(request) {
   try {
-    await dbConnect();
+    await connectDB();
     const { email, password } = await request.json();
 
     if (!email || !password) {

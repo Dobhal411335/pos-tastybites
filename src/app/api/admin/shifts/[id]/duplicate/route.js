@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import dbConnect from '@/lib/db';
-import EmployeeShift from '@/models/EmployeeShift';
+import connectDB from '@/lib/db';
+import EmployeeShift from '@/models/employee/EmployeeShift';
 import { withAuth } from '@/utils/auth';
 
 const duplicateShiftHandler = async (request, context) => {
@@ -8,9 +8,9 @@ const duplicateShiftHandler = async (request, context) => {
     const { id } = context.params;
     const body = await request.json();
     const { targetDate } = body;
-    
-    await dbConnect();
-    
+
+    await connectDB();
+
     const shift = await EmployeeShift.findOne({ _id: id, restaurant: request.restaurant });
     if (!shift) {
       return NextResponse.json({ success: false, message: 'Shift not found' }, { status: 404 });
@@ -30,7 +30,7 @@ const duplicateShiftHandler = async (request, context) => {
       const originalEnd = new Date(shift.endTime);
       newEnd = new Date(targetDate);
       newEnd.setHours(originalEnd.getHours(), originalEnd.getMinutes(), 0, 0);
-      
+
       // If the original shift crossed midnight, adjust the end date by 1 day
       if (originalEnd < originalStart) {
         newEnd.setDate(newEnd.getDate() + 1);

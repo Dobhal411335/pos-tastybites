@@ -56,10 +56,10 @@ export default function TodayOrderListPage() {
 
   return (
     <div className="flex flex-col overflow-hidden min-h-screen" style={{ backgroundColor: PALETTE.canvas, color: PALETTE.ink }}>
-      
+
       <div className="flex-1 overflow-y-auto p-8">
-        <div className="max-w-[1200px] mx-auto space-y-8 pb-16 font-sans">
-          
+        <div className="max-w-300 mx-auto space-y-8 pb-16 font-sans">
+
           {/* Header */}
           <div className="flex flex-col sm:flex-row justify-between sm:items-end gap-4 border-b border-zinc-200 pb-5">
             <div>
@@ -186,8 +186,8 @@ export default function TodayOrderListPage() {
         <div className="fixed inset-0 bg-zinc-900/40 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200">
           <Card className="w-full max-w-md shadow-2xl border-none overflow-hidden bg-white animate-in zoom-in-95 slide-in-from-bottom-4 duration-300">
             <CardHeader className="bg-zinc-50 border-b border-zinc-100 pb-4 relative">
-              <button 
-                onClick={() => setIsConfirmModalOpen(false)} 
+              <button
+                onClick={() => setIsConfirmModalOpen(false)}
                 className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-full hover:bg-zinc-200 text-zinc-500 transition-colors"
               >
                 <XCircle className="w-5 h-5" />
@@ -204,7 +204,7 @@ export default function TodayOrderListPage() {
                 </div>
                 <div className="text-right space-y-1">
                   <span className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider block">Date &amp; Time</span>
-                  <span className="font-bold text-[14px] text-zinc-700">{new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                  <span className="font-bold text-[14px] text-zinc-700">{new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                 </div>
               </div>
 
@@ -212,7 +212,7 @@ export default function TodayOrderListPage() {
                 <div className="space-y-4">
                   <div className="space-y-2">
                     <label className="text-[13px] font-semibold text-zinc-700">Guest Name</label>
-                    <Input 
+                    <Input
                       value={guestName}
                       onChange={(e) => setGuestName(e.target.value)}
                       placeholder="e.g. John Doe"
@@ -222,7 +222,7 @@ export default function TodayOrderListPage() {
 
                   <div className="space-y-2">
                     <label className="text-[13px] font-semibold text-zinc-700">Call Number</label>
-                    <Input 
+                    <Input
                       value={callNumber}
                       onChange={(e) => setCallNumber(e.target.value)}
                       placeholder="e.g. +1 234 567 8900"
@@ -252,7 +252,7 @@ export default function TodayOrderListPage() {
                 </div>
 
                 <div className="pt-4 flex gap-3">
-                  <Button 
+                  <Button
                     type="button"
                     variant="outline"
                     onClick={() => setIsConfirmModalOpen(false)}
@@ -260,7 +260,7 @@ export default function TodayOrderListPage() {
                   >
                     Cancel
                   </Button>
-                  <Button 
+                  <Button
                     type="submit"
                     className="flex-1 h-12 bg-[#1e40af] hover:bg-blue-900 text-white font-bold text-[15px] shadow-md transition-transform hover:scale-[1.02]"
                   >

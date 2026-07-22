@@ -78,7 +78,7 @@ export default function ProductsPage() {
 
         {/* PAGE CONTENT */}
         <main className="flex-1 overflow-y-auto p-8">
-          <div className="max-w-[1200px] mx-auto space-y-8">
+          <div className="max-w-300 mx-auto space-y-8">
 
             {/* Page Header */}
             <div className="flex items-end justify-between">

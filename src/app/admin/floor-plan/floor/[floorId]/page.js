@@ -761,7 +761,7 @@ export default function FloorPlanEditorPage({ params }) {
 
           {/* RIGHT SIDEBAR: Properties Panel */}
           {!isPreviewMode && (
-            <aside className="w-[300px] bg-white border-l border-stone-200 shrink-0 z-10 shadow-sm flex flex-col h-full overflow-hidden">
+            <aside className="w-75 bg-white border-l border-stone-200 shrink-0 z-10 shadow-sm flex flex-col h-full overflow-hidden">
               <div className="p-5 border-b border-stone-200 bg-stone-50/50">
                 <h2 className="text-[16px] font-bold text-stone-900">Properties</h2>
                 <p className="text-[13px] text-stone-500 mt-1">Configure selected element</p>

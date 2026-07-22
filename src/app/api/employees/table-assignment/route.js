@@ -1,5 +1,5 @@
 import { withAuth } from "@/utils/auth";
-import EmployeeShift from "@/models/EmployeeShift";
+import EmployeeShift from "@/models/employee/EmployeeShift";
 import { sendSuccess } from "@/utils/apiResponse";
 import { sendError } from "@/utils/errorHandler";
 import { logger } from "@/utils/logger";

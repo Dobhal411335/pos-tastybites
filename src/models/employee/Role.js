@@ -2,7 +2,8 @@ import mongoose from 'mongoose';
 
 const RoleSchema = new mongoose.Schema(
   {
-    name: { type: String, required: true, enum: ['ADMIN', 'MANAGER', 'WAITER', 'CASHIER', 'KITCHEN'] },
+    name: { type: String, required: true },
+    restaurant: { type: mongoose.Schema.Types.ObjectId, ref: 'Restaurant', required: true },
     permissions: [{ type: String }],
   },
   { timestamps: true }

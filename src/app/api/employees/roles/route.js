@@ -1,5 +1,5 @@
 import { withAuth } from "@/utils/auth";
-import Role from "@/models/Role";
+import Role from "@/models/employee/Role";
 import { sendSuccess } from "@/utils/apiResponse";
 import { sendError } from "@/utils/errorHandler";
 import { logger } from "@/utils/logger";
@@ -25,13 +25,7 @@ export const POST = withAuth(async (request) => {
       return sendError(new Error("Missing field"), "Role name is required", 400);
     }
 
-    // Role enum: ['ADMIN', 'MANAGER', 'WAITER', 'CASHIER', 'KITCHEN']
-    const validRoles = ['ADMIN', 'MANAGER', 'WAITER', 'CASHIER', 'KITCHEN'];
     const uppercaseName = name.toUpperCase();
-
-    if (!validRoles.includes(uppercaseName)) {
-      return sendError(new Error("Invalid Role"), `Role must be one of: ${validRoles.join(', ')}`, 400);
-    }
 
     const existing = await Role.findOne({ name: uppercaseName });
     if (existing) {
@@ -55,13 +49,17 @@ export const POST = withAuth(async (request) => {
 export const PUT = withAuth(async (request) => {
   try {
     const data = await request.json();
-    const { _id, permissions } = data;
+    const { _id, name, permissions } = data;
 
-    if (!_id || !permissions || !Array.isArray(permissions)) {
-      return sendError(new Error("Missing fields"), "Role ID and permissions array are required", 400);
+    if (!_id) {
+      return sendError(new Error("Missing field"), "Role ID is required", 400);
     }
 
-    const updatedRole = await Role.findByIdAndUpdate(_id, { permissions }, { new: true });
+    const updateData = {};
+    if (name) updateData.name = name.toUpperCase();
+    if (permissions) updateData.permissions = permissions;
+
+    const updatedRole = await Role.findByIdAndUpdate(_id, updateData, { new: true });
     
     if (!updatedRole) {
       return sendError(new Error("Not Found"), "Role not found", 404);

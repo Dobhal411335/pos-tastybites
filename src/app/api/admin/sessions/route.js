@@ -1,14 +1,14 @@
 import { NextResponse } from 'next/server';
-import dbConnect from '@/lib/db';
-import EmployeeSession from '@/models/EmployeeSession';
+import connectDB from '@/lib/db';
+import EmployeeSession from '@/models/employee/EmployeeSession';
 import { withAuth } from '@/utils/auth';
 
 const getSessionsList = async (request) => {
   try {
-    await dbConnect();
+    await connectDB();
     const restaurantId = request.restaurant;
     const { searchParams } = new URL(request.url);
-    
+
     // Pagination
     const page = parseInt(searchParams.get('page') || '1', 10);
     const limit = parseInt(searchParams.get('limit') || '50', 10);

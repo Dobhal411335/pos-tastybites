@@ -2,7 +2,7 @@ import { verifyToken } from './jwt';
 import { cookies } from 'next/headers';
 import { sendError } from './errorHandler';
 import { runWithTenant } from '@/tenant/tenantContext';
-import dbConnect from '@/lib/db';
+import connectDB from '@/lib/db';
 
 /**
  * Higher-order function to wrap API routes with Authentication and Tenant Context.
@@ -11,8 +11,8 @@ import dbConnect from '@/lib/db';
 export const withAuth = (handler, allowedRoles = []) => {
   return async (request, context) => {
     try {
-      await dbConnect(); // Ensure DB is connected for every protected route
-      
+      await connectDB(); // Ensure DB is connected for every protected route
+
       const cookieStore = await cookies();
       const token = cookieStore.get('token')?.value;
 
