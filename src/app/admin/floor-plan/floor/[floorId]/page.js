@@ -231,6 +231,12 @@ function CanvasTable({ table, isSelected, onSelect, onResizeStart, zoom, isPrevi
         {!isStructural && (
           <span className="text-[10px] font-semibold text-stone-500 uppercase tracking-wider mt-0.5">{table.seats} Seats</span>
         )}
+        {table.assignedEmployee && (
+          <div className="mt-1 flex items-center justify-center gap-1 bg-white/90 px-1.5 py-0.5 rounded-full border shadow-sm max-w-full overflow-hidden" style={{ borderColor: table.assignedEmployee.employeeColor || '#ccc' }}>
+             <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: table.assignedEmployee.employeeColor || '#ccc' }} />
+             <span className="text-[9px] font-bold text-stone-700 truncate">{table.assignedEmployee.firstName}</span>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -245,8 +251,54 @@ export default function FloorPlanEditorPage({ params }) {
   const unwrappedParams = React.use(params);
   const floorId = unwrappedParams.floorId || "f1";
 
-  // Data State
-  const [tables, setTables] = useState(INITIAL_TABLES);
+  const [tables, setTables] = useState([]);
+  const [unassignedTables, setUnassignedTables] = useState([]);
+  const [floorData, setFloorData] = useState(null);
+
+  useEffect(() => {
+    const fetchLayoutAndTables = async () => {
+      try {
+        const [layoutRes, tablesRes] = await Promise.all([
+          fetch(`/api/floor/layout?floorId=${floorId}`),
+          fetch(`/api/floor/tables`)
+        ]);
+        const layoutJson = await layoutRes.json();
+        const tablesJson = await tablesRes.json();
+        
+        if (layoutJson.success && layoutJson.data.length > 0) {
+          const floor = layoutJson.data[0];
+          setFloorData(floor);
+          
+          const mappedTables = floor.tables.map(t => ({
+            id: t._id,
+            floorId: floor._id,
+            name: t.tableNumber,
+            type: t.shape === "rectangle" && t.width > 100 ? "booth" : t.shape,
+            seats: t.seats,
+            section: t.section || "Main",
+            status: t.status,
+            x: t.x,
+            y: t.y,
+            w: t.width,
+            h: t.height,
+            r: t.rotation,
+            locked: false,
+            assignedEmployee: t.assignedEmployee,
+            isShape: false
+          }));
+          setTables(mappedTables);
+        }
+
+        if (tablesJson.success) {
+          setUnassignedTables(tablesJson.data.filter(t => !t.floor));
+        }
+
+      } catch (err) {
+        toast.error("Failed to fetch floor data");
+      }
+    };
+    fetchLayoutAndTables();
+  }, [floorId]);
 
   // Editor State
   const [selectedTableId, setSelectedTableId] = useState(null);
@@ -291,8 +343,8 @@ export default function FloorPlanEditorPage({ params }) {
   };
 
   // Computed
-  const currentFloor = MOCK_FLOORS.find((f) => f.id === floorId) || MOCK_FLOORS[0];
-  const currentFloorTables = tables.filter((t) => t.floorId === currentFloor.id);
+  const currentFloor = floorData || MOCK_FLOORS.find((f) => f.id === floorId) || MOCK_FLOORS[0];
+  const currentFloorTables = tables;
   const selectedTable = tables.find((t) => t.id === selectedTableId);
 
   // DnD Sensors
@@ -364,9 +416,9 @@ export default function FloorPlanEditorPage({ params }) {
       const y = snap(pan.y * -1 + 200);
 
       const newElement = {
-        id: `t${Date.now()}`,
-        floorId: currentFloor.id,
-        name: tool.id === "round" || tool.id === "square" || tool.id === "rectangle" ? `T-${currentFloorTables.length + 1}` : tool.label,
+        id: `shape-${Date.now()}`,
+        floorId: currentFloor._id || currentFloor.id,
+        name: "Unassigned",
         type: tool.id,
         seats: tool.id.includes("round") ? 4 : 2,
         section: currentSection,
@@ -377,7 +429,9 @@ export default function FloorPlanEditorPage({ params }) {
         h: tool.h,
         r: 0,
         locked: false,
+        isShape: true, // Mark it as an unassigned shape
       };
+      
       setTables([...tables, newElement]);
       setSelectedTableId(newElement.id);
     } else if (active.data.current?.type === "table") {
@@ -395,6 +449,52 @@ export default function FloorPlanEditorPage({ params }) {
           return t;
         })
       );
+    }
+  };
+
+  const deleteTable = () => {
+    if (!selectedTableId) return;
+    saveHistory();
+    setTables((prev) => prev.filter((t) => t.id !== selectedTableId));
+    setSelectedTableId(null);
+    toast.success("Element deleted.");
+  };
+
+  const assignTable = async (dbTable) => {
+    if (!selectedTable) return;
+    try {
+      const res = await fetch("/api/floor/tables", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          _id: dbTable._id,
+          floor: floorId,
+          x: selectedTable.x,
+          y: selectedTable.y,
+          width: selectedTable.w,
+          height: selectedTable.h,
+          rotation: selectedTable.r,
+          shape: selectedTable.type === "booth" ? "rectangle" : selectedTable.type,
+          seats: selectedTable.seats,
+          section: selectedTable.section
+        })
+      });
+      const json = await res.json();
+      if (json.success) {
+        setTables(prev => prev.map(t => t.id === selectedTable.id ? { 
+          ...t, 
+          id: dbTable._id, 
+          name: dbTable.tableNumber,
+          isShape: false 
+        } : t));
+        setSelectedTableId(dbTable._id);
+        setUnassignedTables(prev => prev.filter(t => t._id !== dbTable._id));
+        toast.success(`Assigned ${dbTable.tableNumber} successfully!`);
+      } else {
+        toast.error(json.message || "Failed to assign table");
+      }
+    } catch (err) {
+      toast.error("Error assigning table");
     }
   };
 
@@ -420,11 +520,35 @@ export default function FloorPlanEditorPage({ params }) {
     setSelectedTableId(newTable.id);
   };
 
-  const deleteTable = () => {
-    if (!selectedTableId) return;
-    saveHistory();
-    setTables(tables.filter((t) => t.id !== selectedTableId));
-    setSelectedTableId(null);
+
+  const saveLayout = async () => {
+    try {
+      const updates = tables.map(t => ({
+        _id: t.id,
+        x: t.x,
+        y: t.y,
+        width: t.w,
+        height: t.h,
+        rotation: t.r,
+        seats: t.seats,
+        section: t.section,
+        shape: t.type === "booth" ? "rectangle" : t.type
+      })).filter(t => !t._id.startsWith("shape-") && !t._id.startsWith("temp-"));
+
+      const res = await fetch("/api/floor/layout", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ floorId: currentFloor._id || currentFloor.id, updates })
+      });
+      const json = await res.json();
+      if (json.success) {
+        toast.success("Layout saved successfully.");
+      } else {
+        toast.error(json.message || "Failed to save layout");
+      }
+    } catch (err) {
+      toast.error("An error occurred");
+    }
   };
 
   return (
@@ -468,7 +592,7 @@ export default function FloorPlanEditorPage({ params }) {
                   value={currentSection}
                   onChange={(e) => setCurrentSection(e.target.value)}
                 >
-                  {currentFloor.sections.map(s => <option key={s} value={s}>{s}</option>)}
+                  {(currentFloor.sections || ["Main"]).map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
               </div>
             </div>
@@ -504,7 +628,7 @@ export default function FloorPlanEditorPage({ params }) {
               <Button onClick={() => { setIsPreviewMode(true); setSelectedTableId(null); }} variant="outline" className="h-10 px-4 text-stone-700 border-stone-300 font-bold bg-white hover:bg-stone-50">
                 <Eye className="mr-2 h-4 w-4" /> Preview
               </Button>
-              <Button onClick={() => toast.success("Layout saved successfully.")} className="h-10 px-6 font-bold text-white transition-transform hover:scale-[1.02] shadow-sm" style={{ backgroundColor: "#1e40af" }}>
+              <Button onClick={saveLayout} className="h-10 px-6 font-bold text-white transition-transform hover:scale-[1.02] shadow-sm" style={{ backgroundColor: "#1e40af" }}>
                 <Save className="mr-2 h-4 w-4" /> Save Layout
               </Button>
             </div>
@@ -657,12 +781,29 @@ export default function FloorPlanEditorPage({ params }) {
                     <AccordionTrigger className="text-[14px] font-bold text-stone-900 hover:no-underline py-4">General</AccordionTrigger>
                     <AccordionContent className="space-y-5 pb-5">
                       <div className="space-y-2">
-                        <label className="text-[13px] font-bold text-stone-700">Table Name</label>
-                        <Input
-                          value={selectedTable.name}
-                          onChange={(e) => updateSelectedTable({ name: e.target.value })}
-                          className="h-10 text-[14px] bg-white border-stone-200 focus:ring-[#1e40af] focus:border-[#1e40af]"
-                        />
+                        <label className="text-[13px] font-bold text-stone-700">Table Name / Assignment</label>
+                        {selectedTable.isShape ? (
+                          <select
+                            className="w-full h-10 rounded-md border border-stone-200 bg-white px-3 py-1 text-[14px] outline-none focus:ring-2 focus:ring-[#1e40af] focus:border-[#1e40af]"
+                            onChange={(e) => {
+                              const t = unassignedTables.find(tbl => tbl._id === e.target.value);
+                              if (t) assignTable(t);
+                            }}
+                            defaultValue=""
+                          >
+                            <option value="" disabled>Select a table...</option>
+                            {unassignedTables.map(t => (
+                              <option key={t._id} value={t._id}>{t.tableNumber}</option>
+                            ))}
+                          </select>
+                        ) : (
+                          <Input
+                            value={selectedTable.name}
+                            onChange={(e) => updateSelectedTable({ name: e.target.value })}
+                            className="h-10 text-[14px] bg-white border-stone-200 focus:ring-[#1e40af] focus:border-[#1e40af]"
+                            disabled={!["kitchen", "door", "register", "bar", "wall", "divider"].includes(selectedTable.type)}
+                          />
+                        )}
                       </div>
                       <div className="space-y-2">
                         <label className="text-[13px] font-bold text-stone-700">Section</label>
@@ -671,7 +812,7 @@ export default function FloorPlanEditorPage({ params }) {
                           value={selectedTable.section}
                           onChange={(e) => updateSelectedTable({ section: e.target.value })}
                         >
-                          {currentFloor.sections.map(s => <option key={s} value={s}>{s}</option>)}
+                          {(currentFloor.sections || ["Main"]).map(s => <option key={s} value={s}>{s}</option>)}
                         </select>
                       </div>
                       {!["kitchen", "door", "register", "bar", "wall", "divider"].includes(selectedTable.type) && (

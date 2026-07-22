@@ -33,14 +33,23 @@ export default function UsersModuleLayout({ children }) {
 
   const sidebarGroups = [
     {
-      title: "Create User ( Server )",
+      title: "Employee Management",
       color: "bg-[#0F6B7A]",
       items: [
-        { label: "Create Server Account", href: "/admin/users/create" },
-        { label: "List Of Server Account", href: "/admin/users/list" }, 
-        { label: "Staff Management", href: "/admin/users/staff" },
+        { label: "All Employees", href: "/admin/employee/lists" },
+        { label: "Create Employee", href: "/admin/employee/create" },
+        { label: "Roles & Permissions", href: "/admin/employee/roles" },
       ],
     },
+    {
+      title: "Workforce",
+      color: "bg-[#1E3A8A]",
+      items: [
+        { label: "Shifts & Scheduling", href: "/admin/employee/shifts" },
+        { label: "Table Assignment", href: "/admin/employee/table-assignment" },
+        { label: "Device Assignment", href: "/admin/employee/device-assignment" },
+      ],
+    }
   ];
 
   return (

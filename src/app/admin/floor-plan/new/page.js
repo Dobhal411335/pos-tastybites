@@ -13,23 +13,64 @@ import { PALETTE } from "@/utils/paletteeColor";
 
 export default function CreateTablePage() {
   const [tableNumber, setTableNumber] = useState("");
-  const [tables, setTables] = useState([
-    { id: 1, tableNumber: "Table 1", status: "Active" },
-    { id: 2, tableNumber: "Table 2", status: "Active" },
-    { id: 3, tableNumber: "Table 3", status: "Inactive" },
-  ]);
+  const [tables, setTables] = useState([]);
 
-  const handleCreate = (e) => {
-    e.preventDefault();
-    if (!tableNumber.trim()) return;
-    setTables([...tables, { id: Date.now(), tableNumber: tableNumber.trim(), status: "Active" }]);
-    setTableNumber("");
-    toast.success("Table created successfully.");
+  React.useEffect(() => {
+    fetchTables();
+  }, []);
+
+  const fetchTables = async () => {
+    try {
+      const res = await fetch("/api/floor/tables");
+      const json = await res.json();
+      if (json.success) {
+        setTables(json.data);
+      }
+    } catch (err) {
+      toast.error("Failed to fetch tables");
+    }
   };
 
-  const handleDelete = (id) => {
-    setTables(tables.filter((t) => t.id !== id));
-    toast.success("Table deleted successfully.");
+  const handleCreate = async (e) => {
+    e.preventDefault();
+    if (!tableNumber.trim()) {
+      toast.error("Please enter a table number.");
+      return;
+    }
+    
+    try {
+      const res = await fetch("/api/floor/tables", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tableNumber: tableNumber.trim() })
+      });
+      const json = await res.json();
+      if (json.success) {
+        setTables([...tables, json.data]);
+        setTableNumber("");
+        toast.success(`Table ${json.data.tableNumber} created successfully!`);
+      } else {
+        toast.error(json.message || "Failed to create table");
+      }
+    } catch (err) {
+      toast.error("An error occurred");
+    }
+  };
+
+  const handleDelete = async (id) => {
+    if (!confirm("Are you sure you want to delete this table?")) return;
+    try {
+      const res = await fetch(`/api/floor/tables?id=${id}`, { method: "DELETE" });
+      const json = await res.json();
+      if (json.success) {
+        setTables(tables.filter((t) => t._id !== id));
+        toast.success("Table deleted successfully.");
+      } else {
+        toast.error(json.message || "Failed to delete table");
+      }
+    } catch (err) {
+      toast.error("An error occurred");
+    }
   };
 
   return (
@@ -114,41 +155,32 @@ export default function CreateTablePage() {
                         </TableRow>
                       ) : (
                         tables.map((t, index) => (
-                          <TableRow key={t.id} className="h-14 hover:bg-zinc-50 transition-colors">
+                          <TableRow key={t._id || index} className="h-14 hover:bg-zinc-50 transition-colors">
                             <TableCell className="px-6 text-center font-bold text-zinc-400 text-[13px]">{index + 1}</TableCell>
                             <TableCell className="px-6">
-                              <span className="font-bold text-[15px] text-zinc-900 uppercase tracking-wide">{t.tableNumber}</span>
+                              <span className="font-bold text-[15px] text-zinc-900">{t.tableNumber}</span>
                             </TableCell>
                             <TableCell className="px-6 text-center">
-                              {t.status === "Active" ? (
-                                <Badge className="bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border-none px-2.5 py-1 text-[12px] font-bold uppercase tracking-wide">
-                                  Active
-                                </Badge>
-                              ) : (
-                                <Badge className="bg-red-50 text-red-600 hover:bg-red-100 border-none px-2.5 py-1 text-[12px] font-bold uppercase tracking-wide">
-                                  Inactive
-                                </Badge>
-                              )}
+                              <Badge className="bg-emerald-50 text-emerald-600 border border-emerald-200 font-bold px-3 py-1">
+                                {t.status || "Available"}
+                              </Badge>
                             </TableCell>
-                            <TableCell className="px-6 text-center">
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="h-8 w-8 border text-zinc-500 hover:text-zinc-900 cursor-pointer">
-                                    <MoreHorizontal className="h-4 w-4" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end" className="w-40 bg-white">
-                                  <DropdownMenuItem className="text-[14px] font-medium cursor-pointer">
-                                    <Edit className="mr-2 h-4 w-4" /> Edit Table
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem
-                                    className="text-[14px] font-medium text-red-600 focus:bg-red-500 focus:text-white cursor-pointer"
-                                    onClick={() => handleDelete(t.id)}
-                                  >
-                                    <Trash2 className="mr-2 h-4 w-4" /> Delete
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
+                            <TableCell className="px-6">
+                              <div className="flex items-center justify-center">
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button variant="ghost" className="h-8 w-8 p-0 text-zinc-400 hover:text-zinc-600">
+                                      <span className="sr-only">Open menu</span>
+                                      <MoreHorizontal className="h-4 w-4" />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end" className="w-[160px] p-2 bg-white rounded-xl shadow-lg border border-zinc-100">
+                                    <DropdownMenuItem className="text-[13px] font-semibold text-red-600 focus:bg-red-50 focus:text-red-700 cursor-pointer p-2 rounded-md" onClick={() => handleDelete(t._id)}>
+                                      <Trash2 className="mr-2 h-4 w-4" /> Delete Table
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              </div>
                             </TableCell>
                           </TableRow>
                         ))

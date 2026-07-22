@@ -14,22 +14,65 @@ import { useRouter } from "next/navigation";
 export default function CreateFloorPage() {
   const router = useRouter();
   const [floorName, setFloorName] = useState("");
-  const [floors, setFloors] = useState([
-    { id: "f1", floorName: "Ground Floor", tableCount: 12 },
-    { id: "f2", floorName: "Patio", tableCount: 5 },
-  ]);
+  const [floors, setFloors] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const handleCreate = (e) => {
-    e.preventDefault();
-    if (!floorName.trim()) return;
-    setFloors([...floors, { id: `f${Date.now()}`, floorName: floorName.trim(), tableCount: 0 }]);
-    setFloorName("");
-    toast.success("Floor created successfully.");
+  React.useEffect(() => {
+    fetchFloors();
+  }, []);
+
+  const fetchFloors = async () => {
+    try {
+      const res = await fetch("/api/floor");
+      const json = await res.json();
+      if (json.success) {
+        setFloors(json.data);
+      }
+    } catch (err) {
+      toast.error("Failed to fetch floors");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleDelete = (id) => {
-    setFloors(floors.filter((f) => f.id !== id));
-    toast.success("Floor deleted successfully.");
+  const handleCreate = async (e) => {
+    e.preventDefault();
+    if (!floorName.trim()) return;
+
+    try {
+      const res = await fetch("/api/floor", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: floorName.trim() })
+      });
+      const json = await res.json();
+      
+      if (json.success) {
+        setFloors([...floors, { id: json.data._id, floorName: json.data.name, tableCount: 0 }]);
+        setFloorName("");
+        toast.success("Floor created successfully.");
+      } else {
+        toast.error(json.message || "Failed to create floor");
+      }
+    } catch (err) {
+      toast.error("An error occurred");
+    }
+  };
+
+  const handleDelete = async (id) => {
+    if (!confirm("Are you sure you want to delete this floor? All assigned tables will be unassigned.")) return;
+    try {
+      const res = await fetch(`/api/floor?id=${id}`, { method: "DELETE" });
+      const json = await res.json();
+      if (json.success) {
+        setFloors(floors.filter(f => f.id !== id));
+        toast.success("Floor deleted successfully.");
+      } else {
+        toast.error(json.message || "Failed to delete floor");
+      }
+    } catch (err) {
+      toast.error("An error occurred");
+    }
   };
 
   const handleEdit = (id) => {

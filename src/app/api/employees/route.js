@@ -1,95 +1,179 @@
 import { withAuth } from "@/utils/auth";
 import Employee from "@/models/Employee";
 import { hashPassword } from "@/utils/password";
+import { sendSuccess } from "@/utils/apiResponse";
+import { sendError } from "@/utils/errorHandler";
+import { logger } from "@/utils/logger";
+import mongoose from "mongoose";
 
-const createEmployeeHandler = async (request) => {
+// GET - List all employees
+export const GET = withAuth(async (request) => {
   try {
-    const { firstName, lastName, email, phone, password, role } = await request.json();
+    const { searchParams } = new URL(request.url);
+    const role = searchParams.get("role");
+    const status = searchParams.get("status");
 
-    if (!firstName || !lastName || !email) {
-      return Response.json(
-        { success: false, message: "First name, last name, and email are required" },
-        { status: 400 }
-      );
+    const query = { restaurant: request.restaurant };
+    if (role) query.role = role;
+    if (status) query.status = status;
+
+    const employees = await Employee.find(query)
+      .select("-password")
+      .populate("defaultFloor", "name")
+      .populate("assignedFloor", "name")
+      .populate("assignedTables", "tableNumber")
+      .lean();
+
+    return sendSuccess(employees, "Employees retrieved successfully");
+  } catch (error) {
+    logger.error("Failed to list employees", error);
+    return sendError(error, "Failed to retrieve employees", 500);
+  }
+}, ["ADMIN", "MANAGER"]);
+
+// POST - Create new employee
+export const POST = withAuth(async (request) => {
+  try {
+    const data = await request.json();
+    const { firstName, lastName, email, phoneNumber, role, password, status, profileImage, defaultFloor, employeeColor, assignedFloor, assignedTables } = data;
+
+    // Validation
+    if (!firstName || !lastName || !email || !phoneNumber) {
+      return sendError(new Error("Missing fields"), "First name, last name, email, and phone number are required", 400);
     }
 
-    // Check if email already exists
-    const existingEmployee = await Employee.findOne({ email });
-    if (existingEmployee) {
-      return Response.json(
-        { success: false, message: "User with this email already exists" },
-        { status: 400 }
-      );
+    // Check unique email and phone
+    const existingEmail = await Employee.findOne({ email: email.toLowerCase() });
+    if (existingEmail) {
+      return sendError(new Error("Conflict"), "Employee with this email already exists", 409);
     }
 
-    // Hash default or provided password
+    const existingPhone = await Employee.findOne({ phoneNumber });
+    if (existingPhone) {
+      return sendError(new Error("Conflict"), "Employee with this phone number already exists", 409);
+    }
+
+    // Generate unique employee ID (e.g., EMP-12345)
+    const count = await Employee.countDocuments({ restaurant: request.restaurant });
+    const employeeId = `EMP-${(count + 1).toString().padStart(4, "0")}`;
+
+    // Default password if not provided
     const rawPassword = password || "TempPassword123!";
     const hashedPassword = await hashPassword(rawPassword);
 
     const newEmployee = await Employee.create({
-      restaurantId: request.restaurant, // attached by withAuth middleware
+      employeeId,
+      restaurant: request.restaurant,
       firstName,
       lastName,
-      email,
-      phone: phone || "",
+      email: email.toLowerCase(),
+      phoneNumber,
       password: hashedPassword,
-      role: role || "WAITER",
-      status: "UNAPPROVED",
-      isActive: true,
+      role: role || "Staff",
+      status: status || "Active",
+      profileImage,
+      defaultFloor: defaultFloor || null,
+      employeeColor: employeeColor || "#4ade80",
+      assignedFloor: assignedFloor || null,
+      assignedTables: assignedTables || [],
     });
 
-    return Response.json(
-      {
-        success: true,
-        message: "Employee account created successfully (Unapproved)",
-        data: {
-          id: newEmployee._id,
-          firstName: newEmployee.firstName,
-          lastName: newEmployee.lastName,
-          email: newEmployee.email,
-          phone: newEmployee.phone,
-          status: newEmployee.status,
-        },
-      },
-      { status: 201 }
-    );
-  } catch (error) {
-    return Response.json(
-      { success: false, message: error.message },
-      { status: 500 }
-    );
-  }
-};
-
-// Also support GET to list employees for the admin's restaurant
-const listEmployeesHandler = async (request) => {
-  try {
-    const employees = await Employee.find({ restaurantId: request.restaurant }).lean();
-    return Response.json({ success: true, data: employees });
-  } catch (error) {
-    return Response.json({ success: false, message: error.message }, { status: 500 });
-  }
-};
-
-// Also support PUT to approve/suspend employees
-export const PUT = withAuth(async (request) => {
-  try {
-    const { id, status } = await request.json();
-    if (!id || !status) {
-      return Response.json({ success: false, message: "ID and status are required" }, { status: 400 });
+    // Update tables with this employee assignment
+    if (assignedTables && assignedTables.length > 0) {
+      await mongoose.model("Table").updateMany(
+        { _id: { $in: assignedTables }, restaurant: request.restaurant },
+        { $set: { assignedEmployee: newEmployee._id } }
+      );
+      logger.info(`Employee Assigned to tables: ${assignedTables.join(', ')}`);
     }
 
-    const updated = await Employee.findByIdAndUpdate(
-      id,
-      { status },
-      { new: true }
-    );
+    const employeeObj = newEmployee.toObject();
+    delete employeeObj.password;
 
-    return Response.json({ success: true, message: `Status updated to ${status}`, data: updated });
+    logger.info(`Employee created: ${email}`);
+    return sendSuccess(employeeObj, "Employee created successfully", 201);
   } catch (error) {
-    return Response.json({ success: false, message: error.message }, { status: 500 });
+    logger.error("Failed to create employee", error);
+    return sendError(error, "Failed to create employee", 500);
+  }
+}, ["ADMIN", "MANAGER"]);
+
+// PUT - Update employee
+export const PUT = withAuth(async (request) => {
+  try {
+    const data = await request.json();
+    const { _id, firstName, lastName, phoneNumber, role, status, profileImage, defaultFloor, employeeColor, assignedFloor, assignedTables } = data;
+
+    if (!_id) {
+      return sendError(new Error("Missing ID"), "Employee ID is required", 400);
+    }
+
+    // Ensure they belong to the same restaurant
+    const existing = await Employee.findOne({ _id, restaurant: request.restaurant });
+    if (!existing) {
+      return sendError(new Error("Not Found"), "Employee not found", 404);
+    }
+
+    const updateData = {
+      ...(firstName && { firstName }),
+      ...(lastName && { lastName }),
+      ...(phoneNumber && { phoneNumber }),
+      ...(role && { role }),
+      ...(status && { status }),
+      ...(profileImage && { profileImage }),
+      ...(defaultFloor && { defaultFloor }),
+      ...(employeeColor && { employeeColor }),
+      ...(assignedFloor !== undefined && { assignedFloor }),
+      ...(assignedTables && { assignedTables }),
+    };
+
+    const updatedEmployee = await Employee.findByIdAndUpdate(_id, updateData, { new: true }).select("-password");
+
+    // Manage Table Assignments
+    if (assignedTables !== undefined) {
+      // Unassign from old tables
+      await mongoose.model("Table").updateMany(
+        { assignedEmployee: _id, restaurant: request.restaurant },
+        { $set: { assignedEmployee: null } }
+      );
+      // Assign to new tables
+      if (assignedTables.length > 0) {
+        await mongoose.model("Table").updateMany(
+          { _id: { $in: assignedTables }, restaurant: request.restaurant },
+          { $set: { assignedEmployee: _id } }
+        );
+      }
+      logger.info(`Employee ${_id} assignments updated`);
+    }
+
+    logger.info(`Employee updated: ${existing.email}`);
+    return sendSuccess(updatedEmployee, "Employee updated successfully");
+  } catch (error) {
+    logger.error("Failed to update employee", error);
+    return sendError(error, "Failed to update employee", 500);
+  }
+}, ["ADMIN", "MANAGER"]);
+
+// DELETE - Remove employee
+export const DELETE = withAuth(async (request) => {
+  try {
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get("id");
+
+    if (!id) {
+      return sendError(new Error("Missing ID"), "Employee ID is required", 400);
+    }
+
+    const employee = await Employee.findOneAndDelete({ _id: id, restaurant: request.restaurant });
+
+    if (!employee) {
+      return sendError(new Error("Not Found"), "Employee not found", 404);
+    }
+
+    logger.info(`Employee deleted: ${employee.email}`);
+    return sendSuccess(null, "Employee deleted successfully");
+  } catch (error) {
+    logger.error("Failed to delete employee", error);
+    return sendError(error, "Failed to delete employee", 500);
   }
 }, ["ADMIN"]);
-
-export const POST = withAuth(createEmployeeHandler, ["ADMIN"]);
-export const GET = withAuth(listEmployeesHandler, ["ADMIN"]);

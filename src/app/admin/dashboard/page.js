@@ -34,6 +34,16 @@ import {
   ArrowRight,
   UserCircle,
   Tablet,
+  Settings,
+  UserPlus,
+  Gift,
+  FileText,
+  Edit,
+  Database,
+  PieChart,
+  Wallet,
+  Coffee,
+  Megaphone
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -316,43 +326,20 @@ export default function AdminDashboardPage() {
           </div>
 
           {/* ──────────────────────────────────────────
-              CORE MODULES (Bento Grid Style)
+              CORE MODULES MENU SERIES
              ────────────────────────────────────────── */}
           <section>
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-black text-slate-900">Core Modules</h2>
+              <h2 className="text-2xl font-black text-slate-900">Core Modules Menu Series</h2>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-              <ModuleCard
-                href="/admin/menu" icon={UtensilsCrossed}
-                color="orange" title="Menu Manager" stat="20 Categories"
-                desc="Curate your menu items, set pricing, and manage special offers."
-              />
-              <ModuleCard
-                href="/admin/orders" icon={ShoppingCart}
-                color="blue" title="Order Tracking" stat="Live Orders"
-                desc="Monitor kitchen tickets, track delivery dispatch, and review history."
-              />
-              <ModuleCard
-                href="/admin/employee" icon={Users}
-                color="indigo" title="Staff Portal" stat="6 Active"
-                desc="Manage schedules, roles, permissions, and payroll data."
-              />
-              <ModuleCard
-                href="/admin/reports" icon={BarChart3}
-                color="emerald" title="Analytics" stat="Real-time"
-                desc="Deep dive into sales metrics, performance graphs, and tax exports."
-              />
-              <ModuleCard
-                href="/admin/guests" icon={UserSearch}
-                color="rose" title="Guest Directory" stat="CRM"
-                desc="Track guest preferences, order history, and loyalty programs."
-              />
-              <ModuleCard
-                href="/admin/stock" icon={Boxes}
-                color="amber" title="Inventory" stat="Stock Alerts"
-                desc="Monitor ingredient levels and automated supplier purchase orders."
-              />
+              <ModuleCard href="/admin/menu" icon={UtensilsCrossed} color="orange" title="Create Menu" stat="Configure" desc="Configure categories, items, modifiers, pricing, and availability." />
+              <ModuleCard href="/admin/floor-plan" icon={LayoutGrid} color="amber" title="Floor Management" stat="Tables" desc="Setup dining sections, table layouts, seating capacities, and status tracking." />
+              <ModuleCard href="/admin/employee" icon={Users} color="indigo" title="Staff Portal" stat="Employees" desc="Manage employee profiles, access permissions, and designation matrices." />
+              <ModuleCard href="/admin/promotions" icon={Gift} color="rose" title="Season Promotions" stat="Offers" desc="Setup promotional codes, percentage/flat discounts, and happy hour schedules." />
+              <ModuleCard href="/admin/tax" icon={Percent} color="emerald" title="Configure Tax And Fees" stat="Tax" desc="Define applicable tax slabs (GST/VAT), service charges, and additional surcharges." />
+              <ModuleCard href="/admin/users" icon={UserPlus} color="blue" title="Master Admin Users" stat="Admins" desc="Setup super-admin accounts with system-wide configuration rights." />
+              <ModuleCard href="/admin/settings" icon={Settings} color="amber" title="System Settings & Integrations" stat="Setup" desc="Configure payment gateways, hardware peripherals, and receipt templates." />
             </div>
           </section>
 
@@ -362,27 +349,55 @@ export default function AdminDashboardPage() {
           <section>
             <h2 className="text-2xl font-black text-slate-900 mb-6">Restaurant Operations</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              <ModuleCard href="/admin/billing/admin" icon={Receipt} color="indigo" title="Admin Billing" stat="Invoices" desc="Manage administrator billing records and payment tracking." />
-              <ModuleCard href="/admin/billing/server" icon={CreditCard} color="blue" title="Server Billing" stat="Records" desc="Review server-processed billing records." />
-              <ModuleCard href="/admin/orders/online" icon={Globe} color="emerald" title="Online Orders" stat="Active" desc="Track and manage orders placed through the online system." />
-              <ModuleCard href="/admin/orders/staff" icon={ChefHat} color="orange" title="Staff Orders" stat="Queue" desc="Monitor internal staff meal orders and kitchen prep queue." />
-              <ModuleCard href="/admin/floor-plan" icon={LayoutGrid} color="amber" title="Floor Management" stat="Tables" desc="View and manage restaurant table layout and seating status." />
-              <ModuleCard href="/admin/devices" icon={Tablet} color="indigo" title="Device Setup" stat="Tablets" desc="Register and manage POS tablets and hardware devices." />
+              <ModuleCard href="/admin/billing/admin" icon={Receipt} color="indigo" title="Admin Billing" stat="Terminal" desc="High-privilege terminal for direct invoicing, final settlements, and bill overrides." />
+              <ModuleCard href="/admin/billing/server" icon={CreditCard} color="blue" title="Server Billing" stat="Floor" desc="Floor-level terminal for taking orders, splitting checks, and printing Kot/BoR slips." />
+              <ModuleCard href="/admin/orders/online" icon={Globe} color="emerald" title="Online Orders" stat="Queue" desc="Centralized dashboard to accept, review, and queue web or aggregator orders." />
+              <ModuleCard href="/admin/orders/staff" icon={ChefHat} color="orange" title="Staff Orders" stat="Internal" desc="Dedicated channel for recording employee meals or internal consumption." />
+              <ModuleCard href="/admin/orders" icon={ClipboardList} color="blue" title="Order Tracking" stat="Live" desc="Real-time visibility of order lifecycle from preparation to fulfillment." />
+              <ModuleCard href="/admin/invoices" icon={FileText} color="rose" title="Invoices" stat="Records" desc="Archive of historical bills, digital receipts, and transaction records." />
             </div>
           </section>
 
           {/* ──────────────────────────────────────────
-              QUICK ACTIONS
+              QUICK ACTIONS AND USEFUL
              ────────────────────────────────────────── */}
           <section>
-            <h2 className="text-2xl font-black text-slate-900 mb-6">Quick Actions</h2>
+            <h2 className="text-2xl font-black text-slate-900 mb-6">Quick Actions And Useful</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              <ModuleCard href="/admin/orders" icon={ClipboardList} color="blue" title="New Order" stat="Start" desc="Start a new food order for dine-in, takeaway, or delivery." />
-              <ModuleCard href="/admin/tax" icon={Percent} color="amber" title="Configure Tax" stat="Rules" desc="Set up tax rates, exemptions, and regional settings." />
-              <ModuleCard href="/admin/emails" icon={Mail} color="emerald" title="Promotions" stat="Active" desc="Send promotional emails and manage marketing campaigns." />
-              <ModuleCard href="/admin/web" icon={Store} color="blue" title="Web Console" stat="Settings" desc="Manage your restaurant website and SEO settings." />
-              <ModuleCard href="/admin/stock" icon={Boxes} color="emerald" title="Stock Control" stat="Alerts" desc="Monitor low stock alerts, reorder points, and supplier inventory." />
+              <ModuleCard href="/admin/stock" icon={Boxes} color="emerald" title="Stock Control" stat="Inventory" desc="Quick stock adjustments, item additions, and batch tracking." />
+              <ModuleCard href="/admin/menu" icon={Edit} color="orange" title="Update Menu / Price" stat="Edit" desc="Instant edits for item availability, descriptions, and dynamic pricing." />
+              <ModuleCard href="/admin/floor-plan" icon={Edit} color="amber" title="Update Floor Management" stat="Edit" desc="Quickly modify table arrangements or merge/split tables on the fly." />
+              <ModuleCard href="/admin/employee" icon={Edit} color="indigo" title="Update Staff Portal" stat="Edit" desc="Rapidly toggle active shifts, reset passwords, or reassign floor roles." />
               <ModuleCard onClick={handleLogout} icon={LogOut} color="rose" title="Sign Out" stat="Action" desc="Log out of the admin panel and return to the login screen." actionLabel="Sign Out" />
+            </div>
+          </section>
+
+          {/* ──────────────────────────────────────────
+              WEB PORTAL / USEFUL LINK
+             ────────────────────────────────────────── */}
+          <section>
+            <h2 className="text-2xl font-black text-slate-900 mb-6">Web Portal / Useful Link</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <ModuleCard href="/admin/web" icon={Store} color="blue" title="Web Console" stat="Cloud" desc="Direct secure link to the cloud management dashboard and remote reporting suite." />
+            </div>
+          </section>
+
+          {/* ──────────────────────────────────────────
+              REPORT MODULE
+             ────────────────────────────────────────── */}
+          <section>
+            <h2 className="text-2xl font-black text-slate-900 mb-6">Report Module</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <ModuleCard href="/admin/reports/guest" icon={UserSearch} color="rose" title="Guest Directory" stat="Reports" desc="Guest Database and Preferences Log." />
+              <ModuleCard href="/admin/reports/inventory" icon={Boxes} color="emerald" title="Inventory & Stock Reports" stat="Reports" desc="Current Stock Valuation, Low Stock Alerts, Movement Analysis, Receiving & PO Tracking." />
+              <ModuleCard href="/admin/reports/invoices" icon={Receipt} color="indigo" title="Day Invoices Record Reports" stat="Reports" desc="Sales Summary, Itemized Sales, Department Sales, Hourly Volume, Payment Breakdown, Voids & Refunds, Promotion Impact." />
+              <ModuleCard href="/admin/reports/employees" icon={Users} color="blue" title="Employee & Staff Reports Log" stat="Reports" desc="Sales Performance, Time & Attendance, Shift Handover Notes, Staff Order Processing." />
+              <ModuleCard href="/admin/reports/admin" icon={UserCheck} color="amber" title="Admin Record Log" stat="Reports" desc="Daily Business Summary, Manager's Daily Report, End-of-Day Report, Night Audit Report, Exception Fields." />
+              <ModuleCard href="/admin/reports/customer" icon={Database} color="rose" title="Customer & POS Reports" stat="Reports" desc="Purchase History, Loyalty Engagement, Retention Ratio, Fulfillment Exceptions." />
+              <ModuleCard href="/admin/reports/financial" icon={Wallet} color="emerald" title="Financial & Accounting Reports" stat="Reports" desc="Z-Report, X-Report, Tax Summary, Cash-Up Reconciliation, Customer Ledger, P&L, Revenue Breakdown." />
+              <ModuleCard href="/admin/reports/stock" icon={PieChart} color="orange" title="Stock Log" stat="Reports" desc="Top Sellers List, Reorder Breach Log, Price Override Log, Filtered Stock Audit." />
+              <ModuleCard href="/admin/reports/promotions" icon={Megaphone} color="blue" title="Promotions Advertisement Log" stat="Reports" desc="Discount Allowances and Campaign Performance." />
+              <ModuleCard href="/admin/reports/kitchen" icon={Coffee} color="indigo" title="Kitchen Log" stat="Reports" desc="KDS Performance and Kitchen Inventory Alerts." />
             </div>
           </section>
         </div>

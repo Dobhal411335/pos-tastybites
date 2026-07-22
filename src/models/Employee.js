@@ -17,7 +17,10 @@ const EmployeeSchema = new mongoose.Schema(
     permissionGroup: { type: mongoose.Schema.Types.ObjectId, ref: 'EmployeePermission' },
     isActive: { type: Boolean, default: true },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee' },
-    updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee' }
+    updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee' },
+    employeeColor: { type: String, default: '#4ade80' },
+    assignedFloor: { type: mongoose.Schema.Types.ObjectId, ref: 'Floor' },
+    assignedTables: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Table' }]
   },
   { timestamps: true }
 );

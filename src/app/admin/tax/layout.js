@@ -1,4 +1,3 @@
-import { Toaster } from "sonner";
 "use client";
 
 import React, { useEffect, useState } from "react";
@@ -44,7 +43,6 @@ export default function TaxModuleLayout({ children }) {
 
   return (
     <div className="min-h-screen bg-[#FAF9F6] flex flex-col antialiased text-[#1F2937] font-sans">
-      <Toaster position="top-right" richColors />
 
       <TopNavbar
         adminName={adminUser?.name}
