@@ -7,8 +7,8 @@ export default function AdminIndexPage() {
   const router = useRouter();
 
   useEffect(() => {
-    // Simply redirect /admin directly to /admin/login by default
-    router.replace("/admin/login");
+    // Simply redirect /admin directly to /login by default
+    router.replace("/login");
   }, [router]);
 
   return (

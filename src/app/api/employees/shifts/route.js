@@ -130,6 +130,24 @@ export const POST = withAuth(async (request) => {
       return sendSuccess(newTemplate, "Template created successfully", 201);
     }
 
+    if (action === "updateTemplate") {
+      const { _id, name, startTime, endTime, color, workingDays, repeatPattern } = data;
+      if (!_id || !name || !startTime || !endTime) return sendError(new Error("Missing fields"), "ID, name, start time, and end time required", 400);
+      
+      const template = await ShiftTemplate.findOne({ _id, restaurant: request.restaurant });
+      if (!template) return sendError(new Error("Not Found"), "Template not found", 404);
+      
+      template.name = name;
+      template.startTime = startTime;
+      template.endTime = endTime;
+      template.color = color || "blue";
+      template.workingDays = workingDays || [];
+      template.repeatPattern = repeatPattern || "Weekly";
+      
+      await template.save();
+      return sendSuccess(template, "Template updated successfully", 200);
+    }
+
     if (action === "copyWeek") {
       const { sourceWeekStart, targetWeekStart } = data;
       if (!sourceWeekStart || !targetWeekStart) return sendError(new Error("Missing fields"), "Source and Target week start required", 400);
@@ -396,14 +414,21 @@ export const PUT = withAuth(async (request) => {
   }
 }, ["ADMIN", "MANAGER"]);
 
-// DELETE - Remove shift
+// DELETE - Remove shift or template
 export const DELETE = withAuth(async (request) => {
   try {
     const { searchParams } = new URL(request.url);
     const id = searchParams.get("id");
+    const action = searchParams.get("action");
 
     if (!id) {
-      return sendError(new Error("Missing ID"), "Shift ID is required", 400);
+      return sendError(new Error("Missing ID"), "ID is required", 400);
+    }
+
+    if (action === "template") {
+      const deletedTemplate = await ShiftTemplate.findOneAndDelete({ _id: id, restaurant: request.restaurant });
+      if (!deletedTemplate) return sendError(new Error("Not Found"), "Template not found", 404);
+      return sendSuccess(null, "Template deleted successfully");
     }
 
     const deletedShift = await EmployeeShift.findOneAndDelete({ _id: id, restaurant: request.restaurant });

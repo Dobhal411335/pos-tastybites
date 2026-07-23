@@ -24,6 +24,7 @@ const EmployeeSchema = new mongoose.Schema(
     employeeColor: { type: String, default: '#4ade80' },
     assignedFloor: { type: mongoose.Schema.Types.ObjectId, ref: 'Floor' },
     assignedTables: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Table' }],
+    assignedDevice: { type: mongoose.Schema.Types.ObjectId, ref: 'RegisteredDevice' },
     availableDays: [{ type: String, enum: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] }],
     weeklyOff: [{ type: String, enum: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] }],
     leaveStatus: { type: String, enum: ['None', 'Vacation', 'Sick Leave'], default: 'None' },

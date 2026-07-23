@@ -24,7 +24,7 @@ export default function UsersModuleLayout({ children }) {
         }
       } catch (err) {
         if (err.message === "Unauthorized") {
-          router.replace("/admin/login");
+          router.replace("/login");
         }
       }
     };
@@ -46,7 +46,7 @@ export default function UsersModuleLayout({ children }) {
       color: "bg-[#1E3A8A]",
       items: [
         { label: "Shifts & Scheduling", href: "/admin/employee/shifts" },
-        { label: "Floor & Table Assignment", href: "/admin/employee/floor-table-assignment" },
+        { label: "Floor Assignment", href: "/admin/employee/floor-assignment" },
         { label: "Device Assignment", href: "/admin/employee/device-assignment" },
       ],
     }

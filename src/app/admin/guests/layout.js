@@ -25,7 +25,7 @@ export default function GuestsModuleLayout({ children }) {
         }
       } catch (err) {
         if (err.message === "Unauthorized") {
-          router.replace("/admin/login");
+          router.replace("/login");
         }
       }
     };

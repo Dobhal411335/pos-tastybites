@@ -43,7 +43,8 @@ import {
   PieChart,
   Wallet,
   Coffee,
-  Megaphone
+  Megaphone,
+  TabletSmartphone
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -87,7 +88,7 @@ export default function AdminDashboardPage() {
         }
       } catch (err) {
         if (err.message === "Unauthorized") {
-          router.replace("/admin/login");
+          router.replace("/login");
         }
       }
     };
@@ -99,7 +100,7 @@ export default function AdminDashboardPage() {
       const res = await fetch("/api/auth/logout", { method: "POST" });
       if (res.ok) {
         toast.success("Logged out successfully.");
-        window.location.href = "/admin/login";
+        window.location.href = "/login";
       }
     } catch (err) {
       toast.error("Logout failed. Please try again.");
@@ -336,6 +337,7 @@ export default function AdminDashboardPage() {
               <ModuleCard href="/admin/menu" icon={UtensilsCrossed} color="orange" title="Create Menu" stat="Configure" desc="Configure categories, items, modifiers, pricing, and availability." />
               <ModuleCard href="/admin/floor-plan" icon={LayoutGrid} color="amber" title="Floor Management" stat="Tables" desc="Setup dining sections, table layouts, seating capacities, and status tracking." />
               <ModuleCard href="/admin/employee" icon={Users} color="indigo" title="Staff Portal" stat="Employees" desc="Manage employee profiles, access permissions, and designation matrices." />
+              <ModuleCard href="/admin/employee/device-assignment" icon={TabletSmartphone} color="blue" title="Device Assignment" stat="Devices" desc="Register POS devices and assign them to staff members." />
               <ModuleCard href="/admin/promotions" icon={Gift} color="rose" title="Season Promotions" stat="Offers" desc="Setup promotional codes, percentage/flat discounts, and happy hour schedules." />
               <ModuleCard href="/admin/tax" icon={Percent} color="emerald" title="Configure Tax And Fees" stat="Tax" desc="Define applicable tax slabs (GST/VAT), service charges, and additional surcharges." />
               <ModuleCard href="/admin/users" icon={UserPlus} color="blue" title="Master Admin Users" stat="Admins" desc="Setup super-admin accounts with system-wide configuration rights." />

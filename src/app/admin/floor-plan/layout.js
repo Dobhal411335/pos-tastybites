@@ -28,7 +28,7 @@ export default function TablesModuleLayout({ children }) {
         }
       } catch (err) {
         if (err.message === "Unauthorized") {
-          router.replace("/admin/login");
+          router.replace("/login");
         }
       }
     };

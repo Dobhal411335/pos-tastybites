@@ -27,7 +27,7 @@ export const GET = withAuth(async (request) => {
     if (id) query._id = id;
 
     const employees = await Employee.find(query)
-      .select("-password")
+      .select("-password -encryptedPassword")
       .populate("defaultFloor", "name")
       .populate("assignedFloor", "name")
       .populate("assignedTables", "tableNumber")

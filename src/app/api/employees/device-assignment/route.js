@@ -1,80 +1,97 @@
 import { withAuth } from "@/utils/auth";
-import EmployeeShift from "@/models/employee/EmployeeShift";
+import Employee from "@/models/employee/Employee";
 import RegisteredDevice from "@/models/RegisteredDevice";
 import { sendSuccess } from "@/utils/apiResponse";
 import { sendError } from "@/utils/errorHandler";
 import { logger } from "@/utils/logger";
-import mongoose from "mongoose";
 
-// GET - List device assignments (via shifts)
+// GET - List Employees with their assigned devices
 export const GET = withAuth(async (request) => {
   try {
     const { searchParams } = new URL(request.url);
-    const date = searchParams.get("date");
     const employeeId = searchParams.get("employeeId");
 
     const query = { restaurant: request.restaurant };
-
-    if (date) {
-      const startOfDay = new Date(date);
-      startOfDay.setUTCHours(0, 0, 0, 0);
-      const endOfDay = new Date(date);
-      endOfDay.setUTCHours(23, 59, 59, 999);
-      query.date = { $gte: startOfDay, $lte: endOfDay };
-    }
-
+    
     if (employeeId) {
-      query.employee = employeeId;
+      query._id = employeeId;
     }
 
-    const shifts = await EmployeeShift.find(query)
-      .select("employee date startTime endTime assignedDevice")
-      .populate("employee", "firstName lastName")
-      .populate("assignedDevice", "deviceName deviceType status")
+    const employees = await Employee.find(query)
+      .select("firstName lastName role employeeColor assignedDevice")
       .lean();
 
-    return sendSuccess(shifts, "Device assignments retrieved successfully");
+    return sendSuccess(employees, "Employees retrieved successfully");
   } catch (error) {
-    logger.error("Failed to list device assignments", error);
-    return sendError(error, "Failed to retrieve device assignments", 500);
+    logger.error("Failed to list employees for device assignment", error);
+    return sendError(error, "Failed to retrieve employees", 500);
   }
 }, ["ADMIN", "MANAGER"]);
 
-// PUT - Update device assignment for a shift
+// PUT - Update device assignments for an employee
 export const PUT = withAuth(async (request) => {
   try {
     const data = await request.json();
-    const { shiftId, assignedDevice } = data; // assignedDevice can be null to unassign
+    const { employeeId, deviceId, forceReassign } = data;
 
-    if (!shiftId || assignedDevice === undefined) {
-      return sendError(new Error("Missing fields"), "Shift ID and assignedDevice are required", 400);
+    if (!employeeId || !deviceId) {
+      return sendError(new Error("Missing fields"), "Employee ID and Device ID are required", 400);
     }
 
-    const shift = await EmployeeShift.findOne({ _id: shiftId, restaurant: request.restaurant });
-    if (!shift) {
-      return sendError(new Error("Not Found"), "Shift not found", 404);
+    const employee = await Employee.findOne({ _id: employeeId, restaurant: request.restaurant });
+    if (!employee) {
+      return sendError(new Error("Not Found"), "Employee not found", 404);
     }
 
-    if (assignedDevice) {
-      const device = await RegisteredDevice.findOne({ _id: assignedDevice, restaurant: request.restaurant });
-      if (!device) {
-        return sendError(new Error("Not Found"), "Device not found or does not belong to this restaurant", 404);
+    const device = await RegisteredDevice.findOne({ _id: deviceId, restaurant: request.restaurant }).populate("assignedEmployee");
+    if (!device) {
+      return sendError(new Error("Not Found"), "Device not found", 404);
+    }
+
+    // Check if device is already assigned to someone else
+    if (device.assignedEmployee && device.assignedEmployee._id.toString() !== employeeId.toString()) {
+      if (!forceReassign) {
+        return Response.json(
+          {
+            success: false,
+            error: "ALREADY_ASSIGNED",
+            message: `This device is already assigned to ${device.assignedEmployee.firstName} ${device.assignedEmployee.lastName}.`,
+            employeeName: `${device.assignedEmployee.firstName} ${device.assignedEmployee.lastName}`
+          },
+          { status: 409 }
+        );
       }
       
-      // Optionally verify if device is already assigned to another ACTIVE shift right now
-      // This could be complex, skipping strict temporal collision for now.
+      // If forcing reassignment, remove the device from the old employee
+      await Employee.updateOne(
+        { _id: device.assignedEmployee._id },
+        { $unset: { assignedDevice: "" } }
+      );
+      logger.info(`Device Unassigned: ${device.deviceCode} from ${device.assignedEmployee.firstName}`);
     }
 
-    shift.assignedDevice = assignedDevice;
-    await shift.save();
+    // Check if new employee already has a device (1-to-1 rule)
+    if (employee.assignedDevice && employee.assignedDevice.toString() !== deviceId.toString()) {
+      // Remove old device's reference to this employee
+      await RegisteredDevice.updateOne(
+        { _id: employee.assignedDevice },
+        { $unset: { assignedEmployee: "" } }
+      );
+      logger.info(`Device Unassigned: Old device from ${employee.firstName}`);
+    }
 
-    await shift.populate("assignedDevice", "deviceName deviceType status");
-    await shift.populate("employee", "firstName lastName");
+    // Update the employee document
+    employee.assignedDevice = deviceId;
+    await employee.save();
 
-    logger.info(`Device assigned to shift ${shiftId}`);
-    return sendSuccess(shift, "Device assignment updated successfully");
+    // Update the device document
+    device.assignedEmployee = employeeId;
+    await device.save();
+
+    logger.info(`Device Assigned: ${device.deviceCode} to ${employee.firstName} ${employee.lastName}`);
+    return sendSuccess(device, "Device assigned successfully");
   } catch (error) {
-    logger.error("Failed to update device assignment", error);
-    return sendError(error, "Failed to update device assignment", 500);
+    logger.error("Failed to assign device", error);
+    return sendError(error, "Failed to assign device", 500);
   }
 }, ["ADMIN", "MANAGER"]);

@@ -11,12 +11,13 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { PALETTE } from "@/utils/paletteeColor";
+import DeleteDialog from "@/components/common/DeleteDialog";
 
 const DAYS_OF_WEEK = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
 export default function ShiftManagementPage() {
   const [activeTab, setActiveTab] = useState("templates");
-  
+
   const [shifts, setShifts] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [templates, setTemplates] = useState([]);
@@ -29,6 +30,9 @@ export default function ShiftManagementPage() {
     workingDays: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
   });
 
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [templateToDelete, setTemplateToDelete] = useState(null);
+
   // Apply Template State
   const [isApplyDialogOpen, setIsApplyDialogOpen] = useState(false);
   const [selectedTemplateToApply, setSelectedTemplateToApply] = useState(null);
@@ -40,7 +44,7 @@ export default function ShiftManagementPage() {
   const [currentMonthStart, setCurrentMonthStart] = useState(() => {
     const d = new Date();
     d.setDate(1);
-    d.setHours(0,0,0,0);
+    d.setHours(0, 0, 0, 0);
     return d;
   });
 
@@ -85,30 +89,75 @@ export default function ShiftManagementPage() {
   }, [fetchInitialData]);
 
   // Template Management
+  const handleOpenEditTemplate = (tpl) => {
+    setTemplateForm({
+      _id: tpl._id,
+      name: tpl.name || "",
+      startTime: tpl.startTime || "",
+      endTime: tpl.endTime || "",
+      color: tpl.color || "blue",
+      repeatPattern: tpl.repeatPattern || "Weekly",
+      workingDays: tpl.workingDays || []
+    });
+    setIsTemplateDialogOpen(true);
+  };
+
+  const handleOpenNewTemplate = () => {
+    setTemplateForm({
+      name: "", startTime: "09:00", endTime: "17:00", color: "blue", repeatPattern: "Weekly",
+      workingDays: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
+    });
+    setIsTemplateDialogOpen(true);
+  };
+
   const handleSaveTemplate = async () => {
     if (!templateForm.name || !templateForm.startTime || !templateForm.endTime || templateForm.workingDays.length === 0) {
       toast.error("Please fill out all required fields and select at least one working day.");
       return;
     }
+    const action = templateForm._id ? "updateTemplate" : "createTemplate";
     try {
       const res = await fetch("/api/employees/shifts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          action: "createTemplate",
+          action,
           ...templateForm
         })
       });
       const json = await res.json();
       if (json.success) {
-        toast.success("Shift Template created successfully!");
+        toast.success(`Shift Template ${templateForm._id ? 'updated' : 'created'} successfully!`);
         setIsTemplateDialogOpen(false);
         fetchInitialData();
       } else {
         toast.error(json.message);
       }
     } catch (e) {
-      toast.error("Error creating template");
+      toast.error("Error saving template");
+    }
+  };
+
+  const handleDeleteTemplate = (id) => {
+    setTemplateToDelete(id);
+    setIsDeleteDialogOpen(true);
+  };
+
+  const confirmDeleteTemplate = async () => {
+    if (!templateToDelete) return;
+    try {
+      const res = await fetch(`/api/employees/shifts?id=${templateToDelete}&action=template`, { method: "DELETE" });
+      const json = await res.json();
+      if (json.success) {
+        toast.success("Template deleted successfully");
+        setIsDeleteDialogOpen(false);
+        setTemplateToDelete(null);
+        fetchInitialData();
+      } else {
+        toast.error(json.message);
+      }
+    } catch (e) {
+      toast.error("Error deleting template");
     }
   };
 
@@ -125,10 +174,10 @@ export default function ShiftManagementPage() {
       toast.error("Select at least one employee.");
       return;
     }
-    
+
     let startDate = new Date();
     let endDate = new Date();
-    
+
     if (applyRange === "thisMonth") {
       startDate.setDate(1);
       endDate = new Date(startDate.getFullYear(), startDate.getMonth() + 1, 0);
@@ -136,7 +185,7 @@ export default function ShiftManagementPage() {
       startDate.setMonth(startDate.getMonth() + 1, 1);
       endDate = new Date(startDate.getFullYear(), startDate.getMonth() + 1, 0);
     }
-    
+
     try {
       const res = await fetch("/api/employees/shifts", {
         method: "POST",
@@ -158,7 +207,7 @@ export default function ShiftManagementPage() {
       } else {
         toast.error(json.message);
       }
-    } catch(e) {
+    } catch (e) {
       toast.error("Error generating schedule.");
     }
   };
@@ -173,12 +222,12 @@ export default function ShiftManagementPage() {
     const month = currentMonthStart.getMonth();
     const daysInMonth = getDaysInMonth(year, month);
     const firstDay = new Date(year, month, 1).getDay(); // 0 is Sunday
-    
+
     const days = [];
     // Padding before 1st
     const padDays = firstDay === 0 ? 6 : firstDay - 1; // Start on Monday
     for (let i = 0; i < padDays; i++) days.push(null);
-    
+
     for (let i = 1; i <= daysInMonth; i++) {
       days.push(new Date(year, month, i));
     }
@@ -210,7 +259,7 @@ export default function ShiftManagementPage() {
 
   const handleSaveEditDay = async () => {
     if (!editDayShift) return toast.error("Creating ad-hoc single days coming soon. Apply a template first.");
-    
+
     try {
       const res = await fetch("/api/employees/shifts", {
         method: "PUT",
@@ -232,7 +281,7 @@ export default function ShiftManagementPage() {
       } else {
         toast.error(json.message);
       }
-    } catch(e) {
+    } catch (e) {
       toast.error("Error updating day.");
     }
   };
@@ -241,7 +290,7 @@ export default function ShiftManagementPage() {
     <div className="flex flex-col overflow-hidden min-h-screen" style={{ backgroundColor: PALETTE.canvas, color: PALETTE.ink }}>
       <div className="flex-1 overflow-y-auto p-4">
         <div className="max-w-6xl mx-auto space-y-8 font-sans">
-          
+
           <div className="flex flex-col sm:flex-row justify-between sm:items-end gap-4 border-b border-zinc-200 pb-5">
             <div>
               <h1 className="text-[32px] font-bold leading-tight" style={{ color: PALETTE.ink }}>
@@ -274,7 +323,7 @@ export default function ShiftManagementPage() {
             {/* TEMPLATES TAB */}
             <TabsContent value="templates" className="pt-6">
               {loading ? (
-                 <div className="flex justify-center items-center h-64"><Loader2 className="h-8 w-8 animate-spin text-[#1e40af]" /></div>
+                <div className="flex justify-center items-center h-64"><Loader2 className="h-8 w-8 animate-spin text-[#1e40af]" /></div>
               ) : templates.length === 0 ? (
                 // EMPTY STATE
                 <div className="flex flex-col items-center justify-center py-20 bg-white rounded-xl border border-zinc-200 border-dashed">
@@ -294,8 +343,8 @@ export default function ShiftManagementPage() {
                 <div>
                   <div className="flex justify-between items-center mb-6">
                     <h2 className="text-xl font-bold text-zinc-800">Shift Template Dashboard</h2>
-                    <Button onClick={() => setIsTemplateDialogOpen(true)} className="bg-[#1e40af] text-white hover:bg-[#1e40af]/90">
-                      <Plus className="w-4 h-4 mr-2" /> New Template
+                    <Button onClick={handleOpenNewTemplate} className="bg-[#1e40af] hover:bg-blue-800 text-white font-semibold">
+                      <FilePlus className="w-4 h-4 mr-2" /> New Template
                     </Button>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -312,11 +361,16 @@ export default function ShiftManagementPage() {
                         </div>
                         <div className="flex flex-wrap gap-1 mb-6">
                           {tpl.workingDays?.map(day => (
-                            <span key={day} className="text-[11px] font-bold bg-zinc-100 text-zinc-600 px-2 py-1 rounded-md">{day.substring(0,3)}</span>
+                            <span key={day} className="text-[11px] font-bold bg-zinc-100 text-zinc-600 px-2 py-1 rounded-md">{day.substring(0, 3)}</span>
                           ))}
                         </div>
                         <div className="flex justify-between border-t border-zinc-100 pt-4">
-                          <Button variant="outline" className="text-[13px] h-9 border-zinc-200 text-zinc-600">Edit</Button>
+                          <div className="flex items-center gap-2">
+                            <Button variant="outline" className="text-[13px] h-9 border-zinc-200 text-zinc-600" onClick={() => handleOpenEditTemplate(tpl)}>Edit</Button>
+                            <Button variant="outline" className="h-9 w-9 p-0 border-zinc-200 text-red-500 hover:text-red-600 hover:bg-red-50" onClick={() => handleDeleteTemplate(tpl._id)}>
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
                           <Button onClick={() => openApplyTemplate(tpl)} className="bg-zinc-900 text-white hover:bg-zinc-800 text-[13px] h-9">
                             Apply / Generate <ChevronRight className="w-4 h-4 ml-1" />
                           </Button>
@@ -335,103 +389,103 @@ export default function ShiftManagementPage() {
               ) : (
                 <>
                   <div className="flex flex-col md:flex-row items-center justify-between bg-white p-4 rounded-xl shadow-sm border border-zinc-200 mb-6 gap-4">
-                <div className="flex items-center gap-4">
-                  <Button variant="outline" size="icon" onClick={handlePrevMonth} className="h-10 w-10">
-                    <ChevronLeft className="h-5 w-5" />
-                  </Button>
-                  <span className="font-bold text-[18px] text-zinc-800 w-40 text-center">
-                    {currentMonthStart.toLocaleDateString([], { month: 'long', year: 'numeric' })}
-                  </span>
-                  <Button variant="outline" size="icon" onClick={handleNextMonth} className="h-10 w-10">
-                    <ChevronRight className="h-5 w-5" />
-                  </Button>
-                </div>
-                <div className="flex items-center gap-3">
-                  <label className="text-sm font-bold text-zinc-600">View Employee:</label>
-                  <Select value={selectedCalendarEmployee} onValueChange={setSelectedCalendarEmployee}>
-                    <SelectTrigger className="w-56 h-10 border-zinc-200 bg-zinc-50 font-bold">
-                      <SelectValue placeholder="All Employees" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-white">
-                      <SelectItem value="all">All Employees</SelectItem>
-                      {employees.map(emp => (
-                        <SelectItem key={emp._id} value={emp._id}>{emp.firstName} {emp.lastName}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div className="flex items-center justify-end gap-4 mb-3 text-[12px] font-medium text-zinc-600">
-                <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-blue-100 border border-blue-200"></div> Regular Shift</div>
-                <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-green-100 border border-green-200"></div> Holiday</div>
-                <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-yellow-100 border border-yellow-200"></div> Overtime / Emergency</div>
-                <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-red-100 border border-red-200"></div> Leave / Vacation</div>
-              </div>
-
-              <div className="bg-white rounded-xl shadow-sm border border-zinc-200 overflow-hidden">
-                <div className="grid grid-cols-7 border-b border-zinc-200 bg-zinc-50">
-                  {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(day => (
-                    <div key={day} className="p-3 text-center font-bold text-[14px] text-zinc-700 border-r border-zinc-200 last:border-r-0">
-                      {day}
+                    <div className="flex items-center gap-4">
+                      <Button variant="outline" size="icon" onClick={handlePrevMonth} className="h-10 w-10">
+                        <ChevronLeft className="h-5 w-5" />
+                      </Button>
+                      <span className="font-bold text-[18px] text-zinc-800 w-40 text-center">
+                        {currentMonthStart.toLocaleDateString([], { month: 'long', year: 'numeric' })}
+                      </span>
+                      <Button variant="outline" size="icon" onClick={handleNextMonth} className="h-10 w-10">
+                        <ChevronRight className="h-5 w-5" />
+                      </Button>
                     </div>
-                  ))}
-                </div>
-                
-                <div className="grid grid-cols-7">
-                  {calendarDays.map((date, i) => {
-                    if (!date) return <div key={i} className="min-h-30 bg-zinc-50/50 border-r border-b border-zinc-100 last:border-r-0"></div>;
-                    
-                    const dayShifts = shifts.filter(s => {
-                      const sDate = new Date(s.date);
-                      return sDate.getFullYear() === date.getFullYear() && 
-                             sDate.getMonth() === date.getMonth() && 
-                             sDate.getDate() === date.getDate() &&
-                             (selectedCalendarEmployee === "all" || (s.employee?._id || s.employee) === selectedCalendarEmployee);
-                    });
+                    <div className="flex items-center gap-3">
+                      <label className="text-sm font-bold text-zinc-600">View Employee:</label>
+                      <Select value={selectedCalendarEmployee} onValueChange={setSelectedCalendarEmployee}>
+                        <SelectTrigger className="w-56 h-10 border-zinc-200 bg-zinc-50 font-bold">
+                          <SelectValue placeholder="All Employees" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-white">
+                          <SelectItem value="all">All Employees</SelectItem>
+                          {employees.map(emp => (
+                            <SelectItem key={emp._id} value={emp._id}>{emp.firstName} {emp.lastName}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
 
-                    const isToday = new Date().toDateString() === date.toDateString();
-                    const todayClasses = isToday ? "ring-2 ring-[#1e40af] ring-inset z-10 bg-blue-50/20" : "";
+                  <div className="flex items-center justify-end gap-4 mb-3 text-[12px] font-medium text-zinc-600">
+                    <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-blue-100 border border-blue-200"></div> Regular Shift</div>
+                    <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-green-100 border border-green-200"></div> Holiday</div>
+                    <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-yellow-100 border border-yellow-200"></div> Overtime / Emergency</div>
+                    <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-red-100 border border-red-200"></div> Leave / Vacation</div>
+                  </div>
 
-                    return (
-                      <div key={i} className={`min-h-30 p-2 border-r border-b border-zinc-200 last:border-r-0 hover:bg-zinc-50 transition-colors relative ${todayClasses}`}>
-                        <div className={`font-bold text-[13px] mb-2 ${isToday ? 'text-[#1e40af] bg-blue-100 inline-block px-1.5 py-0.5 rounded-md' : 'text-zinc-500'}`}>
-                          {date.getDate()}
+                  <div className="bg-white rounded-xl shadow-sm border border-zinc-200 overflow-hidden">
+                    <div className="grid grid-cols-7 border-b border-zinc-200 bg-zinc-50">
+                      {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(day => (
+                        <div key={day} className="p-3 text-center font-bold text-[14px] text-zinc-700 border-r border-zinc-200 last:border-r-0">
+                          {day}
                         </div>
-                        <div className="flex flex-col gap-1.5">
-                          {dayShifts.map(shift => {
-                            const emp = shift.employee ? employees.find(e => e._id === (shift.employee._id || shift.employee)) : null;
-                            
-                            // Badge Colors
-                            let badgeClass = "bg-blue-50 border-blue-200 text-blue-800 hover:border-blue-300";
-                            if (shift.shiftType === "Holiday") badgeClass = "bg-green-50 border-green-200 text-green-800";
-                            if (shift.shiftType === "Emergency" || shift.shiftType === "Overtime") badgeClass = "bg-yellow-50 border-yellow-200 text-yellow-800";
-                            if (["Leave", "Sick Leave", "Vacation"].includes(shift.shiftType)) badgeClass = "bg-red-50 border-red-200 text-red-800";
+                      ))}
+                    </div>
 
-                            return (
-                              <div 
-                                key={shift._id} 
-                                onClick={() => openEditDay(date, shift, emp)}
-                                className={`p-1.5 rounded-md border text-[11px] cursor-pointer transition-all ${badgeClass}`}
-                              >
-                                {selectedCalendarEmployee === "all" && <div className="font-bold">{emp?.firstName}</div>}
-                                <div className="font-medium">
-                                  {shift.templateId?.name || shift.shiftType}
-                                </div>
-                                <div className="opacity-80">
-                                  {new Date(shift.startTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-              </>
-            )}
+                    <div className="grid grid-cols-7">
+                      {calendarDays.map((date, i) => {
+                        if (!date) return <div key={i} className="min-h-30 bg-zinc-50/50 border-r border-b border-zinc-100 last:border-r-0"></div>;
+
+                        const dayShifts = shifts.filter(s => {
+                          const sDate = new Date(s.date);
+                          return sDate.getFullYear() === date.getFullYear() &&
+                            sDate.getMonth() === date.getMonth() &&
+                            sDate.getDate() === date.getDate() &&
+                            (selectedCalendarEmployee === "all" || (s.employee?._id || s.employee) === selectedCalendarEmployee);
+                        });
+
+                        const isToday = new Date().toDateString() === date.toDateString();
+                        const todayClasses = isToday ? "ring-2 ring-[#1e40af] ring-inset z-10 bg-blue-50/20" : "";
+
+                        return (
+                          <div key={i} className={`min-h-30 p-2 border-r border-b border-zinc-200 last:border-r-0 hover:bg-zinc-50 transition-colors relative ${todayClasses}`}>
+                            <div className={`font-bold text-[13px] mb-2 ${isToday ? 'text-[#1e40af] bg-blue-100 inline-block px-1.5 py-0.5 rounded-md' : 'text-zinc-500'}`}>
+                              {date.getDate()}
+                            </div>
+                            <div className="flex flex-col gap-1.5">
+                              {dayShifts.map(shift => {
+                                const emp = shift.employee ? employees.find(e => e._id === (shift.employee._id || shift.employee)) : null;
+
+                                // Badge Colors
+                                let badgeClass = "bg-blue-50 border-blue-200 text-blue-800 hover:border-blue-300";
+                                if (shift.shiftType === "Holiday") badgeClass = "bg-green-50 border-green-200 text-green-800";
+                                if (shift.shiftType === "Emergency" || shift.shiftType === "Overtime") badgeClass = "bg-yellow-50 border-yellow-200 text-yellow-800";
+                                if (["Leave", "Sick Leave", "Vacation"].includes(shift.shiftType)) badgeClass = "bg-red-50 border-red-200 text-red-800";
+
+                                return (
+                                  <div
+                                    key={shift._id}
+                                    onClick={() => openEditDay(date, shift, emp)}
+                                    className={`p-1.5 rounded-md border text-[11px] cursor-pointer transition-all ${badgeClass}`}
+                                  >
+                                    {selectedCalendarEmployee === "all" && <div className="font-bold">{emp?.firstName}</div>}
+                                    <div className="font-medium">
+                                      {shift.templateId?.name || shift.shiftType}
+                                    </div>
+                                    <div className="opacity-80">
+                                      {new Date(shift.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </>
+              )}
             </TabsContent>
           </Tabs>
         </div>
@@ -447,16 +501,16 @@ export default function ShiftManagementPage() {
           <div className="grid gap-4 py-4">
             <div className="space-y-2">
               <label className="text-[13px] font-bold text-zinc-700">Template Name</label>
-              <Input placeholder="e.g. Morning Shift" value={templateForm.name} onChange={e => setTemplateForm({...templateForm, name: e.target.value})} className="border-zinc-200" />
+              <Input placeholder="e.g. Morning Shift" value={templateForm.name} onChange={e => setTemplateForm({ ...templateForm, name: e.target.value })} className="border-zinc-200" />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <label className="text-[13px] font-bold text-zinc-700">Start Time</label>
-                <Input type="time" value={templateForm.startTime} onChange={e => setTemplateForm({...templateForm, startTime: e.target.value})} className="border-zinc-200" />
+                <Input type="time" value={templateForm.startTime} onChange={e => setTemplateForm({ ...templateForm, startTime: e.target.value })} className="border-zinc-200" />
               </div>
               <div className="space-y-2">
                 <label className="text-[13px] font-bold text-zinc-700">End Time</label>
-                <Input type="time" value={templateForm.endTime} onChange={e => setTemplateForm({...templateForm, endTime: e.target.value})} className="border-zinc-200" />
+                <Input type="time" value={templateForm.endTime} onChange={e => setTemplateForm({ ...templateForm, endTime: e.target.value })} className="border-zinc-200" />
               </div>
             </div>
             <div className="space-y-2">
@@ -464,12 +518,12 @@ export default function ShiftManagementPage() {
               <div className="grid grid-cols-2 gap-2">
                 {DAYS_OF_WEEK.map(day => (
                   <div key={day} className="flex items-center space-x-2">
-                    <Checkbox 
+                    <Checkbox
                       id={`day-${day}`}
                       checked={templateForm.workingDays.includes(day)}
                       onCheckedChange={(checked) => {
-                        if(checked) setTemplateForm({...templateForm, workingDays: [...templateForm.workingDays, day]});
-                        else setTemplateForm({...templateForm, workingDays: templateForm.workingDays.filter(d => d !== day)});
+                        if (checked) setTemplateForm({ ...templateForm, workingDays: [...templateForm.workingDays, day] });
+                        else setTemplateForm({ ...templateForm, workingDays: templateForm.workingDays.filter(d => d !== day) });
                       }}
                     />
                     <label htmlFor={`day-${day}`} className="text-sm font-medium">{day}</label>
@@ -479,7 +533,7 @@ export default function ShiftManagementPage() {
             </div>
             <div className="space-y-2">
               <label className="text-[13px] font-bold text-zinc-700">Repeat Pattern</label>
-              <Select value={templateForm.repeatPattern} onValueChange={v => setTemplateForm({...templateForm, repeatPattern: v})}>
+              <Select value={templateForm.repeatPattern} onValueChange={v => setTemplateForm({ ...templateForm, repeatPattern: v })}>
                 <SelectTrigger className="border-zinc-200"><SelectValue /></SelectTrigger>
                 <SelectContent className="bg-white">
                   <SelectItem value="Weekly">Weekly</SelectItem>
@@ -519,11 +573,11 @@ export default function ShiftManagementPage() {
               <div className="max-h-37.5 overflow-y-auto grid grid-cols-2 gap-2">
                 {employees.map(emp => (
                   <div key={emp._id} className="flex items-center space-x-2">
-                    <Checkbox 
+                    <Checkbox
                       id={`emp-${emp._id}`}
                       checked={selectedEmployees.includes(emp._id)}
                       onCheckedChange={(checked) => {
-                        if(checked) setSelectedEmployees([...selectedEmployees, emp._id]);
+                        if (checked) setSelectedEmployees([...selectedEmployees, emp._id]);
                         else setSelectedEmployees(selectedEmployees.filter(id => id !== emp._id));
                       }}
                     />
@@ -550,7 +604,7 @@ export default function ShiftManagementPage() {
           <div className="grid gap-4 py-4">
             <div className="space-y-2">
               <label className="text-[13px] font-bold text-zinc-700">Mark Status</label>
-              <Select value={editDayForm.shiftType} onValueChange={v => setEditDayForm({...editDayForm, shiftType: v})}>
+              <Select value={editDayForm.shiftType} onValueChange={v => setEditDayForm({ ...editDayForm, shiftType: v })}>
                 <SelectTrigger className="border-zinc-200"><SelectValue /></SelectTrigger>
                 <SelectContent className="bg-white">
                   <SelectItem value="Regular">Regular Shift</SelectItem>
@@ -565,15 +619,23 @@ export default function ShiftManagementPage() {
             </div>
             <div className="space-y-2">
               <label className="text-[13px] font-bold text-zinc-700">Notes</label>
-              <Input placeholder="Reason for change..." value={editDayForm.notes} onChange={e => setEditDayForm({...editDayForm, notes: e.target.value})} className="border-zinc-200" />
+              <Input placeholder="Reason for change..." value={editDayForm.notes} onChange={e => setEditDayForm({ ...editDayForm, notes: e.target.value })} className="border-zinc-200" />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsEditDayDialogOpen(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setIsEditDayDialogOpen(false)} className="border-zinc-200">Cancel</Button>
             <Button onClick={handleSaveEditDay} className="bg-zinc-900 text-white">Save Changes</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <DeleteDialog 
+        isOpen={isDeleteDialogOpen} 
+        onOpenChange={setIsDeleteDialogOpen} 
+        onConfirm={confirmDeleteTemplate} 
+        title="Delete Shift Template" 
+        description="Are you sure you want to delete this shift template? This action cannot be undone and will not affect shifts that have already been generated." 
+      />
 
     </div>
   );
