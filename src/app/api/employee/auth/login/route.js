@@ -4,6 +4,7 @@ import Employee from '@/models/employee/Employee';
 import RegisteredDevice from '@/models/RegisteredDevice';
 import EmployeeShift from '@/models/employee/EmployeeShift';
 import EmployeeSession from '@/models/employee/EmployeeSession';
+import EmployeeLog from '@/models/employee/EmployeeLog';
 import { comparePassword } from '@/utils/password';
 import { signToken } from '@/utils/jwt';
 
@@ -19,7 +20,12 @@ export async function POST(request) {
     }
 
     // 1. Verify Employee
-    const employee = await Employee.findOne({ employeeId });
+    const employee = await Employee.findOne({ 
+      $or: [
+        { employeeId: employeeId },
+        { username: employeeId.toLowerCase() }
+      ]
+    });
     if (!employee) {
       return NextResponse.json({ success: false, message: 'Invalid credentials' }, { status: 401 });
     }
@@ -31,7 +37,7 @@ export async function POST(request) {
     }
 
     // 3. Verify Active Status
-    if (!employee.isActive || employee.status !== 'Active') {
+    if (employee.status !== 'Active' && employee.status !== 'Approved') {
       return NextResponse.json({ success: false, message: 'Employee account is not active' }, { status: 403 });
     }
 
@@ -45,34 +51,78 @@ export async function POST(request) {
     device.lastLogin = new Date();
     await device.save();
 
-    // 5. Verify Current Shift
-    const activeShift = await EmployeeShift.findOne({ employee: employee._id, status: 'Active' });
-    if (!activeShift) {
-      return NextResponse.json({ success: false, message: 'No active shift found. Please clock in first.' }, { status: 403 });
+    // 5. Verify Current Shift (Strict validation)
+    const startOfDay = new Date();
+    startOfDay.setUTCHours(0, 0, 0, 0);
+    const endOfDay = new Date();
+    endOfDay.setUTCHours(23, 59, 59, 999);
+
+    const todaysShifts = await EmployeeShift.find({ 
+      employee: employee._id, 
+      date: { $gte: startOfDay, $lte: endOfDay }
+    });
+
+    if (!todaysShifts || todaysShifts.length === 0) {
+      return NextResponse.json({ success: false, message: 'You have no shift scheduled for today.' }, { status: 403 });
     }
 
     const now = new Date();
-    // 30 minute grace period before shift starts
-    const shiftStart = new Date(activeShift.startTime.getTime() - 30 * 60000);
-    const shiftEnd = activeShift.endTime ? new Date(activeShift.endTime.getTime()) : null;
+    let currentValidShift = null;
+    let shiftTooEarly = false;
+    let shiftTooLate = false;
 
-    if (now < shiftStart) {
-      return NextResponse.json({ success: false, message: 'Your shift has not started yet.' }, { status: 403 });
+    for (const shift of todaysShifts) {
+      // Allow 15 min buffer before start
+      const shiftStart = new Date(shift.startTime.getTime() - 15 * 60000);
+      const shiftEnd = shift.endTime ? new Date(shift.endTime.getTime()) : null;
+
+      if (['Leave', 'Sick Leave', 'Vacation', 'Holiday'].includes(shift.shiftType)) {
+        continue;
+      }
+
+      if (now < shiftStart) {
+        shiftTooEarly = true;
+      } else if (shiftEnd && now > shiftEnd) {
+        shiftTooLate = true;
+      } else {
+        currentValidShift = shift;
+        break;
+      }
     }
 
-    if (shiftEnd && now > shiftEnd) {
-      return NextResponse.json({ success: false, message: 'Your shift has already ended.' }, { status: 403 });
+    if (!currentValidShift) {
+      if (shiftTooEarly) return NextResponse.json({ success: false, message: 'Your shift has not started yet.' }, { status: 403 });
+      if (shiftTooLate) return NextResponse.json({ success: false, message: 'Your shift has already ended.' }, { status: 403 });
+      
+      // If we got here and there were shifts, it means they were skipped (e.g. Leave, Holiday)
+      if (todaysShifts.some(s => ['Leave', 'Sick Leave', 'Vacation', 'Holiday'].includes(s.shiftType))) {
+        return NextResponse.json({ success: false, message: 'You cannot login because you are marked as on Leave or Holiday today.' }, { status: 403 });
+      }
+
+      return NextResponse.json({ success: false, message: 'You are not scheduled to work at this current time.' }, { status: 403 });
     }
 
     // 6. Create EmployeeSession
     const session = await EmployeeSession.create({
       employee: employee._id,
       restaurant: employee.restaurant,
-      shift: activeShift._id,
+      shift: currentValidShift._id,
       device: device._id,
       browserFingerprint,
-      ipAddress: ipAddress || 'unknown', // Ideally passed from headers in edge middleware
+      ipAddress: ipAddress || 'unknown',
       status: 'Active'
+    });
+
+    // 7. Create EmployeeLog
+    await EmployeeLog.create({
+      employee: employee._id,
+      restaurant: employee.restaurant,
+      shift: currentValidShift._id,
+      date: new Date(),
+      loginTime: new Date(),
+      device: device._id,
+      floor: currentValidShift.assignedFloor || employee.assignedFloor,
+      tablesAssigned: currentValidShift.assignedTables || []
     });
 
     // 7. Return JWT

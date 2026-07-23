@@ -15,6 +15,8 @@ const EmployeeShiftSchema = new mongoose.Schema(
     totalHours: { type: Number, default: 0 },
     regularHours: { type: Number, default: 0 },
     overtimeHours: { type: Number, default: 0 },
+    shiftType: { type: String, enum: ['Regular', 'Overtime', 'Holiday', 'Emergency'], default: 'Regular' },
+    templateId: { type: mongoose.Schema.Types.ObjectId, ref: 'ShiftTemplate' },
     notes: { type: String }
   },
   { timestamps: true }

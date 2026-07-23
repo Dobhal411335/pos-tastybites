@@ -75,7 +75,7 @@ export default function UsersModuleLayout({ children }) {
         )}
 
         <main className="flex-1 overflow-y-auto p-6">
-          <div className="mx-auto max-w-6xl bg-white border border-zinc-200 p-6 rounded-xl shadow-xs min-h-125">
+          <div className="mx-auto max-w-7xl bg-white border border-zinc-200 p-6 rounded-xl shadow-xs min-h-125">
             {children}
           </div>
         </main>

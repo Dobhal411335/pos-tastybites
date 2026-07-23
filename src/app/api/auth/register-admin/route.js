@@ -26,7 +26,7 @@ export async function POST(request) {
     }
 
     // Get or Create restaurant
-    const rName = restaurantName || "Tasty Bites Master Branch";
+    const rName = restaurantName || "Tasty Bites";
     const rSlug = rName.toLowerCase().replace(/[^a-z0-9]+/g, "-");
 
     let restaurant = await Restaurant.findOne({ slug: rSlug });

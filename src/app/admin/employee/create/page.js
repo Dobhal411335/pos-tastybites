@@ -24,25 +24,71 @@ export default function CreateServerAccountPage() {
   const [role, setRole] = useState("Staff");
   const [employeeColor, setEmployeeColor] = useState("#4ade80");
   
+  // Default Shift Assignment
+  const [defaultShiftTemplate, setDefaultShiftTemplate] = useState("");
+  const [templates, setTemplates] = useState([]);
+  
   const [roles, setRoles] = useState([]);
   const [isAddRoleOpen, setIsAddRoleOpen] = useState(false);
   const [newRoleName, setNewRoleName] = useState("");
   const [addingRole, setAddingRole] = useState(false);
 
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [editId, setEditId] = useState(null);
+
   useEffect(() => {
-    // Fetch available roles
+    // Check if we are in edit mode
+    const searchParams = new URLSearchParams(window.location.search);
+    const id = searchParams.get("id");
+    if (id) {
+      setIsEditMode(true);
+      setEditId(id);
+    }
+
+    // Fetch available roles and templates
     const fetchInitialData = async () => {
       try {
-        const rolesRes = await fetch("/api/roles");
+        const [rolesRes, templatesRes] = await Promise.all([
+          fetch("/api/roles"),
+          fetch("/api/employees/shifts?action=templates", { cache: "no-store" })
+        ]);
+        
         const rolesJson = await rolesRes.json();
         if (rolesJson.success) {
           setRoles(rolesJson.data);
-          if (!rolesJson.data.find(r => r.name === role) && rolesJson.data.length > 0) {
+          if (!rolesJson.data.find(r => r.name === role) && rolesJson.data.length > 0 && !id) {
             setRole(rolesJson.data[0].name);
           }
         }
+
+        const templatesJson = await templatesRes.json();
+        if (templatesJson.success) {
+          setTemplates(templatesJson.data);
+        }
+
+        if (id) {
+          const empRes = await fetch(`/api/employees?id=${id}`);
+          const empJson = await empRes.json();
+          if (empJson.success && empJson.data.length > 0) {
+            const emp = empJson.data[0];
+            setFirstName(emp.firstName || "");
+            setLastName(emp.lastName || "");
+            setEmail(emp.email || "");
+            // Basic parsing of phone if it has country code
+            const phoneParts = (emp.phoneNumber || "").split(" ");
+            if (phoneParts.length > 1) {
+              setCountryCode(phoneParts[0]);
+              setPhoneNumber(phoneParts.slice(1).join(" "));
+            } else {
+              setPhoneNumber(emp.phoneNumber || "");
+            }
+            if (emp.role) setRole(emp.role);
+            if (emp.employeeColor) setEmployeeColor(emp.employeeColor);
+            if (emp.defaultShiftTemplate) setDefaultShiftTemplate(emp.defaultShiftTemplate);
+          }
+        }
       } catch (err) {
-        toast.error("Failed to fetch roles");
+        toast.error("Failed to fetch data");
       }
     };
     fetchInitialData();
@@ -58,25 +104,35 @@ export default function CreateServerAccountPage() {
     setLoading(true);
     try {
       const fullPhone = `${countryCode} ${phoneNumber.trim()}`;
+      
+      const payload = {
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        phoneNumber: fullPhone,
+        role: role,
+        employeeColor: employeeColor,
+        defaultShiftTemplate: defaultShiftTemplate || null
+      };
+
+      if (!isEditMode) {
+        payload.email = email.trim();
+      } else {
+        payload._id = editId;
+        payload.action = "updateEmployee";
+      }
+
       const res = await fetch("/api/employees", {
-        method: "POST",
+        method: isEditMode ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          firstName: firstName.trim(),
-          lastName: lastName.trim(),
-          email: email.trim(),
-          phoneNumber: fullPhone,
-          role: role,
-          employeeColor: employeeColor
-        }),
+        body: JSON.stringify(payload),
       });
 
       const json = await res.json();
       if (!res.ok || !json.success) {
-        throw new Error(json.message || "Failed to create account");
+        throw new Error(json.message || (isEditMode ? "Failed to update account" : "Failed to create account"));
       }
 
-      toast.success("Employee account created successfully!");
+      toast.success(isEditMode ? "Employee updated successfully!" : "Employee account created successfully!");
       setFirstName("");
       setLastName("");
       setEmail("");
@@ -131,10 +187,10 @@ export default function CreateServerAccountPage() {
           <div className="flex flex-col sm:flex-row justify-between sm:items-end gap-4 border-b border-zinc-200 pb-5">
             <div>
               <h1 className="text-[32px] font-bold leading-tight" style={{ color: PALETTE.ink }}>
-                Create Employee
+                {isEditMode ? "Edit Employee" : "Create Employee"}
               </h1>
               <p className="text-[15px] mt-1" style={{ color: PALETTE.inkMuted }}>
-                Add new staff members and assign their roles.
+                {isEditMode ? "Update staff member details and assignments." : "Add new staff members and assign their roles."}
               </p>
             </div>
             <Button variant="outline" asChild className="h-10 px-4 font-semibold text-[15px] gap-2 hover:bg-zinc-50 border-zinc-200 text-zinc-700">
@@ -201,7 +257,8 @@ export default function CreateServerAccountPage() {
                       <Input
                         type="email"
                         placeholder="e.g. john.doe@example.com"
-                        required
+                        required={!isEditMode}
+                        disabled={isEditMode}
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                         className="pl-10 h-12 text-[15px] bg-white border-zinc-200 focus:ring-[#1e40af]"
@@ -287,7 +344,12 @@ export default function CreateServerAccountPage() {
                 </div>
                 </div>
 
-                <div className="pt-4 flex justify-end">
+                <div className="pt-6 border-t border-zinc-100 flex justify-end gap-3">
+                  {isEditMode && (
+                    <Button type="button" variant="outline" className="w-full md:w-auto h-12 px-8 text-[15px] font-bold" asChild>
+                      <Link href="/admin/employee">Cancel</Link>
+                    </Button>
+                  )}
                   <Button
                     type="submit"
                     disabled={loading}
@@ -297,12 +359,12 @@ export default function CreateServerAccountPage() {
                     {loading ? (
                       <>
                         <Loader2 className="h-5 w-5 animate-spin" />
-                        <span>Creating Account...</span>
+                        <span>{isEditMode ? "Updating..." : "Creating Account..."}</span>
                       </>
                     ) : (
                       <>
                         <UserPlus className="h-5 w-5" />
-                        <span>Create User Account</span>
+                        <span>{isEditMode ? "Update User Account" : "Create User Account"}</span>
                       </>
                     )}
                   </Button>
