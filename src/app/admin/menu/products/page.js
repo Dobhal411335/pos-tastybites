@@ -24,52 +24,126 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { PALETTE } from "@/utils/paletteeColor"
+import { PALETTE } from "@/utils/paletteeColor";
+import DeleteDialog from "@/components/common/DeleteDialog";
+import { Loader2 } from "lucide-react";
 
 export default function ProductsPage() {
   const router = useRouter();
 
-  const [products, setProducts] = useState([
-    { id: 1, category: "Starters & Appetizers", name: "Spicy Garlic Shrimp", status: "Active" },
-    { id: 2, category: "Gourmet Hamburgers", name: "Classic Cheese Beef Burger", status: "Active" },
-    { id: 3, category: "Gourmet Hamburgers", name: "Bacon Truffle Burger", status: "Active" },
-    { id: 4, category: "Wood-Fired Pizzas", name: "Margherita Supreme Pizza", status: "Active" },
-  ]);
+  const [products, setProducts] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [newProductName, setNewProductName] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("Starters & Appetizers");
+  const [selectedCategory, setSelectedCategory] = useState("");
 
-  const handleCreateProduct = (e) => {
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [productToDelete, setProductToDelete] = useState(null);
+
+  const fetchInitialData = async () => {
+    try {
+      const [prodRes, catRes] = await Promise.all([
+        fetch("/api/menu/products"),
+        fetch("/api/menu/categories")
+      ]);
+      const prodJson = await prodRes.json();
+      const catJson = await catRes.json();
+
+      if (prodJson.success) setProducts(prodJson.data);
+      if (catJson.success) setCategories(catJson.data);
+    } catch (e) {
+      toast.error("Failed to fetch data.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  React.useEffect(() => {
+    fetchInitialData();
+  }, []);
+
+  const handleCreateProduct = async (e) => {
     e.preventDefault();
     if (!newProductName.trim()) {
-      toast.error("Please enter a product name.");
-      return;
+      return toast.error("Please enter a product name.");
+    }
+    if (!selectedCategory) {
+      return toast.error("Please select a category.");
     }
 
-    const newProd = {
-      id: Date.now(),
-      category: selectedCategory,
-      name: newProductName.trim(),
-      status: "Active",
-    };
-
-    setProducts([...products, newProd]);
-    setNewProductName("");
-    setIsAddDialogOpen(false);
-    toast.success("Product draft created! Head to configuration for details.");
+    try {
+      const res = await fetch("/api/menu/products", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: newProductName.trim(),
+          categoryId: selectedCategory
+        })
+      });
+      const json = await res.json();
+      if (json.success) {
+        toast.success("Product draft created! Redirecting to configuration...");
+        router.push(`/admin/menu/products/${json.data._id}`);
+      } else {
+        toast.error(json.message);
+      }
+    } catch (e) {
+      toast.error("An error occurred");
+    }
   };
 
-  const handleDeleteProduct = (id) => {
-    setProducts(products.filter((p) => p.id !== id));
-    toast.success("Product deleted successfully.");
+  const handleToggleStatus = async (prod) => {
+    const newStatus = prod.status === "Active" ? "Inactive" : "Active";
+    try {
+      const res = await fetch(`/api/menu/products/${prod._id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: newStatus })
+      });
+      const json = await res.json();
+      if (json.success) {
+        toast.success(`Status updated to ${newStatus}`);
+        setProducts(products.map(p => p._id === prod._id ? { ...p, status: newStatus } : p));
+      } else {
+        toast.error(json.message);
+      }
+    } catch (e) {
+      toast.error("Failed to update status");
+    }
   };
 
-  const filteredProducts = products.filter(p =>
-    p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    p.category.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const handleDeletePrompt = (id) => {
+    setProductToDelete(id);
+    setIsDeleteDialogOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!productToDelete) return;
+    try {
+      const res = await fetch(`/api/menu/products/${productToDelete}`, { method: "DELETE" });
+      const json = await res.json();
+      if (json.success) {
+        toast.success("Product deleted successfully.");
+        fetchInitialData();
+      } else {
+        toast.error(json.message);
+      }
+    } catch (e) {
+      toast.error("Failed to delete product");
+    } finally {
+      setIsDeleteDialogOpen(false);
+      setProductToDelete(null);
+    }
+  };
+
+  const filteredProducts = products.filter(p => {
+    const term = searchQuery.toLowerCase();
+    const catName = p.category?.name?.toLowerCase() || "";
+    return p.name.toLowerCase().includes(term) || catName.includes(term);
+  });
 
   return (
     <div className="h-screen flex flex-col overflow-hidden" style={{ backgroundColor: PALETTE.canvas, color: PALETTE.ink }}>
@@ -116,10 +190,9 @@ export default function ProductsPage() {
                             <SelectValue placeholder="Select Category" />
                           </SelectTrigger>
                           <SelectContent className="bg-white">
-                            <SelectItem value="Starters & Appetizers">Starters & Appetizers</SelectItem>
-                            <SelectItem value="Gourmet Hamburgers">Gourmet Hamburgers</SelectItem>
-                            <SelectItem value="Wood-Fired Pizzas">Wood-Fired Pizzas</SelectItem>
-                            <SelectItem value="Seasonal Desserts">Seasonal Desserts</SelectItem>
+                            {categories.map(c => (
+                              <SelectItem key={c._id} value={c._id}>{c.name}</SelectItem>
+                            ))}
                           </SelectContent>
                         </Select>
                       </div>
@@ -185,34 +258,42 @@ export default function ProductsPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredProducts.length > 0 ? (
+                    {loading ? (
+                      <TableRow>
+                        <TableCell colSpan={3} className="h-32 text-center">
+                          <Loader2 className="w-6 h-6 animate-spin mx-auto text-zinc-400" />
+                        </TableCell>
+                      </TableRow>
+                    ) : filteredProducts.length > 0 ? (
                       filteredProducts.map((p) => (
-                        <TableRow key={p.id} className="h-16 hover:bg-zinc-50 transition-colors">
+                        <TableRow key={p._id} className="h-16 hover:bg-zinc-50 transition-colors">
                           <TableCell className="px-6 py-3">
                             <div className="flex flex-col">
                               <span className="text-[15px] font-semibold text-zinc-900 leading-tight">
                                 {p.name}
                               </span>
                               <span className="text-[13px] text-zinc-500 mt-1">
-                                {p.category}
+                                {p.category?.name || "Uncategorized"}
                               </span>
                             </div>
                           </TableCell>
                           <TableCell className="px-6">
-                            {p.status === "Active" ? (
-                              <Badge className="bg-emerald-50 text-emerald-700 hover:bg-emerald-50 border-none px-2.5 py-1 text-[13px] font-semibold">
-                                Active
-                              </Badge>
-                            ) : (
-                              <Badge className="bg-zinc-100 text-zinc-600 hover:bg-zinc-100 border-none px-2.5 py-1 text-[13px] font-semibold">
-                                Inactive
-                              </Badge>
-                            )}
+                            <Button variant="ghost" className="p-0 h-auto hover:bg-transparent" onClick={() => handleToggleStatus(p)}>
+                              {p.status === "Active" ? (
+                                <Badge className="bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 px-2.5 py-1 text-[13px] font-semibold transition-colors cursor-pointer">
+                                  Active
+                                </Badge>
+                              ) : (
+                                <Badge className="bg-zinc-100 text-zinc-600 hover:bg-zinc-200 border border-zinc-200 px-2.5 py-1 text-[13px] font-semibold transition-colors cursor-pointer">
+                                  Inactive
+                                </Badge>
+                              )}
+                            </Button>
                           </TableCell>
                           <TableCell className="px-6 text-right">
                             <div className="flex items-center justify-end gap-2">
                               <Button variant="outline" size="sm" className="h-8 text-[12px] font-semibold" asChild>
-                                <Link href="/admin/menu/products/details">Edit Product</Link>
+                                <Link href={`/admin/menu/products/${p._id}`}>Edit Product</Link>
                               </Button>
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
@@ -221,14 +302,16 @@ export default function ProductsPage() {
                                   </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end" className="w-40 bg-white">
-                                  <DropdownMenuItem className="text-[14px] font-medium cursor-pointer">
-                                    <Edit /> Edit Category
+                                  <DropdownMenuItem asChild className="text-[14px] font-medium cursor-pointer">
+                                    <Link href={`/admin/menu/products/${p._id}`}>
+                                      <Edit className="mr-2 h-4 w-4" /> Edit Details
+                                    </Link>
                                   </DropdownMenuItem>
                                   <DropdownMenuItem
                                     className="text-[14px] font-medium text-red-600 focus:bg-red-500 focus:text-white cursor-pointer"
-                                    onClick={() => handleDeleteCategory(cat.id)}
+                                    onClick={() => { setTimeout(() => handleDeletePrompt(p._id), 150) }}
                                   >
-                                    <Trash /> Delete
+                                    <Trash className="mr-2 h-4 w-4" /> Delete
                                   </DropdownMenuItem>
                                 </DropdownMenuContent>
                               </DropdownMenu>
@@ -239,7 +322,7 @@ export default function ProductsPage() {
                     ) : (
                       <TableRow>
                         <TableCell colSpan={3} className="h-32 text-center text-zinc-500 text-[15px]">
-                          No categories found matching &quot;{searchQuery}&quot;
+                          No products found matching &quot;{searchQuery}&quot;
                         </TableCell>
                       </TableRow>
                     )}
@@ -266,6 +349,14 @@ export default function ProductsPage() {
           </div>
         </main>
       </div>
+
+      <DeleteDialog 
+        isOpen={isDeleteDialogOpen} 
+        onOpenChange={setIsDeleteDialogOpen} 
+        onConfirm={confirmDelete} 
+        title="Delete Product" 
+        description="Are you sure you want to delete this product? This action cannot be undone." 
+      />
     </div>
   );
 }

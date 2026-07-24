@@ -135,7 +135,7 @@ export default function AdminDashboardPage() {
                 />
               </div>
             </Link>
- 
+
             <div className="hidden lg:block h-8 w-px bg-stone-300" />
 
             <div className="hidden lg:flex flex-col">
@@ -180,16 +180,14 @@ export default function AdminDashboardPage() {
               </Badge>
 
             </div>
-
             <Button
+              variant="destructive"
               onClick={handleLogout}
-              variant="outline"
-              className="h-10 border-red-200 bg-white text-red-600 hover:border-red-300 hover:bg-red-50 hover:text-red-700"
+              className="hidden lg:flex h-12 gap-2 rounded-xl px-5 text-white bg-red-500 hover:bg-red-600"
             >
-              <LogOut className="mr-2 h-4 w-4" />
+              <LogOut className="h-4 w-4" />
               Logout
             </Button>
-
           </div>
 
         </div>
@@ -337,7 +335,7 @@ export default function AdminDashboardPage() {
               <ModuleCard href="/admin/menu" icon={UtensilsCrossed} color="orange" title="Create Menu" stat="Configure" desc="Configure categories, items, modifiers, pricing, and availability." />
               <ModuleCard href="/admin/floor-plan" icon={LayoutGrid} color="amber" title="Floor Management" stat="Tables" desc="Setup dining sections, table layouts, seating capacities, and status tracking." />
               <ModuleCard href="/admin/employee" icon={Users} color="indigo" title="Staff Portal" stat="Employees" desc="Manage employee profiles, access permissions, and designation matrices." />
-              <ModuleCard href="/admin/employee/device-assignment" icon={TabletSmartphone} color="blue" title="Device Assignment" stat="Devices" desc="Register POS devices and assign them to staff members." />
+              <ModuleCard href="/admin/employee/device-assignment?action=new" icon={TabletSmartphone} color="blue" title="Device Assignment" stat="Devices" desc="Register POS devices and assign them to staff members." />
               <ModuleCard href="/admin/promotions" icon={Gift} color="rose" title="Season Promotions" stat="Offers" desc="Setup promotional codes, percentage/flat discounts, and happy hour schedules." />
               <ModuleCard href="/admin/tax" icon={Percent} color="emerald" title="Configure Tax And Fees" stat="Tax" desc="Define applicable tax slabs (GST/VAT), service charges, and additional surcharges." />
               <ModuleCard href="/admin/users" icon={UserPlus} color="blue" title="Master Admin Users" stat="Admins" desc="Setup super-admin accounts with system-wide configuration rights." />

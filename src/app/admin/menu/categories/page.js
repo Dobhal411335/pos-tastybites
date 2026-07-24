@@ -23,50 +23,123 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { PALETTE } from "@/utils/paletteeColor"
+import DeleteDialog from "@/components/common/DeleteDialog";
+import { Loader2 } from "lucide-react";
 
 export default function MenuCategoriesPage() {
   const router = useRouter();
 
-  const [categories, setCategories] = useState([
-    { id: 1, name: "Starters & Appetizers", items: 12, status: "Active" },
-    { id: 2, name: "Gourmet Hamburgers", items: 8, status: "Active" },
-    { id: 3, name: "Wood-Fired Pizzas", items: 15, status: "Active" },
-    { id: 4, name: "Seasonal Desserts", items: 6, status: "Active" },
-    { id: 5, name: "Premium Cocktails & Drinks", items: 24, status: "Inactive" },
-    { id: 6, name: "Starters & Appetizers", items: 12, status: "Active" },
-    { id: 7, name: "Gourmet Hamburgers", items: 8, status: "Active" },
-    { id: 8, name: "Wood-Fired Pizzas", items: 15, status: "Active" },
-    { id: 9, name: "Seasonal Desserts", items: 6, status: "Active" },
-    { id: 10, name: "Premium Cocktails & Drinks", items: 24, status: "Inactive" },
-  ]);
+  const [categories, setCategories] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
+  const [editCategoryId, setEditCategoryId] = useState(null);
 
-  const handleCreateCategory = (e) => {
-    e.preventDefault();
-    if (!newCategoryName.trim()) {
-      toast.error("Please enter a category name.");
-      return;
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [categoryToDelete, setCategoryToDelete] = useState(null);
+
+  const fetchCategories = async () => {
+    try {
+      const res = await fetch("/api/menu/categories");
+      const json = await res.json();
+      if (json.success) {
+        setCategories(json.data);
+      }
+    } catch (e) {
+      toast.error("Failed to fetch categories.");
+    } finally {
+      setLoading(false);
     }
-
-    const newCat = {
-      id: Date.now(),
-      name: newCategoryName.trim(),
-      items: 0,
-      status: "Active",
-    };
-
-    setCategories([...categories, newCat]);
-    setNewCategoryName("");
-    setIsAddDialogOpen(false);
-    toast.success("Category created successfully!");
   };
 
-  const handleDeleteCategory = (id) => {
-    setCategories(categories.filter((cat) => cat.id !== id));
-    toast.success("Category deleted successfully.");
+  React.useEffect(() => {
+    fetchCategories();
+  }, []);
+
+  const handleOpenAdd = () => {
+    setEditCategoryId(null);
+    setNewCategoryName("");
+    setIsAddDialogOpen(true);
+  };
+
+  const handleOpenEdit = (cat) => {
+    setEditCategoryId(cat._id);
+    setNewCategoryName(cat.name);
+    setIsAddDialogOpen(true);
+  };
+
+  const handleSaveCategory = async (e) => {
+    e.preventDefault();
+    if (!newCategoryName.trim()) {
+      return toast.error("Please enter a category name.");
+    }
+    try {
+      const url = "/api/menu/categories";
+      const method = editCategoryId ? "PUT" : "POST";
+      const payload = editCategoryId ? { _id: editCategoryId, name: newCategoryName.trim() } : { name: newCategoryName.trim() };
+
+      const res = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      const json = await res.json();
+      if (json.success) {
+        toast.success(`Category ${editCategoryId ? "updated" : "created"} successfully!`);
+        setIsAddDialogOpen(false);
+        fetchCategories();
+      } else {
+        toast.error(json.message);
+      }
+    } catch (e) {
+      toast.error("An error occurred");
+    }
+  };
+
+  const handleToggleStatus = async (cat) => {
+    const newStatus = cat.status === "Active" ? "Inactive" : "Active";
+    try {
+      const res = await fetch("/api/menu/categories", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ _id: cat._id, status: newStatus })
+      });
+      const json = await res.json();
+      if (json.success) {
+        toast.success(`Status updated to ${newStatus}`);
+        setCategories(categories.map(c => c._id === cat._id ? { ...c, status: newStatus } : c));
+      } else {
+        toast.error(json.message);
+      }
+    } catch (e) {
+      toast.error("Failed to update status");
+    }
+  };
+
+  const handleDeletePrompt = (id) => {
+    setCategoryToDelete(id);
+    setIsDeleteDialogOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!categoryToDelete) return;
+    try {
+      const res = await fetch(`/api/menu/categories?id=${categoryToDelete}`, { method: "DELETE" });
+      const json = await res.json();
+      if (json.success) {
+        toast.success("Category deleted successfully.");
+        fetchCategories();
+      } else {
+        toast.error(json.message);
+      }
+    } catch (e) {
+      toast.error("Failed to delete category");
+    } finally {
+      setIsDeleteDialogOpen(false);
+      setCategoryToDelete(null);
+    }
   };
 
   const filteredCategories = categories.filter(c =>
@@ -94,17 +167,17 @@ export default function MenuCategoriesPage() {
 
               <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
                 <DialogTrigger asChild>
-                  <Button className="h-10 px-4 font-semibold text-[15px] gap-2 transition-transform hover:scale-[1.02]" style={{ backgroundColor: PALETTE.accent, color: "white" }}>
+                  <Button onClick={handleOpenAdd} className="h-10 px-4 font-semibold text-[15px] gap-2 transition-transform hover:scale-[1.02]" style={{ backgroundColor: PALETTE.accent, color: "white" }}>
                     <Plus className="w-5 h-5" />
                     Add Category
                   </Button>
                 </DialogTrigger>
                 <DialogContent className="sm:max-w-[425px]">
-                  <form onSubmit={handleCreateCategory}>
+                  <form onSubmit={handleSaveCategory}>
                     <DialogHeader>
-                      <DialogTitle className="text-[22px] font-bold">Add Category</DialogTitle>
+                      <DialogTitle className="text-[22px] font-bold">{editCategoryId ? "Edit Category" : "Add Category"}</DialogTitle>
                       <DialogDescription className="text-[15px]">
-                        Create a new category to group related menu items.
+                        {editCategoryId ? "Modify this category's properties." : "Create a new category to group related menu items."}
                       </DialogDescription>
                     </DialogHeader>
                     <div className="py-6">
@@ -122,11 +195,11 @@ export default function MenuCategoriesPage() {
                       </div>
                     </div>
                     <DialogFooter>
-                      <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)} className="h-11 hover:bg-red-600 hover:text-white px-6 font-semibold cursor-pointer">
+                      <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)} className="h-11 hover:bg-red-600 hover:text-white px-6 font-semibold cursor-pointer border-zinc-200">
                         Cancel
                       </Button>
                       <Button type="submit" className="h-11 px-6 font-semibold cursor-pointer" style={{ backgroundColor: PALETTE.accent, color: "white" }}>
-                        Save Category
+                        {editCategoryId ? "Save Changes" : "Save Category"}
                       </Button>
                     </DialogFooter>
                   </form>
@@ -168,22 +241,30 @@ export default function MenuCategoriesPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredCategories.length > 0 ? (
+                  {loading ? (
+                    <TableRow>
+                      <TableCell colSpan={4} className="h-32 text-center">
+                        <Loader2 className="w-6 h-6 animate-spin mx-auto text-zinc-400" />
+                      </TableCell>
+                    </TableRow>
+                  ) : filteredCategories.length > 0 ? (
                     filteredCategories.map((cat) => (
-                      <TableRow key={cat.id} className="h-16 hover:bg-zinc-50 transition-colors">
+                      <TableRow key={cat._id} className="h-16 hover:bg-zinc-50 transition-colors">
                         <TableCell className="px-6 font-semibold text-[15px] text-zinc-900">
                           {cat.name}
                         </TableCell>
                         <TableCell className="px-6">
-                          {cat.status === "Active" ? (
-                            <Badge className="bg-emerald-50 text-emerald-700 hover:bg-emerald-50 border-none px-2.5 py-1 text-[13px] font-semibold">
-                              Active
-                            </Badge>
-                          ) : (
-                            <Badge className="bg-zinc-100 text-zinc-600 hover:bg-zinc-100 border-none px-2.5 py-1 text-[13px] font-semibold">
-                              Inactive
-                            </Badge>
-                          )}
+                          <Button variant="ghost" className="p-0 h-auto hover:bg-transparent" onClick={() => handleToggleStatus(cat)}>
+                            {cat.status === "Active" ? (
+                              <Badge className="bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 px-2.5 py-1 text-[13px] font-semibold transition-colors cursor-pointer">
+                                Active
+                              </Badge>
+                            ) : (
+                              <Badge className="bg-zinc-100 text-zinc-600 hover:bg-zinc-200 border border-zinc-200 px-2.5 py-1 text-[13px] font-semibold transition-colors cursor-pointer">
+                                Inactive
+                              </Badge>
+                            )}
+                          </Button>
                         </TableCell>
                         <TableCell className="px-6 text-right">
                           <DropdownMenu>
@@ -193,12 +274,12 @@ export default function MenuCategoriesPage() {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="w-40 bg-white">
-                              <DropdownMenuItem className="text-[14px] font-medium cursor-pointer">
+                              <DropdownMenuItem className="text-[14px] font-medium cursor-pointer" onClick={() => { setTimeout(() => handleOpenEdit(cat), 150) }}>
                                 <Edit />  Edit Category
                               </DropdownMenuItem>
                               <DropdownMenuItem
                                 className="text-[14px] font-medium text-red-600 focus:bg-red-500 focus:text-white cursor-pointer"
-                                onClick={() => handleDeleteCategory(cat.id)}
+                                onClick={() => { setTimeout(() => handleDeletePrompt(cat._id), 150) }}
                               >
                                 <Trash />  Delete
                               </DropdownMenuItem>
@@ -236,6 +317,14 @@ export default function MenuCategoriesPage() {
           </div>
         </main>
       </div>
+
+      <DeleteDialog 
+        isOpen={isDeleteDialogOpen} 
+        onOpenChange={setIsDeleteDialogOpen} 
+        onConfirm={confirmDelete} 
+        title="Delete Category" 
+        description="Are you sure you want to delete this category? Products assigned to it must be removed first." 
+      />
     </div>
   );
 }

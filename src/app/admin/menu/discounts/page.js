@@ -23,50 +23,159 @@ import {
 } from "@/components/ui/radio-group";
 
 import { Label } from "@/components/ui/label";
-export default function ApplyDiscountsPage() {
-  const [appliedDiscounts, setAppliedDiscounts] = useState([
-    { id: 1, code: "TASTY15", targetType: "Category", targetName: "Gourmet Hamburgers", active: true },
-    { id: 2, code: "WELCOME5", targetType: "Product", targetName: "Spicy Garlic Shrimp", active: true },
-  ]);
+import DeleteDialog from "@/components/common/DeleteDialog";
 
-  const [selectedCode, setSelectedCode] = useState("TASTY15");
-  const [selectedMenuCategory, setSelectedMenuCategory] = useState("Gourmet Hamburgers");
-  const [selectedProduct, setSelectedProduct] = useState("Spicy Garlic Shrimp");
+export default function ApplyDiscountsPage() {
+  const [coupons, setCoupons] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const [selectedCoupon, setSelectedCoupon] = useState("");
+  const [selectedMenuCategory, setSelectedMenuCategory] = useState("");
+  const [selectedProduct, setSelectedProduct] = useState("");
+
+  const [editingProductId, setEditingProductId] = useState(null);
+  const [deleteId, setDeleteId] = useState(null);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
   // Decide whether to apply to category or product
   const [targetMode, setTargetMode] = useState("Category"); // 'Category' or 'Product'
 
-  const handleApplyCoupon = (e) => {
+  const fetchData = async () => {
+    try {
+      const [coupRes, catRes, prodRes] = await Promise.all([
+        fetch("/api/menu/coupons"),
+        fetch("/api/menu/categories"),
+        fetch("/api/menu/products")
+      ]);
+      const coupJson = await coupRes.json();
+      const catJson = await catRes.json();
+      const prodJson = await prodRes.json();
+
+      if (coupJson.success) setCoupons(coupJson.data.filter(c => c.status === "Active"));
+      if (catJson.success) setCategories(catJson.data);
+      if (prodJson.success) setProducts(prodJson.data);
+    } catch (e) {
+      toast.error("Failed to load data");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  React.useEffect(() => {
+    fetchData();
+  }, []);
+
+  const handleApplyCoupon = async (e) => {
     e.preventDefault();
-
-    const targetName = targetMode === "Category" ? selectedMenuCategory : selectedProduct;
-
-    // Check duplication
-    const duplicate = appliedDiscounts.some(
-      (d) => d.code === selectedCode && d.targetType === targetMode && d.targetName === targetName
-    );
-
-    if (duplicate) {
-      toast.error("This discount is already applied to this selection.");
-      return;
+    if (!selectedCoupon) return toast.error("Please select a coupon");
+    
+    let targetId;
+    if (targetMode === "Category") {
+      if (!selectedMenuCategory) return toast.error("Please select a category");
+      targetId = selectedMenuCategory;
+    } else {
+      if (!selectedProduct) return toast.error("Please select a product");
+      targetId = selectedProduct;
     }
 
-    const newApplication = {
-      id: Date.now(),
-      code: selectedCode,
-      targetType: targetMode,
-      targetName,
-      active: true,
-    };
-
-    setAppliedDiscounts([...appliedDiscounts, newApplication]);
-    toast.success(`Discount ${selectedCode} applied to ${targetName}!`);
+    try {
+      const res = await fetch("/api/menu/discounts/apply", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          couponId: selectedCoupon,
+          targetType: targetMode === "Category" ? "menu" : "product", // 'menu' or 'product'
+          targetId: targetId
+        })
+      });
+      const json = await res.json();
+      if (json.success) {
+        toast.success(editingProductId ? "Discount updated!" : `Discount applied to ${json.data.updatedCount} products!`);
+        fetchData(); // reload products to show applied discounts
+        
+        // Reset form
+        setEditingProductId(null);
+        setSelectedCoupon("");
+        setSelectedMenuCategory("");
+        setSelectedProduct("");
+      } else {
+        toast.error(json.message);
+      }
+    } catch (e) {
+      toast.error(`Failed to ${editingProductId ? "update" : "apply"} discount`);
+    }
   };
 
-  const handleDeleteApplication = (id) => {
-    setAppliedDiscounts(appliedDiscounts.filter((d) => d.id !== id));
-    toast.success("Applied discount mapping removed.");
+  const handleEditClick = (app) => {
+    setEditingProductId(app.id); // Product ID
+    setTargetMode("Product");
+    setSelectedProduct(app.id);
+    setSelectedCoupon(app.couponId); // Need to make sure app has couponId
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
+
+  const handleDeleteClick = (id) => {
+    setDeleteId(id);
+    setIsDeleteDialogOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteId) return;
+    try {
+      const res = await fetch(`/api/menu/products/${deleteId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ discount: null })
+      });
+      const json = await res.json();
+      if (json.success) {
+        toast.success("Discount removed from product");
+        fetchData();
+      } else {
+        toast.error(json.message);
+      }
+    } catch (e) {
+      toast.error("Failed to remove discount");
+    } finally {
+      setDeleteId(null);
+      setIsDeleteDialogOpen(false);
+    }
+  };
+
+  const handleToggleStatus = async (couponId, currentActive) => {
+    const newStatus = currentActive ? "Inactive" : "Active";
+    try {
+      const res = await fetch(`/api/menu/coupons/${couponId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: newStatus })
+      });
+      const json = await res.json();
+      if (json.success) {
+        toast.success(`Coupon set to ${newStatus}`);
+        fetchData(); // reload products to show new status
+      } else {
+        toast.error(json.message);
+      }
+    } catch (e) {
+      toast.error("Failed to update status");
+    }
+  };
+
+  const appliedDiscounts = products
+    .filter(p => p.discount)
+    .map(p => ({
+      id: p._id,
+      couponId: p.discount._id,
+      code: p.discount.code,
+      targetType: "Product",
+      targetName: p.name,
+      active: p.discount.status === "Active"
+    }));
+
+
 
   return (
     <div className="flex flex-col overflow-hidden min-h-screen" style={{ backgroundColor: PALETTE.canvas, color: PALETTE.ink }}>
@@ -105,24 +214,22 @@ export default function ApplyDiscountsPage() {
                     <div className="relative w-full">
                       <Tag className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-zinc-400 z-10 pointer-events-none" />
 
-                      <Select
-                        value={selectedCode}
-                        onValueChange={setSelectedCode}
-                      >
-                        <SelectTrigger className="w-full h-11 pl-10 text-[15px] font-mono font-semibold border-zinc-200 focus:ring-2 focus:ring-[#F97316]">
-                          <SelectValue placeholder="Select Coupon Code" />
-                        </SelectTrigger>
+                        <Select
+                          value={selectedCoupon}
+                          onValueChange={setSelectedCoupon}
+                        >
+                          <SelectTrigger className="w-full h-11 pl-10 text-[15px] font-mono font-semibold border-zinc-200 focus:ring-2 focus:ring-[#F97316]">
+                            <SelectValue placeholder="Select Coupon Code" />
+                          </SelectTrigger>
 
-                        <SelectContent className="" style={{ backgroundColor: PALETTE.canvas }}>
-                          <SelectItem value="TASTY15">
-                            TASTY15 (15% OFF)
-                          </SelectItem>
-
-                          <SelectItem value="WELCOME5">
-                            WELCOME5 ($5.00 OFF)
-                          </SelectItem>
-                        </SelectContent>
-                      </Select>
+                          <SelectContent className="" style={{ backgroundColor: PALETTE.canvas }}>
+                            {coupons.map(c => (
+                              <SelectItem key={c._id} value={c._id}>
+                                {c.code} ({c.discountType === "percent" ? `${c.value}% OFF` : `$${c.value} OFF`})
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                     </div>
                   </div>
 
@@ -210,21 +317,11 @@ export default function ApplyDiscountsPage() {
                           </SelectTrigger>
 
                           <SelectContent style={{ backgroundColor: PALETTE.canvas }}>
-                            <SelectItem value="Starters & Appetizers">
-                              Starters & Appetizers
-                            </SelectItem>
-
-                            <SelectItem value="Gourmet Hamburgers">
-                              Gourmet Hamburgers
-                            </SelectItem>
-
-                            <SelectItem value="Wood-Fired Pizzas">
-                              Wood-Fired Pizzas
-                            </SelectItem>
-
-                            <SelectItem value="Seasonal Desserts">
-                              Seasonal Desserts
-                            </SelectItem>
+                            {categories.map(cat => (
+                              <SelectItem key={cat._id} value={cat._id}>
+                                {cat.name}
+                              </SelectItem>
+                            ))}
                           </SelectContent>
                         </Select>
                       </div>
@@ -246,21 +343,11 @@ export default function ApplyDiscountsPage() {
                           </SelectTrigger>
 
                           <SelectContent style={{ backgroundColor: PALETTE.canvas }}>
-                            <SelectItem value="Spicy Garlic Shrimp">
-                              Spicy Garlic Shrimp
-                            </SelectItem>
-
-                            <SelectItem value="Classic Cheese Beef Burger">
-                              Classic Cheese Beef Burger
-                            </SelectItem>
-
-                            <SelectItem value="Bacon Truffle Burger">
-                              Bacon Truffle Burger
-                            </SelectItem>
-
-                            <SelectItem value="Margherita Supreme Pizza">
-                              Margherita Supreme Pizza
-                            </SelectItem>
+                            {products.map(p => (
+                              <SelectItem key={p._id} value={p._id}>
+                                {p.name}
+                              </SelectItem>
+                            ))}
                           </SelectContent>
                         </Select>
                       </div>
@@ -271,16 +358,32 @@ export default function ApplyDiscountsPage() {
               </Card>
             </div>
 
-            {/* Sidebar Save Section */}
-            <div className="flex flex-col justify-end">
-              <Button
-                type="submit"
-                className="w-full h-12 text-[15px] font-bold text-white transition-transform hover:scale-[1.02] shadow-md"
-                style={{ backgroundColor: PALETTE.accent }}
-              >
-                Apply Coupon Target
-              </Button>
-            </div>
+              {/* Sidebar Action Section */}
+              <div className="lg:col-span-4 flex flex-col justify-end">
+                <Button
+                  type="submit"
+                  className="w-full h-12 text-[15px] font-bold text-white transition-transform hover:scale-[1.02] shadow-md"
+                  style={{ backgroundColor: PALETTE.accent }}
+                >
+                  {editingProductId ? "Update Applied Discount" : "Apply Discount"}
+                </Button>
+                
+                {editingProductId && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full h-12 mt-2 text-[15px] font-bold"
+                    onClick={() => {
+                      setEditingProductId(null);
+                      setSelectedCoupon("");
+                      setSelectedMenuCategory("");
+                      setSelectedProduct("");
+                    }}
+                  >
+                    Cancel Edit
+                  </Button>
+                )}
+              </div>
 
           </form>
 
@@ -306,7 +409,11 @@ export default function ApplyDiscountsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {appliedDiscounts.length > 0 ? appliedDiscounts.map((ad) => (
+                  {loading ? (
+                    <TableRow>
+                      <TableCell colSpan={5} className="h-24 text-center">Loading...</TableCell>
+                    </TableRow>
+                  ) : appliedDiscounts.length > 0 ? appliedDiscounts.map((ad) => (
                     <TableRow key={ad.id} className="h-16 hover:bg-zinc-50 transition-colors">
                       <TableCell className="px-6">
                         <div className="flex items-center gap-2">
@@ -323,9 +430,14 @@ export default function ApplyDiscountsPage() {
                         <span className="font-semibold text-[15px] text-zinc-800">{ad.targetName}</span>
                       </TableCell>
                       <TableCell className="px-6 text-center">
-                        <Badge className="bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border-none px-2.5 py-1 text-[13px] font-semibold inline-flex items-center gap-1">
-                          <CheckCircle2 className="h-3.5 w-3.5" />
-                          Active
+                        <Badge 
+                          className={ad.active 
+                            ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border-none px-2.5 py-1 text-[13px] font-semibold inline-flex items-center gap-1"
+                            : "bg-red-50 text-red-700 hover:bg-red-100 border-none px-2.5 py-1 text-[13px] font-semibold inline-flex items-center gap-1"
+                          }
+                        >
+                          {ad.active ? <CheckCircle2 className="h-3.5 w-3.5" /> : null}
+                          {ad.active ? "Active" : "Inactive"}
                         </Badge>
                       </TableCell>
                       <TableCell className="px-6 text-center">
@@ -336,14 +448,23 @@ export default function ApplyDiscountsPage() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className="w-40 bg-white">
-                            <DropdownMenuItem className="text-[14px] font-medium cursor-pointer">
-                              <Edit /> Edit Discount
+                            <DropdownMenuItem
+                              className="text-[14px] font-medium text-zinc-600 focus:bg-zinc-100 cursor-pointer"
+                              onClick={() => handleToggleStatus(ad.couponId, ad.active)}
+                            >
+                              <ArrowUpDown className="mr-2 h-4 w-4" /> {ad.active ? "Mark Inactive" : "Mark Active"}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              className="text-[14px] font-medium text-blue-600 focus:bg-blue-500 focus:text-white cursor-pointer"
+                              onClick={() => handleEditClick(ad)}
+                            >
+                              <Edit className="mr-2 h-4 w-4" /> Edit
                             </DropdownMenuItem>
                             <DropdownMenuItem
                               className="text-[14px] font-medium text-red-600 focus:bg-red-500 focus:text-white cursor-pointer"
-                              onClick={() => handleDeleteApplication(ad.id)}
+                              onClick={() => handleDeleteClick(ad.id)}
                             >
-                              <Trash />  Delete
+                              <Trash2 className="mr-2 h-4 w-4" /> Remove
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
@@ -361,6 +482,14 @@ export default function ApplyDiscountsPage() {
 
         </div>
       </div>
+      
+      <DeleteDialog
+        isOpen={isDeleteDialogOpen}
+        onOpenChange={setIsDeleteDialogOpen}
+        onConfirm={handleDeleteConfirm}
+        title="Remove Discount"
+        description="Are you sure you want to remove the discount from this product?"
+      />
     </div>
   );
 }

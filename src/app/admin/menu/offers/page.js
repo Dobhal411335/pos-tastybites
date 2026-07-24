@@ -1,103 +1,251 @@
 "use client";
 
-import React, { useState } from "react";
-import Link from "next/link";
-import { ArrowLeft, Plus, Edit, Trash2, MoreHorizontal, Calendar, Image as ImageIcon, Trash } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import Image from "next/image";
+import {
+  Plus,
+  MoreHorizontal,
+  Edit,
+  Trash,
+  Calendar,
+  ImageIcon,
+  Trash2,
+  Loader2
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardDescription, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { PALETTE } from "@/utils/paletteeColor";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DatePicker } from "@/components/ui/date-picker";
+import { format } from "date-fns";
+
 export default function CreatePromoOfferPage() {
-  const [offers, setOffers] = useState([
-    {
-      id: 1,
-      name: "Festive Double Feast Bundle",
-      price: 34.99,
-      validFrom: "2026-11-20",
-      validTo: "2026-12-30",
-      status: true,
-    },
-    {
-      id: 2,
-      name: "Happy Hour Garlic Special",
-      price: 15.00,
-      validFrom: "2026-07-01",
-      validTo: "2026-08-31",
-      status: true,
-    },
-  ]);
+  const [offers, setOffers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [editingOfferId, setEditingOfferId] = useState(null);
 
   // Form states
   const [offerName, setOfferName] = useState("");
-  const [offerInclude, setOfferInclude] = useState("");
-  const [choice1, setChoice1] = useState("");
-  const [choice2, setChoice2] = useState("");
-  const [choice3, setChoice3] = useState("");
-  const [drinkInclusion, setDrinkInclusion] = useState("");
   const [priceAmount, setPriceAmount] = useState("");
   const [description, setDescription] = useState("");
-  const [validFrom, setValidFrom] = useState("");
-  const [validTo, setValidTo] = useState("");
+  const [validFrom, setValidFrom] = useState(null);
+  const [validTo, setValidTo] = useState(null);
 
-  const handleCreateOffer = (e) => {
+  // Dynamic arrays
+  const [inclusions, setInclusions] = useState([""]);
+  const [choices, setChoices] = useState([""]);
+  const [drinks, setDrinks] = useState([""]);
+
+  // Image Upload
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [offerImage, setOfferImage] = useState(null);
+
+  const fetchOffers = async () => {
+    try {
+      const res = await fetch("/api/menu/offers");
+      const json = await res.json();
+      if (json.success) setOffers(json.data);
+    } catch (e) {
+      toast.error("Failed to load offers");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchOffers();
+  }, []);
+
+  const handleImageUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      return toast.error("Please select an image file.");
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      return toast.error("Image size must be less than 5MB.");
+    }
+
+    setUploadingImage(true);
+    const formDataUpload = new FormData();
+    formDataUpload.append("file", file);
+
+    const existingKey = offerImage?.key;
+    if (existingKey) {
+      try { await fetch(`/api/cloudinary?key=${existingKey}`, { method: 'DELETE' }); } catch (e) { }
+    }
+
+    try {
+      const res = await fetch("/api/cloudinary", {
+        method: "POST",
+        body: formDataUpload,
+      });
+      const data = await res.json();
+      if (res.ok && data.url) {
+        toast.success("Image uploaded!");
+        setOfferImage({ url: data.url, key: data.key || "" });
+      } else {
+        toast.error("Cloudinary upload failed: " + (data.error || "Unknown error"));
+      }
+    } catch (error) {
+      toast.error("Cloudinary upload error: " + error.message);
+    } finally {
+      setUploadingImage(false);
+      e.target.value = "";
+    }
+  };
+
+  const handleSubmitOffer = async (e) => {
     e.preventDefault();
     if (!offerName.trim() || !priceAmount || isNaN(parseFloat(priceAmount))) {
       toast.error("Please enter a valid offer name and price.");
       return;
     }
 
-    const newOffer = {
-      id: Date.now(),
+    setSaving(true);
+
+    // Clean arrays
+    const cleanInclusions = inclusions.filter(i => i.trim() !== "");
+    const cleanChoices = choices.filter(c => c.trim() !== "");
+    const cleanDrinks = drinks.filter(d => d.trim() !== "");
+
+    const payload = {
       name: offerName.trim(),
       price: parseFloat(priceAmount),
-      validFrom: validFrom || "2026-07-17",
-      validTo: validTo || "2026-08-17",
-      status: true,
+      description,
+      inclusions: cleanInclusions,
+      choices: cleanChoices,
+      drinks: cleanDrinks,
+      validFrom: validFrom ? validFrom.toISOString() : null,
+      validTo: validTo ? validTo.toISOString() : null,
+      image: offerImage
     };
 
-    setOffers([...offers, newOffer]);
+    try {
+      const url = editingOfferId ? `/api/menu/offers/${editingOfferId}` : "/api/menu/offers";
+      const method = editingOfferId ? "PUT" : "POST";
+
+      const res = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+
+      const json = await res.json();
+      if (json.success) {
+        toast.success(editingOfferId ? "Offer updated successfully!" : "Promotional offer created successfully!");
+        handleCancelEdit();
+        fetchOffers();
+      } else {
+        toast.error(json.message);
+      }
+    } catch (error) {
+      toast.error(editingOfferId ? "Failed to update offer" : "Failed to create offer");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleEditOffer = (id) => {
+    const offer = offers.find((o) => o._id === id);
+    if (!offer) return;
+    
+    setEditingOfferId(offer._id);
+    setOfferName(offer.name || "");
+    setPriceAmount(offer.price?.toString() || "");
+    setDescription(offer.description || "");
+    setValidFrom(offer.validFrom ? new Date(offer.validFrom) : null);
+    setValidTo(offer.validTo ? new Date(offer.validTo) : null);
+    
+    setInclusions(offer.inclusions?.length ? offer.inclusions : [""]);
+    setChoices(offer.choices?.length ? offer.choices : [""]);
+    setDrinks(offer.drinks?.length ? offer.drinks : [""]);
+    
+    setOfferImage(offer.image || null);
+    
+    // Scroll to top
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleCancelEdit = () => {
+    setEditingOfferId(null);
     setOfferName("");
     setPriceAmount("");
-    setOfferInclude("");
-    setChoice1("");
-    setChoice2("");
-    setChoice3("");
-    setDrinkInclusion("");
     setDescription("");
-    setValidFrom("");
-    setValidTo("");
-    toast.success("Promotional offer created successfully!");
+    setValidFrom(null);
+    setValidTo(null);
+    setInclusions([""]);
+    setChoices([""]);
+    setDrinks([""]);
+    setOfferImage(null);
   };
 
-  const handleToggleStatus = (id) => {
-    setOffers(
-      offers.map((off) =>
-        off.id === id ? { ...off, status: !off.status } : off
-      )
-    );
-    toast.info("Offer status toggled.");
+  const handleToggleStatus = async (id, currentStatus) => {
+    try {
+      const res = await fetch(`/api/menu/offers/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: !currentStatus })
+      });
+      const json = await res.json();
+      if (json.success) {
+        toast.info("Offer status toggled.");
+        fetchOffers();
+      } else {
+        toast.error(json.message);
+      }
+    } catch (e) {
+      toast.error("Failed to toggle status");
+    }
   };
 
-  const handleDeleteOffer = (id) => {
-    setOffers(offers.filter((o) => o.id !== id));
-    toast.success("Offer deleted successfully.");
+  const handleDeleteOffer = async (id) => {
+    if (!confirm("Are you sure you want to delete this offer?")) return;
+    try {
+      const res = await fetch(`/api/menu/offers/${id}`, { method: "DELETE" });
+      const json = await res.json();
+      if (json.success) {
+        toast.success("Offer deleted successfully.");
+        fetchOffers();
+      } else {
+        toast.error(json.message);
+      }
+    } catch (e) {
+      toast.error("Failed to delete offer");
+    }
+  };
+
+  // Array handlers
+  const updateArray = (arr, setter, index, val) => {
+    const newArr = [...arr];
+    newArr[index] = val;
+    setter(newArr);
+  };
+  const addToArray = (arr, setter) => setter([...arr, ""]);
+  const removeFromArray = (arr, setter, index) => {
+    const newArr = arr.filter((_, i) => i !== index);
+    if (newArr.length === 0) newArr.push("");
+    setter(newArr);
   };
 
   return (
     <div className="flex flex-col overflow-hidden min-h-screen" style={{ backgroundColor: PALETTE.canvas, color: PALETTE.ink }}>
-
       <div className="flex-1 overflow-y-auto p-8">
         <div className="max-w-300 mx-auto space-y-8 pb-16 font-sans">
 
-          {/* Top Header & Back Button */}
+          {/* Top Header */}
           <div className="flex flex-col sm:flex-row justify-between sm:items-end gap-4 border-b border-zinc-200 pb-5">
             <div>
               <h1 className="text-[32px] font-bold leading-tight" style={{ color: PALETTE.ink }}>
-                Create Promotional Offer
+                Create Festive Offers
               </h1>
               <p className="text-[15px] mt-1" style={{ color: PALETTE.inkMuted }}>
                 Define special seasonal bundles, happy hour packages, and active coupons.
@@ -105,7 +253,7 @@ export default function CreatePromoOfferPage() {
             </div>
           </div>
 
-          <form onSubmit={handleCreateOffer} className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+          <form onSubmit={handleSubmitOffer} className="grid grid-cols-1 lg:grid-cols-12 gap-8">
 
             {/* Left Column */}
             <div className="lg:col-span-8 space-y-6">
@@ -151,66 +299,93 @@ export default function CreatePromoOfferPage() {
                   <CardDescription className="text-[14px]">Specify the items and choices included in this offer.</CardDescription>
                 </CardHeader>
                 <CardContent className="p-6 space-y-6">
-                  <div className="space-y-2">
+
+                  {/* Inclusions */}
+                  <div className="space-y-3">
                     <label className="text-[14px] font-semibold text-zinc-900">
                       Includes (Products)
                     </label>
-                    <div className="flex gap-2">
-                      <Input
-                        type="text"
-                        placeholder="Type Product Name"
-                        value={offerInclude}
-                        onChange={(e) => setOfferInclude(e.target.value)}
-                        className="h-11 text-[16px] bg-white flex-1"
-                      />
-                      <Button type="button" variant="outline" className="h-11 px-4 font-semibold shrink-0 text-zinc-700">
-                        <Plus className="w-4 h-4 mr-2" /> Add
-                      </Button>
-                    </div>
+                    {inclusions.map((item, index) => (
+                      <div key={`inc-${index}`} className="flex gap-2">
+                        <Input
+                          type="text"
+                          placeholder="Type Product Name"
+                          value={item}
+                          onChange={(e) => updateArray(inclusions, setInclusions, index, e.target.value)}
+                          className="h-11 text-[16px] bg-white flex-1"
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => removeFromArray(inclusions, setInclusions, index)}
+                          className="h-11 w-11 p-0 shrink-0 text-red-500 hover:text-red-700 hover:bg-red-50"
+                        >
+                          <Trash2 className="w-5 h-5" />
+                        </Button>
+                      </div>
+                    ))}
+                    <Button type="button" variant="outline" onClick={() => addToArray(inclusions, setInclusions)} className="h-9 px-4 font-semibold text-zinc-700">
+                      <Plus className="w-4 h-4 mr-2" /> Add Included Item
+                    </Button>
                   </div>
 
-                  <div className="space-y-2">
+                  {/* Choices */}
+                  <div className="space-y-3 pt-4 border-t border-zinc-100">
                     <label className="text-[14px] font-semibold text-zinc-900">
-                      Choice Of (Pick up to 3)
+                      Choice Of
                     </label>
-                    <div className="flex flex-col sm:flex-row gap-2 items-center">
-                      <Input
-                        type="text"
-                        placeholder="Choice 1"
-                        value={choice1}
-                        onChange={(e) => setChoice1(e.target.value)}
-                        className="h-11 text-[15px] bg-white"
-                      />
-                      <span className="text-[12px] font-bold text-zinc-400">OR</span>
-                      <Input
-                        type="text"
-                        placeholder="Choice 2"
-                        value={choice2}
-                        onChange={(e) => setChoice2(e.target.value)}
-                        className="h-11 text-[15px] bg-white"
-                      />
-                      <span className="text-[12px] font-bold text-zinc-400">OR</span>
-                      <Input
-                        type="text"
-                        placeholder="Choice 3"
-                        value={choice3}
-                        onChange={(e) => setChoice3(e.target.value)}
-                        className="h-11 text-[15px] bg-white"
-                      />
-                    </div>
+                    {choices.map((item, index) => (
+                      <div key={`cho-${index}`} className="flex gap-2 items-center">
+                        <Input
+                          type="text"
+                          placeholder="Type Choice"
+                          value={item}
+                          onChange={(e) => updateArray(choices, setChoices, index, e.target.value)}
+                          className="h-11 text-[15px] bg-white flex-1"
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => removeFromArray(choices, setChoices, index)}
+                          className="h-11 w-11 p-0 shrink-0 text-red-500 hover:text-red-700 hover:bg-red-50"
+                        >
+                          <Trash2 className="w-5 h-5" />
+                        </Button>
+                        {index < choices.length - 1 && <span className="text-[12px] font-bold text-zinc-400 mx-1">OR</span>}
+                      </div>
+                    ))}
+                    <Button type="button" variant="outline" onClick={() => addToArray(choices, setChoices)} className="h-9 px-4 font-semibold text-zinc-700">
+                      <Plus className="w-4 h-4 mr-2" /> Add Choice Option
+                    </Button>
                   </div>
 
-                  <div className="space-y-2">
+                  {/* Drinks */}
+                  <div className="space-y-3 pt-4 border-t border-zinc-100">
                     <label className="text-[14px] font-semibold text-zinc-900">
                       Drink / Liqueur Inclusions
                     </label>
-                    <Input
-                      type="text"
-                      placeholder="Type Drink Names"
-                      value={drinkInclusion}
-                      onChange={(e) => setDrinkInclusion(e.target.value)}
-                      className="h-11 text-[16px] bg-white"
-                    />
+                    {drinks.map((item, index) => (
+                      <div key={`drk-${index}`} className="flex gap-2">
+                        <Input
+                          type="text"
+                          placeholder="Type Drink Names"
+                          value={item}
+                          onChange={(e) => updateArray(drinks, setDrinks, index, e.target.value)}
+                          className="h-11 text-[16px] bg-white flex-1"
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => removeFromArray(drinks, setDrinks, index)}
+                          className="h-11 w-11 p-0 shrink-0 text-red-500 hover:text-red-700 hover:bg-red-50"
+                        >
+                          <Trash2 className="w-5 h-5" />
+                        </Button>
+                      </div>
+                    ))}
+                    <Button type="button" variant="outline" onClick={() => addToArray(drinks, setDrinks)} className="h-9 px-4 font-semibold text-zinc-700">
+                      <Plus className="w-4 h-4 mr-2" /> Add Drink
+                    </Button>
                   </div>
                 </CardContent>
               </Card>
@@ -232,7 +407,7 @@ export default function CreatePromoOfferPage() {
                     </label>
                     <Input
                       type="number"
-                      step="0.01"
+                      step="1"
                       placeholder="0.00"
                       value={priceAmount}
                       onChange={(e) => setPriceAmount(e.target.value)}
@@ -244,11 +419,10 @@ export default function CreatePromoOfferPage() {
                     <label className="text-[14px] font-semibold text-zinc-900">
                       Valid From
                     </label>
-                    <Input
-                      type="date"
+                    <DatePicker
                       value={validFrom}
-                      onChange={(e) => setValidFrom(e.target.value)}
-                      className="h-11 text-[15px] bg-white"
+                      onChange={setValidFrom}
+                      placeholder="Select start date"
                     />
                   </div>
 
@@ -256,11 +430,10 @@ export default function CreatePromoOfferPage() {
                     <label className="text-[14px] font-semibold text-zinc-900">
                       Valid To
                     </label>
-                    <Input
-                      type="date"
+                    <DatePicker
                       value={validTo}
-                      onChange={(e) => setValidTo(e.target.value)}
-                      className="h-11 text-[15px] bg-white"
+                      onChange={setValidTo}
+                      placeholder="Select end date"
                     />
                   </div>
 
@@ -268,28 +441,69 @@ export default function CreatePromoOfferPage() {
                     <label className="text-[14px] font-semibold text-zinc-900">
                       Offer Image
                     </label>
-                    <button
-                      type="button"
-                      onClick={() => toast.success("Mock upload: promo image selected!")}
-                      className="w-full flex flex-col items-center justify-center gap-2 border-2 border-dashed border-zinc-300 rounded-lg h-28 hover:border-[#F97316] hover:bg-orange-50/50 transition-colors cursor-pointer group"
+                    <input
+                      type="file"
+                      accept="image/*"
+                      id="offer-image-upload"
+                      className="hidden"
+                      onChange={handleImageUpload}
+                      disabled={uploadingImage}
+                    />
+                    <label
+                      htmlFor="offer-image-upload"
+                      className={`w-full flex flex-col items-center justify-center gap-2 border-2 border-dashed border-zinc-300 rounded-lg h-32 hover:border-[#F97316] hover:bg-orange-50/50 transition-colors cursor-pointer group ${uploadingImage ? 'opacity-50 pointer-events-none' : ''}`}
                     >
-                      <div className="h-10 w-10 rounded-full bg-zinc-100 group-hover:bg-orange-100 flex items-center justify-center transition-colors">
-                        <ImageIcon className="h-5 w-5 text-zinc-500 group-hover:text-[#F97316]" />
-                      </div>
-                      <span className="text-[13px] font-medium text-zinc-600 group-hover:text-zinc-900">Upload Image</span>
-                    </button>
+                      {uploadingImage ? (
+                        <Loader2 className="h-6 w-6 animate-spin text-zinc-400" />
+                      ) : offerImage?.url ? (
+                        <div className="relative w-full h-full p-1 rounded-md overflow-hidden">
+                          <Image
+                            width={200}
+                            height={150}
+                            src={offerImage.url}
+                            alt="Offer"
+                            className="w-full h-full object-contain rounded-md"
+                          />
+                          <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity rounded-md">
+                            <span className="text-white text-xs font-semibold">Change Image</span>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="h-10 w-10 rounded-full bg-zinc-100 group-hover:bg-orange-100 flex items-center justify-center transition-colors">
+                            <ImageIcon className="h-5 w-5 text-zinc-500 group-hover:text-[#F97316]" />
+                          </div>
+                          <span className="text-[13px] font-medium text-zinc-600 group-hover:text-zinc-900">Click to upload image</span>
+                        </>
+                      )}
+                    </label>
                   </div>
 
                 </CardContent>
               </Card>
 
-              <Button
-                type="submit"
-                className="w-full h-12 text-[15px] font-bold text-white transition-transform hover:scale-[1.02]"
-                style={{ backgroundColor: PALETTE.accent }}
-              >
-                Create Offer
-              </Button>
+              <div className="flex gap-4">
+                <Button
+                  type="submit"
+                  disabled={saving}
+                  className="flex-1 h-12 text-[15px] font-bold text-white transition-transform hover:scale-[1.02]"
+                  style={{ backgroundColor: PALETTE.accent }}
+                >
+                  {saving ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : null}
+                  {editingOfferId ? "Update Offer" : "Create Offer"}
+                </Button>
+                {editingOfferId && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleCancelEdit}
+                    disabled={saving}
+                    className="flex-1 h-12 text-[15px] font-bold transition-transform hover:scale-[1.02]"
+                  >
+                    Cancel Edit
+                  </Button>
+                )}
+              </div>
 
             </div>
           </form>
@@ -303,6 +517,7 @@ export default function CreatePromoOfferPage() {
               <Table>
                 <TableHeader className="bg-zinc-50">
                   <TableRow>
+                    <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6 w-12">Image</TableHead>
                     <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6">Offer Name</TableHead>
                     <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6 text-center">Price</TableHead>
                     <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6 text-center">Duration Dates</TableHead>
@@ -312,23 +527,40 @@ export default function CreatePromoOfferPage() {
                 </TableHeader>
                 <TableBody>
                   {offers.length > 0 ? offers.map((off) => (
-                    <TableRow key={off.id} className="h-16 hover:bg-zinc-50 transition-colors">
+                    <TableRow key={off._id} className="h-16 hover:bg-zinc-50 transition-colors">
+                      <TableCell className="px-6">
+                        {off.image?.url ? (
+                          <div className="w-10 h-10 rounded-md overflow-hidden border border-zinc-200 bg-white flex items-center justify-center">
+                            <Image src={off.image.url} alt={off.name} width={40} height={40} className="object-contain w-full h-full" />
+                          </div>
+                        ) : (
+                          <div className="w-10 h-10 rounded-md border border-zinc-200 bg-zinc-50 flex items-center justify-center">
+                            <ImageIcon className="w-4 h-4 text-zinc-400" />
+                          </div>
+                        )}
+                      </TableCell>
                       <TableCell className="px-6">
                         <span className="text-[15px] font-semibold text-zinc-900">{off.name}</span>
                       </TableCell>
                       <TableCell className="px-6 text-center font-bold text-[15px] text-[#F97316]">
-                        ${off.price.toFixed(2)}
+                        ${Number(off.price || 0).toFixed(2)}
                       </TableCell>
                       <TableCell className="px-6 text-center">
-                        <div className="inline-flex items-center gap-1.5 bg-zinc-200 text-zinc-900 px-2.5 py-1 rounded-md text-[13px] font-medium">
-                          <Calendar className="w-3.5 h-3.5 text-zinc-400" />
-                          {off.validFrom} to {off.validTo}
-                        </div>
+                        {(off.validFrom || off.validTo) ? (
+                          <div className="inline-flex items-center gap-1.5 bg-zinc-100 text-zinc-700 px-2.5 py-1 rounded-md text-[13px] font-medium border border-zinc-200">
+                            <Calendar className="w-3.5 h-3.5 text-zinc-400" />
+                            {off.validFrom ? format(new Date(off.validFrom), 'MMM d, yyyy') : '...'}
+                            {' - '}
+                            {off.validTo ? format(new Date(off.validTo), 'MMM d, yyyy') : '...'}
+                          </div>
+                        ) : (
+                          <span className="text-[13px] text-zinc-400 font-medium">No Dates set</span>
+                        )}
                       </TableCell>
                       <TableCell className="px-6 text-center">
                         <button
                           type="button"
-                          onClick={() => handleToggleStatus(off.id)}
+                          onClick={() => handleToggleStatus(off._id, off.status)}
                           className="cursor-pointer transition-transform hover:scale-105"
                         >
                           {off.status ? (
@@ -350,14 +582,17 @@ export default function CreatePromoOfferPage() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className="w-40 bg-white">
-                            <DropdownMenuItem className="text-[14px] font-medium cursor-pointer">
-                              <Edit /> Edit Promotions
+                            <DropdownMenuItem
+                              className="text-[14px] font-medium cursor-pointer"
+                              onClick={() => handleEditOffer(off._id)}
+                            >
+                              <Edit className="w-4 h-4 mr-2" /> Edit Offer
                             </DropdownMenuItem>
                             <DropdownMenuItem
                               className="text-[14px] font-medium text-red-600 focus:bg-red-500 focus:text-white cursor-pointer"
-                              onClick={() => handleDeleteOffer(off.id)}
+                              onClick={() => handleDeleteOffer(off._id)}
                             >
-                              <Trash /> Delete
+                              <Trash className="w-4 h-4 mr-2" /> Delete
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
@@ -365,7 +600,9 @@ export default function CreatePromoOfferPage() {
                     </TableRow>
                   )) : (
                     <TableRow>
-                      <TableCell colSpan={5} className="h-24 text-center text-zinc-500 text-[14px]">No offers found.</TableCell>
+                      <TableCell colSpan={6} className="h-32 text-center">
+                        {loading ? <Loader2 className="w-6 h-6 animate-spin text-zinc-400 mx-auto" /> : <span className="text-zinc-500 text-[14px]">No offers found.</span>}
+                      </TableCell>
                     </TableRow>
                   )}
                 </TableBody>
