@@ -18,12 +18,14 @@ const OrderSchema = new mongoose.Schema(
     subTotal: { type: Number, required: true },
     taxTotal: { type: Number, default: 0 },
     discountTotal: { type: Number, default: 0 },
+    discountCode: { type: String, default: null },
     totalAmount: { type: Number, required: true },
     specialNote: { type: String },
     guestName: { type: String },
     contactNumber: { type: String },
     tableNo: { type: String },
     status: { type: String, enum: ['PENDING', 'CONFIRMED', 'CANCELLED'], default: 'PENDING' },
+    source: { type: String, default: 'POS' }, // E.g., 'POS', 'STAFF', 'ONLINE'
     processedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee' }, // Who took the order
   },
   { timestamps: true }

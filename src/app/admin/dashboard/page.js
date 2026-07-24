@@ -379,7 +379,7 @@ export default function AdminDashboardPage() {
                     <ModuleCard href="/admin/billing/admin" icon={Receipt} color="indigo" title="Admin Billing" stat="Terminal" desc="High-privilege terminal for direct invoicing, final settlements, and bill overrides." />
                     <ModuleCard href="/admin/billing/server" icon={CreditCard} color="blue" title="Server Billing" stat="Floor" desc="Floor-level terminal for taking orders, splitting checks, and printing Kot/BoR slips." />
                     <ModuleCard href="/admin/orders/online" icon={Globe} color="emerald" title="Online Orders" stat="Queue" desc="Centralized dashboard to accept, review, and queue web or aggregator orders." />
-                    <ModuleCard href="/admin/orders/staff" icon={ChefHat} color="orange" title="Staff Orders" stat="Internal" desc="Dedicated channel for recording employee meals or internal consumption." />
+                    <ModuleCard href="/admin/orders/staff/create" icon={ChefHat} color="orange" title="Staff Orders" stat="Internal" desc="Dedicated channel for recording employee meals or internal consumption." />
                     <ModuleCard href="/admin/orders" icon={ClipboardList} color="blue" title="Order Tracking" stat="Live" desc="Real-time visibility of order lifecycle from preparation to fulfillment." />
                     <ModuleCard href="/admin/invoices" icon={FileText} color="rose" title="Invoices" stat="Records" desc="Archive of historical bills, digital receipts, and transaction records." />
                   </div>

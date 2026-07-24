@@ -37,7 +37,6 @@ export default function StaffOrderLayout({ children }) {
       bgColorClass: "bg-blue-800", // Blue color for staff food order section
       items: [
         { label: "Create Order", href: "/admin/orders/staff/create" },
-        { label: "Today Order List", href: "/admin/orders/staff/today" },
       ],
     },
   ];

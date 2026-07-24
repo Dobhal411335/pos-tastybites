@@ -5,12 +5,14 @@ import { sendSuccess } from "@/utils/apiResponse";
 import { sendError } from "@/utils/errorHandler";
 import { logger } from "@/utils/logger";
 import Coupon from "@/models/menu/Coupon";
+import Tax from "@/models/tax/Tax";
 // GET - List all products
 export const GET = withAuth(async (request) => {
   try {
     const products = await Product.find({ restaurant: request.restaurant })
       .populate("category", "name")
       .populate("discount")
+      .populate("taxes")
       .sort({ createdAt: -1 })
       .lean();
 

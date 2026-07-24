@@ -781,7 +781,7 @@ export default function ProductDetailsConfigPage() {
                       onChange={(e) => setNewAddonName(e.target.value)}
                     />
                   </div>
-                  <DialogFooter>
+                  <DialogFooter className="pt-2">
                     <Button type="button" variant="outline" onClick={() => setIsAddonModalOpen(false)} className="h-11 px-6 font-semibold cursor-pointer">
                       Cancel
                     </Button>

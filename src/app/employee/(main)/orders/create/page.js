@@ -64,7 +64,7 @@ export default function EmployeeCreateOrderPage() {
       toast.error("Please provide Guest Name or Table No.");
       return;
     }
-    
+
     toast.success("Order confirmed and sent to kitchen!");
     setIsConfirmModalOpen(false);
     setCart([]);
@@ -79,10 +79,10 @@ export default function EmployeeCreateOrderPage() {
 
   return (
     <div className="flex flex-col overflow-hidden min-h-screen" style={{ backgroundColor: PALETTE.canvas, color: PALETTE.ink }}>
-      
+
       <div className="flex-1 overflow-y-auto p-8">
-        <div className="max-w-[1400px] mx-auto space-y-8 pb-16 font-sans">
-          
+        <div className="max-w-350 mx-auto space-y-8 pb-16 font-sans">
+
           {/* Header */}
           <div className="flex flex-col sm:flex-row justify-between sm:items-end gap-4 border-b border-zinc-200 pb-5">
             <div>
@@ -96,7 +96,7 @@ export default function EmployeeCreateOrderPage() {
           </div>
 
           <div className="flex flex-col items-center w-full gap-8">
-            
+
             {/* Left Column: Menu Selection */}
             <div className="w-full space-y-6">
               <Card className="shadow-sm border-zinc-200 bg-white overflow-hidden h-full flex flex-col">
@@ -133,12 +133,12 @@ export default function EmployeeCreateOrderPage() {
                               <span className="text-zinc-500">Tax: ${item.tax.toFixed(2)}</span>
                             </div>
                           </div>
-                          
+
                           <div className="flex items-center gap-2">
                             {item.hasOptions ? (
-                              <Button 
-                                variant="outline" 
-                                size="sm" 
+                              <Button
+                                variant="outline"
+                                size="sm"
                                 className="h-8 text-[12px] font-bold border-zinc-200 text-zinc-700 hover:bg-zinc-100"
                                 onClick={() => handleOpenOptions(item)}
                               >
@@ -149,8 +149,8 @@ export default function EmployeeCreateOrderPage() {
                                 <List className="w-3.5 h-3.5 mr-1" /> Std
                               </Badge>
                             )}
-                            <Button 
-                              size="sm" 
+                            <Button
+                              size="sm"
                               className="h-8 text-[12px] font-bold bg-[#1e40af] hover:bg-blue-900 text-white"
                               onClick={() => handleAddToCart(item)}
                             >
@@ -158,7 +158,7 @@ export default function EmployeeCreateOrderPage() {
                             </Button>
                           </div>
                         </div>
-                    ))}
+                      ))}
                   </div>
                 </CardContent>
               </Card>
@@ -166,7 +166,7 @@ export default function EmployeeCreateOrderPage() {
 
             {/* Right Column: Cart & Billing */}
             <div className="w-full space-y-6">
-              
+
               {/* Cart Table */}
               <Card className="shadow-sm border-zinc-200 bg-white overflow-hidden">
                 <CardHeader className="bg-zinc-50/50 border-b border-zinc-100 pb-4 flex flex-row items-center justify-between gap-4">
@@ -217,7 +217,7 @@ export default function EmployeeCreateOrderPage() {
                                 <button className="text-zinc-400 hover:text-zinc-800 transition-colors p-1">
                                   <Edit className="h-4 w-4" />
                                 </button>
-                                <button 
+                                <button
                                   className="text-red-400 hover:text-red-600 transition-colors p-1"
                                   onClick={() => setCart(cart.filter(x => x.cartId !== c.cartId))}
                                 >
@@ -235,18 +235,18 @@ export default function EmployeeCreateOrderPage() {
 
               {/* Billing Summary */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                
+
                 {/* Notes & Discounts */}
                 <Card className="shadow-sm border-zinc-200 bg-white overflow-hidden">
                   <CardContent className="p-6 space-y-6">
                     <div className="space-y-2">
                       <label className="text-[14px] font-semibold text-zinc-900">Special Note</label>
-                      <textarea 
+                      <textarea
                         placeholder="Add any special instructions here..."
                         className="w-full bg-zinc-50 border border-zinc-200 rounded-md min-h-[80px] p-3 text-[14px] text-zinc-700 focus:outline-none focus:ring-2 focus:ring-[#F97316]"
                       />
                     </div>
-                    
+
                     <div className="space-y-2">
                       <label className="text-[14px] font-semibold text-zinc-900 flex items-center gap-2">
                         <Tag className="w-4 h-4 text-zinc-500" /> Discount Code
@@ -283,13 +283,13 @@ export default function EmployeeCreateOrderPage() {
                         <span>-$0.00</span>
                       </div>
                     </div>
-                    
+
                     <div>
                       <div className="flex justify-between items-center mb-6">
                         <span className="text-[18px] font-bold text-zinc-100">Total Amount</span>
                         <span className="text-[28px] font-black text-[#F97316]">${grandTotal.toFixed(2)}</span>
                       </div>
-                      <Button 
+                      <Button
                         onClick={handlePlaceOrderClick}
                         className="w-full h-14 text-[16px] font-bold bg-[#F97316] hover:bg-[#e06510] text-white rounded-md shadow-lg transition-transform hover:scale-[1.02]"
                       >
@@ -316,14 +316,14 @@ export default function EmployeeCreateOrderPage() {
                 <CardTitle className="text-[20px] font-bold text-zinc-900">{selectedItem.name}</CardTitle>
                 <CardDescription className="text-[13px]">Select variations and extras</CardDescription>
               </div>
-              <button 
-                onClick={() => setIsOptionModalOpen(false)} 
+              <button
+                onClick={() => setIsOptionModalOpen(false)}
                 className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-zinc-200 text-zinc-500 transition-colors"
               >
                 ×
               </button>
             </CardHeader>
-            
+
             <CardContent className="p-6 space-y-4">
               <div className="flex text-[11px] font-bold uppercase tracking-wider text-zinc-400 mb-2 border-b border-zinc-100 pb-2 px-3">
                 <div className="flex-1">Option</div>
@@ -374,7 +374,7 @@ export default function EmployeeCreateOrderPage() {
                 </label>
               </div>
             </CardContent>
-            
+
             <div className="p-4 border-t border-zinc-100 flex gap-3 bg-zinc-50/50">
               <Button variant="outline" className="flex-1 h-11 border-zinc-300 font-bold text-zinc-700 hover:bg-white" onClick={() => setIsOptionModalOpen(false)}>
                 Cancel
@@ -392,8 +392,8 @@ export default function EmployeeCreateOrderPage() {
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
           <Card className="w-full max-w-md shadow-2xl border-none overflow-hidden bg-white animate-in zoom-in-95 duration-200 p-2">
             <CardHeader className="text-center pb-2 relative">
-              <button 
-                onClick={() => setIsConfirmModalOpen(false)} 
+              <button
+                onClick={() => setIsConfirmModalOpen(false)}
                 className="absolute top-2 right-2 w-8 h-8 flex items-center justify-center rounded-full hover:bg-zinc-200 text-zinc-500 transition-colors"
               >
                 ×
@@ -405,7 +405,7 @@ export default function EmployeeCreateOrderPage() {
               <CardDescription className="text-[14px]">Assign to guest or table.</CardDescription>
             </CardHeader>
             <CardContent className="p-6 pt-2 space-y-6">
-              
+
               <div className="bg-zinc-50 p-4 rounded-xl border border-zinc-100 flex justify-between items-center">
                 <div className="space-y-1">
                   <span className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider block">Order ID</span>
@@ -420,7 +420,7 @@ export default function EmployeeCreateOrderPage() {
               <div className="space-y-3">
                 <div className="space-y-1.5">
                   <label className="text-[13px] font-semibold text-zinc-900">Guest Name</label>
-                  <Input 
+                  <Input
                     value={guestName}
                     onChange={(e) => setGuestName(e.target.value)}
                     placeholder="e.g. John Doe"
@@ -430,7 +430,7 @@ export default function EmployeeCreateOrderPage() {
 
                 <div className="space-y-1.5">
                   <label className="text-[13px] font-semibold text-zinc-900">Call Number</label>
-                  <Input 
+                  <Input
                     value={callNumber}
                     onChange={(e) => setCallNumber(e.target.value)}
                     placeholder="e.g. +1 234 567 8900"
@@ -461,14 +461,14 @@ export default function EmployeeCreateOrderPage() {
               </div>
 
               <div className="flex gap-3 pt-4 border-t border-zinc-100">
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   className="flex-1 h-12 font-bold text-zinc-700 border-zinc-200 hover:bg-zinc-50"
                   onClick={() => setIsConfirmModalOpen(false)}
                 >
                   Cancel
                 </Button>
-                <Button 
+                <Button
                   className="flex-1 h-12 font-bold text-white shadow-sm transition-transform hover:scale-[1.02]"
                   style={{ backgroundColor: "#1e40af" }}
                   onClick={handleFinalConfirm}
