@@ -242,7 +242,7 @@ export default function TodayOrderListPage() {
                     <SelectTrigger className="w-full bg-white border-zinc-200 h-11 text-[15px] focus:ring-2 focus:ring-[#1e40af]">
                       <SelectValue placeholder="Assign a table..." />
                     </SelectTrigger>
-                    <SelectContent className="bg-white">
+                    <SelectContent className="bg-white max-h-60 overflow-y-auto">
                       <SelectItem value="T1">Table 1 (Window)</SelectItem>
                       <SelectItem value="T2">Table 2 (Center)</SelectItem>
                       <SelectItem value="T3">Table 3 (Patio)</SelectItem>

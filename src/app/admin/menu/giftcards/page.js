@@ -22,6 +22,7 @@ export default function GiftcardsConfigPage() {
   const [giftcardName, setGiftcardName] = useState("");
   const [discountType, setDiscountType] = useState("amount");
   const [discountValue, setDiscountValue] = useState("");
+  const [validFrom, setValidFrom] = useState(undefined);
   const [validUntil, setValidUntil] = useState(undefined);
   const [stickerCount, setStickerCount] = useState(1);
 
@@ -75,6 +76,7 @@ export default function GiftcardsConfigPage() {
         name: giftcardName.trim() || "Gift Card",
         discountType,
         value,
+        validFrom: validFrom ? format(validFrom, "yyyy-MM-dd") : null,
         validUntil: validUntil ? format(validUntil, "yyyy-MM-dd") : null,
       };
 
@@ -97,6 +99,7 @@ export default function GiftcardsConfigPage() {
         setEditingId(null);
         setGiftcardName("");
         setDiscountValue("");
+        setValidFrom(undefined);
         setValidUntil(undefined);
         setStickerCount(1);
       } else {
@@ -112,8 +115,9 @@ export default function GiftcardsConfigPage() {
   const handleEditClick = (g) => {
     setEditingId(g._id);
     setGiftcardName(g.name);
-    setDiscountType(g.discountType || "amount");
+    setDiscountType("amount");
     setDiscountValue(g.value);
+    setValidFrom(g.validFrom ? new Date(g.validFrom) : undefined);
     setValidUntil(g.validUntil ? new Date(g.validUntil) : undefined);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -209,41 +213,34 @@ export default function GiftcardsConfigPage() {
                   </div>
 
                   {/* Validity */}
-                  <div className="space-y-2 flex flex-col">
-                    <label className="text-[14px] font-semibold text-zinc-900">
-                      Valid Until
-                    </label>
-                    <DatePicker
-                      value={validUntil}
-                      onChange={setValidUntil}
-                      placeholder="Pick an expiry date"
-                    />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                    <div className="space-y-2 flex flex-col">
+                      <label className="text-[14px] font-semibold text-zinc-900">
+                        Valid From
+                      </label>
+                      <DatePicker
+                        value={validFrom}
+                        onChange={setValidFrom}
+                        placeholder="Pick a start date"
+                      />
+                    </div>
+                    <div className="space-y-2 flex flex-col">
+                      <label className="text-[14px] font-semibold text-zinc-900">
+                        Valid Until
+                      </label>
+                      <DatePicker
+                        value={validUntil}
+                        onChange={setValidUntil}
+                        placeholder="Pick an expiry date"
+                      />
+                    </div>
                   </div>
 
-                  {/* Discount Type and Value */}
+                  {/* Value */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                     <div className="space-y-2">
-                      <label className="text-[14px] font-semibold text-zinc-900">Discount Type <span className="text-red-500">*</span></label>
-                      <div className="flex bg-zinc-100 p-1 rounded-lg">
-                        <button
-                          type="button"
-                          onClick={() => setDiscountType("amount")}
-                          className={`flex-1 py-2 text-[14px] font-bold rounded-md transition-all ${discountType === "amount" ? "bg-white text-zinc-900 shadow-sm" : "text-zinc-500 hover:text-zinc-700"}`}
-                        >
-                          Fixed Amount ($)
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setDiscountType("percent")}
-                          className={`flex-1 py-2 text-[14px] font-bold rounded-md transition-all ${discountType === "percent" ? "bg-white text-zinc-900 shadow-sm" : "text-zinc-500 hover:text-zinc-700"}`}
-                        >
-                          Percentage (%)
-                        </button>
-                      </div>
-                    </div>
-                    <div className="space-y-2">
                       <label className="text-[14px] font-semibold text-zinc-900">
-                        Value <span className="text-red-500">*</span>
+                        Amount Value ($) <span className="text-red-500">*</span>
                       </label>
                       <Input
                         type="number"
@@ -353,12 +350,20 @@ export default function GiftcardsConfigPage() {
                         </div>
                       </TableCell>
                       <TableCell className="px-6 text-center font-bold text-[15px] text-[#F97316]">
-                        {g.discountType === "percent" ? `${g.value}%` : `$${g.value.toFixed(2)}`}
+                        ${g.value.toFixed(2)}
                       </TableCell>
                       <TableCell className="px-6 text-center">
-                        <div className="inline-flex items-center gap-1.5 bg-zinc-100 text-zinc-700 px-2.5 py-1 rounded-md text-[13px] font-medium">
-                          <CalendarIcon className="w-3.5 h-3.5 text-zinc-400" />
-                          {g.validUntil ? new Date(g.validUntil).toLocaleDateString() : "Never expires"}
+                        <div className="flex flex-col gap-1 items-center">
+                          {g.validFrom && (
+                            <div className="inline-flex items-center gap-1.5 bg-zinc-100 text-zinc-700 px-2.5 py-1 rounded-md text-[13px] font-medium w-max">
+                              <CalendarIcon className="w-3.5 h-3.5 text-zinc-400" />
+                              From: {new Date(g.validFrom).toLocaleDateString()}
+                            </div>
+                          )}
+                          <div className="inline-flex items-center gap-1.5 bg-zinc-100 text-zinc-700 px-2.5 py-1 rounded-md text-[13px] font-medium w-max">
+                            <CalendarIcon className="w-3.5 h-3.5 text-zinc-400" />
+                            {g.validUntil ? `To: ${new Date(g.validUntil).toLocaleDateString()}` : "Never expires"}
+                          </div>
                         </div>
                       </TableCell>
 

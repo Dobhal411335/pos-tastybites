@@ -45,6 +45,19 @@ export default function CreatePromoOfferPage() {
   // Image Upload
   const [uploadingImage, setUploadingImage] = useState(false);
   const [offerImage, setOfferImage] = useState(null);
+  const [availableTaxes, setAvailableTaxes] = useState([]);
+
+  const fetchTaxes = async () => {
+    try {
+      const res = await fetch("/api/tax");
+      const json = await res.json();
+      if (json.success) {
+        setAvailableTaxes(json.data.filter(t => t.status === "Active"));
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   const fetchOffers = async () => {
     try {
@@ -60,6 +73,7 @@ export default function CreatePromoOfferPage() {
 
   useEffect(() => {
     fetchOffers();
+    fetchTaxes();
   }, []);
 
   const handleImageUpload = async (e) => {
@@ -401,6 +415,30 @@ export default function CreatePromoOfferPage() {
                   <CardTitle className="text-[18px] font-bold text-zinc-900">Pricing & Validity</CardTitle>
                 </CardHeader>
                 <CardContent className="p-6 space-y-6">
+                  {/* Tax Information */}
+                  {availableTaxes.length > 0 && (
+                    <div className="space-y-4 mb-4">
+                      <div className="p-3 bg-orange-50 border border-orange-100 rounded-md">
+                        <p className="text-[13px] text-orange-800 font-medium">
+                          {availableTaxes.length} active tax{availableTaxes.length !== 1 ? 'es' : ''} will be automatically applied to this offer.
+                        </p>
+                      </div>
+                      <div className="grid grid-cols-1 gap-2">
+                        {availableTaxes.map((tax) => (
+                          <div
+                            key={tax._id}
+                            className="flex items-center justify-between p-3 rounded-md border border-zinc-200 bg-zinc-50"
+                          >
+                            <span className="text-[14px] font-medium text-zinc-900">{tax.name}</span>
+                            <span className="text-[13px] font-bold text-zinc-600">
+                              {tax.type === "percent" || tax.type === "Percent" ? `${tax.value}%` : `$${tax.value.toFixed(2)}`}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   <div className="space-y-2">
                     <label className="text-[14px] font-semibold text-zinc-900">
                       Price Amount ($) <span className="text-red-500">*</span>

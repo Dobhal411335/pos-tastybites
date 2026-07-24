@@ -17,14 +17,14 @@ export default function EmployeeTopNav({ onMenuToggle, employeeName = "Employee"
       const res = await fetch("/api/employee/auth/logout", { method: "POST" });
       if (res.ok) {
         toast.success("Logged out successfully.");
-        router.replace("/employee/login");
+        router.replace("/login");
       } else {
         // Fallback clear if logout api fails
-        router.replace("/employee/login");
+        router.replace("/login");
       }
     } catch (err) {
       toast.error("Logout failed.");
-      router.replace("/employee/login");
+      router.replace("/login");
     }
   };
 

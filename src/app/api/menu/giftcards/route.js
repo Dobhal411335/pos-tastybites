@@ -31,6 +31,7 @@ export const GET = withAuth(async (request) => {
           name: { $first: "$name" },
           discountType: { $first: "$discountType" },
           value: { $first: "$value" },
+          validFrom: { $first: "$validFrom" },
           validUntil: { $first: "$validUntil" },
           status: { $first: "$status" },
           count: { $sum: 1 },
@@ -66,7 +67,7 @@ export const GET = withAuth(async (request) => {
 export const POST = withAuth(async (request) => {
   try {
     const data = await request.json();
-    const { name, discountType, value, validUntil, count = 1 } = data;
+    const { name, discountType, value, validFrom, validUntil, count = 1 } = data;
 
     if (!discountType || !value) {
       return sendError(new Error("Missing fields"), "Discount type and value are required", 400);
@@ -87,6 +88,7 @@ export const POST = withAuth(async (request) => {
         name: name || "Gift Card",
         discountType,
         value,
+        validFrom,
         validUntil,
         status: "Active",
         createdBy: request.user.id

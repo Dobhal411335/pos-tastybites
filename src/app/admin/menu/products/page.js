@@ -39,6 +39,7 @@ export default function ProductsPage() {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [newProductName, setNewProductName] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
+  const [filterCategory, setFilterCategory] = useState("all");
 
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [productToDelete, setProductToDelete] = useState(null);
@@ -75,18 +76,28 @@ export default function ProductsPage() {
     }
 
     try {
+      const names = newProductName.split("\n").map(n => n.trim()).filter(n => n.length > 0);
+      if (names.length === 0) return toast.error("Please enter at least one valid product name.");
+
       const res = await fetch("/api/menu/products", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: newProductName.trim(),
+          names: names,
           categoryId: selectedCategory
         })
       });
       const json = await res.json();
       if (json.success) {
-        toast.success("Product draft created! Redirecting to configuration...");
-        router.push(`/admin/menu/products/${json.data._id}`);
+        if (json.data.length === 1) {
+          toast.success("Product draft created! Redirecting to configuration...");
+          router.push(`/admin/menu/products/${json.data[0]._id}`);
+        } else {
+          toast.success(`${json.data.length} product drafts created!`);
+          setIsAddDialogOpen(false);
+          setNewProductName("");
+          fetchInitialData();
+        }
       } else {
         toast.error(json.message);
       }
@@ -142,11 +153,14 @@ export default function ProductsPage() {
   const filteredProducts = products.filter(p => {
     const term = searchQuery.toLowerCase();
     const catName = p.category?.name?.toLowerCase() || "";
-    return p.name.toLowerCase().includes(term) || catName.includes(term);
+    const matchesSearch = p.name.toLowerCase().includes(term) || catName.includes(term);
+    
+    if (filterCategory === "all") return matchesSearch;
+    return matchesSearch && p.category?._id === filterCategory;
   });
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden" style={{ backgroundColor: PALETTE.canvas, color: PALETTE.ink }}>
+    <div className="flex flex-col overflow-hidden" style={{ backgroundColor: PALETTE.canvas, color: PALETTE.ink }}>
       {/* MAIN CONTENT AREA */}
       <div className="flex-1 flex overflow-hidden">
 
@@ -172,9 +186,9 @@ export default function ProductsPage() {
                     Add Product
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="sm:max-w-[425px]">
+                <DialogContent className="sm:max-w-106.25">
                   <form onSubmit={handleCreateProduct}>
-                    <DialogHeader>
+                    <DialogHeader>  
                       <DialogTitle className="text-[22px] font-bold">Add Product</DialogTitle>
                       <DialogDescription className="text-[15px]">
                         Create a new product draft. You can configure prices and modifiers later.
@@ -189,9 +203,9 @@ export default function ProductsPage() {
                           <SelectTrigger className="h-11 text-[16px]">
                             <SelectValue placeholder="Select Category" />
                           </SelectTrigger>
-                          <SelectContent className="bg-white">
+                          <SelectContent className="bg-white max-h-60 overflow-y-auto">
                             {categories.map(c => (
-                              <SelectItem key={c._id} value={c._id}>{c.name}</SelectItem>
+                              <SelectItem  key={c._id} value={c._id}>{c.name}</SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
@@ -199,12 +213,13 @@ export default function ProductsPage() {
 
                       <div className="space-y-2">
                         <label className="text-[14px] font-semibold" style={{ color: PALETTE.ink }}>
-                          Product Name <span className="text-red-500">*</span>
+                          Product Name(s) <span className="text-red-500">*</span>
                         </label>
-                        <Input
+                        <p className="text-[12px] text-zinc-500 mb-1">Enter one product name per line to create multiple at once.</p>
+                        <textarea
                           autoFocus
-                          placeholder="e.g. Classic Cheese Beef Burger"
-                          className="h-11 text-[16px]"
+                          placeholder="e.g. Classic Cheese Beef Burger&#10;Spicy Chicken Wrap&#10;Veggie Delight"
+                          className="w-full bg-white border border-zinc-200 rounded-md min-h-30 p-3 text-[16px] focus:outline-none focus:ring-2 focus:ring-[#F97316]"
                           value={newProductName}
                           onChange={(e) => setNewProductName(e.target.value)}
                         />
@@ -229,14 +244,27 @@ export default function ProductsPage() {
               {/* Toolbar */}
               <CardHeader className="px-6 py-5 border-b" style={{ borderColor: PALETTE.border, paddingBottom: "1.25rem" }}>
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                  <div className="relative w-full sm:w-80">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
-                    <Input
-                      placeholder="Search products..."
-                      className="h-10 pl-9 bg-zinc-50 border-zinc-200 text-[14px]"
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                    />
+                  <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+                    <div className="relative w-full sm:w-80">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+                      <Input
+                        placeholder="Search products..."
+                        className="h-10 pl-9 bg-zinc-50 border-zinc-200 text-[14px]"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                      />
+                    </div>
+                    <Select value={filterCategory} onValueChange={setFilterCategory}>
+                      <SelectTrigger className="h-10 w-full sm:w-48 bg-white border-zinc-200 text-[14px]">
+                        <SelectValue placeholder="All Categories" />
+                      </SelectTrigger>
+                      <SelectContent className="max-h-60 overflow-y-auto">
+                        <SelectItem value="all">All Categories</SelectItem>
+                        {categories.map(c => (
+                          <SelectItem className="" key={c._id} value={c._id}>{c.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
               </CardHeader>
@@ -350,12 +378,12 @@ export default function ProductsPage() {
         </main>
       </div>
 
-      <DeleteDialog 
-        isOpen={isDeleteDialogOpen} 
-        onOpenChange={setIsDeleteDialogOpen} 
-        onConfirm={confirmDelete} 
-        title="Delete Product" 
-        description="Are you sure you want to delete this product? This action cannot be undone." 
+      <DeleteDialog
+        isOpen={isDeleteDialogOpen}
+        onOpenChange={setIsDeleteDialogOpen}
+        onConfirm={confirmDelete}
+        title="Delete Product"
+        description="Are you sure you want to delete this product? This action cannot be undone."
       />
     </div>
   );

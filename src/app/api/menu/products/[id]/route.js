@@ -47,7 +47,19 @@ export const PUT = withAuth(async (request, { params }) => {
     const updateData = { updatedBy: request.user.id };
     
     if (description !== undefined) updateData.description = description;
-    if (taxes !== undefined) updateData.taxes = taxes;
+    if (taxes !== undefined) {
+      updateData.taxes = taxes;
+      const activeTaxes = await Tax.find({ _id: { $in: taxes }, restaurant: request.restaurant });
+      let totalPercentage = 0;
+      let totalFixed = 0;
+      const taxNames = [];
+      activeTaxes.forEach(t => {
+        taxNames.push(t.name);
+        if (t.type === "percent" || t.type === "Percent") totalPercentage += t.value;
+        else totalFixed += t.value;
+      });
+      updateData.taxData = { totalPercentage, totalFixed, taxNames };
+    }
     if (status) updateData.status = status;
     if (variants) updateData.variants = variants;
     if (addons) updateData.addons = addons;

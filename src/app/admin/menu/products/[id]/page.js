@@ -203,7 +203,7 @@ export default function ProductDetailsConfigPage() {
         body: JSON.stringify({
           description,
           taxValue: parseFloat(taxValue) || 0,
-          taxes: selectedTaxes,
+          taxes: availableTaxes.map(t => t._id),
           variants: variants.filter(v => v.size).map(v => ({ ...v, price: parseFloat(v.price) || 0 })),
           addons: addons.filter(a => a.name).map(a => ({ ...a, price: parseFloat(a.price) || 0 })),
           image: product?.image
@@ -380,7 +380,7 @@ export default function ProductDetailsConfigPage() {
                                 <SelectTrigger className="h-11 text-[16px] bg-white flex-1">
                                   <SelectValue placeholder="Select Size" />
                                 </SelectTrigger>
-                                <SelectContent className="bg-white">
+                                <SelectContent className="bg-white max-h-60 overflow-y-auto">
                                   {sizesList.map((sz, idx) => (
                                     <SelectItem key={idx} value={sz}>{sz}</SelectItem>
                                   ))}
@@ -454,7 +454,7 @@ export default function ProductDetailsConfigPage() {
                                   <SelectTrigger className="h-11 text-[16px] bg-white flex-1">
                                     <SelectValue placeholder="Select Addon" />
                                   </SelectTrigger>
-                                  <SelectContent className="bg-white">
+                                  <SelectContent className="bg-white max-h-60 overflow-y-auto">
                                     {addonsList.map((ad, idx) => (
                                       <SelectItem key={idx} value={ad}>{ad}</SelectItem>
                                     ))}
@@ -508,35 +508,25 @@ export default function ProductDetailsConfigPage() {
                         Applicable Taxes / Fees
                       </label>
                       {availableTaxes.length > 0 ? (
-                        <div className="grid grid-cols-1 gap-2">
-                          {availableTaxes.map((tax) => (
-                            <label
-                              key={tax._id}
-                              className={`flex items-center gap-3 p-3 rounded-md border cursor-pointer transition-colors ${selectedTaxes.includes(tax._id)
-                                ? 'border-[#F97316] bg-orange-50/30'
-                                : 'border-zinc-200 bg-zinc-50 hover:bg-zinc-100'
-                                }`}
-                            >
-                              <input
-                                type="checkbox"
-                                checked={selectedTaxes.includes(tax._id)}
-                                onChange={(e) => {
-                                  if (e.target.checked) {
-                                    setSelectedTaxes([...selectedTaxes, tax._id]);
-                                  } else {
-                                    setSelectedTaxes(selectedTaxes.filter(id => id !== tax._id));
-                                  }
-                                }}
-                                className="h-4 w-4 rounded border-zinc-300 text-[#F97316] focus:ring-[#F97316]"
-                              />
-                              <div className="flex flex-col flex-1">
-                                <span className="text-[14px] font-semibold text-zinc-900">{tax.name}</span>
-                                <span className="text-[12px] text-zinc-500">
-                                  {tax.type === "percent" ? `${tax.value}%` : `$${tax.value.toFixed(2)}`}
+                        <div className="space-y-4">
+                          <div className="p-3 bg-orange-50 border border-orange-100 rounded-md">
+                            <p className="text-[13px] text-orange-800 font-medium">
+                              {availableTaxes.length} active tax{availableTaxes.length !== 1 ? 'es' : ''} will be automatically applied to this product.
+                            </p>
+                          </div>
+                          <div className="grid grid-cols-1 gap-2">
+                            {availableTaxes.map((tax) => (
+                              <div
+                                key={tax._id}
+                                className="flex items-center justify-between p-3 rounded-md border border-zinc-200 bg-zinc-50"
+                              >
+                                <span className="text-[14px] font-medium text-zinc-900">{tax.name}</span>
+                                <span className="text-[13px] font-bold text-zinc-600">
+                                  {tax.type === "percent" || tax.type === "Percent" ? `${tax.value}%` : `$${tax.value.toFixed(2)}`}
                                 </span>
                               </div>
-                            </label>
-                          ))}
+                            ))}
+                          </div>
                         </div>
                       ) : (
                         <div className="p-4 rounded-md border border-zinc-200 bg-zinc-50 text-center">

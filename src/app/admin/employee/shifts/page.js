@@ -406,7 +406,7 @@ export default function ShiftManagementPage() {
                         <SelectTrigger className="w-56 h-10 border-zinc-200 bg-zinc-50 font-bold">
                           <SelectValue placeholder="All Employees" />
                         </SelectTrigger>
-                        <SelectContent className="bg-white">
+                        <SelectContent className="bg-white max-h-60 overflow-y-auto">
                           <SelectItem value="all">All Employees</SelectItem>
                           {employees.map(emp => (
                             <SelectItem key={emp._id} value={emp._id}>{emp.firstName} {emp.lastName}</SelectItem>
@@ -535,7 +535,7 @@ export default function ShiftManagementPage() {
               <label className="text-[13px] font-bold text-zinc-700">Repeat Pattern</label>
               <Select value={templateForm.repeatPattern} onValueChange={v => setTemplateForm({ ...templateForm, repeatPattern: v })}>
                 <SelectTrigger className="border-zinc-200"><SelectValue /></SelectTrigger>
-                <SelectContent className="bg-white">
+                <SelectContent className="bg-white max-h-60 overflow-y-auto">
                   <SelectItem value="Weekly">Weekly</SelectItem>
                   <SelectItem value="Bi Weekly">Bi Weekly</SelectItem>
                   <SelectItem value="Monthly">Monthly</SelectItem>
@@ -562,7 +562,7 @@ export default function ShiftManagementPage() {
               <label className="text-[13px] font-bold text-zinc-700">Target Range</label>
               <Select value={applyRange} onValueChange={setApplyRange}>
                 <SelectTrigger className="border-zinc-200"><SelectValue /></SelectTrigger>
-                <SelectContent className="bg-white">
+                <SelectContent className="bg-white max-h-60 overflow-y-auto">
                   <SelectItem value="thisMonth">Apply This Month</SelectItem>
                   <SelectItem value="nextMonth">Apply Next Month</SelectItem>
                 </SelectContent>
@@ -606,7 +606,7 @@ export default function ShiftManagementPage() {
               <label className="text-[13px] font-bold text-zinc-700">Mark Status</label>
               <Select value={editDayForm.shiftType} onValueChange={v => setEditDayForm({ ...editDayForm, shiftType: v })}>
                 <SelectTrigger className="border-zinc-200"><SelectValue /></SelectTrigger>
-                <SelectContent className="bg-white">
+                <SelectContent className="bg-white max-h-60 overflow-y-auto">
                   <SelectItem value="Regular">Regular Shift</SelectItem>
                   <SelectItem value="Leave">Mark Leave</SelectItem>
                   <SelectItem value="Sick Leave">Mark Sick Leave</SelectItem>
@@ -629,12 +629,12 @@ export default function ShiftManagementPage() {
         </DialogContent>
       </Dialog>
 
-      <DeleteDialog 
-        isOpen={isDeleteDialogOpen} 
-        onOpenChange={setIsDeleteDialogOpen} 
-        onConfirm={confirmDeleteTemplate} 
-        title="Delete Shift Template" 
-        description="Are you sure you want to delete this shift template? This action cannot be undone and will not affect shifts that have already been generated." 
+      <DeleteDialog
+        isOpen={isDeleteDialogOpen}
+        onOpenChange={setIsDeleteDialogOpen}
+        onConfirm={confirmDeleteTemplate}
+        title="Delete Shift Template"
+        description="Are you sure you want to delete this shift template? This action cannot be undone and will not affect shifts that have already been generated."
       />
 
     </div>

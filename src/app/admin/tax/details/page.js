@@ -68,19 +68,19 @@ export default function TaxDetailsPage() {
     if (!form.name || !form.value || !form.type) {
       return toast.error("Please fill in all fields.");
     }
-    
+
     try {
       const url = "/api/tax";
       const method = editId ? "PUT" : "POST";
       const payload = editId ? { _id: editId, ...form } : form;
-      
+
       const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
       });
       const json = await res.json();
-      
+
       if (json.success) {
         toast.success(`Tax ${editId ? "updated" : "created"} successfully`);
         setIsDialogOpen(false);
@@ -201,7 +201,7 @@ export default function TaxDetailsPage() {
                 </div>
               </div>
             </CardContent>
-            
+
             {/* Tax Table Section */}
             <div className="border-t border-zinc-200">
               <CardHeader className="px-5 border-b border-zinc-200 bg-white">
@@ -211,84 +211,84 @@ export default function TaxDetailsPage() {
               </CardHeader>
               <CardContent className="p-0 bg-white">
                 <Table>
-                <TableHeader className="bg-zinc-50">
-                  <TableRow>
-                    <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6">Tax Name</TableHead>
-                    <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6 text-center">Rate</TableHead>
-                    <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6 text-center">Type</TableHead>
-                    <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6 text-center">Status</TableHead>
-                    <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6 text-center">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {loading ? (
+                  <TableHeader className="bg-zinc-50">
                     <TableRow>
-                      <TableCell colSpan={5} className="h-32 text-center">
-                        <Loader2 className="w-6 h-6 animate-spin mx-auto text-zinc-400" />
-                      </TableCell>
+                      <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6">Tax Name</TableHead>
+                      <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6 text-center">Rate</TableHead>
+                      <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6 text-center">Type</TableHead>
+                      <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6 text-center">Status</TableHead>
+                      <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6 text-center">Actions</TableHead>
                     </TableRow>
-                  ) : filteredTaxes.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={5} className="h-32 text-center text-zinc-500 text-[14px]">
-                        No tax configuration found matching filters.
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    filteredTaxes.map((t) => (
-                      <TableRow key={t._id} className="h-16 hover:bg-zinc-50 transition-colors">
-                        <TableCell className="px-6">
-                          <span className="font-semibold text-[15px] text-zinc-900">{t.name}</span>
-                        </TableCell>
-                        <TableCell className="px-6 text-center">
-                          <span className="inline-flex items-center justify-center bg-orange-50 text-[#F97316] px-3 py-1 rounded-md text-[14px] font-extrabold border border-orange-100">
-                            {t.type === "Amount" ? "$" : ""}{t.value}{t.type === "Percent" ? "%" : ""}
-                          </span>
-                        </TableCell>
-                        <TableCell className="px-6 text-center font-semibold text-[14px] text-zinc-700">
-                          {t.type}
-                        </TableCell>
-                        <TableCell className="px-6 text-center">
-                          <Button 
-                            variant="ghost" 
-                            className="p-0 h-auto hover:bg-transparent" 
-                            onClick={() => handleToggleStatus(t)}
-                          >
-                            {t.status === 'Active' ? (
-                              <Badge className="bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 px-3 py-1.5 text-[13px] font-semibold transition-colors cursor-pointer">
-                                Active
-                              </Badge>
-                            ) : (
-                              <Badge className="bg-red-50 text-red-600 hover:bg-red-100 border border-red-200 px-3 py-1.5 text-[13px] font-semibold transition-colors cursor-pointer">
-                                Inactive
-                              </Badge>
-                            )}
-                          </Button>
-                        </TableCell>
-                        <TableCell className="px-6 text-center">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon" className="h-8 w-8 border text-zinc-500 hover:text-zinc-900 cursor-pointer">
-                                <MoreHorizontal className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-40 bg-white">
-                              <DropdownMenuItem className="text-[14px] font-medium cursor-pointer" onClick={() => { setTimeout(() => handleOpenEdit(t), 150) }}>
-                                <Edit className="mr-2 h-4 w-4" /> Edit Tax
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                className="text-[14px] font-medium text-red-600 focus:bg-red-500 focus:text-white cursor-pointer"
-                                onClick={() => { setTimeout(() => handleDeletePrompt(t._id), 150) }}
-                              >
-                                <Trash2 className="mr-2 h-4 w-4" /> Delete
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
+                  </TableHeader>
+                  <TableBody>
+                    {loading ? (
+                      <TableRow>
+                        <TableCell colSpan={5} className="h-32 text-center">
+                          <Loader2 className="w-6 h-6 animate-spin mx-auto text-zinc-400" />
                         </TableCell>
                       </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
+                    ) : filteredTaxes.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={5} className="h-32 text-center text-zinc-500 text-[14px]">
+                          No tax configuration found matching filters.
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      filteredTaxes.map((t) => (
+                        <TableRow key={t._id} className="h-16 hover:bg-zinc-50 transition-colors">
+                          <TableCell className="px-6">
+                            <span className="font-semibold text-[15px] text-zinc-900">{t.name}</span>
+                          </TableCell>
+                          <TableCell className="px-6 text-center">
+                            <span className="inline-flex items-center justify-center bg-orange-50 text-[#F97316] px-3 py-1 rounded-md text-[14px] font-extrabold border border-orange-100">
+                              {t.type === "Amount" ? "$" : ""}{t.value}{t.type === "Percent" ? "%" : ""}
+                            </span>
+                          </TableCell>
+                          <TableCell className="px-6 text-center font-semibold text-[14px] text-zinc-700">
+                            {t.type}
+                          </TableCell>
+                          <TableCell className="px-6 text-center">
+                            <Button
+                              variant="ghost"
+                              className="p-0 h-auto hover:bg-transparent"
+                              onClick={() => handleToggleStatus(t)}
+                            >
+                              {t.status === 'Active' ? (
+                                <Badge className="bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 px-3 py-1.5 text-[13px] font-semibold transition-colors cursor-pointer">
+                                  Active
+                                </Badge>
+                              ) : (
+                                <Badge className="bg-red-50 text-red-600 hover:bg-red-100 border border-red-200 px-3 py-1.5 text-[13px] font-semibold transition-colors cursor-pointer">
+                                  Inactive
+                                </Badge>
+                              )}
+                            </Button>
+                          </TableCell>
+                          <TableCell className="px-6 text-center">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-8 w-8 border text-zinc-500 hover:text-zinc-900 cursor-pointer">
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-40 bg-white">
+                                <DropdownMenuItem className="text-[14px] font-medium cursor-pointer" onClick={() => { setTimeout(() => handleOpenEdit(t), 150) }}>
+                                  <Edit className="mr-2 h-4 w-4" /> Edit Tax
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  className="text-[14px] font-medium text-red-600 focus:bg-red-500 focus:text-white cursor-pointer"
+                                  onClick={() => { setTimeout(() => handleDeletePrompt(t._id), 150) }}
+                                >
+                                  <Trash2 className="mr-2 h-4 w-4" /> Delete
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
               </CardContent>
             </div>
           </Card>
@@ -308,19 +308,19 @@ export default function TaxDetailsPage() {
           <div className="grid gap-4 py-4">
             <div className="space-y-2">
               <label className="text-[13px] font-bold text-zinc-700">Tax Name</label>
-              <Input 
-                placeholder="e.g. State Tax" 
-                value={form.name} 
-                onChange={e => setForm({...form, name: e.target.value})} 
-                className="border-zinc-200" 
+              <Input
+                placeholder="e.g. State Tax"
+                value={form.name}
+                onChange={e => setForm({ ...form, name: e.target.value })}
+                className="border-zinc-200"
               />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <label className="text-[13px] font-bold text-zinc-700">Type</label>
-                <Select value={form.type} onValueChange={v => setForm({...form, type: v})}>
+                <Select value={form.type} onValueChange={v => setForm({ ...form, type: v })}>
                   <SelectTrigger className="border-zinc-200"><SelectValue /></SelectTrigger>
-                  <SelectContent className="bg-white">
+                  <SelectContent className="bg-white max-h-60 overflow-y-auto">
                     <SelectItem value="Percent">Percent (%)</SelectItem>
                     <SelectItem value="Amount">Amount ($)</SelectItem>
                   </SelectContent>
@@ -328,13 +328,13 @@ export default function TaxDetailsPage() {
               </div>
               <div className="space-y-2">
                 <label className="text-[13px] font-bold text-zinc-700">Rate / Value</label>
-                <Input 
-                  type="number" 
+                <Input
+                  type="number"
                   step="0.01"
-                  placeholder="e.g. 5.0" 
-                  value={form.value} 
-                  onChange={e => setForm({...form, value: e.target.value})} 
-                  className="border-zinc-200" 
+                  placeholder="e.g. 5.0"
+                  value={form.value}
+                  onChange={e => setForm({ ...form, value: e.target.value })}
+                  className="border-zinc-200"
                 />
               </div>
             </div>
@@ -346,12 +346,12 @@ export default function TaxDetailsPage() {
         </DialogContent>
       </Dialog>
 
-      <DeleteDialog 
-        isOpen={isDeleteDialogOpen} 
-        onOpenChange={setIsDeleteDialogOpen} 
-        onConfirm={confirmDelete} 
-        title="Delete Tax" 
-        description="Are you sure you want to delete this tax record? This action cannot be undone." 
+      <DeleteDialog
+        isOpen={isDeleteDialogOpen}
+        onOpenChange={setIsDeleteDialogOpen}
+        onConfirm={confirmDelete}
+        title="Delete Tax"
+        description="Are you sure you want to delete this tax record? This action cannot be undone."
       />
 
     </div>

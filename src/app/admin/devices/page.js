@@ -245,7 +245,7 @@ export default function DeviceManagementPage() {
                               <SelectValue placeholder="Select type" />
                             </SelectTrigger>
                           </FormControl>
-                          <SelectContent>
+                          <SelectContent className="max-h-60 overflow-y-auto">
                             <SelectItem value="Tablet">Tablet</SelectItem>
                             <SelectItem value="Monitor">Monitor (KDS/POS)</SelectItem>
                             <SelectItem value="Smartphone">Smartphone</SelectItem>
@@ -270,7 +270,7 @@ export default function DeviceManagementPage() {
                                 <SelectValue placeholder="Select floor" />
                               </SelectTrigger>
                             </FormControl>
-                            <SelectContent>
+                            <SelectContent className="max-h-60 overflow-y-auto">
                               {MOCK_FLOORS.map(f => <SelectItem key={f} value={f}>{f}</SelectItem>)}
                             </SelectContent>
                           </Select>
@@ -292,7 +292,7 @@ export default function DeviceManagementPage() {
                                 <SelectValue placeholder="Select section" />
                               </SelectTrigger>
                             </FormControl>
-                            <SelectContent>
+                            <SelectContent className="max-h-60 overflow-y-auto">
                               {MOCK_SECTIONS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                             </SelectContent>
                           </Select>
@@ -331,7 +331,7 @@ export default function DeviceManagementPage() {
                   <SelectValue placeholder="Filter Status" />
                 </div>
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="max-h-60 overflow-y-auto">
                 <SelectItem value="All">All Statuses</SelectItem>
                 <SelectItem value="Online">Online</SelectItem>
                 <SelectItem value="Offline">Offline</SelectItem>

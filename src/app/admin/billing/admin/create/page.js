@@ -83,7 +83,7 @@ export default function CreateOrderPage() {
                       <SelectTrigger className="h-9 text-[13px] bg-white border-zinc-200 focus:ring-2 focus:ring-[#F97316]">
                         <SelectValue placeholder="All Items" />
                       </SelectTrigger>
-                      <SelectContent className="bg-white">
+                      <SelectContent className="max-h-60 overflow-y-auto bg-white">
                         <SelectItem value="all">All Items</SelectItem>
                         <SelectItem value="Pizza">Pizza</SelectItem>
                         <SelectItem value="Pasta">Pasta</SelectItem>

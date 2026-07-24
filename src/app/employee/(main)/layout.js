@@ -26,7 +26,7 @@ export default function EmployeeMainLayout({ children }) {
           throw new Error("Unauthorized");
         }
       } catch (err) {
-        router.replace("/employee/login");
+        router.replace("/login");
       } finally {
     setLoading(false);
       }

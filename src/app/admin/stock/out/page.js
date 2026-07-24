@@ -22,7 +22,7 @@ export default function StockOutPage() {
   const [stockOuts, setStockOuts] = useState([]);
   const [openingBalance, setOpeningBalance] = useState("0.00");
   const [selectedProductDetails, setSelectedProductDetails] = useState(null);
-  
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState(null);
@@ -87,7 +87,7 @@ export default function StockOutPage() {
         fetch(`/api/stock/out?productId=${productId}`)
       ]);
       const [inJson, outJson] = await Promise.all([inRes.json(), outRes.json()]);
-      
+
       let totalIn = 0;
       let totalOut = 0;
 
@@ -166,16 +166,16 @@ export default function StockOutPage() {
 
   const handleEdit = (entry) => {
     setEditingId(entry._id);
-    
+
     const catId = entry.product?.category?._id?.toString() || entry.product?.category?.toString();
     const prodId = entry.product?._id?.toString() || entry.product?.toString();
-    
+
     // Set up category and filtered products first
     setFilteredProducts(allProducts.filter(p => {
       const pCat = p.category?._id?.toString() || p.category?.toString();
       return pCat === catId;
     }));
-    
+
     setFormData({
       menuHead: catId || "",
       productName: prodId || "",
@@ -183,11 +183,11 @@ export default function StockOutPage() {
       qty: entry.quantity.toString(),
       value: entry.value.toString(),
     });
-    
+
     const product = allProducts.find(p => p._id === entry.product?._id);
     setSelectedProductDetails(product);
     calculateOpeningBalance(entry.product?._id);
-    
+
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -235,8 +235,8 @@ export default function StockOutPage() {
   return (
     <div className="flex flex-col overflow-hidden min-h-screen" style={{ backgroundColor: PALETTE.canvas, color: PALETTE.ink }}>
       <Toaster position="top-right" richColors />
-      
-      <DeleteDialog 
+
+      <DeleteDialog
         isOpen={deleteOpen}
         onOpenChange={(open) => setDeleteOpen(open)}
         onConfirm={confirmDelete}
@@ -279,7 +279,7 @@ export default function StockOutPage() {
                         <SelectTrigger className="h-11 text-[15px] bg-white border-zinc-200 focus:ring-2 focus:ring-[#F97316]">
                           <SelectValue placeholder="Select Category" />
                         </SelectTrigger>
-                        <SelectContent className="bg-white">
+                        <SelectContent className="bg-white max-h-60 overflow-y-auto">
                           {categories.map((c) => (
                             <SelectItem key={c._id} value={c._id}>{c.name}</SelectItem>
                           ))}
@@ -291,15 +291,15 @@ export default function StockOutPage() {
                       <label className="text-[14px] font-semibold text-zinc-900">
                         Product Name <span className="text-red-500">*</span>
                       </label>
-                      <Select 
-                        value={formData.productName} 
+                      <Select
+                        value={formData.productName}
                         onValueChange={handleProductChange}
                         disabled={!formData.menuHead}
                       >
                         <SelectTrigger className="h-11 text-[15px] bg-white border-zinc-200 focus:ring-2 focus:ring-[#F97316]">
                           <SelectValue placeholder={formData.menuHead ? "Select Product" : "Select Category first"} />
                         </SelectTrigger>
-                        <SelectContent className="bg-white">
+                        <SelectContent className="bg-white max-h-60 overflow-y-auto">
                           {filteredProducts.map((p) => (
                             <SelectItem key={p._id} value={p._id}>{p.name}</SelectItem>
                           ))}
@@ -471,7 +471,7 @@ export default function StockOutPage() {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="w-40 bg-white">
-                              <DropdownMenuItem 
+                              <DropdownMenuItem
                                 className="text-[14px] font-medium cursor-pointer"
                                 onSelect={() => handleEdit(s)}
                               >

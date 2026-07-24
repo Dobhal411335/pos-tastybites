@@ -66,8 +66,18 @@ export const PUT = withAuth(async (request) => {
       );
     }
 
-    // 3. Update the employee document
+    // 3. Find primary floor from assigned tables
+    let primaryFloor = null;
+    if (assignedTables.length > 0) {
+      const tables = await mongoose.model("Table").find({ _id: { $in: assignedTables } }).select("floor");
+      if (tables.length > 0 && tables[0].floor) {
+        primaryFloor = tables[0].floor;
+      }
+    }
+
+    // 4. Update the employee document
     employee.assignedTables = assignedTables;
+    employee.assignedFloor = primaryFloor;
     await employee.save();
 
     await employee.populate({

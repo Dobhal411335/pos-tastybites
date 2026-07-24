@@ -30,7 +30,7 @@ export const withEmployeeAuth = (handler, allowedPermissions = []) => {
 
       // 2. Fetch Employee details (Optional optimization: store more in JWT to avoid DB hit, but this ensures fresh state)
       const employee = await Employee.findById(payload.employeeId).populate('permissionGroup');
-      if (!employee || !employee.isActive || employee.status !== 'Active') {
+      if (!employee || !employee.isActive || (employee.status !== 'Active' && employee.status !== 'Approved')) {
         return NextResponse.json({ success: false, message: 'Account suspended or inactive' }, { status: 403 });
       }
 

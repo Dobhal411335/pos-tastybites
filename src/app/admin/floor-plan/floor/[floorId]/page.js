@@ -182,9 +182,9 @@ function CanvasTable({ table, isSelected, onSelect, onResizeStart, zoom, isPrevi
       {/* Resize Handles */}
       {isSelected && !table.locked && !isPreviewMode && (
         <>
-          <div 
+          <div
             onPointerDown={(e) => onResizeStart(e, table)}
-            className="absolute -bottom-2 -right-2 h-4 w-4 rounded-full border-2 border-orange-500 bg-white cursor-se-resize z-20 shadow-sm" 
+            className="absolute -bottom-2 -right-2 h-4 w-4 rounded-full border-2 border-orange-500 bg-white cursor-se-resize z-20 shadow-sm"
           />
         </>
       )}
@@ -196,8 +196,8 @@ function CanvasTable({ table, isSelected, onSelect, onResizeStart, zoom, isPrevi
         )}
         {table.assignedEmployee && (
           <div className="mt-1 flex items-center justify-center gap-1 bg-white/90 px-1.5 py-0.5 rounded-full border shadow-sm max-w-full overflow-hidden" style={{ borderColor: table.assignedEmployee.employeeColor || '#ccc' }}>
-             <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: table.assignedEmployee.employeeColor || '#ccc' }} />
-             <span className="text-[9px] font-bold text-stone-700 truncate">{table.assignedEmployee.firstName}</span>
+            <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: table.assignedEmployee.employeeColor || '#ccc' }} />
+            <span className="text-[9px] font-bold text-stone-700 truncate">{table.assignedEmployee.firstName}</span>
           </div>
         )}
       </div>
@@ -230,15 +230,15 @@ export default function FloorPlanEditorPage({ params }) {
         const layoutJson = await layoutRes.json();
         const tablesJson = await tablesRes.json();
         const floorsJson = await floorsRes.json();
-        
+
         if (floorsJson.success) {
           setAllFloors(floorsJson.data);
         }
-        
+
         if (layoutJson.success && layoutJson.data.length > 0) {
           const floor = layoutJson.data[0];
           setFloorData(floor);
-          
+
           const mappedTables = floor.tables.map(t => ({
             id: t._id,
             floorId: floor._id,
@@ -337,7 +337,7 @@ export default function FloorPlanEditorPage({ params }) {
   const handleResizeStart = (e, table) => {
     e.stopPropagation();
     e.preventDefault();
-    
+
     saveHistory(); // Save state before resizing begins
 
     const startX = e.clientX;
@@ -401,7 +401,7 @@ export default function FloorPlanEditorPage({ params }) {
         locked: false,
         isShape: true, // Mark it as an unassigned shape
       };
-      
+
       setTables([...tables, newElement]);
       setSelectedTableId(newElement.id);
     } else if (active.data.current?.type === "table") {
@@ -425,7 +425,7 @@ export default function FloorPlanEditorPage({ params }) {
   const handleToolClick = (tool) => {
     saveHistory();
     const snap = (val) => (snapToGrid ? Math.round(val / 20) * 20 : Math.round(val));
-    
+
     // Calculate a position near the center of the current view
     const x = snap((pan.x * -1 + 400) / zoom);
     const y = snap((pan.y * -1 + 300) / zoom);
@@ -446,7 +446,7 @@ export default function FloorPlanEditorPage({ params }) {
       locked: false,
       isShape: true,
     };
-    
+
     setTables([...tables, newElement]);
     setSelectedTableId(newElement.id);
   };
@@ -480,11 +480,11 @@ export default function FloorPlanEditorPage({ params }) {
       });
       const json = await res.json();
       if (json.success) {
-        setTables(prev => prev.map(t => t.id === selectedTable.id ? { 
-          ...t, 
-          id: dbTable._id, 
+        setTables(prev => prev.map(t => t.id === selectedTable.id ? {
+          ...t,
+          id: dbTable._id,
           name: dbTable.tableNumber,
-          isShape: false 
+          isShape: false
         } : t));
         setSelectedTableId(dbTable._id);
         setUnassignedTables(prev => prev.filter(t => t._id !== dbTable._id));
@@ -555,7 +555,7 @@ export default function FloorPlanEditorPage({ params }) {
 
       {/* ─── TOP TOOLBAR ────────────────────────────────────────────── */}
       <header className="h-16 bg-white border-b border-stone-200 flex items-center justify-between px-6 shrink-0 sticky top-0 z-50">
-        
+
         {isPreviewMode ? (
           <div className="w-full flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -582,7 +582,7 @@ export default function FloorPlanEditorPage({ params }) {
                   <SelectTrigger className="w-45 h-10 font-bold bg-white focus:ring-[#1e40af]">
                     <SelectValue placeholder="Select Floor" />
                   </SelectTrigger>
-                  <SelectContent className="bg-white">
+                  <SelectContent className="bg-white max-h-60 overflow-y-auto">
                     {allFloors.length > 0
                       ? allFloors.map(f => <SelectItem key={f.id} value={f.id}>{f.floorName}</SelectItem>)
                       : <SelectItem value={currentFloor.id || currentFloor._id}>{currentFloor.name || currentFloor.floorName}</SelectItem>
@@ -613,10 +613,10 @@ export default function FloorPlanEditorPage({ params }) {
                 <Button variant={snapToGrid ? "secondary" : "ghost"} size="sm" onClick={() => setSnapToGrid(!snapToGrid)} className={`h-8 px-3 rounded-md text-[13px] font-semibold ${snapToGrid ? 'bg-orange-600 shadow-sm text-stone-900' : 'text-stone-500 hover:text-stone-900'}`}>
                   Snap
                 </Button>
-                <Button 
-                  variant={gridMode !== "none" ? "secondary" : "ghost"} 
-                  size="sm" 
-                  onClick={() => setGridMode(prev => prev === "lines" ? "dots" : prev === "dots" ? "none" : "lines")} 
+                <Button
+                  variant={gridMode !== "none" ? "secondary" : "ghost"}
+                  size="sm"
+                  onClick={() => setGridMode(prev => prev === "lines" ? "dots" : prev === "dots" ? "none" : "lines")}
                   className={`h-8 px-3 rounded-md text-[13px] font-semibold ${gridMode !== "none" ? 'bg-orange-600 shadow-sm text-stone-900' : 'text-stone-500 hover:text-stone-900'}`}
                 >
                   {gridMode === "lines" ? "Lines" : gridMode === "dots" ? "Dots" : "Grid Off"}
@@ -767,100 +767,100 @@ export default function FloorPlanEditorPage({ params }) {
                 <p className="text-[13px] text-stone-500 mt-1">Configure selected element</p>
               </div>
 
-            <div className="flex-1 overflow-y-auto">
-              {!selectedTable ? (
-                <div className="p-5 text-center flex flex-col items-center justify-center h-full text-stone-400">
-                  <div className="w-16 h-16 bg-stone-50 border border-stone-100 rounded-full flex items-center justify-center mb-4 shadow-sm">
-                    <MousePointer2 className="h-6 w-6 text-stone-300" />
+              <div className="flex-1 overflow-y-auto">
+                {!selectedTable ? (
+                  <div className="p-5 text-center flex flex-col items-center justify-center h-full text-stone-400">
+                    <div className="w-16 h-16 bg-stone-50 border border-stone-100 rounded-full flex items-center justify-center mb-4 shadow-sm">
+                      <MousePointer2 className="h-6 w-6 text-stone-300" />
+                    </div>
+                    <h3 className="text-[15px] font-bold text-stone-700 mb-1">No element selected</h3>
+                    <p className="text-[13px] leading-relaxed">Select an object on the canvas to edit its properties, alignment, and capacity.</p>
                   </div>
-                  <h3 className="text-[15px] font-bold text-stone-700 mb-1">No element selected</h3>
-                  <p className="text-[13px] leading-relaxed">Select an object on the canvas to edit its properties, alignment, and capacity.</p>
-                </div>
-              ) : (
-                <Accordion type="multiple" defaultValue={["general", "appearance", "actions"]} className="w-full">
+                ) : (
+                  <Accordion type="multiple" defaultValue={["general", "appearance", "actions"]} className="w-full">
 
-                  {/* General Settings */}
-                  <AccordionItem value="general" className="border-stone-200 px-5">
-                    <AccordionTrigger className="text-[14px] font-bold text-stone-900 hover:no-underline py-4">General</AccordionTrigger>
-                    <AccordionContent className="space-y-5 pb-5">
-                      <div className="space-y-2">
-                        <label className="text-[13px] font-bold text-stone-700">Table Name / Assignment</label>
-                        {selectedTable.isShape ? (
-                          <Select
-                            onValueChange={(val) => {
-                              const t = unassignedTables.find(tbl => tbl._id === val);
-                              if (t) assignTable(t);
-                            }}
-                          >
-                            <SelectTrigger className="w-full h-10 bg-white focus:ring-[#1e40af]">
-                              <SelectValue placeholder="Select a table..." />
-                            </SelectTrigger>
-                            <SelectContent className="bg-white">
-                              {unassignedTables.map(t => (
-                                <SelectItem key={t._id} value={t._id}>{t.tableNumber}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        ) : (
-                          <Input
-                            value={selectedTable.name}
-                            onChange={(e) => updateSelectedTable({ name: e.target.value })}
-                            className="h-10 text-[14px] bg-white border-stone-200 focus:ring-[#1e40af] focus:border-[#1e40af]"
-                            disabled={!["kitchen", "door", "register", "bar", "wall", "divider"].includes(selectedTable.type)}
-                          />
-                        )}
-                      </div>
-                      {!["kitchen", "door", "register", "bar", "wall", "divider"].includes(selectedTable.type) && (
+                    {/* General Settings */}
+                    <AccordionItem value="general" className="border-stone-200 px-5">
+                      <AccordionTrigger className="text-[14px] font-bold text-stone-900 hover:no-underline py-4">General</AccordionTrigger>
+                      <AccordionContent className="space-y-5 pb-5">
                         <div className="space-y-2">
-                          <label className="text-[13px] font-bold text-stone-700">Seats</label>
-                          <Input type="number" value={selectedTable.seats} onChange={(e) => updateSelectedTable({ seats: parseInt(e.target.value) || 0 })} className="h-10 text-[14px] bg-white border-stone-200 focus:ring-[#1e40af] focus:border-[#1e40af]" />
+                          <label className="text-[13px] font-bold text-stone-700">Table Name / Assignment</label>
+                          {selectedTable.isShape ? (
+                            <Select
+                              onValueChange={(val) => {
+                                const t = unassignedTables.find(tbl => tbl._id === val);
+                                if (t) assignTable(t);
+                              }}
+                            >
+                              <SelectTrigger className="w-full h-10 bg-white focus:ring-[#1e40af]">
+                                <SelectValue placeholder="Select a table..." />
+                              </SelectTrigger>
+                              <SelectContent className="bg-white max-h-60 overflow-y-auto">
+                                {unassignedTables.map(t => (
+                                  <SelectItem key={t._id} value={t._id}>{t.tableNumber}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          ) : (
+                            <Input
+                              value={selectedTable.name}
+                              onChange={(e) => updateSelectedTable({ name: e.target.value })}
+                              className="h-10 text-[14px] bg-white border-stone-200 focus:ring-[#1e40af] focus:border-[#1e40af]"
+                              disabled={!["kitchen", "door", "register", "bar", "wall", "divider"].includes(selectedTable.type)}
+                            />
+                          )}
                         </div>
-                      )}
-                    </AccordionContent>
-                  </AccordionItem>
+                        {!["kitchen", "door", "register", "bar", "wall", "divider"].includes(selectedTable.type) && (
+                          <div className="space-y-2">
+                            <label className="text-[13px] font-bold text-stone-700">Seats</label>
+                            <Input type="number" value={selectedTable.seats} onChange={(e) => updateSelectedTable({ seats: parseInt(e.target.value) || 0 })} className="h-10 text-[14px] bg-white border-stone-200 focus:ring-[#1e40af] focus:border-[#1e40af]" />
+                          </div>
+                        )}
+                      </AccordionContent>
+                    </AccordionItem>
 
-                  {/* Appearance */}
-                  <AccordionItem value="appearance" className="border-stone-200 px-5">
-                    <AccordionTrigger className="text-[14px] font-bold text-stone-900 hover:no-underline py-4">Appearance</AccordionTrigger>
-                    <AccordionContent className="space-y-5 pb-5">
-                      <div className="flex items-center gap-3">
-                        <div className="space-y-2 flex-1">
-                          <label className="text-[13px] font-bold text-stone-700">Width</label>
-                          <Input type="number" value={selectedTable.w} onChange={(e) => updateSelectedTable({ w: parseInt(e.target.value) || 20 })} className="h-10 text-[14px] bg-white border-stone-200 focus:ring-[#1e40af] focus:border-[#1e40af]" />
+                    {/* Appearance */}
+                    <AccordionItem value="appearance" className="border-stone-200 px-5">
+                      <AccordionTrigger className="text-[14px] font-bold text-stone-900 hover:no-underline py-4">Appearance</AccordionTrigger>
+                      <AccordionContent className="space-y-5 pb-5">
+                        <div className="flex items-center gap-3">
+                          <div className="space-y-2 flex-1">
+                            <label className="text-[13px] font-bold text-stone-700">Width</label>
+                            <Input type="number" value={selectedTable.w} onChange={(e) => updateSelectedTable({ w: parseInt(e.target.value) || 20 })} className="h-10 text-[14px] bg-white border-stone-200 focus:ring-[#1e40af] focus:border-[#1e40af]" />
+                          </div>
+                          <div className="space-y-2 flex-1">
+                            <label className="text-[13px] font-bold text-stone-700">Height</label>
+                            <Input type="number" value={selectedTable.h} onChange={(e) => updateSelectedTable({ h: parseInt(e.target.value) || 20 })} className="h-10 text-[14px] bg-white border-stone-200 focus:ring-[#1e40af] focus:border-[#1e40af]" />
+                          </div>
                         </div>
-                        <div className="space-y-2 flex-1">
-                          <label className="text-[13px] font-bold text-stone-700">Height</label>
-                          <Input type="number" value={selectedTable.h} onChange={(e) => updateSelectedTable({ h: parseInt(e.target.value) || 20 })} className="h-10 text-[14px] bg-white border-stone-200 focus:ring-[#1e40af] focus:border-[#1e40af]" />
+                        <div className="space-y-2">
+                          <label className="text-[13px] font-bold text-stone-700">Rotation (deg)</label>
+                          <Input type="number" value={selectedTable.r} onChange={(e) => updateSelectedTable({ r: parseInt(e.target.value) || 0 })} className="h-10 text-[14px] bg-white border-stone-200 focus:ring-[#1e40af] focus:border-[#1e40af]" />
                         </div>
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-[13px] font-bold text-stone-700">Rotation (deg)</label>
-                        <Input type="number" value={selectedTable.r} onChange={(e) => updateSelectedTable({ r: parseInt(e.target.value) || 0 })} className="h-10 text-[14px] bg-white border-stone-200 focus:ring-[#1e40af] focus:border-[#1e40af]" />
-                      </div>
-                    </AccordionContent>
-                  </AccordionItem>
+                      </AccordionContent>
+                    </AccordionItem>
 
-                  {/* Actions */}
-                  <AccordionItem value="actions" className="border-transparent px-5">
-                    <AccordionTrigger className="text-[14px] font-bold text-stone-900 hover:no-underline py-4">Actions</AccordionTrigger>
-                    <AccordionContent className="space-y-3 pb-5">
-                      <Button variant="outline" onClick={duplicateTable} className="w-full h-10 justify-start text-[14px] font-bold text-stone-700 border-stone-200 hover:bg-stone-50">
-                        <Copy className="mr-2 h-4 w-4 text-stone-400" /> Duplicate
-                      </Button>
-                      <Button variant="outline" onClick={() => updateSelectedTable({ locked: !selectedTable.locked })} className="w-full h-10 justify-start text-[14px] font-bold text-stone-700 border-stone-200 hover:bg-stone-50">
-                        {selectedTable.locked ? <Unlock className="mr-2 h-4 w-4 text-stone-400" /> : <Lock className="mr-2 h-4 w-4 text-stone-400" />}
-                        {selectedTable.locked ? "Unlock" : "Lock"}
-                      </Button>
-                      <Button variant="outline" onClick={deleteTable} className="w-full h-10 justify-start text-[14px] font-bold text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700">
-                        <Trash2 className="mr-2 h-4 w-4" /> Delete Element
-                      </Button>
-                    </AccordionContent>
-                  </AccordionItem>
-                </Accordion>
-              )}
-            </div>
+                    {/* Actions */}
+                    <AccordionItem value="actions" className="border-transparent px-5">
+                      <AccordionTrigger className="text-[14px] font-bold text-stone-900 hover:no-underline py-4">Actions</AccordionTrigger>
+                      <AccordionContent className="space-y-3 pb-5">
+                        <Button variant="outline" onClick={duplicateTable} className="w-full h-10 justify-start text-[14px] font-bold text-stone-700 border-stone-200 hover:bg-stone-50">
+                          <Copy className="mr-2 h-4 w-4 text-stone-400" /> Duplicate
+                        </Button>
+                        <Button variant="outline" onClick={() => updateSelectedTable({ locked: !selectedTable.locked })} className="w-full h-10 justify-start text-[14px] font-bold text-stone-700 border-stone-200 hover:bg-stone-50">
+                          {selectedTable.locked ? <Unlock className="mr-2 h-4 w-4 text-stone-400" /> : <Lock className="mr-2 h-4 w-4 text-stone-400" />}
+                          {selectedTable.locked ? "Unlock" : "Lock"}
+                        </Button>
+                        <Button variant="outline" onClick={deleteTable} className="w-full h-10 justify-start text-[14px] font-bold text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700">
+                          <Trash2 className="mr-2 h-4 w-4" /> Delete Element
+                        </Button>
+                      </AccordionContent>
+                    </AccordionItem>
+                  </Accordion>
+                )}
+              </div>
 
-          </aside>
+            </aside>
           )}
 
         </div>

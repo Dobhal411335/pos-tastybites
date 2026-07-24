@@ -20,6 +20,11 @@ const ProductSchema = new mongoose.Schema(
     name: { type: String, required: true, trim: true },
     description: { type: String, trim: true, default: '' },
     taxes: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Tax' }],
+    taxData: {
+      totalPercentage: { type: Number, default: 0 },
+      totalFixed: { type: Number, default: 0 },
+      taxNames: [{ type: String }]
+    },
     status: { type: String, enum: ['Active', 'Inactive'], default: 'Active' },
     discount: { type: mongoose.Schema.Types.ObjectId, ref: 'Coupon' },
     image: { url: { type: String }, key: { type: String } },

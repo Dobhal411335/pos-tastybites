@@ -27,10 +27,10 @@ export const GET = withAuth(async (request) => {
 export const POST = withAuth(async (request) => {
   try {
     const data = await request.json();
-    const { name, categoryId } = data;
+    const { names, categoryId } = data;
 
-    if (!name || !categoryId) {
-      return sendError(new Error("Missing fields"), "Product name and category are required", 400);
+    if (!names || !Array.isArray(names) || names.length === 0 || !categoryId) {
+      return sendError(new Error("Missing fields"), "Product names and category are required", 400);
     }
 
     const category = await Category.findOne({ _id: categoryId, restaurant: request.restaurant });
@@ -38,16 +38,35 @@ export const POST = withAuth(async (request) => {
       return sendError(new Error("Invalid Category"), "Selected category does not exist", 404);
     }
 
-    const newProduct = await Product.create({
-      restaurant: request.restaurant,
-      category: categoryId,
-      name,
-      status: "Active",
-      createdBy: request.user.id
+    const activeTaxes = await Tax.find({ restaurant: request.restaurant, status: "Active" });
+    const taxIds = activeTaxes.map(t => t._id);
+    let totalPercentage = 0;
+    let totalFixed = 0;
+    const taxNames = [];
+    activeTaxes.forEach(t => {
+      taxNames.push(t.name);
+      if (t.type === "percent" || t.type === "Percent") totalPercentage += t.value;
+      else totalFixed += t.value;
     });
 
-    logger.info(`Product created: ${name}`);
-    return sendSuccess(newProduct, "Product created successfully", 201);
+    const productsToCreate = names.map(name => ({
+      restaurant: request.restaurant,
+      category: categoryId,
+      name: name.trim(),
+      status: "Active",
+      taxes: taxIds,
+      taxData: {
+        totalPercentage,
+        totalFixed,
+        taxNames
+      },
+      createdBy: request.user.id
+    }));
+
+    const newProducts = await Product.insertMany(productsToCreate);
+
+    logger.info(`Products created: ${names.join(", ")}`);
+    return sendSuccess(newProducts, "Products created successfully", 201);
   } catch (error) {
     logger.error("Failed to create product", error);
     return sendError(error, "Failed to create product", 500);

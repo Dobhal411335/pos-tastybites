@@ -281,7 +281,7 @@ export default function DeviceAssignmentPage() {
                     <SelectValue placeholder="Status" />
                   </div>
                 </SelectTrigger>
-                <SelectContent className="bg-white">
+                <SelectContent className="bg-white max-h-60 overflow-y-auto">
                   <SelectItem value="All">All Statuses</SelectItem>
                   <SelectItem value="Active">Active</SelectItem>
                   <SelectItem value="Inactive">Inactive</SelectItem>
@@ -298,7 +298,7 @@ export default function DeviceAssignmentPage() {
                     <SelectValue placeholder="Type" />
                   </div>
                 </SelectTrigger>
-                <SelectContent className="bg-white">
+                <SelectContent className="bg-white max-h-60 overflow-y-auto">
                   <SelectItem value="All">All Types</SelectItem>
                   <SelectItem value="Tablet">Tablet</SelectItem>
                   <SelectItem value="Desktop">Desktop</SelectItem>
@@ -429,7 +429,7 @@ export default function DeviceAssignmentPage() {
                   <SelectTrigger className="w-full h-12 text-[15px] border-zinc-200 focus:ring-2 focus:ring-[#1e40af] bg-white">
                     <SelectValue placeholder="Select type" />
                   </SelectTrigger>
-                  <SelectContent className="bg-white">
+                  <SelectContent className="bg-white max-h-60 overflow-y-auto">
                     <SelectItem className="hover:bg-orange-500" value="Tablet">Tablet</SelectItem>
                     <SelectItem className="hover:bg-orange-500" value="Desktop">Desktop</SelectItem>
                     <SelectItem className="hover:bg-orange-500" value="POS Terminal">POS Terminal</SelectItem>
@@ -444,10 +444,10 @@ export default function DeviceAssignmentPage() {
                   <SelectTrigger className="w-full h-12 text-[15px] border-zinc-200 focus:ring-2 focus:ring-[#1e40af] bg-white">
                     <SelectValue placeholder="Select floor" />
                   </SelectTrigger>
-                  <SelectContent className="bg-white">
+                  <SelectContent className="bg-white max-h-60 overflow-y-auto">
                     <SelectItem className="hover:bg-orange-500" value="">None / Unassigned</SelectItem>
                     {floors.map(f => (
-                      <SelectItem className="hover:bg-orange-500" key={f._id} value={f._id}>{f.name}</SelectItem>
+                      <SelectItem className="hover:bg-orange-500" key={f.id} value={f.id}>{f.floorName}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -459,7 +459,7 @@ export default function DeviceAssignmentPage() {
                 <SelectTrigger className="w-full h-12 text-[15px] border-zinc-200 focus:ring-2 focus:ring-[#1e40af] bg-white">
                   <SelectValue placeholder="Select status" />
                 </SelectTrigger>
-                <SelectContent className="bg-white">
+                <SelectContent className="bg-white max-h-60 overflow-y-auto">
                   <SelectItem value="Active" className="hover:bg-orange-500 cursor-pointer">Active</SelectItem>
                   <SelectItem value="Inactive" className="hover:bg-orange-500 cursor-pointer">Inactive</SelectItem>
                   <SelectItem value="Maintenance" className="hover:bg-orange-500 cursor-pointer">Maintenance</SelectItem>
@@ -513,7 +513,7 @@ export default function DeviceAssignmentPage() {
                 <SelectTrigger className="bg-white h-12 text-base">
                   <SelectValue placeholder="Select an employee..." />
                 </SelectTrigger>
-                <SelectContent className="bg-white">
+                <SelectContent className="bg-white max-h-60 overflow-y-auto">
                   <SelectItem value="">Select an employee...</SelectItem>
                   {employees.map(emp => (
                     <SelectItem className="hover:bg-orange-500 cursor-pointer" key={emp._id} value={emp._id}>
@@ -563,7 +563,7 @@ export default function DeviceAssignmentPage() {
                     <SelectTrigger className="w-full h-12 text-[15px] border-zinc-200 focus:ring-2 focus:ring-[#1e40af] bg-white">
                       <SelectValue placeholder="Select type" />
                     </SelectTrigger>
-                    <SelectContent className="bg-white">
+                    <SelectContent className="bg-white max-h-60 overflow-y-auto">
                       <SelectItem value="Tablet">Tablet</SelectItem>
                       <SelectItem value="Desktop">Desktop</SelectItem>
                       <SelectItem value="POS Terminal">POS Terminal</SelectItem>
@@ -578,7 +578,7 @@ export default function DeviceAssignmentPage() {
                     <SelectTrigger className="w-full h-12 text-[15px] border-zinc-200 focus:ring-2 focus:ring-[#1e40af] bg-white">
                       <SelectValue placeholder="Select floor" />
                     </SelectTrigger>
-                    <SelectContent className="bg-white">
+                    <SelectContent className="bg-white max-h-60 overflow-y-auto">
                       <SelectItem value="">None / Unassigned</SelectItem>
                       {floors.map(f => (
                         <SelectItem key={f.id} value={f.id}>{f.floorName}</SelectItem>
@@ -593,7 +593,7 @@ export default function DeviceAssignmentPage() {
                   <SelectTrigger className="w-full h-12 text-[15px] border-zinc-200 focus:ring-2 focus:ring-[#1e40af] bg-white">
                     <SelectValue placeholder="Select status" />
                   </SelectTrigger>
-                  <SelectContent className="bg-white">
+                  <SelectContent className="bg-white max-h-60 overflow-y-auto">
                     <SelectItem value="Active">Active</SelectItem>
                     <SelectItem value="Inactive">Inactive</SelectItem>
                     <SelectItem value="Maintenance">Maintenance</SelectItem>

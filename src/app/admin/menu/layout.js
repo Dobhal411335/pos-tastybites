@@ -49,7 +49,6 @@ export default function MenuModuleLayout({ children }) {
       title: "Create Discount",
       bgColorClass: "bg-blue-850",
       items: [
-        { label: "Create Discount & Coupon", href: "/admin/menu/coupons" },
         { label: "Apply Discount / Offer", href: "/admin/menu/discounts" },
         { label: "Create Tasty Bites Gift Card", href: "/admin/menu/giftcards" },
       ],
@@ -58,7 +57,7 @@ export default function MenuModuleLayout({ children }) {
 
   return (
     <div className="min-h-screen bg-[#FAF9F6] flex flex-col antialiased text-[#1F2937] font-sans">
-      
+
       {/* Shared top navbar */}
       <TopNavbar
         adminName={adminUser?.name}
@@ -86,13 +85,13 @@ export default function MenuModuleLayout({ children }) {
 
         {/* Right Content Viewport */}
         <main className="flex-1 overflow-y-auto p-8">
-          <div className="mx-auto max-w-6xl bg-white border border-[#ECECEC] p-6 sm:p-10 rounded-xl shadow-xs min-h-[500px]">
+          <div className="mx-auto max-w-6xl bg-white border border-[#ECECEC] p-6 sm:p-10 rounded-xl shadow-xs min-h-125">
             {children}
           </div>
         </main>
       </div>
 
-      <FooterBar/>
+      <FooterBar />
     </div>
   );
 }

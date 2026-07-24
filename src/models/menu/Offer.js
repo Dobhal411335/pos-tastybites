@@ -11,6 +11,19 @@ const OfferSchema = new mongoose.Schema(
     drinks: [{ type: String, trim: true }],
     validFrom: { type: Date },
     validTo: { type: Date },
+    taxes: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Tax' }],
+    taxData: {
+      totalPercentage: { type: Number, default: 0 },
+      totalFixed: { type: Number, default: 0 },
+      taxNames: [{ type: String }],
+      taxDetails: [
+        {
+          name: String,
+          value: Number,
+          type: { type: String }
+        }
+      ]
+    },
     image: {
       url: { type: String },
       key: { type: String }

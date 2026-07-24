@@ -19,7 +19,7 @@ export default function StockLevelPage() {
   const [searchMenuHead, setSearchMenuHead] = useState("all");
   const [stockLevels, setStockLevels] = useState([]);
   const [loading, setLoading] = useState(true);
-  
+
   const fetchCategories = async () => {
     try {
       const res = await fetch("/api/stock/category");
@@ -86,7 +86,7 @@ export default function StockLevelPage() {
                   <SelectTrigger className="w-full h-10 text-[14px] bg-white border-zinc-200 focus:ring-2 focus:ring-[#F97316]">
                     <SelectValue placeholder="Search Menu Head" />
                   </SelectTrigger>
-                  <SelectContent className="bg-white">
+                  <SelectContent className="bg-white max-h-60 overflow-y-auto">
                     <SelectItem value="all">All Categories</SelectItem>
                     {categories.map((c) => (
                       <SelectItem key={c._id} value={c._id}>{c.name}</SelectItem>
@@ -95,9 +95,9 @@ export default function StockLevelPage() {
                 </Select>
               </div>
               <div className="text-[13px] font-semibold text-zinc-500 flex items-center gap-4">
-                <Button 
-                  variant="outline" 
-                  size="sm" 
+                <Button
+                  variant="outline"
+                  size="sm"
                   className="h-8 border-zinc-200 text-zinc-600 hover:text-zinc-900"
                   onClick={() => fetchStockLevels(searchMenuHead)}
                 >
@@ -179,7 +179,7 @@ export default function StockLevelPage() {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="w-40 bg-white">
-                              <DropdownMenuItem 
+                              <DropdownMenuItem
                                 className="text-[14px] font-medium cursor-pointer"
                                 onSelect={() => handleEditRedirect(s._id)}
                               >

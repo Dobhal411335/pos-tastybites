@@ -354,7 +354,7 @@ export default function StockProductsPage() {
                           <SelectTrigger className="w-full h-11 bg-white border-zinc-200 text-[15px]">
                             <SelectValue placeholder="Select category..." />
                           </SelectTrigger>
-                          <SelectContent className="bg-white">
+                          <SelectContent className="bg-white max-h-60 overflow-y-auto">
                             {categories.map((c) => (
                               <SelectItem key={c._id} value={c._id}>{c.name}</SelectItem>
                             ))}
@@ -392,7 +392,7 @@ export default function StockProductsPage() {
                             <SelectTrigger className="w-full h-11 bg-white border-zinc-200 text-[15px]">
                               <SelectValue placeholder="Select type..." />
                             </SelectTrigger>
-                            <SelectContent className="bg-white">
+                            <SelectContent className="bg-white max-h-60 overflow-y-auto">
                               {productTypes.map((t) => (
                                 <SelectItem key={t._id} value={t._id}>{t.name}</SelectItem>
                               ))}
@@ -425,7 +425,7 @@ export default function StockProductsPage() {
                             <SelectTrigger className="w-full h-11 bg-white border-zinc-200 text-[15px]">
                               <SelectValue placeholder="Select unit..." />
                             </SelectTrigger>
-                            <SelectContent className="bg-white">
+                            <SelectContent className="bg-white max-h-60 overflow-y-auto">
                               {unitMeasures.map((u) => (
                                 <SelectItem key={u._id} value={u._id}>{u.name}</SelectItem>
                               ))}
@@ -596,8 +596,8 @@ export default function StockProductsPage() {
                           <button
                             onClick={() => handleToggleStatus(p)}
                             className={`px-5 py-2 text-[12px] font-bold rounded transition-colors ${p.status
-                                ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
-                                : 'bg-red-100 text-red-700 hover:bg-red-200'
+                              ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
+                              : 'bg-red-100 text-red-700 hover:bg-red-200'
                               }`}
                           >
                             {p.status ? 'Active' : 'Inactive'}

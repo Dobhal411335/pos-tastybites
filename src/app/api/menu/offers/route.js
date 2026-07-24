@@ -3,6 +3,7 @@ import Offer from "@/models/menu/Offer";
 import { sendSuccess } from "@/utils/apiResponse";
 import { sendError } from "@/utils/errorHandler";
 import { logger } from "@/utils/logger";
+import Tax from "@/models/tax/Tax";
 
 // GET - List all offers for the restaurant
 export const GET = withAuth(async (request) => {
@@ -27,6 +28,20 @@ export const POST = withAuth(async (request) => {
       return sendError(new Error("Missing fields"), "Name and Price are required", 400);
     }
 
+    const activeTaxes = await Tax.find({ restaurant: request.restaurant, status: "Active" });
+    const taxIds = activeTaxes.map(t => t._id);
+    let totalPercentage = 0;
+    let totalFixed = 0;
+    const taxNames = [];
+    const taxDetails = [];
+    
+    activeTaxes.forEach(t => {
+      taxNames.push(t.name);
+      taxDetails.push({ name: t.name, value: t.value, type: t.type });
+      if (t.type === "percent" || t.type === "Percent") totalPercentage += t.value;
+      else totalFixed += t.value;
+    });
+
     const newOffer = await Offer.create({
       restaurant: request.restaurant,
       name,
@@ -35,6 +50,13 @@ export const POST = withAuth(async (request) => {
       inclusions: inclusions || [],
       choices: choices || [],
       drinks: drinks || [],
+      taxes: taxIds,
+      taxData: {
+        totalPercentage,
+        totalFixed,
+        taxNames,
+        taxDetails
+      },
       validFrom: validFrom ? new Date(validFrom) : null,
       validTo: validTo ? new Date(validTo) : null,
       image: image || {},

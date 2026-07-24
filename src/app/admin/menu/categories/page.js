@@ -172,7 +172,7 @@ export default function MenuCategoriesPage() {
                     Add Category
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="sm:max-w-[425px]">
+                <DialogContent className="sm:max-w-106.25">
                   <form onSubmit={handleSaveCategory}>
                     <DialogHeader>
                       <DialogTitle className="text-[22px] font-bold">{editCategoryId ? "Edit Category" : "Add Category"}</DialogTitle>
@@ -230,6 +230,9 @@ export default function MenuCategoriesPage() {
                 <TableHeader className="bg-zinc-50 sticky top-0 z-10 border-b border-zinc-200">
                   <TableRow className="hover:bg-transparent">
                     <TableHead className="w-[45%] text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6">
+                      S.No
+                    </TableHead>
+                    <TableHead className="w-[45%] text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6">
                       Category Name <ArrowUpDown className="inline w-3 h-3 ml-1" />
                     </TableHead>
                     <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6">
@@ -248,8 +251,11 @@ export default function MenuCategoriesPage() {
                       </TableCell>
                     </TableRow>
                   ) : filteredCategories.length > 0 ? (
-                    filteredCategories.map((cat) => (
+                    filteredCategories.map((cat, index) => (
                       <TableRow key={cat._id} className="h-16 hover:bg-zinc-50 transition-colors">
+                        <TableCell className="px-6 font-semibold text-[15px] text-zinc-900">
+                          {index + 1}
+                        </TableCell>
                         <TableCell className="px-6 font-semibold text-[15px] text-zinc-900">
                           {cat.name}
                         </TableCell>
@@ -318,12 +324,12 @@ export default function MenuCategoriesPage() {
         </main>
       </div>
 
-      <DeleteDialog 
-        isOpen={isDeleteDialogOpen} 
-        onOpenChange={setIsDeleteDialogOpen} 
-        onConfirm={confirmDelete} 
-        title="Delete Category" 
-        description="Are you sure you want to delete this category? Products assigned to it must be removed first." 
+      <DeleteDialog
+        isOpen={isDeleteDialogOpen}
+        onOpenChange={setIsDeleteDialogOpen}
+        onConfirm={confirmDelete}
+        title="Delete Category"
+        description="Are you sure you want to delete this category? Products assigned to it must be removed first."
       />
     </div>
   );

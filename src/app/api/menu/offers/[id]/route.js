@@ -4,6 +4,7 @@ import { sendSuccess } from "@/utils/apiResponse";
 import { sendError } from "@/utils/errorHandler";
 import { logger } from "@/utils/logger";
 import { deleteImage } from "@/lib/cloudinary/deleteImage";
+import Tax from "@/models/tax/Tax";
 
 // PUT - Update an offer or toggle status
 export const PUT = withAuth(async (request, { params }) => {
@@ -22,6 +23,23 @@ export const PUT = withAuth(async (request, { params }) => {
     // Handle date strings if present
     if (updateData.validFrom) updateData.validFrom = new Date(updateData.validFrom);
     if (updateData.validTo) updateData.validTo = new Date(updateData.validTo);
+
+    const activeTaxes = await Tax.find({ restaurant: request.restaurant, status: "Active" });
+    const taxIds = activeTaxes.map(t => t._id);
+    let totalPercentage = 0;
+    let totalFixed = 0;
+    const taxNames = [];
+    const taxDetails = [];
+    
+    activeTaxes.forEach(t => {
+      taxNames.push(t.name);
+      taxDetails.push({ name: t.name, value: t.value, type: t.type });
+      if (t.type === "percent" || t.type === "Percent") totalPercentage += t.value;
+      else totalFixed += t.value;
+    });
+
+    updateData.taxes = taxIds;
+    updateData.taxData = { totalPercentage, totalFixed, taxNames, taxDetails };
 
     const updatedOffer = await Offer.findOneAndUpdate(
       { _id: id, restaurant: request.restaurant },

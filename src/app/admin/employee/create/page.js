@@ -275,7 +275,7 @@ export default function CreateServerAccountPage() {
                         <SelectTrigger className="w-32 text-xs h-12 rounded-r-none border-r-0 border-zinc-200 focus:ring-0 focus:border-zinc-200 bg-zinc-50 font-medium">
                           <SelectValue placeholder="+1" />
                         </SelectTrigger>
-                        <SelectContent className="bg-white">
+                        <SelectContent className="bg-white max-h-60 overflow-y-auto">
                           <SelectItem value="+1">🇨🇦 +1 (Canada/US)</SelectItem>
                           <SelectItem value="+44">🇬🇧 +44 (UK)</SelectItem>
                           <SelectItem value="+91">🇮🇳 +91 (India)</SelectItem>
@@ -310,7 +310,7 @@ export default function CreateServerAccountPage() {
                       <SelectTrigger className="w-full h-12 text-[15px] border-zinc-200 focus:ring-2 focus:ring-[#1e40af] bg-white">
                         <SelectValue placeholder="Select role..." />
                       </SelectTrigger>
-                      <SelectContent className="bg-white">
+                      <SelectContent className="bg-white max-h-60 overflow-y-auto">
                         {roles.map(r => (
                           <SelectItem key={r.name} value={r.name}>{r.name}</SelectItem>
                         ))}

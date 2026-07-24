@@ -222,7 +222,7 @@ export default function ApplyDiscountsPage() {
                             <SelectValue placeholder="Select Coupon Code" />
                           </SelectTrigger>
 
-                          <SelectContent className="" style={{ backgroundColor: PALETTE.canvas }}>
+                          <SelectContent className="max-h-60 overflow-y-auto" style={{ backgroundColor: PALETTE.canvas }}>
                             {coupons.map(c => (
                               <SelectItem key={c._id} value={c._id}>
                                 {c.code} ({c.discountType === "percent" ? `${c.value}% OFF` : `$${c.value} OFF`})
@@ -316,7 +316,7 @@ export default function ApplyDiscountsPage() {
                             <SelectValue placeholder="Select Category" />
                           </SelectTrigger>
 
-                          <SelectContent style={{ backgroundColor: PALETTE.canvas }}>
+                          <SelectContent className="max-h-60 overflow-y-auto" style={{ backgroundColor: PALETTE.canvas }}>
                             {categories.map(cat => (
                               <SelectItem key={cat._id} value={cat._id}>
                                 {cat.name}
@@ -342,7 +342,7 @@ export default function ApplyDiscountsPage() {
                             <SelectValue placeholder="Select Product" />
                           </SelectTrigger>
 
-                          <SelectContent style={{ backgroundColor: PALETTE.canvas }}>
+                          <SelectContent className="max-h-60 overflow-y-auto" style={{ backgroundColor: PALETTE.canvas }}>
                             {products.map(p => (
                               <SelectItem key={p._id} value={p._id}>
                                 {p.name}

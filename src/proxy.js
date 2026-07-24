@@ -12,13 +12,12 @@ export async function proxy(request) {
   requestHeaders.set('x-request-id', reqId);
 
   const adminToken = request.cookies.get('token')?.value;
-  const employeeToken = request.cookies.get('employee-token')?.value;
+  const employeeToken = request.cookies.get('employee_access_token')?.value;
   const { pathname } = request.nextUrl;
 
   const isAdminPage = pathname.startsWith('/admin');
-  const isAdminAuthPage = pathname === '/admin/login';
   const isEmployeePage = pathname.startsWith('/employee');
-  const isEmployeeAuthPage = pathname === '/employee/login';
+  const isAuthPage = pathname === '/login';
 
   let adminPayload = null;
   if (adminToken) {
@@ -40,17 +39,21 @@ export async function proxy(request) {
 
   // Route protection
   if (isAdminPage) {
-    if (!adminPayload && !isAdminAuthPage) {
-      response = NextResponse.redirect(new URL('/admin/login', request.url));
-    } else if (adminPayload && isAdminAuthPage) {
-      response = NextResponse.redirect(new URL('/admin/dashboard', request.url));
+    if (!adminPayload) {
+      response = NextResponse.redirect(new URL('/login', request.url));
     } else {
       response = NextResponse.next({ request: { headers: requestHeaders } });
     }
   } else if (isEmployeePage) {
-    if (!employeePayload && !isEmployeeAuthPage) {
-      response = NextResponse.redirect(new URL('/employee/login', request.url));
-    } else if (employeePayload && isEmployeeAuthPage) {
+    if (!employeePayload) {
+      response = NextResponse.redirect(new URL('/login', request.url));
+    } else {
+      response = NextResponse.next({ request: { headers: requestHeaders } });
+    }
+  } else if (isAuthPage) {
+    if (adminPayload) {
+      response = NextResponse.redirect(new URL('/admin/dashboard', request.url));
+    } else if (employeePayload) {
       response = NextResponse.redirect(new URL('/employee/orders/create', request.url));
     } else {
       response = NextResponse.next({ request: { headers: requestHeaders } });

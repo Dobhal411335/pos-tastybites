@@ -289,7 +289,7 @@ export default function TableAssignmentPage() {
                       <SelectTrigger className="w-full sm:w-62.5 bg-white">
                         <SelectValue placeholder="Choose a floor" />
                       </SelectTrigger>
-                      <SelectContent className="bg-white">
+                      <SelectContent className="bg-white max-h-60 overflow-y-auto">
                         {floors.map(f => (
                           <SelectItem key={f.id} value={f.id}>{f.floorName}</SelectItem>
                         ))}
@@ -311,8 +311,8 @@ export default function TableAssignmentPage() {
                                 key={t._id}
                                 variant={isSelected ? "default" : "outline"}
                                 className={`cursor-pointer transition-colors px-3 py-1 text-sm shadow-none ${isSelected
-                                    ? 'bg-[#F97316] hover:bg-[#F97316]/90 text-white border-transparent'
-                                    : 'bg-white hover:bg-zinc-100 text-zinc-700 border-zinc-300'
+                                  ? 'bg-[#F97316] hover:bg-[#F97316]/90 text-white border-transparent'
+                                  : 'bg-white hover:bg-zinc-100 text-zinc-700 border-zinc-300'
                                   }`}
                                 onClick={() => toggleTable(section.id, t._id)}
                               >

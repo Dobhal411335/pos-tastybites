@@ -1,5 +1,7 @@
 import { withAuth } from "@/utils/auth";
 import RegisteredDevice from "@/models/RegisteredDevice";
+import Employee from "@/models/employee/Employee";
+import Floor from "@/models/floor/Floor";
 import { sendSuccess } from "@/utils/apiResponse";
 import { sendError } from "@/utils/errorHandler";
 import { logger } from "@/utils/logger";

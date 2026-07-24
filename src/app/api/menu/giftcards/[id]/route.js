@@ -15,6 +15,7 @@ export const PUT = withAuth(async (request, { params }) => {
 
     if (data.status !== undefined) updateData.status = data.status;
     if (data.name !== undefined) updateData.name = data.name;
+    if (data.validFrom !== undefined) updateData.validFrom = data.validFrom;
     if (data.validUntil !== undefined) updateData.validUntil = data.validUntil;
     if (data.value !== undefined) updateData.value = data.value;
     if (data.discountType !== undefined) updateData.discountType = data.discountType;
