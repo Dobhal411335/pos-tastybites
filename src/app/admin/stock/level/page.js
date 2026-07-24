@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import { ArrowLeft, Trash2, Edit, Search, MoreHorizontal, Trash, CalendarClock } from "lucide-react";
+import { ArrowLeft, Trash2, Edit, Search, MoreHorizontal, Trash, CalendarClock, Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -11,18 +11,53 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { toast, Toaster } from "sonner";
 import { PALETTE } from "@/utils/paletteeColor";
+import { useRouter } from "next/navigation";
 
 export default function StockLevelPage() {
-  const [searchMenuHead, setSearchMenuHead] = useState("");
+  const router = useRouter();
+  const [categories, setCategories] = useState([]);
+  const [searchMenuHead, setSearchMenuHead] = useState("all");
+  const [stockLevels, setStockLevels] = useState([]);
+  const [loading, setLoading] = useState(true);
+  
+  const fetchCategories = async () => {
+    try {
+      const res = await fetch("/api/stock/category");
+      const json = await res.json();
+      if (json.success) setCategories(json.data);
+    } catch (error) {
+      console.error("Failed to fetch categories");
+    }
+  };
+  const fetchStockLevels = async (categoryFilter) => {
+    try {
+      setLoading(true);
+      const url = new URL("/api/stock/level", window.location.origin);
+      if (categoryFilter && categoryFilter !== "all") {
+        url.searchParams.append("category", categoryFilter);
+      }
+      const res = await fetch(url);
+      const json = await res.json();
+      if (json.success) setStockLevels(json.data);
+    } catch (error) {
+      toast.error("Failed to load stock levels");
+    } finally {
+      setLoading(false);
+    }
+  };
+  useEffect(() => {
+    fetchCategories();
+  }, []);
 
-  const [stockLevels, setStockLevels] = useState([
-    { id: 1, name: "Tomato", highValue: "150 - 45", currentBalance: "105", measure: "kg", status: "Active" },
-    { id: 2, name: "Milk", highValue: "50 - 12", currentBalance: "38", measure: "L", status: "Active" },
-  ]);
+  useEffect(() => {
+    fetchStockLevels(searchMenuHead);
+  }, [searchMenuHead]);
 
-  const handleDelete = (id) => {
-    setStockLevels(stockLevels.filter((s) => s.id !== id));
-    toast.success("Stock level record deleted successfully.");
+
+
+  const handleEditRedirect = (id) => {
+    // Redirect to the products page so they can edit the product definition
+    router.push(`/admin/stock/products?edit=${id}`);
   };
 
   return (
@@ -39,10 +74,9 @@ export default function StockLevelPage() {
                 Current Stock Level
               </h1>
               <p className="text-[15px] mt-1" style={{ color: PALETTE.inkMuted }}>
-                View total inventory balances and filter by category.
+                View real-time total inventory balances and filter by category.
               </p>
             </div>
-
           </div>
 
           <Card className="shadow-sm border-zinc-200 bg-white overflow-hidden mt-8">
@@ -52,16 +86,28 @@ export default function StockLevelPage() {
                   <SelectTrigger className="w-full h-10 text-[14px] bg-white border-zinc-200 focus:ring-2 focus:ring-[#F97316]">
                     <SelectValue placeholder="Search Menu Head" />
                   </SelectTrigger>
-                  <SelectContent style={{ backgroundColor: PALETTE.canvas }}>
+                  <SelectContent className="bg-white">
                     <SelectItem value="all">All Categories</SelectItem>
-                    <SelectItem value="Produce">Produce</SelectItem>
-                    <SelectItem value="Dairy">Dairy</SelectItem>
+                    {categories.map((c) => (
+                      <SelectItem key={c._id} value={c._id}>{c.name}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
-              <div className="text-[13px] font-semibold text-zinc-500 flex items-center gap-2">
-                <CalendarClock className="w-4 h-4" />
-                Current Date Status
+              <div className="text-[13px] font-semibold text-zinc-500 flex items-center gap-4">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="h-8 border-zinc-200 text-zinc-600 hover:text-zinc-900"
+                  onClick={() => fetchStockLevels(searchMenuHead)}
+                >
+                  <RefreshCw className={`h-3.5 w-3.5 mr-2 ${loading ? 'animate-spin' : ''}`} />
+                  Refresh
+                </Button>
+                <div className="flex items-center gap-2">
+                  <CalendarClock className="w-4 h-4" />
+                  Live Status
+                </div>
               </div>
             </CardHeader>
             <CardContent className="p-0">
@@ -69,26 +115,36 @@ export default function StockLevelPage() {
                 <TableHeader className="bg-zinc-50">
                   <TableRow>
                     <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6">Product Name</TableHead>
-                    <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6 text-center">High Value<br />(In - Out)</TableHead>
+                    <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6 text-center">In - Out</TableHead>
                     <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6 text-center">Current Balance</TableHead>
                     <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6 text-center">Measure</TableHead>
+                    <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6 text-center">Pricing</TableHead>
                     <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6 text-center">Status</TableHead>
                     <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6 text-center">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {stockLevels.length === 0 ? (
+                  {loading ? (
                     <TableRow>
-                      <TableCell colSpan={6} className="h-24 text-center text-zinc-500 text-[14px]">No records found.</TableCell>
+                      <TableCell colSpan={7} className="h-24 text-center">
+                        <Loader2 className="h-6 w-6 animate-spin mx-auto text-zinc-400" />
+                      </TableCell>
+                    </TableRow>
+                  ) : stockLevels.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={7} className="h-24 text-center text-zinc-500 text-[14px]">No inventory records found.</TableCell>
                     </TableRow>
                   ) : (
                     stockLevels.map((s) => (
-                      <TableRow key={s.id} className="h-16 hover:bg-zinc-50 transition-colors">
+                      <TableRow key={s._id} className="h-16 hover:bg-zinc-50 transition-colors">
                         <TableCell className="px-6">
-                          <span className="font-semibold text-[15px] text-zinc-900">{s.name}</span>
+                          <div className="flex flex-col">
+                            <span className="font-semibold text-[15px] text-zinc-900">{s.name}</span>
+                            <span className="text-[12px] font-medium text-zinc-500">{s.category?.name}</span>
+                          </div>
                         </TableCell>
-                        <TableCell className="px-6 text-center font-mono text-[14px] text-zinc-600">
-                          {s.highValue}
+                        <TableCell className="px-6 text-center font-mono text-[14px] text-zinc-900 font-semibold">
+                          {s.totalIn} - {s.totalOut}
                         </TableCell>
                         <TableCell className="px-6 text-center">
                           <span className="inline-flex items-center justify-center bg-blue-50 text-blue-700 px-3 py-1 rounded-md text-[15px] font-extrabold border border-blue-100">
@@ -96,10 +152,16 @@ export default function StockLevelPage() {
                           </span>
                         </TableCell>
                         <TableCell className="px-6 text-center text-[14px] font-bold text-zinc-500 uppercase">
-                          {s.measure}
+                          {s.unit?.name}
+                        </TableCell>
+                        <TableCell className="px-6 py-4">
+                          <div className="flex flex-col gap-1 items-center justify-center">
+                            <span className="text-[13px] font-bold text-zinc-900">CP: ${s.purchasePrice?.toFixed(2)}</span>
+                            <span className="text-[13px] font-bold text-emerald-600">SP: ${s.salePrice?.toFixed(2)}</span>
+                          </div>
                         </TableCell>
                         <TableCell className="px-6 text-center">
-                          {s.status === "Active" ? (
+                          {s.status ? (
                             <Badge className="bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border-none px-2.5 py-1 text-[13px] font-semibold">
                               Active
                             </Badge>
@@ -117,14 +179,11 @@ export default function StockLevelPage() {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="w-40 bg-white">
-                              <DropdownMenuItem className="text-[14px] font-medium cursor-pointer">
-                                <Edit className="mr-2 h-4 w-4" /> Edit Record
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                className="text-[14px] font-medium text-red-600 focus:bg-red-500 focus:text-white cursor-pointer"
-                                onClick={() => handleDelete(s.id)}
+                              <DropdownMenuItem 
+                                className="text-[14px] font-medium cursor-pointer"
+                                onSelect={() => handleEditRedirect(s._id)}
                               >
-                                <Trash className="mr-2 h-4 w-4" /> Delete
+                                <Edit className="mr-2 h-4 w-4" /> Edit Product
                               </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
