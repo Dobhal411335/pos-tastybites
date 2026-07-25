@@ -12,16 +12,29 @@ export class AuthService {
     const admin = await this.authRepo.findAdminByEmail(email);
     if (!admin) throw new Error('Invalid credentials');
 
+    if (admin.status === 'Inactive') {
+      throw new Error('Account is inactive. Please contact your administrator.');
+    }
+
     const isMatch = await comparePassword(password, admin.password);
     if (!isMatch) throw new Error('Invalid credentials');
+
+    // Auto-migrate legacy 'ADMIN' to 'Super Admin'
+    let currentRole = admin.role;
+    if (currentRole === 'ADMIN') {
+      currentRole = 'Super Admin';
+      await this.authRepo.updateAdmin(admin._id, { role: 'Super Admin', lastLogin: new Date() });
+    } else {
+      await this.authRepo.updateAdmin(admin._id, { lastLogin: new Date() });
+    }
 
     const token = await signToken({
       userId: admin._id.toString(),
       restaurantId: admin.restaurantId ? admin.restaurantId.toString() : null,
-      role: admin.role,
+      role: currentRole,
     });
 
-    return { token, user: { id: admin._id.toString(), email: admin.email, role: admin.role } };
+    return { token, user: { id: admin._id.toString(), email: admin.email, role: currentRole, name: admin.name } };
   }
 
   async employeeLogin(email, password) {

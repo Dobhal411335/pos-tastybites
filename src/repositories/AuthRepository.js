@@ -46,6 +46,10 @@ export class AuthRepository {
     return await Admin.findByIdAndUpdate(id, { password: hashedPassword });
   }
 
+  async updateAdmin(id, updateData) {
+    return await Admin.findByIdAndUpdate(id, updateData, { new: true });
+  }
+
   async updateEmployeePassword(id, hashedPassword) {
     return await Employee.findByIdAndUpdate(id, { password: hashedPassword });
   }
