@@ -4,6 +4,25 @@ import { sendSuccess } from "@/utils/apiResponse";
 import { sendError } from "@/utils/errorHandler";
 import { logger } from "@/utils/logger";
 
+// GET - Retrieve all giftcards in a batch
+export const GET = withAuth(async (request, { params }) => {
+  try {
+    const { id } = await params;
+    if (!id) return sendError(new Error("Missing ID"), "Batch ID is required", 400);
+
+    const giftcards = await Giftcard.find({ batchId: id, restaurant: request.restaurant }).sort({ createdAt: 1 }).lean();
+    
+    if (!giftcards || giftcards.length === 0) {
+      return sendError(new Error("Not Found"), "Giftcards not found for this batch", 404);
+    }
+
+    return sendSuccess(giftcards, "Giftcards retrieved successfully");
+  } catch (error) {
+    logger.error(`Failed to get giftcards for batch ${params?.id}`, error);
+    return sendError(error, "Failed to retrieve giftcards", 500);
+  }
+}, ["ADMIN", "MANAGER"]);
+
 // PUT - Update a giftcard (e.g. status)
 export const PUT = withAuth(async (request, { params }) => {
   try {

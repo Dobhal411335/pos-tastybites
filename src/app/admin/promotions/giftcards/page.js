@@ -14,8 +14,9 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { format } from "date-fns";
 import { DatePicker } from "@/components/ui/date-picker";
 import DeleteDialog from "@/components/common/DeleteDialog";
-
+import { useRouter } from "next/navigation";
 export default function GiftcardsConfigPage() {
+  const router=useRouter()
   const [giftcards, setGiftcards] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -397,7 +398,7 @@ export default function GiftcardsConfigPage() {
                       <TableCell className="px-6 text-center">
                         <button
                           type="button"
-                          onClick={() => toast.success(`Downloading PDF for Batch ${g._id.slice(0, 8)}...`)}
+                          onClick={() => router.push(`/admin/promotions/giftcards/print/${g._id}`)}
                           className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-zinc-100 text-zinc-700 hover:bg-zinc-200 rounded-md text-[13px] font-semibold transition-all cursor-pointer"
                         >
                           <Download className="h-4 w-4 text-zinc-500" />

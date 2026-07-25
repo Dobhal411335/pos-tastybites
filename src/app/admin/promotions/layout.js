@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import TopNavbar from "@/components/layout/TopNavbar";
 import ModuleSidebar from "@/components/layout/ModuleSidebar";
 import { Loader2 } from "lucide-react";
@@ -9,8 +9,10 @@ import { FooterBar } from "@/components/layout/FooterBar";
 
 export default function MenuModuleLayout({ children }) {
     const router = useRouter();
+    const pathname = usePathname();
     const [adminUser, setAdminUser] = useState(null);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+    const isPrintPage = pathname?.includes("/print/");
 
     // Authenticate user on mount
     useEffect(() => {
@@ -56,19 +58,22 @@ export default function MenuModuleLayout({ children }) {
     ];
 
     return (
-        <div className="min-h-screen bg-[#FAF9F6] flex flex-col antialiased text-[#1F2937] font-sans">
+        <div className={`${isPrintPage ? "h-screen overflow-hidden" : "min-h-screen"} bg-[#FAF9F6] flex flex-col antialiased text-[#1F2937] font-sans`}>
 
             {/* Shared top navbar */}
-            <TopNavbar
-                adminName={adminUser?.name}
-                onMenuToggle={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            />
-
+            {!isPrintPage && (
+                <TopNavbar
+                    adminName={adminUser?.name}
+                    onMenuToggle={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                />
+            )}
             <div className="flex-1 flex overflow-hidden relative">
                 {/* Left Module Sidebar (Desktop) */}
-                <div className="hidden md:block">
-                    <ModuleSidebar groups={sidebarGroups} />
-                </div>
+                {!isPrintPage && (
+                    <div className="hidden md:block">
+                        <ModuleSidebar groups={sidebarGroups} />
+                    </div>
+                )}
 
                 {/* Left Module Sidebar (Mobile Drawer) */}
                 {isMobileMenuOpen && (
@@ -84,14 +89,20 @@ export default function MenuModuleLayout({ children }) {
                 )}
 
                 {/* Right Content Viewport */}
-                <main className="flex-1 overflow-y-auto p-8">
-                    <div className="mx-auto max-w-6xl bg-white border border-[#ECECEC] p-6 sm:p-10 rounded-xl shadow-xs min-h-125">
+                {isPrintPage ? (
+                    <main className="flex-1 flex flex-col min-w-0 overflow-y-auto bg-gray-200">
                         {children}
-                    </div>
-                </main>
+                    </main>
+                ) : (
+                    <main className="flex-1 overflow-y-auto p-8">
+                        <div className="mx-auto max-w-6xl bg-white border border-[#ECECEC] p-6 sm:p-10 rounded-xl shadow-xs min-h-125">
+                            {children}
+                        </div>
+                    </main>
+                )}
             </div>
 
-            <FooterBar />
+            {!isPrintPage && <FooterBar />}
         </div>
     );
 }

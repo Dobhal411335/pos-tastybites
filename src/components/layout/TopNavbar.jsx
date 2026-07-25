@@ -24,7 +24,7 @@ export default function TopNavbar({ onMenuToggle, adminName }) {
   };
 
   return (
-    <header className="sticky top-0 z-40 h-16 border-b border-stone-200 bg-[#F7F7F7]">
+    <header className="print:hidden sticky top-0 z-40 h-16 border-b border-stone-200 bg-[#F7F7F7]">
   <div className="grid h-full grid-cols-[280px_1fr_auto] items-center px-5">
 
     {/* LEFT */}
@@ -50,7 +50,7 @@ export default function TopNavbar({ onMenuToggle, adminName }) {
           className="object-contain"
         />
 
-        <span className="rounded-md bg-orange-100 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-orange-700">
+        <span className="print:hidden rounded-md bg-orange-100 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-orange-700">
           Admin
         </span>
       </Link>
