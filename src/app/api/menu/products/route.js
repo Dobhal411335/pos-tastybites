@@ -21,7 +21,7 @@ export const GET = withAuth(async (request) => {
     logger.error("Failed to list products", error);
     return sendError(error, "Failed to retrieve products", 500);
   }
-}, ["ADMIN", "MANAGER"]);
+});
 
 // POST - Create a new product (basic info)
 export const POST = withAuth(async (request) => {

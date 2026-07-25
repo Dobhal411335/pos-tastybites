@@ -13,7 +13,6 @@ export default function EmployeeMainLayout({ children }) {
   const [employeeUser, setEmployeeUser] = useState(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [loading, setLoading] = useState(true);
-
   useEffect(() => {
     const verifyAuth = async () => {
       try {
@@ -28,7 +27,7 @@ export default function EmployeeMainLayout({ children }) {
       } catch (err) {
         router.replace("/login");
       } finally {
-    setLoading(false);
+        setLoading(false);
       }
     };
     verifyAuth();
@@ -44,9 +43,14 @@ export default function EmployeeMainLayout({ children }) {
 
   return (
     <div className="min-h-screen bg-[#FAFAFA] flex flex-col antialiased text-zinc-900 font-sans">
-      
+
       <EmployeeTopNav
-        employeeName={employeeUser?.name || employeeUser?.firstName || "Employee"}
+        employeeName={
+          (employeeUser?.employee || employeeUser)?.firstName && (employeeUser?.employee || employeeUser)?.lastName
+            ? `${(employeeUser?.employee || employeeUser).firstName} ${(employeeUser?.employee || employeeUser).lastName}`
+            : (employeeUser?.employee || employeeUser)?.name || (employeeUser?.employee || employeeUser)?.firstName || ""
+        }
+        employeeRole={(employeeUser?.employee || employeeUser)?.role || "Server"}
         onMenuToggle={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
       />
 
@@ -64,13 +68,13 @@ export default function EmployeeMainLayout({ children }) {
           </div>
         )}
 
-        <main className="flex-1 overflow-y-auto p-4 md:p-8">
-          <div className="mx-auto max-w-7xl">
+        <main className="flex-1 overflow-y-auto p-4">
+          <div className="mx-auto max-w-8xl">
             {children}
           </div>
         </main>
       </div>
-      <EmployeeFooter/>
+      <EmployeeFooter />
     </div>
   );
 }

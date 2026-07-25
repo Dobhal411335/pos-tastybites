@@ -42,15 +42,6 @@ export default function MenuModuleLayout({ children }) {
       items: [
         { label: "Menu Category", href: "/admin/menu/categories" },
         { label: "Create Product", href: "/admin/menu/products" },
-        { label: "Create Festive Offer", href: "/admin/menu/offers" },
-      ],
-    },
-    {
-      title: "Create Discount",
-      bgColorClass: "bg-blue-850",
-      items: [
-        { label: "Apply Discount / Offer", href: "/admin/menu/discounts" },
-        { label: "Create Tasty Bites Gift Card", href: "/admin/menu/giftcards" },
       ],
     },
   ];

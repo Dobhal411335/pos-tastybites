@@ -13,7 +13,7 @@ export const GET = withAuth(async (request) => {
     logger.error("Failed to list taxes", error);
     return sendError(error, "Failed to retrieve taxes", 500);
   }
-}, ["ADMIN", "MANAGER"]);
+});
 
 // POST - Create a new tax
 export const POST = withAuth(async (request) => {

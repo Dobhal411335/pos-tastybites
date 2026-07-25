@@ -161,48 +161,6 @@ export default function TaxDetailsPage() {
 
           {/* Search Filters */}
           <Card className="shadow-sm border-zinc-200 bg-white overflow-hidden">
-            <CardHeader className="bg-zinc-50/50 border-b border-zinc-100 pb-4">
-              <CardTitle className="text-[18px] font-bold text-zinc-900 flex items-center gap-2">
-                <Search className="w-5 h-5 text-zinc-400" /> Filter Options
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-6">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="space-y-2">
-                  <label className="text-[14px] font-semibold text-zinc-900">
-                    Tax Name
-                  </label>
-                  <div className="relative">
-                    <FileText className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-400" />
-                    <Input
-                      type="text"
-                      placeholder="e.g. VAT, City Tax..."
-                      value={searchName}
-                      onChange={(e) => setSearchName(e.target.value)}
-                      className="pl-10 h-11 text-[15px] bg-white border-zinc-200 focus:ring-[#F97316]"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-[14px] font-semibold text-zinc-900">
-                    Status
-                  </label>
-                  <Select value={searchStatus} onValueChange={setSearchStatus}>
-                    <SelectTrigger className="h-11 text-[15px] bg-white border-zinc-200 focus:ring-[#F97316]">
-                      <SelectValue placeholder="All Statuses" />
-                    </SelectTrigger>
-                    <SelectContent style={{ backgroundColor: PALETTE.canvas }}>
-                      <SelectItem value="all">All Statuses</SelectItem>
-                      <SelectItem value="active">Active</SelectItem>
-                      <SelectItem value="inactive">Inactive</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            </CardContent>
-
-            {/* Tax Table Section */}
             <div className="border-t border-zinc-200">
               <CardHeader className="px-5 border-b border-zinc-200 bg-white">
                 <CardTitle className="text-[16px] font-bold text-zinc-900 flex items-center gap-2">

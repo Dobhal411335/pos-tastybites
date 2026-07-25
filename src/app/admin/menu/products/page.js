@@ -40,6 +40,7 @@ export default function ProductsPage() {
   const [newProductName, setNewProductName] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
   const [filterCategory, setFilterCategory] = useState("all");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [productToDelete, setProductToDelete] = useState(null);
@@ -76,6 +77,7 @@ export default function ProductsPage() {
     }
 
     try {
+      setIsSubmitting(true);
       const names = newProductName.split("\n").map(n => n.trim()).filter(n => n.length > 0);
       if (names.length === 0) return toast.error("Please enter at least one valid product name.");
 
@@ -103,6 +105,8 @@ export default function ProductsPage() {
       }
     } catch (e) {
       toast.error("An error occurred");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -226,11 +230,12 @@ export default function ProductsPage() {
                       </div>
                     </div>
                     <DialogFooter>
-                      <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)} className="h-11 px-6 font-semibold cursor-pointer">
+                      <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)} disabled={isSubmitting} className="h-11 px-6 font-semibold cursor-pointer">
                         Cancel
                       </Button>
-                      <Button type="submit" className="h-11 px-6 font-semibold cursor-pointer" style={{ backgroundColor: PALETTE.accent, color: "white" }}>
-                        Create Draft
+                      <Button type="submit" disabled={isSubmitting} className="h-11 px-6 font-semibold cursor-pointer" style={{ backgroundColor: PALETTE.accent, color: "white" }}>
+                        {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : null}
+                        {isSubmitting ? "Creating..." : "Create Draft"}
                       </Button>
                     </DialogFooter>
                   </form>

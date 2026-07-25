@@ -3,112 +3,61 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ChevronDown, ChevronRight, Utensils, Receipt, CheckCircle, XCircle, BarChart3 } from "lucide-react";
+import { 
+  LayoutDashboard, ShoppingBag, Grid2X2, UtensilsCrossed, 
+  BarChart3, UserCircle, ChefHat, ChevronLeft
+} from "lucide-react";
 
 export default function EmployeeSidebar() {
   const pathname = usePathname();
+  const [isSidebarExpanded, setIsSidebarExpanded] = useState(true);
 
-  const groups = [
-    {
-      title: "Point of Sale",
-      color: "bg-orange-500",
-      items: [
-        { label: "Create Order", href: "/employee/orders/create", icon: Utensils },
-        { label: "Today Order List", href: "/employee/orders/today", icon: Receipt },
-        { label: "Total Sale Record", href: "/employee/sales", icon: BarChart3 },
-        { label: "Confirm Order", href: "/employee/orders/confirm", icon: CheckCircle },
-        { label: "Cancel Order", href: "/employee/orders/cancel", icon: XCircle },
-      ],
-    },
+  const navItems = [
+    { icon: LayoutDashboard, label: "Dashboard", href: "/employee/dashboard" },
+    { icon: ShoppingBag, label: "Orders", href: "/employee/orders/history" },
+    { icon: BarChart3, label: "Sales Report", href: "/employee/sales" },
+    { icon: UserCircle, label: "Profile", href: "/employee/profile" },
   ];
 
-  const [openGroups, setOpenGroups] = useState({ 0: true });
-
-  const toggleGroup = (idx) => {
-    setOpenGroups((prev) => ({
-      ...prev,
-      [idx]: !prev[idx],
-    }));
-  };
-
   return (
-    <aside className="w-72 shrink-0 border-r border-zinc-200 bg-white h-full overflow-y-auto">
-      {/* Header */}
-      <div className="sticky top-0 z-10 bg-white border-b border-zinc-200 px-6 py-5">
-        <h2 className="text-[18px] font-bold text-zinc-900">
-          Staff Dashboard
-        </h2>
-        <p className="mt-1 text-[13px] text-zinc-500 font-medium">
-          Manage your daily operations
-        </p>
+    <aside 
+      className={`${isSidebarExpanded ? 'w-55' : 'w-18'} bg-white border-r border-zinc-200 flex flex-col transition-all duration-300 z-20 shrink-0 h-full relative`}
+    >
+      <div className="h-16 flex items-center justify-between px-4 border-b border-zinc-200 shrink-0">
+        <div className="flex items-center gap-3 overflow-hidden">
+          <div className="bg-orange-500 text-white p-1.5 rounded-lg shrink-0">
+            <ChefHat className="w-5 h-5" />
+          </div>
+          {isSidebarExpanded && <span className="font-bold text-zinc-900 whitespace-nowrap">TastyBites</span>}
+        </div>
+        <button 
+          onClick={() => setIsSidebarExpanded(!isSidebarExpanded)}
+          className="hover:bg-zinc-100 rounded-lg shrink-0 text-zinc-500"
+        >
+          <ChevronLeft className={`absolute bg-white border-2 rounded top-5 -right-3 w-6 h-6 transition-transform ${!isSidebarExpanded && 'rotate-180'}`} />
+        </button>
       </div>
 
-      {/* Navigation */}
-      <div className="p-4 space-y-5">
-        {groups.map((group, groupIdx) => {
-          const isOpen = openGroups[groupIdx];
-
+      <nav className="flex-1 py-4 px-2.5 flex flex-col gap-1.5 overflow-y-auto no-scrollbar">
+        {navItems.map((item, idx) => {
+          const active = pathname === item.href || pathname.startsWith(item.href + "/");
           return (
-            <div
-              key={groupIdx}
-              className="rounded-xl border border-zinc-200 overflow-hidden bg-white shadow-sm"
+            <Link
+              key={idx}
+              href={item.href}
+              className={`flex items-center gap-3 px-3 min-h-11 rounded-xl font-bold text-sm transition-colors ${
+                active 
+                  ? 'bg-orange-50 text-orange-600' 
+                  : 'text-zinc-600 hover:bg-zinc-100'
+              }`}
+              title={!isSidebarExpanded ? item.label : undefined}
             >
-              {/* Group Header */}
-              <button
-                onClick={() => toggleGroup(groupIdx)}
-                className="flex w-full items-center justify-between px-5 py-4 hover:bg-zinc-50 transition-colors"
-              >
-                <div className="flex items-center gap-3">
-                  <div
-                    className={`h-2.5 w-2.5 rounded-full ${
-                      group.color || "bg-orange-500"
-                    }`}
-                  />
-
-                  <span className="text-base font-semibold text-zinc-800">
-                    {group.title}
-                  </span>
-                </div>
-
-                {isOpen ? (
-                  <ChevronDown className="h-4 w-4 text-zinc-500" />
-                ) : (
-                  <ChevronRight className="h-4 w-4 text-zinc-500" />
-                )}
-              </button>
-
-              {/* Links */}
-              {isOpen && (
-                <div className="border-t border-zinc-100 py-2">
-                  {group.items.map((item, index) => {
-                    const active =
-                      pathname === item.href ||
-                      pathname.startsWith(item.href + "/");
-
-                    return (
-                     <Link
-                        key={index}
-                        href={item.href}
-                        className={`group mx-2 mb-1 flex items-center justify-between rounded-lg px-4 py-3 text-base transition-all duration-200 ${
-                          active
-                            ? "bg-orange-200 text-orange-600 font-semibold"
-                            : "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900"
-                        }`}
-                      >
-                        <span>{item.label}</span>
-
-                        {active && (
-                          <span className="h-2 w-2 rounded-full bg-orange-500" />
-                        )}
-                      </Link>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+              <item.icon className="w-5 h-5 shrink-0" />
+              {isSidebarExpanded && <span className="whitespace-nowrap">{item.label}</span>}
+            </Link>
           );
         })}
-      </div>
+      </nav>
     </aside>
   );
 }

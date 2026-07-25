@@ -2,14 +2,14 @@
 
 import React from "react";
 import Link from "next/link";
-import { LayoutDashboard, LogOut, Menu, UserCircle } from "lucide-react";
+import { LayoutDashboard, LogOut, Menu, UserCircle, Tablet, Wifi, BellRing } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import DateTimeDisplay from "@/components/common/DateTimeDisplay";
 import Image from "next/image";
 import { Badge } from "@/components/ui/badge";
-export default function EmployeeTopNav({ onMenuToggle, employeeName = "Employee" }) {
+export default function EmployeeTopNav({ onMenuToggle, employeeName = "Employee", employeeRole = "Server" }) {
   const router = useRouter();
 
   const handleLogout = async () => {
@@ -45,26 +45,25 @@ export default function EmployeeTopNav({ onMenuToggle, employeeName = "Employee"
           </Button>
 
           <Link
-            href="/admin/dashboard"
+            href="/employee/dashboard"
             className="flex items-center gap-3"
           >
             <Image
               src="/BannerImage.png"
               alt="Logo"
-              width={180}
-              height={60}
+              width={140}
+              height={50}
               className="object-contain"
               priority
             />
 
             <Badge
               variant="secondary"
-              className="bg-blue-100 text-blue-700 hover:bg-blue-100 uppercase tracking-wider"
+              className="bg-orange-100 text-orange-700 hover:bg-orange-100 uppercase tracking-wider hidden sm:inline-flex"
             >
               Staff POS
             </Badge>
           </Link>
-
         </div>
 
         {/* CENTER */}
@@ -77,10 +76,10 @@ export default function EmployeeTopNav({ onMenuToggle, employeeName = "Employee"
 
           {/* Back */}
           <Link
-            href="/admin/dashboard"
+            href="/employee/dashboard"
             className="group hidden xl:flex items-center gap-3 rounded-xl border border-stone-200 bg-white px-4 py-2 shadow-sm transition-all duration-200 hover:border-orange-300 hover:bg-orange-50 hover:shadow-md"
           >
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-orange-100 transition-colors group-hover:bg-orange-500">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-orange-100 transition-colors group-hover:bg-orange-500">
               <LayoutDashboard className="h-5 w-5 text-orange-600 group-hover:text-white" />
             </div>
 
@@ -94,26 +93,32 @@ export default function EmployeeTopNav({ onMenuToggle, employeeName = "Employee"
               </p>
             </div>
           </Link>
+            {/* Employee */}
+          <div className="hidden lg:flex items-center gap-3 rounded-xl border border-stone-200 bg-white px-4 py-2 shadow-sm hover:shadow-md transition-all">
 
-          {/* Employee */}
-          <div className="hidden lg:flex items-center gap-3 rounded-xl border border-stone-200 bg-white px-4 py-2 shadow-sm">
+            {/* Avatar */}
+            <div className="relative">
+              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-linear-to-br from-orange-500 to-orange-600 text-white text-base font-bold">
+                {employeeName?.charAt(0)?.toUpperCase() || "E"}
+              </div>
 
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100">
-              <UserCircle className="h-6 w-6 text-blue-600" />
+              <span className="absolute bottom-0 right-0 h-2 w-2 rounded-full border-2 border-white bg-emerald-500"></span>
             </div>
 
+            {/* Employee Info */}
             <div className="leading-tight">
-              <p className="text-xs text-stone-500">
-                Logged in as
-              </p>
-
               <p className="text-sm font-semibold text-stone-900">
                 {employeeName || "Employee"}
               </p>
+
+              <div className="mt-0.5 flex items-center gap-2">
+                <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wider">
+                  {employeeRole}
+                </span>
+                </div>
             </div>
 
           </div>
-
           {/* Mobile Logout */}
           <Button
             variant="ghost"
@@ -126,9 +131,9 @@ export default function EmployeeTopNav({ onMenuToggle, employeeName = "Employee"
 
           {/* Desktop Logout */}
           <Button
-            variant="destructive"
+            variant="default"
             onClick={handleLogout}
-            className="hidden lg:flex h-11 items-center gap-2 rounded-xl px-5"
+            className="hidden lg:flex bg-red-500 hover:bg-red-600 text-white items-center gap-2 rounded-xl px-5 h-12"
           >
             <LogOut className="h-4 w-4" />
             Logout

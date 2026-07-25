@@ -44,4 +44,4 @@ export const POST = withAuth(async (request) => {
     logger.error("Failed to apply discount", error);
     return sendError(error, "Failed to apply discount", 500);
   }
-}, ["ADMIN", "MANAGER", "STAFF"]);
+});

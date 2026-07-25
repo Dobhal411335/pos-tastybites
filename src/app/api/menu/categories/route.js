@@ -9,7 +9,7 @@ import { logger } from "@/utils/logger";
 export const GET = withAuth(async (request) => {
   try {
     const categories = await Category.find({ restaurant: request.restaurant }).sort({ createdAt: -1 }).lean();
-    
+
     // Get product counts per category
     const categoryIds = categories.map(c => c._id);
     const productCounts = await Product.aggregate([
@@ -32,7 +32,7 @@ export const GET = withAuth(async (request) => {
     logger.error("Failed to list categories", error);
     return sendError(error, "Failed to retrieve categories", 500);
   }
-}, ["ADMIN", "MANAGER"]);
+});
 
 // POST - Create a new category
 export const POST = withAuth(async (request) => {

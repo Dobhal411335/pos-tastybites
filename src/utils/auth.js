@@ -14,7 +14,12 @@ export const withAuth = (handler, allowedRoles = []) => {
       await connectDB(); // Ensure DB is connected for every protected route
 
       const cookieStore = await cookies();
-      const token = cookieStore.get('token')?.value;
+      let token = cookieStore.get('token')?.value;
+      
+      // Fallback to employee token if admin token is missing
+      if (!token) {
+        token = cookieStore.get('employee_access_token')?.value;
+      }
 
       if (!token) {
         return sendError(new Error('Unauthorized'), 'Authentication required', 401);
@@ -31,7 +36,7 @@ export const withAuth = (handler, allowedRoles = []) => {
       }
 
       // Attach context to request object (simulated via custom properties on NextRequest)
-      request.user = { id: payload.userId };
+      request.user = { id: payload.userId || payload.employeeId };
       request.restaurant = payload.restaurantId;
       request.role = payload.role;
 

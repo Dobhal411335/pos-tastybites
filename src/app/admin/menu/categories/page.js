@@ -36,6 +36,7 @@ export default function MenuCategoriesPage() {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
   const [editCategoryId, setEditCategoryId] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [categoryToDelete, setCategoryToDelete] = useState(null);
@@ -76,6 +77,7 @@ export default function MenuCategoriesPage() {
       return toast.error("Please enter a category name.");
     }
     try {
+      setIsSubmitting(true);
       const url = "/api/menu/categories";
       const method = editCategoryId ? "PUT" : "POST";
       const payload = editCategoryId ? { _id: editCategoryId, name: newCategoryName.trim() } : { name: newCategoryName.trim() };
@@ -95,6 +97,8 @@ export default function MenuCategoriesPage() {
       }
     } catch (e) {
       toast.error("An error occurred");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -195,11 +199,12 @@ export default function MenuCategoriesPage() {
                       </div>
                     </div>
                     <DialogFooter>
-                      <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)} className="h-11 hover:bg-red-600 hover:text-white px-6 font-semibold cursor-pointer border-zinc-200">
+                      <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)} disabled={isSubmitting} className="h-11 hover:bg-red-600 hover:text-white px-6 font-semibold cursor-pointer border-zinc-200">
                         Cancel
                       </Button>
-                      <Button type="submit" className="h-11 px-6 font-semibold cursor-pointer" style={{ backgroundColor: PALETTE.accent, color: "white" }}>
-                        {editCategoryId ? "Save Changes" : "Save Category"}
+                      <Button type="submit" disabled={isSubmitting} className="h-11 px-6 font-semibold cursor-pointer" style={{ backgroundColor: PALETTE.accent, color: "white" }}>
+                        {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : null}
+                        {editCategoryId ? (isSubmitting ? "Saving..." : "Save Changes") : (isSubmitting ? "Saving..." : "Save Category")}
                       </Button>
                     </DialogFooter>
                   </form>
