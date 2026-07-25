@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { withEmployeeAuth } from '@/utils/employeeAuth';
 import EmployeeShift from '@/models/employee/EmployeeShift';
-
+import Floor from"@/models/floor/Floor"
 const getMeHandler = async (request) => {
   try {
     const employee = request.employee;
@@ -18,7 +18,9 @@ const getMeHandler = async (request) => {
           firstName: employee.firstName,
           lastName: employee.lastName,
           email: employee.email,
+          phoneNumber: employee.phoneNumber,
           role: employee.role,
+          joinDate: employee.createdAt,
           profileImage: employee.profileImage,
           permissions: employee.permissionGroup?.permissions || []
         },

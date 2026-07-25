@@ -55,3 +55,20 @@ export const POST = withAuth(async (request) => {
     return sendError(error, "Failed to place order", 500);
   }
 }, ["EMPLOYEE", "MANAGER", "ADMIN"]); // Ensure Employee can access this
+
+// GET - Get orders placed by the current employee
+export const GET = withAuth(async (request) => {
+  try {
+    const employeeId = request.user.id;
+    const restaurantId = request.restaurant;
+
+    const orders = await Order.find({ restaurantId, processedBy: employeeId })
+      .sort({ createdAt: -1 })
+      .lean();
+
+    return sendSuccess(orders, "Employee orders retrieved successfully");
+  } catch (error) {
+    logger.error("Failed to fetch employee orders", error);
+    return sendError(error, "Failed to fetch orders", 500);
+  }
+}, ["EMPLOYEE", "MANAGER", "ADMIN"]);

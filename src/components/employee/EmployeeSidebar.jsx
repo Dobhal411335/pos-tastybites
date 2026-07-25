@@ -21,7 +21,7 @@ export default function EmployeeSidebar() {
 
   return (
     <aside 
-      className={`${isSidebarExpanded ? 'w-55' : 'w-18'} bg-white border-r border-zinc-200 flex flex-col transition-all duration-300 z-20 shrink-0 h-full relative`}
+      className={`${isSidebarExpanded ? 'w-52' : 'w-18'} bg-white border-r border-zinc-200 flex flex-col transition-all duration-300 z-20 shrink-0 h-full relative`}
     >
       <div className="h-16 flex items-center justify-between px-4 border-b border-zinc-200 shrink-0">
         <div className="flex items-center gap-3 overflow-hidden">

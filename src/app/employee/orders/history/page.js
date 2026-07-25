@@ -1,61 +1,61 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { 
   Search, ChevronDown, Clock, CheckCircle2, ChevronRight, X, 
-  Receipt, ShoppingBag, Truck, Check, ChefHat, Play, CheckCircle
+  Receipt, ShoppingBag, Truck, Check, ChefHat, Play, CheckCircle, Loader2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { toast } from "sonner";
 
-const STATUSES = ["All", "Draft", "Pending", "Kitchen", "Preparing", "Ready", "Served", "Paid", "Cancelled"];
-
-const mockOrders = [
-  { id: "#1042", table: "T-04", type: "Dine-in", items: 3, total: "$42.50", status: "Ready", time: "2:45 PM", 
-    cart: [{name: "Burger", qty: 2, price: "$24.00"}, {name: "Fries", qty: 1, price: "$4.50"}, {name: "Coke", qty: 2, price: "$14.00"}] },
-  { id: "#1041", table: "Takeaway", type: "Takeaway", items: 2, total: "$28.00", status: "Preparing", time: "2:30 PM", 
-    cart: [{name: "Margherita Pizza", qty: 1, price: "$18.00"}, {name: "Salad", qty: 1, price: "$10.00"}] },
-  { id: "#1040", table: "T-01", type: "Dine-in", items: 1, total: "$12.00", status: "Paid", time: "1:30 PM", 
-    cart: [{name: "Pasta", qty: 1, price: "$12.00"}] },
-  { id: "#1039", table: "Delivery", type: "Delivery", items: 5, total: "$85.50", status: "Kitchen", time: "2:55 PM", 
-    cart: [{name: "Steak", qty: 2, price: "$60.00"}, {name: "Wine", qty: 1, price: "$25.50"}] },
-  { id: "#1038", table: "T-02", type: "Dine-in", items: 2, total: "$34.00", status: "Served", time: "1:10 PM", 
-    cart: [{name: "Fish & Chips", qty: 2, price: "$34.00"}] },
-];
+const STATUSES = ["All", "PENDING", "CONFIRMED", "CANCELLED"];
 
 export default function EmployeeOrdersHistory() {
   const [activeTab, setActiveTab] = useState("All");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedOrder, setSelectedOrder] = useState(null);
+  const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchOrders();
+  }, []);
+
+  const fetchOrders = async () => {
+    try {
+      const res = await fetch("/api/orders/employee");
+      const data = await res.json();
+      if (data.success) {
+        setOrders(data.data || []);
+      }
+    } catch (err) {
+      toast.error("Failed to fetch orders.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const getStatusColor = (status) => {
     switch (status) {
-      case "Draft": return "bg-zinc-200 text-zinc-600";
-      case "Pending": 
-      case "Kitchen": return "bg-amber-100 text-amber-700";
-      case "Preparing": return "bg-blue-100 text-blue-700";
-      case "Ready": return "bg-teal-100 text-teal-700";
-      case "Served":
-      case "Paid": return "bg-emerald-100 text-emerald-700";
-      case "Cancelled": return "bg-red-100 text-red-700";
+      case "PENDING": return "bg-amber-100 text-amber-700";
+      case "CONFIRMED": return "bg-emerald-100 text-emerald-700";
+      case "CANCELLED": return "bg-red-100 text-red-700";
       default: return "bg-zinc-100 text-zinc-700";
     }
   };
 
-  const getTypeIcon = (type) => {
-    switch (type) {
-      case "Dine-in": return <Receipt className="w-4 h-4 text-zinc-400" />;
-      case "Takeaway": return <ShoppingBag className="w-4 h-4 text-zinc-400" />;
-      case "Delivery": return <Truck className="w-4 h-4 text-zinc-400" />;
-      default: return <Receipt className="w-4 h-4 text-zinc-400" />;
-    }
+  const getTypeIcon = (source, tableNo) => {
+    if (source === 'ONLINE') return <ShoppingBag className="w-4 h-4 text-zinc-400" />;
+    return <Receipt className="w-4 h-4 text-zinc-400" />;
   };
 
-  const filteredOrders = mockOrders.filter(o => {
+  const filteredOrders = orders.filter(o => {
     const matchesTab = activeTab === "All" || o.status === activeTab;
-    const matchesSearch = o.id.toLowerCase().includes(searchQuery.toLowerCase()) || o.table.toLowerCase().includes(searchQuery.toLowerCase());
+    const searchString = `${o.orderNumber || ''} ${o.tableNo || ''}`.toLowerCase();
+    const matchesSearch = searchString.includes(searchQuery.toLowerCase());
     return matchesTab && matchesSearch;
   });
 
@@ -110,7 +110,11 @@ export default function EmployeeOrdersHistory() {
         {/* LIST */}
         <div className="flex-1 overflow-y-auto p-6">
           <div className="max-w-5xl mx-auto space-y-3">
-            {filteredOrders.length === 0 ? (
+            {loading ? (
+              <div className="flex justify-center items-center py-20">
+                <Loader2 className="w-8 h-8 animate-spin text-orange-500" />
+              </div>
+            ) : filteredOrders.length === 0 ? (
               <div className="text-center py-20 bg-white rounded-2xl border border-zinc-200 border-dashed">
                 <ShoppingBag className="w-12 h-12 text-zinc-300 mx-auto mb-3" />
                 <h3 className="text-lg font-bold text-zinc-900">No orders found</h3>
@@ -119,34 +123,34 @@ export default function EmployeeOrdersHistory() {
             ) : (
               filteredOrders.map((order) => (
                 <div 
-                  key={order.id}
+                  key={order._id}
                   onClick={() => setSelectedOrder(order)}
                   className={`bg-white p-4 rounded-2xl border transition-all cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-4 group ${
-                    selectedOrder?.id === order.id 
+                    selectedOrder?._id === order._id 
                       ? 'border-orange-500 ring-1 ring-orange-500 shadow-md' 
                       : 'border-zinc-200 hover:border-orange-300 hover:shadow-sm'
                   }`}
                 >
                   <div className="flex items-center gap-4">
                     <div className="w-12 h-12 rounded-xl bg-zinc-50 border border-zinc-100 flex items-center justify-center shrink-0">
-                      {getTypeIcon(order.type)}
+                      {getTypeIcon(order.source, order.tableNo)}
                     </div>
                     <div>
                       <div className="flex items-center gap-2">
-                        <span className="font-bold text-zinc-900">{order.id}</span>
+                        <span className="font-bold text-zinc-900">{order.orderNumber}</span>
                         <span className="w-1 h-1 rounded-full bg-zinc-300"></span>
-                        <span className="font-bold text-zinc-600">{order.table}</span>
+                        <span className="font-bold text-zinc-600">{order.tableNo || "Takeaway"}</span>
                       </div>
                       <div className="flex items-center gap-3 text-xs font-semibold text-zinc-500 mt-1 uppercase tracking-wider">
-                        <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" /> {order.time}</span>
-                        <span>{order.type}</span>
-                        <span>{order.items} Items</span>
+                        <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" /> {new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                        <span>{order.source}</span>
+                        <span>{order.items?.length || 0} Items</span>
                       </div>
                     </div>
                   </div>
 
                   <div className="flex items-center gap-6 justify-between sm:justify-end border-t sm:border-none pt-3 sm:pt-0 border-zinc-100 mt-2 sm:mt-0">
-                    <div className="font-bold text-lg text-zinc-900">{order.total}</div>
+                    <div className="font-bold text-lg text-zinc-900">${(order.totalAmount || 0).toFixed(2)}</div>
                     <Badge className={`${getStatusColor(order.status)} px-3 py-1 text-[11px] font-bold uppercase tracking-wider border-none shadow-none`}>
                       {order.status}
                     </Badge>
@@ -171,12 +175,12 @@ export default function EmployeeOrdersHistory() {
             <div className="p-5 border-b border-zinc-100 flex justify-between items-center bg-zinc-50 shrink-0">
               <div>
                 <div className="flex items-center gap-2 mb-1">
-                  <h2 className="text-xl font-bold text-zinc-900">{selectedOrder.id}</h2>
+                  <h2 className="text-xl font-bold text-zinc-900">{selectedOrder.orderNumber}</h2>
                   <Badge className={`${getStatusColor(selectedOrder.status)} text-[10px] uppercase font-bold px-2 py-0.5 border-none shadow-none`}>
                     {selectedOrder.status}
                   </Badge>
                 </div>
-                <p className="text-sm font-semibold text-zinc-500">{selectedOrder.table} • {selectedOrder.type}</p>
+                <p className="text-sm font-semibold text-zinc-500">{selectedOrder.tableNo || "Takeaway"} • {selectedOrder.source}</p>
               </div>
               <Button variant="ghost" size="icon" className="rounded-full text-zinc-400 hover:bg-zinc-200 hover:text-zinc-600" onClick={() => setSelectedOrder(null)}>
                 <X className="w-5 h-5" />
@@ -190,13 +194,13 @@ export default function EmployeeOrdersHistory() {
               <div>
                 <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-4">Order Items</h3>
                 <div className="space-y-3">
-                  {selectedOrder.cart.map((item, idx) => (
+                  {selectedOrder.items?.map((item, idx) => (
                     <div key={idx} className="flex justify-between items-start text-sm">
                       <div className="flex gap-3">
                         <span className="font-bold text-zinc-400">{item.qty}x</span>
                         <span className="font-bold text-zinc-800">{item.name}</span>
                       </div>
-                      <span className="font-semibold text-zinc-900">{item.price}</span>
+                      <span className="font-semibold text-zinc-900">${(item.price * item.qty).toFixed(2)}</span>
                     </div>
                   ))}
                 </div>
@@ -208,15 +212,15 @@ export default function EmployeeOrdersHistory() {
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between text-zinc-500 font-medium">
                   <span>Subtotal</span>
-                  <span>{selectedOrder.total}</span>
+                  <span>${(selectedOrder.subTotal || 0).toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between text-zinc-500 font-medium">
-                  <span>Tax (0%)</span>
-                  <span>$0.00</span>
+                  <span>Tax</span>
+                  <span>${(selectedOrder.taxTotal || 0).toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between text-lg font-bold text-zinc-900 pt-2 border-t border-zinc-100 mt-2">
                   <span>Total</span>
-                  <span>{selectedOrder.total}</span>
+                  <span>${(selectedOrder.totalAmount || 0).toFixed(2)}</span>
                 </div>
               </div>
 

@@ -16,34 +16,41 @@ export default function EmployeeProfilePage() {
   const [employee, setEmployee] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Mock fetching employee profile and shift assignments
   useEffect(() => {
-    // In a real app, this would be an API call based on the logged-in session
-    setTimeout(() => {
-      setEmployee({
-        id: "EMP-0001",
-        firstName: "Akhil",
-        lastName: "Maratha",
-        email: "akhilmaratha58@gmail.com",
-        phone: "+91 98765 43210",
-        role: "Manager",
-        joinDate: "Jan 12, 2024",
-        status: "active_shift",
-        shift: {
-          start: "09:00 AM",
-          end: "05:00 PM",
-          section: "Main Dining Floor",
-          deviceId: "Tablet 01",
-          tables: ["T1", "T2", "T3", "T4", "T5", "T6"]
-        },
-        performance: {
-          ordersToday: 42,
-          avgOrderTime: "14m",
-          rating: "4.8"
+    const fetchProfile = async () => {
+      try {
+        const res = await fetch("/api/employee/auth/me");
+        const json = await res.json();
+        if (json.success && json.data) {
+          const emp = json.data.employee;
+          const shift = json.data.shift;
+          
+          setEmployee({
+            id: emp.id || "N/A",
+            firstName: emp.firstName || "",
+            lastName: emp.lastName || "",
+            email: emp.email || "N/A",
+            phone: emp.phoneNumber || "N/A",
+            role: emp.role || "Staff",
+            joinDate: emp.joinDate ? new Date(emp.joinDate).toLocaleDateString() : "N/A",
+            status: shift ? "active_shift" : "no_shift",
+            shift: shift ? {
+              start: new Date(shift.startTime).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'}),
+              end: "In Progress",
+              section: shift.assignedFloor || "Main Dining Floor",
+              deviceId: "Active Device", 
+              tables: shift.assignedSection ? [shift.assignedSection] : ["All assigned tables"]
+            } : null
+          });
         }
-      });
-      setIsLoading(false);
-    }, 600);
+      } catch (err) {
+        toast.error("Failed to load profile.");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    fetchProfile();
   }, []);
 
   const handleClockOut = async () => {
@@ -180,32 +187,6 @@ export default function EmployeeProfilePage() {
 
         {/* RIGHT COLUMN: Account & Stats */}
         <div className="space-y-6">
-          
-          {/* Performance Snapshot */}
-          <Card className="rounded-2xl shadow-sm border-zinc-200 bg-zinc-900 text-white border-none">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-semibold text-zinc-400 uppercase tracking-wider">
-                Shift Performance
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div className="flex justify-between items-end border-b border-zinc-800 pb-3">
-                  <span className="text-zinc-300">Orders Today</span>
-                  <span className="text-2xl font-bold">{employee.performance.ordersToday}</span>
-                </div>
-                <div className="flex justify-between items-end border-b border-zinc-800 pb-3">
-                  <span className="text-zinc-300">Avg. Order Time</span>
-                  <span className="text-2xl font-bold">{employee.performance.avgOrderTime}</span>
-                </div>
-                <div className="flex justify-between items-end">
-                  <span className="text-zinc-300">Rating</span>
-                  <span className="text-2xl font-bold text-orange-400">{employee.performance.rating}</span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
           {/* Account & Contact */}
           <Card className="rounded-2xl shadow-sm border-zinc-200">
             <CardHeader className="pb-3 border-b border-zinc-100 mb-4">

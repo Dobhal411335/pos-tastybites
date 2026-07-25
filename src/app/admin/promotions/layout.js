@@ -40,13 +40,13 @@ export default function MenuModuleLayout({ children }) {
             title: "Create Discount",
             bgColorClass: "bg-blue-850",
             items: [
-                { label: "Apply Discount / Offer", href: "/admin/promotions/coupons" },
+                { label: "Create Discount / Offer", href: "/admin/promotions/coupons" },
                 { label: "Apply Discount / Offer", href: "/admin/promotions/discounts" },
                 
             ],
         },
         {
-            title: "Festive Offers / Gift Card",
+            title: "Festive / Gift Card",
             bgColorClass: "bg-blue-850",
             items: [
                 { label: "Create Festive Offer", href: "/admin/promotions/offers" },

@@ -2,9 +2,9 @@
 
 import React, { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { 
-  ArrowLeft, Search, Plus, Minus, Mic, NotebookPen, 
-  CheckCircle2, X, Tag, DollarSign, Percent, User, Phone, MapPin,
+import {
+  ArrowLeft, Search, Plus, Minus, Mic, NotebookPen,
+  CheckCircle2, X, Tag, DollarSign, Percent, User, Phone, MapPin, Trash2,
   Loader2
 } from "lucide-react";
 import { toast } from "sonner";
@@ -93,7 +93,7 @@ export default function OrderPage() {
   const calculateItemTax = (item, basePrice) => {
     let taxesToUse = (item.taxes && Array.isArray(item.taxes) && item.taxes.length > 0) ? item.taxes : globalTaxes;
     if (!taxesToUse || taxesToUse.length === 0) return 0;
-    
+
     const pctTaxes = taxesToUse.filter(t => t?.type?.toLowerCase().includes('percent')).reduce((sum, t) => sum + (t.value || 0), 0);
     const fixedTaxes = taxesToUse.filter(t => t?.type && !t.type.toLowerCase().includes('percent')).reduce((sum, t) => sum + (t.value || 0), 0);
     return (basePrice * pctTaxes / 100) + fixedTaxes;
@@ -120,7 +120,7 @@ export default function OrderPage() {
       handleOpenOptions(product);
       return;
     }
-    
+
     const price = product.price || 0;
     const itemTax = calculateItemTax(product, price);
 
@@ -129,12 +129,12 @@ export default function OrderPage() {
       if (existing) {
         return prev.map(item => item.id === product._id ? { ...item, qty: item.qty + 1 } : item);
       }
-      return [...prev, { 
-        id: product._id, 
-        name: product.name, 
-        price, 
-        tax: itemTax, 
-        qty: 1, 
+      return [...prev, {
+        id: product._id,
+        name: product.name,
+        price,
+        tax: itemTax,
+        qty: 1,
         size: "Standard",
         cartId: Date.now()
       }];
@@ -154,13 +154,13 @@ export default function OrderPage() {
     const finalPrice = basePrice + addonsPrice;
 
     const finalTax = calculateItemTax(selectedProduct, finalPrice);
-    
+
     let modifierStr = selectedSize && selectedSize !== "Standard" ? `Size: ${selectedSize}` : "";
     if (selectedAddons.length > 0) {
       modifierStr += (modifierStr ? " | " : "") + `Extras: ${selectedAddons.map(a => a.name).join(", ")}`;
     }
 
-    setCart(prev => [...prev, { 
+    setCart(prev => [...prev, {
       id: selectedProduct._id,
       cartId: Date.now(),
       name: selectedProduct.name,
@@ -183,6 +183,10 @@ export default function OrderPage() {
         return item;
       }).filter(item => item.qty > 0)
     );
+  };
+
+  const removeFromCart = (id) => {
+    setCart(prev => prev.filter(item => (item.cartId || item.id) !== id));
   };
 
   const handleSendToKitchen = () => {
@@ -216,7 +220,7 @@ export default function OrderPage() {
         body: JSON.stringify(payload)
       });
       const json = await res.json();
-      
+
       if (json.success) {
         toast.success("Order sent to kitchen!");
         setIsKitchenModalOpen(false);
@@ -295,12 +299,22 @@ export default function OrderPage() {
       {/* TOP HEADER */}
       <header className="h-16 bg-white border-b border-zinc-200 flex items-center justify-between px-4 shrink-0 shadow-sm z-10">
         {/* Back & Table Info */}
-        <div className="flex items-center gap-3 w-55 shrink-0">
-          <Button variant="ghost" size="icon" onClick={() => router.push("/employee/dashboard")} className="h-11 w-11 hover:bg-zinc-100 rounded-lg shrink-0">
-            <ArrowLeft className="w-5 h-5 text-zinc-700" />
+        <div className="flex items-center gap-3 w-60 shrink-0">
+          <Button
+            variant="ghost"
+            onClick={() => router.push("/employee/dashboard")}
+            className="h-8 px-3 hover:bg-orange-500 border rounded-lg shrink-0 flex items-center gap-2"
+          >
+            <ArrowLeft className="w-5 h-5 text-zinc-700 shrink-0" />
+            <span className="text-xs font-medium text-zinc-700 leading-tight text-left">
+              Back
+            </span>
           </Button>
+
           <div className="flex flex-col">
-            <h1 className="text-base font-bold text-zinc-900 leading-tight">Table {tableId}</h1>
+            <h1 className="text-base font-bold text-zinc-900 leading-tight">
+              Table {tableId}
+            </h1>
             <span className="text-xs font-semibold text-zinc-500">Main Floor</span>
           </div>
         </div>
@@ -313,8 +327,8 @@ export default function OrderPage() {
         <div className="w-[65%] flex flex-col border-r border-zinc-200 bg-zinc-50">
 
           {/* Search & Category Tabs */}
-          <div className="px-4 pt-3 pb-3 bg-white border-b border-zinc-200 shrink-0 space-y-3">
-            <div className="relative">
+          <div className="flex items-center gap-2 px-4 py-4 bg-white border-b border-zinc-200 shrink-0">
+            <div className="relative w-full">
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
               <Input
                 placeholder="Search menu items..."
@@ -323,19 +337,20 @@ export default function OrderPage() {
                 className="pl-9 pr-10 h-11 bg-zinc-50 border-zinc-200 rounded-lg text-sm font-semibold focus-visible:ring-orange-500"
               />
             </div>
-
-            <Select value={activeCategory} onValueChange={setActiveCategory}>
-              <SelectTrigger className="w-full h-11 bg-white border-zinc-200 rounded-lg font-bold text-zinc-900 focus:ring-orange-500">
-                <SelectValue placeholder="Select a category" />
-              </SelectTrigger>
-              <SelectContent>
-                {categories.map(cat => (
-                  <SelectItem key={cat} value={cat} className="font-semibold text-zinc-900">
-                    {cat}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="w-80">
+              <Select value={activeCategory} onValueChange={setActiveCategory}>
+                <SelectTrigger className="w-full h-11 bg-white border-zinc-200 rounded-lg font-bold text-zinc-900 focus:ring-orange-500">
+                  <SelectValue placeholder="Select a category" />
+                </SelectTrigger>
+                <SelectContent>
+                  {categories.map(cat => (
+                    <SelectItem key={cat} value={cat} className="font-semibold text-zinc-900">
+                      {cat}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           {/* Clean List Rows (Professional UI) */}
@@ -346,16 +361,16 @@ export default function OrderPage() {
                 const isAvailable = product.inStock !== false;
                 const basePrice = hasOptions ? product.variants[0].price : (product.price || 0);
                 const taxAmount = calculateItemTax(product, basePrice);
-                
+
                 return (
                   <div
                     key={product._id}
-                    className="flex flex-col sm:flex-row items-stretch bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden transition-all hover:shadow-md hover:border-zinc-300 min-h-[76px]"
+                    className="flex flex-col sm:flex-row items-stretch bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden transition-all hover:shadow-md hover:border-zinc-300 min-h-19"
                   >
                     {/* Food Item Info */}
-                    <div className="flex-1 flex flex-col justify-center px-4 py-3 border-b sm:border-b-0 sm:border-r border-zinc-100">
+                    <div className="flex-1 flex flex-col justify-center px-4 py-3 border-b sm:border-b-0 sm:border-r border-zinc-300">
                       <div className="flex items-center gap-2 mb-1">
-                        <span className="font-bold text-zinc-900 text-base">{product.name}</span>
+                        <span className="font-bold text-zinc-900 text-sm">{product.name}</span>
                         {!isAvailable && (
                           <Badge className="bg-red-50 text-red-600 border border-red-200 text-[10px] font-bold uppercase rounded-md px-1.5 py-0.5 shrink-0">Out of Stock</Badge>
                         )}
@@ -363,31 +378,31 @@ export default function OrderPage() {
                       <div className="flex items-center gap-3">
                         <span className="text-xs font-semibold text-zinc-500">{product.category?.name || "Uncategorized"}</span>
                         {hasOptions && (
-                           <span className="text-xs font-bold text-orange-500 flex items-center gap-1">
-                             <NotebookPen className="w-3.5 h-3.5" />
-                             Variants
-                           </span>
+                          <span className="text-xs font-bold text-orange-500 flex items-center gap-1">
+                            <NotebookPen className="w-3.5 h-3.5" />
+                            Variants
+                          </span>
                         )}
                       </div>
                     </div>
 
                     {/* Price & Tax */}
                     <div className="flex items-center">
-                      <div className="w-[100px] flex flex-col items-center justify-center px-3 py-2 border-r border-zinc-100 h-full">
+                      <div className="w-25 flex flex-col items-center justify-center px-3 py-2 border-r border-zinc-300 h-full">
                         <span className="text-sm font-semibold text-zinc-500">Price</span>
-                        <span className="text-base font-black text-zinc-900">${basePrice.toFixed(2)}</span>
+                        <span className="text-sm font-black text-zinc-900">${basePrice.toFixed(2)}</span>
                       </div>
 
-                      <div className="w-[100px] flex flex-col items-center justify-center px-3 py-2 border-r border-zinc-100 h-full">
+                      <div className="w-25 flex flex-col items-center justify-center px-3 py-2 border-r border-zinc-300 h-full">
                         <span className="text-sm font-semibold text-zinc-500">Tax</span>
-                        <span className="text-base font-bold text-zinc-900">${taxAmount.toFixed(2)}</span>
+                        <span className="text-sm font-bold text-zinc-900">${taxAmount.toFixed(2)}</span>
                       </div>
                     </div>
 
                     {/* Add To Cart Button */}
-                    <div className="w-full sm:w-[140px] shrink-0 p-2 bg-zinc-50/50 flex items-center justify-center">
+                    <div className="w-full sm:w-35 shrink-0 p-3 bg-zinc-50/50 flex items-center justify-center">
                       <Button
-                        className="w-full h-full min-h-[44px] bg-zinc-900 hover:bg-orange-500 text-white font-bold text-sm rounded-lg shadow-sm transition-colors disabled:bg-zinc-200 disabled:text-zinc-400"
+                        className="w-full h-full min-h-8 bg-zinc-900 hover:bg-orange-500 text-white font-bold text-sm rounded-lg shadow-sm transition-colors disabled:bg-zinc-200 disabled:text-zinc-400"
                         disabled={!isAvailable}
                         onClick={() => hasOptions ? handleOpenOptions(product) : addToCart(product)}
                       >
@@ -399,11 +414,11 @@ export default function OrderPage() {
               })}
               {filteredProducts.length === 0 && (
                 <div className="text-center py-12 flex flex-col items-center bg-white rounded-xl border border-zinc-200 shadow-sm mx-4">
-                   <div className="w-12 h-12 bg-zinc-100 rounded-full flex items-center justify-center mb-3">
-                     <Search className="w-6 h-6 text-zinc-400" />
-                   </div>
-                   <p className="text-base font-bold text-zinc-900">No items found</p>
-                   <p className="text-sm font-medium text-zinc-500 mt-1">Try adjusting your search or category.</p>
+                  <div className="w-12 h-12 bg-zinc-100 rounded-full flex items-center justify-center mb-3">
+                    <Search className="w-6 h-6 text-zinc-400" />
+                  </div>
+                  <p className="text-base font-bold text-zinc-900">No items found</p>
+                  <p className="text-sm font-medium text-zinc-500 mt-1">Try adjusting your search or category.</p>
                 </div>
               )}
             </div>
@@ -412,7 +427,7 @@ export default function OrderPage() {
 
         {/* RIGHT PANEL (LIVE CART) — ~35% */}
         <div className="w-[35%] flex flex-col bg-white">
-         {/* Scrollable area: cart items + notes + discount */}
+          {/* Scrollable area: cart items + notes + discount */}
           <ScrollArea className="flex-1 bg-zinc-50">
             <div className="p-4 space-y-4">
               {/* Cart items */}
@@ -433,12 +448,15 @@ export default function OrderPage() {
                         <span className="font-bold text-sm text-zinc-900 shrink-0">${(item.price * item.qty).toFixed(2)}</span>
                       </div>
                       <div className="flex items-center justify-between mt-2">
-                        <button
-                          className="p-1.5 -ml-1.5 text-zinc-400 hover:text-orange-500 hover:bg-orange-50 rounded-md transition-colors"
-                          title="Add Item Note"
-                        >
-                          <NotebookPen className="w-4 h-4" />
-                        </button>
+                        <div className="flex items-center gap-1">
+                            <button
+                            onClick={() => removeFromCart(item.cartId || item.id)}
+                            className="p-1.5 text-zinc-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors"
+                            title="Remove Item"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
                         <div className="flex items-center gap-2 bg-zinc-100 rounded-md p-0.5">
                           <button onClick={() => updateQty(item.cartId || item.id, -1)} className="w-8 h-8 rounded bg-white shadow-sm flex items-center justify-center text-zinc-700 hover:bg-zinc-50">
                             <Minus className="w-3.5 h-3.5" />
@@ -536,14 +554,14 @@ export default function OrderPage() {
               <Button
                 onClick={handleSendToKitchen}
                 disabled={cart.length === 0}
-                className="h-[52px] bg-orange-500 hover:bg-orange-600 text-white font-bold text-sm rounded-xl shadow-none"
+                className="h-13 bg-orange-500 hover:bg-orange-600 text-white font-bold text-sm rounded-xl shadow-none"
               >
                 Send to Kitchen
               </Button>
               <Button
                 onClick={handlePayment}
                 disabled={orderStatus !== "Served"}
-                className="h-[52px] bg-zinc-900 hover:bg-zinc-800 text-white font-bold text-sm rounded-xl shadow-none disabled:opacity-25 disabled:cursor-not-allowed"
+                className="h-13 bg-zinc-900 hover:bg-zinc-800 text-white font-bold text-sm rounded-xl shadow-none disabled:opacity-25 disabled:cursor-not-allowed"
               >
                 Collect Payment
               </Button>
@@ -605,14 +623,14 @@ export default function OrderPage() {
               <Button
                 variant="outline"
                 onClick={() => setIsKitchenModalOpen(false)}
-                className="flex-1 h-[48px] rounded-xl font-bold border-zinc-200 text-zinc-700 shadow-none"
+                className="flex-1 h-12 rounded-xl font-bold border-zinc-200 text-zinc-700 shadow-none"
               >
                 Cancel
               </Button>
               <Button
                 onClick={handleConfirmKitchen}
                 disabled={isSubmitting}
-                className="flex-[2] h-[48px] rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-bold shadow-none flex items-center justify-center"
+                className="flex-2 h-12 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-bold shadow-none flex items-center justify-center"
               >
                 {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : "Confirm & Send"}
               </Button>
@@ -637,7 +655,7 @@ export default function OrderPage() {
 
             <ScrollArea className="flex-1 p-6">
               <div className="space-y-6">
-                
+
                 <div className="flex text-[11px] font-bold uppercase tracking-wider text-zinc-400 border-b border-zinc-100 pb-2 px-1">
                   <div className="flex-1">Option</div>
                   <div className="w-24 text-center">Price</div>
@@ -649,20 +667,19 @@ export default function OrderPage() {
                     <span className="text-[13px] font-bold text-zinc-900 mb-2 block">Size / Variant</span>
                     <div className="grid gap-2">
                       {selectedProduct.variants.map((v) => (
-                        <label 
+                        <label
                           key={v.size}
-                          className={`flex items-center border rounded-lg p-3 cursor-pointer transition-colors group ${
-                            selectedSize === v.size ? 'border-orange-500 bg-orange-50/30' : 'border-zinc-200 hover:border-orange-300'
-                          }`}
+                          className={`flex items-center border rounded-lg p-3 cursor-pointer transition-colors group ${selectedSize === v.size ? 'border-orange-500 bg-orange-50/30' : 'border-zinc-200 hover:border-orange-300'
+                            }`}
                           onClick={() => setSelectedSize(v.size)}
                         >
                           <div className={`flex-1 flex items-center gap-3 text-sm font-bold ${selectedSize === v.size ? 'text-zinc-900' : 'text-zinc-700 group-hover:text-zinc-900'}`}>
-                            <input 
-                              type="radio" 
-                              name="size" 
+                            <input
+                              type="radio"
+                              name="size"
                               checked={selectedSize === v.size}
                               onChange={() => setSelectedSize(v.size)}
-                              className="w-4 h-4 accent-orange-500" 
+                              className="w-4 h-4 accent-orange-500"
                             />
                             <span>{v.size}</span>
                           </div>
@@ -681,11 +698,10 @@ export default function OrderPage() {
                       {selectedProduct.addons.map((addon) => {
                         const isChecked = selectedAddons.some(a => a._id === addon._id);
                         return (
-                          <label 
-                            key={addon._id} 
-                            className={`flex items-center border p-3 rounded-lg cursor-pointer transition-colors group ${
-                              isChecked ? 'border-orange-500 bg-orange-50/30' : 'border-zinc-200 hover:border-orange-300'
-                            }`}
+                          <label
+                            key={addon._id}
+                            className={`flex items-center border p-3 rounded-lg cursor-pointer transition-colors group ${isChecked ? 'border-orange-500 bg-orange-50/30' : 'border-zinc-200 hover:border-orange-300'
+                              }`}
                           >
                             <div className={`flex-1 flex items-center gap-3 text-sm font-bold ${isChecked ? 'text-zinc-900' : 'text-zinc-700 group-hover:text-zinc-900'}`}>
                               <input

@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { 
   TrendingUp, TrendingDown,Clock, DollarSign, ShoppingBag, 
-  Receipt, Wallet, Search, ChevronDown, Calendar
+  Receipt, Wallet, Search, ChevronDown, Calendar, ChevronLeft, ChevronRight, Loader2
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,8 +13,9 @@ import {
   LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, 
   XAxis, YAxis, Tooltip, ResponsiveContainer
 } from "recharts";
+import { toast } from "sonner";
 
-// Mock Data for Charts
+// Mock Data for Charts (Keep static for now unless we have an aggregation endpoint)
 const salesData = [
   { time: "9am", sales: 120 }, { time: "10am", sales: 250 },
   { time: "11am", sales: 400 }, { time: "12pm", sales: 850 },
@@ -37,26 +38,68 @@ const orderTypeData = [
 ];
 const COLORS = ["#f97316", "#3b82f6", "#10b981"]; // Orange, Blue, Green
 
-// Mock Orders List
-const orderHistory = [
-  { id: "#1042", table: "T-04", items: 3, total: "$42.50", status: "Paid", time: "2:45 PM" },
-  { id: "#1041", table: "T-01", items: 2, total: "$28.00", status: "Paid", time: "2:15 PM" },
-  { id: "#1040", table: "Takeaway", items: 1, total: "$12.00", status: "Paid", time: "1:30 PM" },
-  { id: "#1039", table: "T-08", items: 5, total: "$85.50", status: "Paid", time: "1:15 PM" },
-  { id: "#1038", table: "T-02", items: 2, total: "$34.00", status: "Cancelled", time: "12:50 PM" },
-];
-
 export default function EmployeeSalesPage() {
   const [dateRange, setDateRange] = useState("Today");
   const [searchQuery, setSearchQuery] = useState("");
+  const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+
+  useEffect(() => {
+    fetchOrders();
+  }, []);
+
+  const fetchOrders = async () => {
+    try {
+      const res = await fetch("/api/orders/employee");
+      const data = await res.json();
+      if (data.success) {
+        setOrders(data.data || []);
+      }
+    } catch (err) {
+      toast.error("Failed to fetch sales data.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const getStatusBadge = (status) => {
     switch(status) {
-      case "Paid": return "bg-emerald-100 text-emerald-700";
-      case "Cancelled": return "bg-red-100 text-red-700";
+      case "CONFIRMED": return "bg-emerald-100 text-emerald-700";
+      case "CANCELLED": return "bg-red-100 text-red-700";
+      case "PENDING": return "bg-amber-100 text-amber-700";
       default: return "bg-zinc-100 text-zinc-700";
     }
   };
+
+  // Calculations
+  const validOrders = orders.filter(o => o.status !== "CANCELLED");
+  const totalOrders = validOrders.length;
+  const totalSales = validOrders.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
+  const avgOrderValue = totalOrders > 0 ? (totalSales / totalOrders) : 0;
+  const tipsEarned = totalSales * 0.05; // Mock tips logic
+
+  const stats = [
+    { label: "Total Sales", value: `$${totalSales.toFixed(2)}`, icon: DollarSign, trend: "+0%", isUp: true },
+    { label: "Total Orders", value: totalOrders.toString(), icon: ShoppingBag, trend: "+0%", isUp: true },
+    { label: "Avg Order Value", value: `$${avgOrderValue.toFixed(2)}`, icon: Receipt, trend: "+0%", isUp: true },
+    { label: "Tips Earned (Est.)", value: `$${tipsEarned.toFixed(2)}`, icon: Wallet, trend: "+0%", isUp: true },
+  ];
+
+  // Pagination logic
+  const filteredOrders = orders.filter(o => 
+    (o.orderNumber || "").toLowerCase().includes(searchQuery.toLowerCase()) || 
+    (o.tableNo || "Takeaway").toLowerCase().includes(searchQuery.toLowerCase())
+  );
+  
+  const totalPages = Math.max(1, Math.ceil(filteredOrders.length / itemsPerPage));
+  const currentOrders = filteredOrders.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
+  // Reset page when search changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery]);
 
   return (
     <div className="flex-1 p-6 space-y-6 max-w-7xl mx-auto pb-24 font-sans">
@@ -86,32 +129,33 @@ export default function EmployeeSalesPage() {
       </div>
 
       {/* STATS ROW */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {[
-          { label: "Total Sales", value: "$3,450", icon: DollarSign, trend: "+12.5%", isUp: true },
-          { label: "Total Orders", value: "124", icon: ShoppingBag, trend: "+8.2%", isUp: true },
-          { label: "Avg Order Value", value: "$27.80", icon: Receipt, trend: "-2.4%", isUp: false },
-          { label: "Tips Earned", value: "$185.50", icon: Wallet, trend: "+15.3%", isUp: true },
-        ].map((stat, i) => (
-          <Card key={i} className="rounded-2xl border-zinc-200 shadow-sm">
-            <CardContent className="p-5">
-              <div className="flex justify-between items-start mb-4">
-                <div className="p-2.5 bg-orange-50 text-orange-600 rounded-xl">
-                  <stat.icon className="w-5 h-5" />
+      {loading ? (
+        <div className="flex justify-center items-center py-10">
+          <Loader2 className="w-8 h-8 animate-spin text-orange-500" />
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {stats.map((stat, i) => (
+            <Card key={i} className="rounded-2xl border-zinc-200 shadow-sm">
+              <CardContent className="p-5">
+                <div className="flex justify-between items-start mb-4">
+                  <div className="p-2.5 bg-orange-50 text-orange-600 rounded-xl">
+                    <stat.icon className="w-5 h-5" />
+                  </div>
+                  <Badge variant="outline" className={`border-none font-bold text-xs ${
+                    stat.isUp ? 'bg-emerald-50 text-emerald-700' : 'bg-zinc-100 text-zinc-700'
+                  }`}>
+                    {stat.isUp ? <TrendingUp className="w-3 h-3 mr-1" /> : <TrendingDown className="w-3 h-3 mr-1" />}
+                    {stat.trend}
+                  </Badge>
                 </div>
-                <Badge variant="outline" className={`border-none font-bold text-xs ${
-                  stat.isUp ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'
-                }`}>
-                  {stat.isUp ? <TrendingUp className="w-3 h-3 mr-1" /> : <TrendingDown className="w-3 h-3 mr-1" />}
-                  {stat.trend}
-                </Badge>
-              </div>
-              <p className="text-zinc-500 text-sm font-semibold">{stat.label}</p>
-              <h3 className="text-2xl font-bold text-zinc-900">{stat.value}</h3>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+                <p className="text-zinc-500 text-sm font-semibold">{stat.label}</p>
+                <h3 className="text-2xl font-bold text-zinc-900">{stat.value}</h3>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
 
       {/* CHARTS SECTION */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -119,7 +163,7 @@ export default function EmployeeSalesPage() {
         {/* Sales Over Time (Line Chart) */}
         <Card className="rounded-2xl border-zinc-200 shadow-sm lg:col-span-2">
           <CardHeader className="pb-2 border-b border-zinc-100 mb-4">
-            <CardTitle className="text-base font-bold text-zinc-800">Sales Over Time</CardTitle>
+            <CardTitle className="text-base font-bold text-zinc-800">Sales Over Time (Demo)</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="h-[280px] w-full">
@@ -142,7 +186,7 @@ export default function EmployeeSalesPage() {
         <div className="space-y-6">
           <Card className="rounded-2xl border-zinc-200 shadow-sm">
             <CardHeader className="pb-2 border-b border-zinc-100 mb-2">
-              <CardTitle className="text-base font-bold text-zinc-800">Top Items</CardTitle>
+              <CardTitle className="text-base font-bold text-zinc-800">Top Items (Demo)</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="h-[140px] w-full">
@@ -164,7 +208,7 @@ export default function EmployeeSalesPage() {
 
           <Card className="rounded-2xl border-zinc-200 shadow-sm">
             <CardHeader className="pb-0 pt-4">
-              <CardTitle className="text-base font-bold text-zinc-800 text-center">Order Split</CardTitle>
+              <CardTitle className="text-base font-bold text-zinc-800 text-center">Order Split (Demo)</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="h-[120px] w-full mt-2">
@@ -208,57 +252,89 @@ export default function EmployeeSalesPage() {
           </div>
         </div>
         
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-zinc-50 border-b border-zinc-100">
-                <th className="px-6 py-3 text-xs font-bold text-zinc-500 uppercase tracking-wider">Order ID</th>
-                <th className="px-6 py-3 text-xs font-bold text-zinc-500 uppercase tracking-wider">Table / Guest</th>
-                <th className="px-6 py-3 text-xs font-bold text-zinc-500 uppercase tracking-wider">Items</th>
-                <th className="px-6 py-3 text-xs font-bold text-zinc-500 uppercase tracking-wider">Total</th>
-                <th className="px-6 py-3 text-xs font-bold text-zinc-500 uppercase tracking-wider">Time</th>
-                <th className="px-6 py-3 text-xs font-bold text-zinc-500 uppercase tracking-wider text-right">Status</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-zinc-100">
-              {orderHistory
-                .filter(o => o.id.toLowerCase().includes(searchQuery.toLowerCase()) || o.table.toLowerCase().includes(searchQuery.toLowerCase()))
-                .map((order, i) => (
-                <tr key={i} className="hover:bg-zinc-50 transition-colors cursor-pointer group">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className="font-bold text-zinc-900">{order.id}</span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-zinc-700">
-                    {order.table}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-zinc-500 font-medium">
-                    {order.items} items
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap font-bold text-zinc-900">
-                    {order.total}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-zinc-500 font-medium flex items-center gap-1.5">
-                    <Clock className="w-3.5 h-3.5" /> {order.time}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right">
-                    <Badge className={`${getStatusBadge(order.status)} border-none px-2.5 py-0.5 shadow-none font-bold uppercase text-[10px] tracking-wider`}>
-                      {order.status}
-                    </Badge>
-                  </td>
+        <div className="overflow-x-auto min-h-[300px]">
+          {loading ? (
+            <div className="flex justify-center items-center h-48">
+              <Loader2 className="w-8 h-8 animate-spin text-orange-500" />
+            </div>
+          ) : (
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-zinc-50 border-b border-zinc-100">
+                  <th className="px-6 py-3 text-xs font-bold text-zinc-500 uppercase tracking-wider">Order ID</th>
+                  <th className="px-6 py-3 text-xs font-bold text-zinc-500 uppercase tracking-wider">Table / Guest</th>
+                  <th className="px-6 py-3 text-xs font-bold text-zinc-500 uppercase tracking-wider">Items</th>
+                  <th className="px-6 py-3 text-xs font-bold text-zinc-500 uppercase tracking-wider">Total</th>
+                  <th className="px-6 py-3 text-xs font-bold text-zinc-500 uppercase tracking-wider">Time</th>
+                  <th className="px-6 py-3 text-xs font-bold text-zinc-500 uppercase tracking-wider text-right">Status</th>
                 </tr>
-              ))}
-              {orderHistory.filter(o => o.id.toLowerCase().includes(searchQuery.toLowerCase()) || o.table.toLowerCase().includes(searchQuery.toLowerCase())).length === 0 && (
-                <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center text-zinc-500">
-                    No matching orders found.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="bg-white divide-y divide-zinc-100">
+                {currentOrders.map((order, i) => (
+                  <tr key={order._id || i} className="hover:bg-zinc-50 transition-colors cursor-pointer group">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className="font-bold text-zinc-900">{order.orderNumber}</span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-zinc-700">
+                      {order.tableNo || "Takeaway"}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-zinc-500 font-medium">
+                      {order.items?.length || 0} items
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap font-bold text-zinc-900">
+                      ${(order.totalAmount || 0).toFixed(2)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-zinc-500 font-medium flex items-center gap-1.5">
+                      <Clock className="w-3.5 h-3.5" /> {new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-right">
+                      <Badge className={`${getStatusBadge(order.status)} border-none px-2.5 py-0.5 shadow-none font-bold uppercase text-[10px] tracking-wider`}>
+                        {order.status}
+                      </Badge>
+                    </td>
+                  </tr>
+                ))}
+                {currentOrders.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="px-6 py-12 text-center text-zinc-500 font-medium">
+                      No matching orders found.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          )}
         </div>
+        
+        {/* PAGINATION */}
+        {!loading && totalPages > 1 && (
+          <div className="p-4 border-t border-zinc-100 flex items-center justify-between bg-zinc-50">
+            <span className="text-sm font-medium text-zinc-500">
+              Page {currentPage} of {totalPages}
+            </span>
+            <div className="flex gap-2">
+              <Button 
+                variant="outline" 
+                size="icon" 
+                className="h-8 w-8 rounded-lg bg-white border-zinc-200"
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+              >
+                <ChevronLeft className="w-4 h-4 text-zinc-600" />
+              </Button>
+              <Button 
+                variant="outline" 
+                size="icon" 
+                className="h-8 w-8 rounded-lg bg-white border-zinc-200"
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+              >
+                <ChevronRight className="w-4 h-4 text-zinc-600" />
+              </Button>
+            </div>
+          </div>
+        )}
       </Card>
-
     </div>
   );
 }

@@ -45,7 +45,7 @@ export const POST = withAuth(async (request) => {
 
     const existingFloor = await Floor.findOne({ name: name.trim(), restaurant: request.restaurant });
     if (existingFloor) {
-      return sendError(new Error("Conflict"), "Floor with this name already exists", 409);
+      return sendError(new Error("Floor with this name already exists"), "Conflict", 409);
     }
 
     const floor = await Floor.create({
@@ -87,7 +87,7 @@ export const PUT = withAuth(async (request) => {
     if (name) {
       const existingFloor = await Floor.findOne({ name: name.trim(), restaurant: request.restaurant, _id: { $ne: _id } });
       if (existingFloor) {
-        return sendError(new Error("Conflict"), "Floor with this name already exists", 409);
+        return sendError(new Error("Floor with this name already exists"), "Conflict", 409);
       }
       floor.name = name.trim();
     }

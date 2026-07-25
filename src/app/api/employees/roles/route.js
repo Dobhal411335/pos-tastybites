@@ -29,7 +29,7 @@ export const POST = withAuth(async (request) => {
 
     const existing = await Role.findOne({ name: uppercaseName });
     if (existing) {
-      return sendError(new Error("Conflict"), "Role already exists", 409);
+      return sendError(new Error("Role already exists"), "Conflict", 409);
     }
 
     const newRole = await Role.create({

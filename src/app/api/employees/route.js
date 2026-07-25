@@ -48,18 +48,18 @@ export const POST = withAuth(async (request) => {
 
     // Validation
     if (!firstName || !lastName || !email || !phoneNumber) {
-      return sendError(new Error("Missing fields"), "First name, last name, email, and phone number are required", 400);
+      return sendError(new Error("First name, last name, email, and phone number are required"), "Missing fields", 400);
     }
 
     // Check unique email and phone
     const existingEmail = await Employee.findOne({ email: email.toLowerCase() });
     if (existingEmail) {
-      return sendError(new Error("Conflict"), "Employee with this email already exists", 409);
+      return sendError(new Error("Employee with this email already exists"), "Conflict", 409);
     }
 
     const existingPhone = await Employee.findOne({ phoneNumber });
     if (existingPhone) {
-      return sendError(new Error("Conflict"), "Employee with this phone number already exists", 409);
+      return sendError(new Error("Employee with this phone number already exists"), "Conflict", 409);
     }
 
     const newEmployee = await Employee.create({
