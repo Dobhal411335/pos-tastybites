@@ -42,10 +42,14 @@ export const POST = withAuth(async (request) => {
       else totalFixed += t.value;
     });
 
+    const parsedPrice = Number(price) || 0;
+    const computedTotalPrice = parsedPrice + (parsedPrice * totalPercentage / 100) + totalFixed;
+
     const newOffer = await Offer.create({
       restaurant: request.restaurant,
       name,
-      price: Number(price) || 0,
+      price: parsedPrice,
+      totalPrice: computedTotalPrice,
       description: description || "",
       inclusions: inclusions || [],
       choices: choices || [],

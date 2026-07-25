@@ -2,6 +2,7 @@ import { withAuth } from "@/utils/auth";
 import Coupon from "@/models/menu/Coupon";
 import { sendSuccess } from "@/utils/apiResponse";
 import { sendError } from "@/utils/errorHandler";
+import Product from "@/models/menu/Product";
 import { logger } from "@/utils/logger";
 
 // PUT - Update a coupon
@@ -52,6 +53,12 @@ export const DELETE = withAuth(async (request, { params }) => {
     if (!deleted) {
       return sendError(new Error("Not Found"), "Coupon not found", 404);
     }
+
+    // Clear this discount from any products that have it applied
+    await Product.updateMany(
+      { discount: id, restaurant: request.restaurant },
+      { $unset: { discount: "" } }
+    );
 
     logger.info(`Coupon deleted: ${id}`);
     return sendSuccess(null, "Coupon deleted successfully");

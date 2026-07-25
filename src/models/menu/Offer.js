@@ -5,6 +5,7 @@ const OfferSchema = new mongoose.Schema(
     restaurant: { type: mongoose.Schema.Types.ObjectId, ref: 'Restaurant', required: true },
     name: { type: String, required: true, trim: true },
     price: { type: Number, required: true },
+    totalPrice: { type: Number, default: 0 },
     description: { type: String, trim: true, default: '' },
     inclusions: [{ type: String, trim: true }],
     choices: [{ type: String, trim: true }],

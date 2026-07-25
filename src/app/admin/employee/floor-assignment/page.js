@@ -51,7 +51,10 @@ export default function TableAssignmentPage() {
     fetchData();
   }, []);
 
-  const handleOpenDialog = (employee) => {
+  const handleOpenDialog = async (employee) => {
+    // Wait for dropdown menu to close
+    await new Promise(resolve => setTimeout(resolve, 150));
+    
     setSelectedEmployee(employee);
 
     // Group existing assignments by floor
@@ -144,7 +147,7 @@ export default function TableAssignmentPage() {
   return (
     <div className="flex flex-col overflow-hidden min-h-screen" style={{ backgroundColor: PALETTE.canvas, color: PALETTE.ink }}>
       <div className="flex-1 overflow-y-auto p-8">
-        <div className="max-w-[1200px] mx-auto space-y-8 pb-16 font-sans">
+        <div className="max-w-300 mx-auto space-y-8 pb-16 font-sans">
 
           <div className="flex flex-col sm:flex-row justify-between sm:items-end gap-4 border-b border-zinc-200 pb-5">
             <div>
@@ -172,22 +175,42 @@ export default function TableAssignmentPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="p-0 flex-1">
-              {loading ? (
-                <div className="flex justify-center items-center h-48">
-                  <Loader2 className="h-8 w-8 animate-spin text-[#F97316]" />
-                </div>
-              ) : (
-                <UITable>
-                  <TableHeader className="bg-zinc-50">
-                    <TableRow>
-                      <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6">Employee</TableHead>
-                      <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6">Role</TableHead>
-                      <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6">Assigned Tables</TableHead>
-                      <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6 text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {employees.length === 0 ? (
+              <UITable>
+                <TableHeader className="bg-zinc-50">
+                  <TableRow>
+                    <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6">Employee</TableHead>
+                    <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6">Role</TableHead>
+                    <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6">Assigned Tables</TableHead>
+                    <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6 text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {loading ? (
+                    Array.from({ length: 4 }).map((_, index) => (
+                      <TableRow key={index} className="h-16 border-b border-zinc-100">
+                        <TableCell className="px-6 py-4">
+                          <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 rounded-full bg-zinc-200 animate-pulse" />
+                            <div className="h-4 w-32 bg-zinc-200 rounded animate-pulse" />
+                          </div>
+                        </TableCell>
+                        <TableCell className="px-6 py-4">
+                          <div className="h-6 w-16 bg-zinc-200 rounded-md animate-pulse" />
+                        </TableCell>
+                        <TableCell className="px-6 py-4">
+                          <div className="flex flex-wrap gap-2">
+                            <div className="h-6 w-20 bg-zinc-200 rounded-md animate-pulse" />
+                            <div className="h-6 w-20 bg-zinc-200 rounded-md animate-pulse" />
+                          </div>
+                        </TableCell>
+                        <TableCell className="px-6 py-4 text-right">
+                          <div className="flex justify-end">
+                            <div className="h-8 w-24 bg-zinc-200 rounded-md animate-pulse" />
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  ) : employees.length === 0 ? (
                       <TableRow>
                         <TableCell colSpan={4} className="h-32 text-center text-zinc-400 font-medium text-[14px]">
                           No employees found.
@@ -226,7 +249,7 @@ export default function TableAssignmentPage() {
                                       <span className="text-[12px] font-bold text-zinc-500 uppercase">{floorName}:</span>
                                       {displayGroups[floorName].map((tNum, i) => (
                                         <Badge key={i} className="bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 shadow-none">
-                                          T{tNum}
+                                          {tNum}
                                         </Badge>
                                       ))}
                                     </div>
@@ -251,9 +274,8 @@ export default function TableAssignmentPage() {
                         );
                       })
                     )}
-                  </TableBody>
-                </UITable>
-              )}
+                </TableBody>
+              </UITable>
             </CardContent>
           </Card>
         </div>

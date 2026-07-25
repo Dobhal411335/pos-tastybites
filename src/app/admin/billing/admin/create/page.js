@@ -52,10 +52,10 @@ export default function CreateOrderPage() {
 
   return (
     <div className="flex flex-col overflow-hidden min-h-screen" style={{ backgroundColor: PALETTE.canvas, color: PALETTE.ink }}>
-      
+
       <div className="flex-1 overflow-y-auto p-8">
         <div className="max-w-360 mx-auto space-y-8 pb-16 font-sans">
-          
+
           {/* Header */}
           <div className="flex flex-col sm:flex-row justify-between sm:items-end gap-4 border-b border-zinc-200 pb-5">
             <div>
@@ -69,7 +69,7 @@ export default function CreateOrderPage() {
           </div>
 
           <div className="flex flex-col gap-8">
-            
+
             {/* Left Column: Menu Selection */}
             <div className="space-y-6">
               <Card className="shadow-sm border-zinc-200 bg-white overflow-hidden h-full flex flex-col">
@@ -106,12 +106,12 @@ export default function CreateOrderPage() {
                               <span className="text-zinc-500">Tax: ${item.tax.toFixed(2)}</span>
                             </div>
                           </div>
-                          
+
                           <div className="flex items-center gap-2">
                             {item.hasOptions ? (
-                              <Button 
-                                variant="outline" 
-                                size="sm" 
+                              <Button
+                                variant="outline"
+                                size="sm"
                                 className="h-8 text-[12px] font-bold border-zinc-200 text-zinc-700 hover:bg-zinc-100"
                                 onClick={() => handleOpenOptions(item)}
                               >
@@ -122,8 +122,8 @@ export default function CreateOrderPage() {
                                 <List className="w-3.5 h-3.5 mr-1" /> Std
                               </Badge>
                             )}
-                            <Button 
-                              size="sm" 
+                            <Button
+                              size="sm"
                               className="h-8 text-[12px] font-bold bg-[#1e40af] hover:bg-blue-900 text-white"
                               onClick={() => handleAddToCart(item)}
                             >
@@ -131,7 +131,7 @@ export default function CreateOrderPage() {
                             </Button>
                           </div>
                         </div>
-                    ))}
+                      ))}
                   </div>
                 </CardContent>
               </Card>
@@ -139,7 +139,7 @@ export default function CreateOrderPage() {
 
             {/*Cart & Billing */}
             <div className="space-y-6">
-              
+
               {/* Cart Table */}
               <Card className="shadow-sm border-zinc-200 bg-white overflow-hidden">
                 <CardHeader className="bg-zinc-50/50 border-b border-zinc-100 pb-4 flex flex-row items-center justify-between gap-4">
@@ -190,7 +190,7 @@ export default function CreateOrderPage() {
                                 <button className="text-zinc-400 hover:text-zinc-800 transition-colors p-1">
                                   <Edit className="h-4 w-4" />
                                 </button>
-                                <button 
+                                <button
                                   className="text-red-400 hover:text-red-600 transition-colors p-1"
                                   onClick={() => setCart(cart.filter(x => x.cartId !== c.cartId))}
                                 >
@@ -208,18 +208,18 @@ export default function CreateOrderPage() {
 
               {/* Billing Summary */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                
+
                 {/* Notes & Discounts */}
                 <Card className="shadow-sm border-zinc-200 bg-white overflow-hidden">
                   <CardContent className="p-6 space-y-6">
                     <div className="space-y-2">
                       <label className="text-[14px] font-semibold text-zinc-900">Special Note</label>
-                      <textarea 
+                      <textarea
                         placeholder="Add any special instructions here..."
-                        className="w-full bg-zinc-50 border border-zinc-200 rounded-md min-h-[80px] p-3 text-[14px] text-zinc-700 focus:outline-none focus:ring-2 focus:ring-[#F97316]"
+                        className="w-full bg-zinc-50 border border-zinc-200 rounded-md min-h-20 p-3 text-[14px] text-zinc-700 focus:outline-none focus:ring-2 focus:ring-[#F97316]"
                       />
                     </div>
-                    
+
                     <div className="space-y-2">
                       <label className="text-[14px] font-semibold text-zinc-900 flex items-center gap-2">
                         <Tag className="w-4 h-4 text-zinc-500" /> Discount Code
@@ -256,7 +256,7 @@ export default function CreateOrderPage() {
                         <span>-$0.00</span>
                       </div>
                     </div>
-                    
+
                     <div>
                       <div className="flex justify-between items-center mb-6">
                         <span className="text-[18px] font-bold text-zinc-100">Total Amount</span>
@@ -286,14 +286,14 @@ export default function CreateOrderPage() {
                 <CardTitle className="text-[20px] font-bold text-zinc-900">{selectedItem.name}</CardTitle>
                 <CardDescription className="text-[13px]">Select variations and extras</CardDescription>
               </div>
-              <button 
-                onClick={() => setIsOptionModalOpen(false)} 
+              <button
+                onClick={() => setIsOptionModalOpen(false)}
                 className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-zinc-200 text-zinc-500 transition-colors"
               >
                 ×
               </button>
             </CardHeader>
-            
+
             <CardContent className="p-6 space-y-4">
               <div className="flex text-[11px] font-bold uppercase tracking-wider text-zinc-400 mb-2 border-b border-zinc-100 pb-2 px-3">
                 <div className="flex-1">Option</div>
@@ -344,7 +344,7 @@ export default function CreateOrderPage() {
                 </label>
               </div>
             </CardContent>
-            
+
             <div className="p-4 border-t border-zinc-100 flex gap-3 bg-zinc-50/50">
               <Button variant="outline" className="flex-1 h-11 border-zinc-300 font-bold text-zinc-700 hover:bg-white" onClick={() => setIsOptionModalOpen(false)}>
                 Cancel

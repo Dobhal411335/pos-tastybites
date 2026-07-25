@@ -98,8 +98,10 @@ export default function EmployeeListPage() {
   };
 
   const handleDeleteUser = (id) => {
-    setEmployeeToDelete(id);
-    setIsDeleteDialogOpen(true);
+    setTimeout(() => {
+      setEmployeeToDelete(id);
+      setIsDeleteDialogOpen(true);
+    }, 150);
   };
 
   const confirmDelete = async () => {
@@ -196,6 +198,9 @@ export default function EmployeeListPage() {
   // Actually, we can return the raw password during `approve` or `regenerate` or use a dedicated decrypt endpoint.
   // Let's create a dedicated decrypt endpoint: `/api/employees/credentials?id=`
   const handleOpenCredentials = async (emp) => {
+    // Wait for dropdown to close to avoid pointer events lock
+    await new Promise(resolve => setTimeout(resolve, 150));
+    
     setSelectedEmployee(emp);
     setDecryptedPassword("");
     setShowPassword(false);
@@ -252,24 +257,53 @@ export default function EmployeeListPage() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-0 flex-1">
-                  {loading ? (
-                    <div className="flex justify-center items-center h-48">
-                      <Loader2 className="h-8 w-8 animate-spin text-[#F97316]" />
-                    </div>
-                  ) : (
-                    <Table>
-                      <TableHeader className="bg-zinc-50">
-                        <TableRow>
-                          <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6">ID / Username</TableHead>
-                          <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6">Employee Details</TableHead>
-                          <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6 text-center">Role</TableHead>
-                          <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6 text-center">Status</TableHead>
-                          <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6 text-center">Credentials</TableHead>
-                          <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6 text-center">Actions</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {employees.length === 0 ? (
+                  <Table>
+                    <TableHeader className="bg-zinc-50">
+                      <TableRow>
+                        <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6">ID / Username</TableHead>
+                        <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6">Employee Details</TableHead>
+                        <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6 text-center">Role</TableHead>
+                        <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6 text-center">Status</TableHead>
+                        <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6 text-center">Credentials</TableHead>
+                        <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6 text-center">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {loading ? (
+                          Array.from({ length: 5 }).map((_, index) => (
+                            <TableRow key={index} className="h-16 border-b border-zinc-100">
+                              <TableCell className="px-6">
+                                <div className="space-y-2">
+                                  <div className="h-4 w-24 bg-zinc-200 rounded animate-pulse" />
+                                  <div className="h-3 w-16 bg-zinc-200 rounded animate-pulse" />
+                                </div>
+                              </TableCell>
+                              <TableCell className="px-6">
+                                <div className="flex items-center gap-3">
+                                  <div className="h-10 w-10 bg-zinc-200 rounded-full animate-pulse" />
+                                  <div className="space-y-2">
+                                    <div className="h-4 w-32 bg-zinc-200 rounded animate-pulse" />
+                                    <div className="h-3 w-40 bg-zinc-200 rounded animate-pulse" />
+                                  </div>
+                                </div>
+                              </TableCell>
+                              <TableCell className="px-6 text-center">
+                                <div className="h-6 w-20 bg-zinc-200 rounded-md animate-pulse mx-auto" />
+                              </TableCell>
+                              <TableCell className="px-6 text-center">
+                                <div className="h-6 w-16 bg-zinc-200 rounded-full animate-pulse mx-auto" />
+                              </TableCell>
+                              <TableCell className="px-6 text-center">
+                                <div className="h-8 w-24 bg-zinc-200 rounded animate-pulse mx-auto" />
+                              </TableCell>
+                              <TableCell className="px-6 text-center">
+                                <div className="flex justify-center">
+                                  <div className="h-8 w-8 bg-zinc-200 rounded animate-pulse" />
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        ) : employees.length === 0 ? (
                           <TableRow>
                             <TableCell colSpan={6} className="h-32 text-center text-zinc-400 font-medium text-[14px]">
                               No employees found.
@@ -296,7 +330,7 @@ export default function EmployeeListPage() {
                                 </div>
                               </TableCell>
                               <TableCell className="px-6 text-center">
-                                <span className="text-[13px] font-bold text-zinc-700 bg-zinc-50 border border-zinc-200 px-3 py-1.5 rounded-md inline-block min-w-[100px]">
+                                <span className="text-[13px] font-bold text-zinc-700 bg-zinc-50 border border-zinc-200 px-3 py-1.5 rounded-md inline-block min-w-25">
                                   {emp.role || 'Staff'}
                                 </span>
                               </TableCell>
@@ -329,7 +363,7 @@ export default function EmployeeListPage() {
                                       </Link>
                                     </DropdownMenuItem>
                                     {emp.status === "Pending Approval" && (
-                                      <DropdownMenuItem className="text-[14px] font-medium text-[#1e40af] focus:bg-blue-50 cursor-pointer" onClick={() => { setSelectedEmployee(emp); setIsApproveOpen(true); }}>
+                                      <DropdownMenuItem className="text-[14px] font-medium text-[#1e40af] focus:bg-blue-50 cursor-pointer" onClick={() => { setSelectedEmployee(emp); setTimeout(() => setIsApproveOpen(true), 150); }}>
                                         <CheckCircle className="mr-2 h-4 w-4" /> Approve Employee
                                       </DropdownMenuItem>
                                     )}
@@ -338,7 +372,7 @@ export default function EmployeeListPage() {
                                         <DropdownMenuItem className="text-[14px] font-medium cursor-pointer" onClick={() => handleOpenCredentials(emp)}>
                                           <Key className="mr-2 h-4 w-4" /> View Credentials
                                         </DropdownMenuItem>
-                                        <DropdownMenuItem className="text-[14px] font-medium cursor-pointer" onClick={() => { setSelectedEmployee(emp); setIsEmailOpen(true); }}>
+                                        <DropdownMenuItem className="text-[14px] font-medium cursor-pointer" onClick={() => { setSelectedEmployee(emp); setTimeout(() => setIsEmailOpen(true), 150); }}>
                                           <Send className="mr-2 h-4 w-4" /> Send Credentials
                                         </DropdownMenuItem>
                                         <DropdownMenuItem className="text-[14px] font-medium text-amber-600 focus:bg-amber-50 cursor-pointer" onClick={() => handleRegeneratePassword(emp._id)}>
@@ -364,7 +398,6 @@ export default function EmployeeListPage() {
                         )}
                       </TableBody>
                     </Table>
-                  )}
                 </CardContent>
               </Card>
             </div>
@@ -484,6 +517,7 @@ export default function EmployeeListPage() {
                   <p>Hello {selectedEmployee.firstName},</p>
                   <p className="mt-2">Your employee account has been approved.</p>
                   <p className="mt-2 font-mono bg-white p-2 border border-zinc-200 rounded">Employee ID: {selectedEmployee.employeeId}<br/>Password: ********</p>
+                  
                 </div>
               </div>
             </div>

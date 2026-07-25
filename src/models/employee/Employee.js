@@ -39,7 +39,6 @@ const EmployeeSchema = new mongoose.Schema(
 );
 
 EmployeeSchema.index({ restaurant: 1, email: 1 }, { unique: true });
-EmployeeSchema.index({ employeeId: 1 });
 
 // Virtual for backward compatibility
 EmployeeSchema.virtual('name').get(function() {

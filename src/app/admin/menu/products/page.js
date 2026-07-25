@@ -292,11 +292,27 @@ export default function ProductsPage() {
                   </TableHeader>
                   <TableBody>
                     {loading ? (
-                      <TableRow>
-                        <TableCell colSpan={3} className="h-32 text-center">
-                          <Loader2 className="w-6 h-6 animate-spin mx-auto text-zinc-400" />
-                        </TableCell>
-                      </TableRow>
+                      Array.from({ length: 4 }).map((_, index) => (
+                        <TableRow key={index} className="h-20 border-b border-zinc-100">
+                          <TableCell className="px-6">
+                            <div className="flex items-center gap-4">
+                              <div className="h-12 w-12 bg-zinc-200 rounded-lg animate-pulse shrink-0" />
+                              <div className="space-y-2">
+                                <div className="h-4 w-40 bg-zinc-200 rounded animate-pulse" />
+                                <div className="h-3 w-24 bg-zinc-200 rounded animate-pulse" />
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell className="px-6">
+                            <div className="h-6 w-16 bg-zinc-200 rounded-full animate-pulse" />
+                          </TableCell>
+                          <TableCell className="px-6 text-right">
+                            <div className="flex justify-end">
+                              <div className="h-8 w-8 bg-zinc-200 rounded animate-pulse" />
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))
                     ) : filteredProducts.length > 0 ? (
                       filteredProducts.map((p) => (
                         <TableRow key={p._id} className="h-16 hover:bg-zinc-50 transition-colors">

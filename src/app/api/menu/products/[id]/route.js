@@ -41,7 +41,7 @@ export const PUT = withAuth(async (request, { params }) => {
     }
 
     const data = await request.json();
-    // Allow updating description, taxes, status, variants, addons, image
+    // Allow updating description, taxes, status, variants, addons, image, discount
     const { description, taxes, status, variants, addons, image } = data;
 
     const updateData = { updatedBy: request.user.id };
@@ -65,9 +65,16 @@ export const PUT = withAuth(async (request, { params }) => {
     if (addons) updateData.addons = addons;
     if (image !== undefined) updateData.image = image;
 
+    const updateObj = { $set: updateData };
+    if (data.discount === null) {
+      updateObj.$unset = { discount: 1 };
+    } else if (data.discount !== undefined) {
+      updateObj.$set.discount = data.discount;
+    }
+
     const updatedProduct = await Product.findOneAndUpdate(
       { _id: id, restaurant: request.restaurant },
-      { $set: updateData },
+      updateObj,
       { returnDocument: 'after', runValidators: true }
     ).populate("category", "name").populate("taxes");
 

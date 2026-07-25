@@ -131,7 +131,8 @@ export default function DeviceAssignmentPage() {
       setSavingDevice(false);
     }
   };
-  const handleOpenEditDevice = (device) => {
+  const handleOpenEditDevice = async (device) => {
+    await new Promise(resolve => setTimeout(resolve, 150));
     setEditDeviceData({
       _id: device._id,
       deviceCode: device.deviceCode,
@@ -171,7 +172,8 @@ export default function DeviceAssignmentPage() {
       setUpdatingDevice(false);
     }
   };
-  const handleOpenAssign = (device) => {
+  const handleOpenAssign = async (device) => {
+    await new Promise(resolve => setTimeout(resolve, 150));
     setSelectedDevice(device);
     setSelectedEmployeeId(device.assignedEmployee?._id || "");
     setIsAssignDialogOpen(true);
@@ -212,7 +214,8 @@ export default function DeviceAssignmentPage() {
       setSavingAssignment(false);
     }
   };
-  const handleViewDevice = (device) => {
+  const handleViewDevice = async (device) => {
+    await new Promise(resolve => setTimeout(resolve, 150));
     setDeviceToView(device);
     setViewDeviceDrawerOpen(true);
   };
@@ -311,27 +314,39 @@ export default function DeviceAssignmentPage() {
           </div>
           <Card className="shadow-[0_8px_30px_rgb(0,0,0,0.04)] border-slate-200/60 bg-white overflow-hidden rounded-2xl">
             <CardContent className="p-0">
-              {loading ? (
-                <div className="flex justify-center items-center h-64">
-                  <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <UITable>
-                    <TableHeader className="bg-slate-50/80 border-b border-slate-100">
-                      <TableRow className="hover:bg-transparent">
-                        <TableHead className="text-xs font-bold uppercase tracking-wider text-slate-500 py-5 px-6">Device Code</TableHead>
-                        <TableHead className="text-xs font-bold uppercase tracking-wider text-slate-500 py-5 px-6">Device Name</TableHead>
-                        <TableHead className="text-xs font-bold uppercase tracking-wider text-slate-500 py-5 px-6">Device Type</TableHead>
-                        <TableHead className="text-xs font-bold uppercase tracking-wider text-slate-500 py-5 px-6">Assigned Floor</TableHead>
-                        <TableHead className="text-xs font-bold uppercase tracking-wider text-slate-500 py-5 px-6">Assigned Employee</TableHead>
-                        <TableHead className="text-xs font-bold uppercase tracking-wider text-slate-500 py-5 px-6">Status</TableHead>
-                        <TableHead className="text-xs font-bold uppercase tracking-wider text-slate-500 py-5 px-6">Last Login</TableHead>
-                        <TableHead className="text-xs font-bold uppercase tracking-wider text-slate-500 py-5 px-6 text-right">Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredDevices.length === 0 ? (
+              <div className="overflow-x-auto">
+                <UITable>
+                  <TableHeader className="bg-slate-50/80 border-b border-slate-100">
+                    <TableRow className="hover:bg-transparent">
+                      <TableHead className="text-xs font-bold uppercase tracking-wider text-slate-500 py-5 px-6">Device Code</TableHead>
+                      <TableHead className="text-xs font-bold uppercase tracking-wider text-slate-500 py-5 px-6">Device Name</TableHead>
+                      <TableHead className="text-xs font-bold uppercase tracking-wider text-slate-500 py-5 px-6">Device Type</TableHead>
+                      <TableHead className="text-xs font-bold uppercase tracking-wider text-slate-500 py-5 px-6">Assigned Floor</TableHead>
+                      <TableHead className="text-xs font-bold uppercase tracking-wider text-slate-500 py-5 px-6">Assigned Employee</TableHead>
+                      <TableHead className="text-xs font-bold uppercase tracking-wider text-slate-500 py-5 px-6">Status</TableHead>
+                      <TableHead className="text-xs font-bold uppercase tracking-wider text-slate-500 py-5 px-6">Last Login</TableHead>
+                      <TableHead className="text-xs font-bold uppercase tracking-wider text-slate-500 py-5 px-6 text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {loading ? (
+                      Array.from({ length: 4 }).map((_, index) => (
+                        <TableRow key={index} className="h-16 border-b border-zinc-100">
+                          <TableCell className="px-6 py-5"><div className="h-4 w-20 bg-zinc-200 rounded animate-pulse" /></TableCell>
+                          <TableCell className="px-6 py-5"><div className="h-4 w-32 bg-zinc-200 rounded animate-pulse" /></TableCell>
+                          <TableCell className="px-6 py-5"><div className="h-4 w-24 bg-zinc-200 rounded animate-pulse" /></TableCell>
+                          <TableCell className="px-6 py-5"><div className="h-4 w-24 bg-zinc-200 rounded animate-pulse" /></TableCell>
+                          <TableCell className="px-6 py-5"><div className="h-4 w-32 bg-zinc-200 rounded animate-pulse" /></TableCell>
+                          <TableCell className="px-6 py-5"><div className="h-6 w-20 bg-zinc-200 rounded-md animate-pulse" /></TableCell>
+                          <TableCell className="px-6 py-5"><div className="h-4 w-24 bg-zinc-200 rounded animate-pulse" /></TableCell>
+                          <TableCell className="px-6 py-5 text-right">
+                            <div className="flex justify-end">
+                              <div className="h-8 w-8 bg-zinc-200 rounded animate-pulse" />
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    ) : filteredDevices.length === 0 ? (
                         <TableRow>
                           <TableCell colSpan={8} className="h-32 text-center text-slate-400 font-medium text-sm">
                             No devices found matching your criteria.
@@ -393,11 +408,10 @@ export default function DeviceAssignmentPage() {
                             </TableCell>
                           </TableRow>
                         ))
-                      )}
-                    </TableBody>
-                  </UITable>
-                </div>
-              )}
+                    )}
+                  </TableBody>
+                </UITable>
+              </div>
             </CardContent>
           </Card>
         </div>

@@ -15,6 +15,11 @@ export const PUT = withAuth(async (request, { params }) => {
       return sendError(new Error("Missing ID"), "Offer ID is required", 400);
     }
 
+    const existingOffer = await Offer.findOne({ _id: id, restaurant: request.restaurant });
+    if (!existingOffer) {
+      return sendError(new Error("Not Found"), "Offer not found", 404);
+    }
+
     const updateData = await request.json();
     
     // Set updatedBy
@@ -41,18 +46,17 @@ export const PUT = withAuth(async (request, { params }) => {
     updateData.taxes = taxIds;
     updateData.taxData = { totalPercentage, totalFixed, taxNames, taxDetails };
 
+    const parsedPrice = updateData.price !== undefined ? (Number(updateData.price) || 0) : existingOffer.price;
+    updateData.totalPrice = parsedPrice + (parsedPrice * totalPercentage / 100) + totalFixed;
+
     const updatedOffer = await Offer.findOneAndUpdate(
       { _id: id, restaurant: request.restaurant },
       { $set: updateData },
       { returnDocument: 'after', runValidators: true }
     );
 
-    if (!updatedOffer) {
-      return sendError(new Error("Not Found"), "Offer not found", 404);
-    }
-
     logger.info(`Offer updated: ${id}`);
-    return sendSuccess(updatedOffer, "Offer updated successfully");
+    return sendSuccess(updatedOffer,  "Offer updated successfully");
   } catch (error) {
     logger.error(`Failed to update offer ${params?.id}`, error);
     return sendError(error, "Failed to update offer", 500);

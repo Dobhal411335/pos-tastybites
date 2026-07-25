@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Trash2, Edit, LayoutGrid, MoreHorizontal, Check, Plus, Edit2 } from "lucide-react";
+import { Trash2, Edit, LayoutGrid, MoreHorizontal, Check, Plus, Edit2, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -20,6 +20,7 @@ export default function CreateFloorPage() {
   const [floorToDelete, setFloorToDelete] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
   const [editingId, setEditingId] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const fetchFloors = async () => {
     try {
@@ -43,6 +44,7 @@ export default function CreateFloorPage() {
     e.preventDefault();
     if (!floorName.trim()) return;
 
+    setIsSubmitting(true);
     try {
       if (isEditing) {
         const res = await fetch("/api/floor", {
@@ -59,7 +61,7 @@ export default function CreateFloorPage() {
           setEditingId(null);
           toast.success("Floor renamed successfully.");
         } else {
-          toast.error(json.message || "Failed to rename floor");
+          toast.error(json.message || "Failed to update floor");
         }
       } else {
         const res = await fetch("/api/floor", {
@@ -70,7 +72,7 @@ export default function CreateFloorPage() {
         const json = await res.json();
 
         if (json.success) {
-          setFloors([...floors, { id: json.data._id, floorName: json.data.name, tableCount: 0 }]);
+          setFloors([...floors, json.data]);
           setFloorName("");
           toast.success("Floor created successfully.");
         } else {
@@ -79,6 +81,8 @@ export default function CreateFloorPage() {
       }
     } catch (err) {
       toast.error("An error occurred");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -98,7 +102,9 @@ export default function CreateFloorPage() {
   };
 
   const handleDeleteClick = (id) => {
-    setFloorToDelete(id);
+    setTimeout(() => {
+      setFloorToDelete(id);
+    }, 150);
   };
 
   const confirmDelete = async () => {
@@ -171,10 +177,17 @@ export default function CreateFloorPage() {
                     <div className="flex gap-2 mt-4">
                       <Button
                         type="submit"
+                        disabled={isSubmitting}
                         className="flex-1 h-11 text-[15px] font-bold text-white transition-transform hover:scale-[1.02] shadow-sm"
                         style={{ backgroundColor: "#1e40af" }}
                       >
-                        {isEditing ? "Save Changes" : "Create Floor"}
+                        {isSubmitting ? (
+                          <Loader2 className="w-5 h-5 animate-spin" />
+                        ) : isEditing ? (
+                          "Save Changes"
+                        ) : (
+                          "Create Floor"
+                        )}
                       </Button>
                       {isEditing && (
                         <Button
@@ -211,7 +224,26 @@ export default function CreateFloorPage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {floors.length === 0 ? (
+                      {loading ? (
+                        Array.from({ length: 4 }).map((_, index) => (
+                          <TableRow key={index} className="h-14 border-b border-zinc-100">
+                            <TableCell className="px-6">
+                              <div className="h-4 w-6 bg-zinc-200 rounded animate-pulse" />
+                            </TableCell>
+                            <TableCell className="px-6">
+                              <div className="h-4 w-32 bg-zinc-200 rounded animate-pulse" />
+                            </TableCell>
+                            <TableCell className="px-6">
+                              <div className="h-6 w-16 bg-zinc-200 rounded-full animate-pulse" />
+                            </TableCell>
+                            <TableCell className="px-6 text-right">
+                              <div className="flex justify-end">
+                                <div className="h-8 w-8 bg-zinc-200 rounded animate-pulse" />
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      ) : floors.length === 0 ? (
                         <TableRow>
                           <TableCell colSpan={4} className="h-32 text-center text-zinc-400 font-medium text-[14px]">
                             No floors created yet.
@@ -241,16 +273,16 @@ export default function CreateFloorPage() {
                                 <div className="flex items-center justify-center">
                                   <DropdownMenu>
                                     <DropdownMenuTrigger asChild>
-                                      <Button variant="ghost" className="h-8 w-8 p-0 text-white hover:text-zinc-600 bg-orange-500 hover:bg-orange-600">
+                                      <Button variant="outline" className="h-8 w-8 p-0 text-black hover:bg-orange-600">
                                         <span className="sr-only">Open menu</span>
                                         <MoreHorizontal className="h-4 w-4" />
                                       </Button>
                                     </DropdownMenuTrigger>
                                     <DropdownMenuContent align="end" className="w-40 p-2 bg-white rounded-xl shadow-lg border border-zinc-100">
-                                      <DropdownMenuItem className="text-[13px] font-semibold text-orange-600 focus:bg-orange-400 focus:text-white cursor-pointer p-2 rounded-md" onClick={() => handleRenameClick(f.id)}>
+                                      <DropdownMenuItem className="text-[13px] font-semibold focus:bg-orange-400 focus:text-white cursor-pointer p-2 rounded-md" onClick={() => handleRenameClick(f.id)}>
                                         <Edit2 className="mr-2 h-4 w-4" /> Rename Floor
                                       </DropdownMenuItem>
-                                      <DropdownMenuItem className="text-[13px] font-semibold text-red-600 focus:bg-orange-500 focus:text-white cursor-pointer p-2 rounded-md" onClick={() => handleDeleteClick(f.id)}>
+                                      <DropdownMenuItem className="text-[13px] font-semibol focus:bg-orange-500 focus:text-white cursor-pointer p-2 rounded-md" onClick={() => handleDeleteClick(f.id)}>
                                         <Trash2 className="mr-2 h-4 w-4" /> Delete Floor
                                       </DropdownMenuItem>
                                     </DropdownMenuContent>

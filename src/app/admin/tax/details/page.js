@@ -9,7 +9,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { PALETTE } from "@/utils/paletteeColor";
 import DeleteDialog from "@/components/common/DeleteDialog";
@@ -62,6 +61,7 @@ export default function TaxDetailsPage() {
     setForm({ name: tax.name, value: tax.value, type: tax.type });
     setEditId(tax._id);
     setIsDialogOpen(true);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const handleSave = async () => {
@@ -153,11 +153,65 @@ export default function TaxDetailsPage() {
                 Manage tax rates, types, and statuses for billing and orders.
               </p>
             </div>
-            <Button onClick={handleOpenCreate} className="h-10 px-6 font-bold text-[14px] text-white shadow-sm hover:scale-[1.02] transition-transform flex items-center gap-2" style={{ backgroundColor: "#1e40af" }}>
-              <PlusCircle className="w-4 h-4" />
-              Create New Tax
-            </Button>
           </div>
+
+            <Card className="shadow-sm border-zinc-200 bg-white overflow-hidden p-6 mb-6">
+              <div className="mb-6">
+                <h2 className="text-xl font-bold">{editId ? "Edit Tax" : "Create New Tax"}</h2>
+                <p className="text-sm text-zinc-500">
+                  {editId ? "Modify the properties of this tax." : "Add a new tax rate to your restaurant."}
+                </p>
+              </div>
+              <div className="grid gap-6">
+                <div className="space-y-2">
+                  <label className="text-[13px] font-bold text-zinc-700">Tax Name</label>
+                  <Input
+                    placeholder="e.g. State Tax"
+                    value={form.name}
+                    onChange={e => setForm({ ...form, name: e.target.value })}
+                    className="border-zinc-200"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-[13px] font-bold text-zinc-700">Type</label>
+                    <Select value={form.type} onValueChange={v => setForm({ ...form, type: v })}>
+                      <SelectTrigger className="border-zinc-200"><SelectValue /></SelectTrigger>
+                      <SelectContent className="bg-white max-h-60 overflow-y-auto">
+                        <SelectItem value="Percent">Percent (%)</SelectItem>
+                        <SelectItem value="Amount">Amount ($)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[13px] font-bold text-zinc-700">Rate / Value</label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      placeholder="e.g. 5.0"
+                      value={form.value}
+                      onChange={e => setForm({ ...form, value: e.target.value })}
+                      className="border-zinc-200"
+                    />
+                  </div>
+                </div>
+                <div className="flex justify-end gap-3 mt-4">
+                  {editId && (
+                    <Button 
+                      variant="outline" 
+                      onClick={() => {
+                        setEditId(null);
+                        setForm({ name: "", value: "", type: "Percent" });
+                      }} 
+                      className="border-zinc-200"
+                    >
+                      Cancel Edit
+                    </Button>
+                  )}
+                  <Button onClick={handleSave} className="bg-[#1e40af] hover:bg-[#1e40af]/90 text-white"><PlusCircle className="w-4 h-4" /> {editId ? "Save Changes" : "Create Tax"}</Button>
+                </div>
+              </div>
+            </Card> 
 
           {/* Search Filters */}
           <Card className="shadow-sm border-zinc-200 bg-white overflow-hidden">
@@ -253,56 +307,6 @@ export default function TaxDetailsPage() {
 
         </div>
       </div>
-
-      {/* CREATE / EDIT DIALOG */}
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="sm:max-w-md bg-white rounded-2xl">
-          <DialogHeader>
-            <DialogTitle className="text-xl font-bold">{editId ? "Edit Tax" : "Create New Tax"}</DialogTitle>
-            <DialogDescription>
-              {editId ? "Modify the properties of this tax." : "Add a new tax rate to your restaurant."}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="space-y-2">
-              <label className="text-[13px] font-bold text-zinc-700">Tax Name</label>
-              <Input
-                placeholder="e.g. State Tax"
-                value={form.name}
-                onChange={e => setForm({ ...form, name: e.target.value })}
-                className="border-zinc-200"
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <label className="text-[13px] font-bold text-zinc-700">Type</label>
-                <Select value={form.type} onValueChange={v => setForm({ ...form, type: v })}>
-                  <SelectTrigger className="border-zinc-200"><SelectValue /></SelectTrigger>
-                  <SelectContent className="bg-white max-h-60 overflow-y-auto">
-                    <SelectItem value="Percent">Percent (%)</SelectItem>
-                    <SelectItem value="Amount">Amount ($)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <label className="text-[13px] font-bold text-zinc-700">Rate / Value</label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  placeholder="e.g. 5.0"
-                  value={form.value}
-                  onChange={e => setForm({ ...form, value: e.target.value })}
-                  className="border-zinc-200"
-                />
-              </div>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsDialogOpen(false)} className="border-zinc-200">Cancel</Button>
-            <Button onClick={handleSave} className="bg-[#1e40af] text-white">Save Tax</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       <DeleteDialog
         isOpen={isDeleteDialogOpen}

@@ -166,7 +166,7 @@ export default function EmployeeSalesPage() {
             <CardTitle className="text-base font-bold text-zinc-800">Sales Over Time (Demo)</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="h-[280px] w-full">
+            <div className="h-70 w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={salesData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                   <XAxis dataKey="time" axisLine={false} tickLine={false} tick={{fill: '#71717a', fontSize: 12}} dy={10} />
@@ -189,7 +189,7 @@ export default function EmployeeSalesPage() {
               <CardTitle className="text-base font-bold text-zinc-800">Top Items (Demo)</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="h-[140px] w-full">
+              <div className="h-35 w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={topItemsData} layout="vertical" margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
                     <XAxis type="number" hide />
@@ -211,7 +211,7 @@ export default function EmployeeSalesPage() {
               <CardTitle className="text-base font-bold text-zinc-800 text-center">Order Split (Demo)</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="h-[120px] w-full mt-2">
+              <div className="h-30 w-full mt-2">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie data={orderTypeData} innerRadius={35} outerRadius={55} paddingAngle={2} dataKey="value" stroke="none">

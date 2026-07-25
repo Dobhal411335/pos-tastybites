@@ -108,7 +108,8 @@ export default function ApplyDiscountsPage() {
     }
   };
 
-  const handleEditClick = (app) => {
+  const handleEditClick = async (app) => {
+    await new Promise(resolve => setTimeout(resolve, 150));
     setEditingProductId(app.id); // Product ID
     setTargetMode("Product");
     setSelectedProduct(app.id);
@@ -116,7 +117,8 @@ export default function ApplyDiscountsPage() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const handleDeleteClick = (id) => {
+  const handleDeleteClick = async (id) => {
+    await new Promise(resolve => setTimeout(resolve, 150));
     setDeleteId(id);
     setIsDeleteDialogOpen(true);
   };
@@ -410,9 +412,19 @@ export default function ApplyDiscountsPage() {
                 </TableHeader>
                 <TableBody>
                   {loading ? (
-                    <TableRow>
-                      <TableCell colSpan={5} className="h-24 text-center">Loading...</TableCell>
-                    </TableRow>
+                    Array.from({ length: 4 }).map((_, index) => (
+                      <TableRow key={index} className="h-16 border-b border-zinc-100">
+                        <TableCell className="px-6 py-4"><div className="h-4 w-24 bg-zinc-200 rounded animate-pulse" /></TableCell>
+                        <TableCell className="px-6 py-4 text-center"><div className="h-6 w-20 mx-auto bg-zinc-200 rounded-md animate-pulse" /></TableCell>
+                        <TableCell className="px-6 py-4"><div className="h-4 w-32 bg-zinc-200 rounded animate-pulse" /></TableCell>
+                        <TableCell className="px-6 py-4 text-center"><div className="h-6 w-16 mx-auto bg-zinc-200 rounded-full animate-pulse" /></TableCell>
+                        <TableCell className="px-6 py-4 text-center">
+                          <div className="flex justify-center">
+                            <div className="h-8 w-8 bg-zinc-200 rounded animate-pulse" />
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))
                   ) : appliedDiscounts.length > 0 ? appliedDiscounts.map((ad) => (
                     <TableRow key={ad.id} className="h-16 hover:bg-zinc-50 transition-colors">
                       <TableCell className="px-6">

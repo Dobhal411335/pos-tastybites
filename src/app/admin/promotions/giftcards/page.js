@@ -112,7 +112,8 @@ export default function GiftcardsConfigPage() {
     }
   };
 
-  const handleEditClick = (g) => {
+  const handleEditClick = async (g) => {
+    await new Promise(resolve => setTimeout(resolve, 150));
     setEditingId(g._id);
     setGiftcardName(g.name);
     setDiscountType("amount");
@@ -142,7 +143,8 @@ export default function GiftcardsConfigPage() {
     }
   };
 
-  const handleDeleteClick = (id) => {
+  const handleDeleteClick = async (id) => {
+    await new Promise(resolve => setTimeout(resolve, 150));
     setDeleteId(id);
     setIsDeleteDialogOpen(true);
   };
@@ -336,9 +338,33 @@ export default function GiftcardsConfigPage() {
                 </TableHeader>
                 <TableBody>
                   {loading ? (
-                    <TableRow>
-                      <TableCell colSpan={6} className="h-24 text-center">Loading...</TableCell>
-                    </TableRow>
+                    Array.from({ length: 4 }).map((_, index) => (
+                      <TableRow key={index} className="h-16 border-b border-zinc-100">
+                        <TableCell className="px-6 py-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded bg-zinc-200 animate-pulse" />
+                            <div className="flex flex-col gap-1">
+                              <div className="h-4 w-32 bg-zinc-200 rounded animate-pulse" />
+                              <div className="h-3 w-20 bg-zinc-200 rounded animate-pulse" />
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell className="px-6 py-4 text-center"><div className="h-5 w-16 mx-auto bg-zinc-200 rounded animate-pulse" /></TableCell>
+                        <TableCell className="px-6 py-4 text-center">
+                          <div className="flex flex-col gap-1 items-center">
+                            <div className="h-5 w-32 bg-zinc-200 rounded animate-pulse" />
+                            <div className="h-5 w-32 bg-zinc-200 rounded animate-pulse" />
+                          </div>
+                        </TableCell>
+                        <TableCell className="px-6 py-4 text-center"><div className="h-8 w-24 mx-auto bg-zinc-200 rounded animate-pulse" /></TableCell>
+                        <TableCell className="px-6 py-4 text-center"><div className="h-6 w-16 mx-auto bg-zinc-200 rounded-full animate-pulse" /></TableCell>
+                        <TableCell className="px-6 py-4 text-center">
+                          <div className="flex justify-center">
+                            <div className="h-8 w-8 bg-zinc-200 rounded animate-pulse" />
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))
                   ) : giftcards.length > 0 ? giftcards.map((g) => (
                     <TableRow key={g._id} className="h-16 hover:bg-zinc-50 transition-colors">
                       <TableCell className="px-6">

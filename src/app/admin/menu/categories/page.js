@@ -237,8 +237,11 @@ export default function MenuCategoriesPage() {
                     <TableHead className="w-[45%] text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6">
                       S.No
                     </TableHead>
-                    <TableHead className="w-[45%] text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6">
+                    <TableHead className="w-[30%] text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6">
                       Category Name <ArrowUpDown className="inline w-3 h-3 ml-1" />
+                    </TableHead>
+                    <TableHead className="w-[25%] text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6">
+                      Products
                     </TableHead>
                     <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6">
                       Status
@@ -250,11 +253,27 @@ export default function MenuCategoriesPage() {
                 </TableHeader>
                 <TableBody>
                   {loading ? (
-                    <TableRow>
-                      <TableCell colSpan={4} className="h-32 text-center">
-                        <Loader2 className="w-6 h-6 animate-spin mx-auto text-zinc-400" />
-                      </TableCell>
-                    </TableRow>
+                    Array.from({ length: 4 }).map((_, index) => (
+                      <TableRow key={index} className="h-16 border-b border-zinc-100">
+                        <TableCell className="px-6">
+                          <div className="h-4 w-6 bg-zinc-200 rounded animate-pulse" />
+                        </TableCell>
+                        <TableCell className="px-6">
+                          <div className="h-4 w-48 bg-zinc-200 rounded animate-pulse" />
+                        </TableCell>
+                        <TableCell className="px-6">
+                          <div className="h-4 w-20 bg-zinc-200 rounded animate-pulse" />
+                        </TableCell>
+                        <TableCell className="px-6">
+                          <div className="h-6 w-16 bg-zinc-200 rounded-full animate-pulse" />
+                        </TableCell>
+                        <TableCell className="px-6 text-right">
+                          <div className="flex justify-end">
+                            <div className="h-8 w-8 bg-zinc-200 rounded animate-pulse" />
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))
                   ) : filteredCategories.length > 0 ? (
                     filteredCategories.map((cat, index) => (
                       <TableRow key={cat._id} className="h-16 hover:bg-zinc-50 transition-colors">
@@ -263,6 +282,9 @@ export default function MenuCategoriesPage() {
                         </TableCell>
                         <TableCell className="px-6 font-semibold text-[15px] text-zinc-900">
                           {cat.name}
+                        </TableCell>
+                        <TableCell className="px-6 font-medium text-[14px] text-zinc-500">
+                          {cat.items || 0} products
                         </TableCell>
                         <TableCell className="px-6">
                           <Button variant="ghost" className="p-0 h-auto hover:bg-transparent" onClick={() => handleToggleStatus(cat)}>

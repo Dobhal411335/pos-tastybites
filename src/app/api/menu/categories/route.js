@@ -4,6 +4,7 @@ import Product from "@/models/menu/Product";
 import { sendSuccess } from "@/utils/apiResponse";
 import { sendError } from "@/utils/errorHandler";
 import { logger } from "@/utils/logger";
+import mongoose from "mongoose";
 
 // GET - List all categories with product counts
 export const GET = withAuth(async (request) => {
@@ -13,7 +14,7 @@ export const GET = withAuth(async (request) => {
     // Get product counts per category
     const categoryIds = categories.map(c => c._id);
     const productCounts = await Product.aggregate([
-      { $match: { category: { $in: categoryIds }, restaurant: request.restaurant } },
+      { $match: { category: { $in: categoryIds }, restaurant: new mongoose.Types.ObjectId(request.restaurant) } },
       { $group: { _id: "$category", count: { $sum: 1 } } }
     ]);
 
@@ -101,10 +102,9 @@ export const DELETE = withAuth(async (request) => {
       return sendError(new Error("Missing ID"), "Category ID is required", 400);
     }
 
-    // Optional: check if there are products using this category
     const productsCount = await Product.countDocuments({ category: id, restaurant: request.restaurant });
     if (productsCount > 0) {
-      return sendError(new Error("Category in use"), "Cannot delete category because it contains products.", 400);
+      return sendError(new Error("Category in use"), "Please delete all products in this category before deleting the category itself.", 409);
     }
 
     const deleted = await Category.findOneAndDelete({ _id: id, restaurant: request.restaurant });

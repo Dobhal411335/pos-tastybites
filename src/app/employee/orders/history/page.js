@@ -63,7 +63,7 @@ export default function EmployeeOrdersHistory() {
     <div className="flex-1 flex overflow-hidden bg-zinc-50 font-sans h-[calc(100vh-64px)]">
       
       {/* MAIN LIST AREA */}
-      <div className={`flex-1 flex flex-col min-w-0 transition-all duration-300 ${selectedOrder ? 'pr-[400px] xl:pr-[450px]' : ''}`}>
+      <div className={`flex-1 flex flex-col min-w-0 transition-all duration-300 ${selectedOrder ? 'pr-100 xl:pr-[450px]' : ''}`}>
         
         {/* HEADER & FILTERS */}
         <div className="bg-white p-6 border-b border-zinc-200 shrink-0 shadow-sm z-10">

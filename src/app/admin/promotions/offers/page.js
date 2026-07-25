@@ -23,12 +23,16 @@ import { toast } from "sonner";
 import { PALETTE } from "@/utils/paletteeColor";
 import { DatePicker } from "@/components/ui/date-picker";
 import { format } from "date-fns";
+import DeleteDialog from "@/components/common/DeleteDialog";
 
 export default function CreatePromoOfferPage() {
   const [offers, setOffers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [editingOfferId, setEditingOfferId] = useState(null);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [offerToDelete, setOfferToDelete] = useState(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   // Form states
   const [offerName, setOfferName] = useState("");
@@ -168,7 +172,8 @@ export default function CreatePromoOfferPage() {
     }
   };
 
-  const handleEditOffer = (id) => {
+  const handleEditOffer = async (id) => {
+    await new Promise(resolve => setTimeout(resolve, 150));
     const offer = offers.find((o) => o._id === id);
     if (!offer) return;
     
@@ -222,18 +227,29 @@ export default function CreatePromoOfferPage() {
   };
 
   const handleDeleteOffer = async (id) => {
-    if (!confirm("Are you sure you want to delete this offer?")) return;
+    await new Promise(resolve => setTimeout(resolve, 150));
+    setOfferToDelete(id);
+    setIsDeleteDialogOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!offerToDelete) return;
+    setDeleteLoading(true);
     try {
-      const res = await fetch(`/api/menu/offers/${id}`, { method: "DELETE" });
+      const res = await fetch(`/api/menu/offers/${offerToDelete}`, { method: "DELETE" });
       const json = await res.json();
       if (json.success) {
         toast.success("Offer deleted successfully.");
         fetchOffers();
+        setIsDeleteDialogOpen(false);
       } else {
         toast.error(json.message);
       }
     } catch (e) {
       toast.error("Failed to delete offer");
+    } finally {
+      setDeleteLoading(false);
+      setOfferToDelete(null);
     }
   };
 
@@ -564,7 +580,22 @@ export default function CreatePromoOfferPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {offers.length > 0 ? offers.map((off) => (
+                  {loading ? (
+                    Array.from({ length: 4 }).map((_, index) => (
+                      <TableRow key={index} className="h-16 border-b border-zinc-100">
+                        <TableCell className="px-6 py-4"><div className="w-10 h-10 rounded-md bg-zinc-200 animate-pulse" /></TableCell>
+                        <TableCell className="px-6 py-4"><div className="h-4 w-32 bg-zinc-200 rounded animate-pulse" /></TableCell>
+                        <TableCell className="px-6 py-4 text-center"><div className="h-5 w-16 mx-auto bg-zinc-200 rounded animate-pulse" /></TableCell>
+                        <TableCell className="px-6 py-4 text-center"><div className="h-6 w-48 mx-auto bg-zinc-200 rounded-md animate-pulse" /></TableCell>
+                        <TableCell className="px-6 py-4 text-center"><div className="h-6 w-16 mx-auto bg-zinc-200 rounded-full animate-pulse" /></TableCell>
+                        <TableCell className="px-6 py-4 text-center">
+                          <div className="flex justify-center">
+                            <div className="h-8 w-8 bg-zinc-200 rounded animate-pulse" />
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  ) : offers.length > 0 ? offers.map((off) => (
                     <TableRow key={off._id} className="h-16 hover:bg-zinc-50 transition-colors">
                       <TableCell className="px-6">
                         {off.image?.url ? (
@@ -580,8 +611,13 @@ export default function CreatePromoOfferPage() {
                       <TableCell className="px-6">
                         <span className="text-[15px] font-semibold text-zinc-900">{off.name}</span>
                       </TableCell>
-                      <TableCell className="px-6 text-center font-bold text-[15px] text-[#F97316]">
-                        ${Number(off.price || 0).toFixed(2)}
+                      <TableCell className="px-6 text-center">
+                        <div className="font-bold text-[15px] text-[#F97316]">
+                          ${Number(off.totalPrice || off.price || 0).toFixed(2)}
+                        </div>
+                        <div className="text-[12px] text-zinc-500 font-medium mt-0.5">
+                          ${Number(off.price || 0).toFixed(2)} + ${Number((off.totalPrice || off.price || 0) - (off.price || 0)).toFixed(2)} tax
+                        </div>
                       </TableCell>
                       <TableCell className="px-6 text-center">
                         {(off.validFrom || off.validTo) ? (
@@ -639,7 +675,7 @@ export default function CreatePromoOfferPage() {
                   )) : (
                     <TableRow>
                       <TableCell colSpan={6} className="h-32 text-center">
-                        {loading ? <Loader2 className="w-6 h-6 animate-spin text-zinc-400 mx-auto" /> : <span className="text-zinc-500 text-[14px]">No offers found.</span>}
+                        <span className="text-zinc-500 text-[14px]">No offers found.</span>
                       </TableCell>
                     </TableRow>
                   )}
@@ -650,6 +686,14 @@ export default function CreatePromoOfferPage() {
 
         </div>
       </div>
+
+      <DeleteDialog 
+        isOpen={isDeleteDialogOpen} 
+        onOpenChange={setIsDeleteDialogOpen} 
+        onConfirm={confirmDelete}
+        title="Delete Offer"
+        description="Are you sure you want to delete this offer? This action cannot be undone."
+      />
     </div>
   );
 }

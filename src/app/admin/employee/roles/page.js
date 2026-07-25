@@ -108,8 +108,10 @@ export default function EmployeeRolesPage() {
       toast.error(`Cannot delete role. ${assignedCount} staff member(s) are assigned to it.`);
       return;
     }
-    setRoleToDelete(role);
-    setIsDeleteDialogOpen(true);
+    setTimeout(() => {
+      setRoleToDelete(role);
+      setIsDeleteDialogOpen(true);
+    }, 150);
   };
 
   const confirmDelete = async () => {
@@ -178,21 +180,32 @@ export default function EmployeeRolesPage() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-0 flex-1">
-                  {loading ? (
-                    <div className="flex justify-center items-center h-48">
-                      <Loader2 className="h-8 w-8 animate-spin text-[#F97316]" />
-                    </div>
-                  ) : (
-                    <Table>
-                      <TableHeader className="bg-zinc-50">
-                        <TableRow>
-                          <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6 w-1/2">Role Name</TableHead>
-                          <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6">Assigned Staff</TableHead>
-                          <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6 text-right">Actions</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {roles.length === 0 ? (
+                  <Table>
+                    <TableHeader className="bg-zinc-50">
+                      <TableRow>
+                        <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6 w-1/2">Role Name</TableHead>
+                        <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6">Assigned Staff</TableHead>
+                        <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6 text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {loading ? (
+                        Array.from({ length: 4 }).map((_, index) => (
+                          <TableRow key={index} className="h-16 border-b border-zinc-100">
+                            <TableCell className="px-6">
+                              <div className="h-5 w-40 bg-zinc-200 rounded animate-pulse" />
+                            </TableCell>
+                            <TableCell className="px-6">
+                              <div className="h-6 w-16 bg-zinc-200 rounded-md animate-pulse" />
+                            </TableCell>
+                            <TableCell className="px-6 text-right">
+                              <div className="flex justify-end">
+                                <div className="h-8 w-8 bg-zinc-200 rounded animate-pulse" />
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      ) : roles.length === 0 ? (
                           <TableRow>
                             <TableCell colSpan={3} className="h-32 text-center text-zinc-400 font-medium text-[14px]">
                               No roles found.
@@ -241,9 +254,8 @@ export default function EmployeeRolesPage() {
                             );
                           })
                         )}
-                      </TableBody>
-                    </Table>
-                  )}
+                    </TableBody>
+                  </Table>
                 </CardContent>
               </Card>
             </div>

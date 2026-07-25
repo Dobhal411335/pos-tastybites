@@ -83,7 +83,7 @@ export default function EmployeeProfilePage() {
       {/* 1. HEADER ROW */}
       <div className="bg-white rounded-2xl border border-zinc-200 p-6 flex items-center justify-between shadow-sm">
         <div className="flex items-center gap-5">
-          <div className="w-20 h-20 rounded-full bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center text-white text-3xl font-bold shadow-md">
+          <div className="w-20 h-20 rounded-full bg-linear-to-br from-orange-500 to-orange-600 flex items-center justify-center text-white text-3xl font-bold shadow-md">
             {employee.firstName.charAt(0)}{employee.lastName.charAt(0)}
           </div>
           <div>
@@ -206,7 +206,7 @@ export default function EmployeeProfilePage() {
               <div className="flex items-center gap-3 text-sm">
                 <Mail className="w-4 h-4 text-zinc-400" />
                 <span className="text-zinc-500">Email</span>
-                <span className="font-semibold text-zinc-900 ml-auto truncate max-w-[120px]" title={employee.email}>
+                <span className="font-semibold text-zinc-900 ml-auto truncate max-w-30" title={employee.email}>
                   {employee.email}
                 </span>
               </div>

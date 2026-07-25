@@ -99,7 +99,9 @@ export default function ShiftManagementPage() {
       repeatPattern: tpl.repeatPattern || "Weekly",
       workingDays: tpl.workingDays || []
     });
-    setIsTemplateDialogOpen(true);
+    setTimeout(() => {
+      setIsTemplateDialogOpen(true);
+    }, 150);
   };
 
   const handleOpenNewTemplate = () => {
@@ -107,7 +109,9 @@ export default function ShiftManagementPage() {
       name: "", startTime: "09:00", endTime: "17:00", color: "blue", repeatPattern: "Weekly",
       workingDays: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
     });
-    setIsTemplateDialogOpen(true);
+    setTimeout(() => {
+      setIsTemplateDialogOpen(true);
+    }, 150);
   };
 
   const handleSaveTemplate = async () => {
@@ -139,8 +143,10 @@ export default function ShiftManagementPage() {
   };
 
   const handleDeleteTemplate = (id) => {
-    setTemplateToDelete(id);
-    setIsDeleteDialogOpen(true);
+    setTimeout(() => {
+      setTemplateToDelete(id);
+      setIsDeleteDialogOpen(true);
+    }, 150);
   };
 
   const confirmDeleteTemplate = async () => {
@@ -163,10 +169,12 @@ export default function ShiftManagementPage() {
 
   // Apply Template
   const openApplyTemplate = (template) => {
-    setSelectedTemplateToApply(template);
-    setSelectedEmployees([]);
-    setApplyRange("thisMonth");
-    setIsApplyDialogOpen(true);
+    setTimeout(() => {
+      setSelectedTemplateToApply(template);
+      setSelectedEmployees([]);
+      setApplyRange("thisMonth");
+      setIsApplyDialogOpen(true);
+    }, 150);
   };
 
   const handleApplyTemplate = async () => {
@@ -246,15 +254,17 @@ export default function ShiftManagementPage() {
   };
 
   const openEditDay = (date, shift, emp) => {
-    setEditDayDate(date);
-    setEditDayEmployee(emp);
-    setEditDayShift(shift);
-    if (shift) {
-      setEditDayForm({ shiftType: shift.shiftType || "Regular", status: shift.status || "Scheduled", notes: shift.notes || "" });
-    } else {
-      setEditDayForm({ shiftType: "Leave", status: "Cancelled", notes: "" });
-    }
-    setIsEditDayDialogOpen(true);
+    setTimeout(() => {
+      setEditDayDate(date);
+      setEditDayEmployee(emp);
+      setEditDayShift(shift);
+      if (shift) {
+        setEditDayForm({ shiftType: shift.shiftType || "Regular", status: shift.status || "Scheduled", notes: shift.notes || "" });
+      } else {
+        setEditDayForm({ shiftType: "Leave", status: "Cancelled", notes: "" });
+      }
+      setIsEditDayDialogOpen(true);
+    }, 150);
   };
 
   const handleSaveEditDay = async () => {

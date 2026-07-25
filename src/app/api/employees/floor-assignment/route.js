@@ -58,7 +58,15 @@ export const PUT = withAuth(async (request) => {
       { $set: { assignedEmployee: null } }
     );
 
-    // 2. Assign the new tables to this employee
+    // 2. Remove these specific tables from any other employees who might currently hold them
+    if (assignedTables.length > 0) {
+      await Employee.updateMany(
+        { assignedTables: { $in: assignedTables }, restaurant: request.restaurant },
+        { $pullAll: { assignedTables: assignedTables } }
+      );
+    }
+
+    // 3. Assign the new tables to this employee
     if (assignedTables.length > 0) {
       await mongoose.model("Table").updateMany(
         { _id: { $in: assignedTables }, restaurant: request.restaurant },
@@ -66,7 +74,7 @@ export const PUT = withAuth(async (request) => {
       );
     }
 
-    // 3. Find primary floor from assigned tables
+    // 4. Find primary floor from assigned tables
     let primaryFloor = null;
     if (assignedTables.length > 0) {
       const tables = await mongoose.model("Table").find({ _id: { $in: assignedTables } }).select("floor");
@@ -75,7 +83,7 @@ export const PUT = withAuth(async (request) => {
       }
     }
 
-    // 4. Update the employee document
+    // 5. Update the employee document
     employee.assignedTables = assignedTables;
     employee.assignedFloor = primaryFloor;
     await employee.save();

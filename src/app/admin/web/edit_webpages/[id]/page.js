@@ -17,7 +17,7 @@ import { Underline } from '@tiptap/extension-underline';
 import { Link } from '@tiptap/extension-link';
 import { Color } from '@tiptap/extension-color';
 import { ListItem } from '@tiptap/extension-list-item';
-import {toast} from "sonner"
+import { toast } from "sonner"
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
 import {
@@ -80,7 +80,7 @@ const InlineRichTextEditor = ({ value, onChange }) => {
     content: value || '',
     editorProps: {
       attributes: {
-        class: 'min-h-[80px] border rounded-lg p-2 bg-gray-200 text-black font-semibold [&_h1]:text-2xl [&_h1]:font-bold [&_h2]:text-xl [&_h2]:font-bold [&_h3]:text-lg [&_h3]:font-semibold [&_p]:my-1 [&_ul]:list-disc [&_ul]:ml-6 [&_ol]:list-decimal [&_ol]:ml-6 [&_blockquote]:border-l-4 [&_blockquote]:border-gray-500 [&_blockquote]:pl-3 [&_blockquote]:italic',
+        class: 'min-h-20 border rounded-lg p-2 bg-gray-200 text-black font-semibold [&_h1]:text-2xl [&_h1]:font-bold [&_h2]:text-xl [&_h2]:font-bold [&_h3]:text-lg [&_h3]:font-semibold [&_p]:my-1 [&_ul]:list-disc [&_ul]:ml-6 [&_ol]:list-decimal [&_ol]:ml-6 [&_blockquote]:border-l-4 [&_blockquote]:border-gray-500 [&_blockquote]:pl-3 [&_blockquote]:italic',
       },
     },
     onUpdate: ({ editor: currentEditor }) => onChange(currentEditor.getHTML()),
@@ -115,7 +115,7 @@ const InlineRichTextEditor = ({ value, onChange }) => {
   );
 };
 
-const EditWebpagesContent = ({params}) => {
+const EditWebpagesContent = ({ params }) => {
   const { id } = React.use(params);
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -715,71 +715,154 @@ const EditWebpagesContent = ({params}) => {
         </CardHeader>
         <CardContent className="p-8 md:p-10">
           <form onSubmit={handleSubmit} className="space-y-8">
-        <div className="mb-4">
-          <Label className="text-sm font-medium text-slate-700 mb-2 block">Frontend Design</Label>
-          <Input type="text" value={form.templateType} disabled readOnly className="h-11 rounded-xl border-slate-200 bg-slate-100 text-slate-500 font-medium" />
-        </div>
-        {(isDesignOneOrTwo || isDesignThree || isDesignFour || isDesignFive || isDesignSix || isDesignSeven) && (
-          <>
-            {!isDesignFour && !isDesignFive && !isDesignSix && !isDesignSeven && (
-              <div className="mb-4">
-                <label className="block mb-2 font-semibold">Top Section View</label>
-                <div className="inline-flex rounded-md border border-gray-300 overflow-hidden">
-                  <button
-                    type="button"
-                    onClick={() => setTopSectionView('all')}
-                    className={`px-4 py-2 font-semibold ${topSectionView === 'all' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
-                  >
-                    All Inputs
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setTopSectionView('bannerOnly')}
-                    className={`px-4 py-2 font-semibold ${topSectionView === 'bannerOnly' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
-                  >
-                    Banner Image Only
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {(topSectionView === 'all' || isDesignFour || isDesignFive || isDesignSix || isDesignSeven) && (
+            <div className="mb-4">
+              <Label className="text-sm font-medium text-slate-700 mb-2 block">Frontend Design</Label>
+              <Input type="text" value={form.templateType} disabled readOnly className="h-11 rounded-xl border-slate-200 bg-slate-100 text-slate-500 font-medium" />
+            </div>
+            {(isDesignOneOrTwo || isDesignThree || isDesignFour || isDesignFive || isDesignSix || isDesignSeven) && (
               <>
-                {/* Main Top Title Tag Line */}
-                <div className="mb-4">
-                  <Label className="text-sm font-medium text-slate-700 mb-2 block">Main Top Title Tag Line</Label>
-                  <Input type="text" name="secondTitle" value={form.secondTitle} onChange={handleChange} placeholder="Type Here" className="h-11 rounded-xl border-slate-200 focus-visible:ring-blue-500 bg-slate-50/50 text-slate-700" />
-                </div>
-
-                {/* Main Top Image (Cloudinary Upload) */}
-                {!isDesignThree && (
+                {!isDesignFour && !isDesignFive && !isDesignSix && !isDesignSeven && (
                   <div className="mb-4">
-                    <Label className="text-sm font-medium text-slate-700 mb-2 block">Main Top Image</Label>
+                    <label className="block mb-2 font-semibold">Top Section View</label>
+                    <div className="inline-flex rounded-md border border-gray-300 overflow-hidden">
+                      <button
+                        type="button"
+                        onClick={() => setTopSectionView('all')}
+                        className={`px-4 py-2 font-semibold ${topSectionView === 'all' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
+                      >
+                        All Inputs
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setTopSectionView('bannerOnly')}
+                        className={`px-4 py-2 font-semibold ${topSectionView === 'bannerOnly' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700'}`}
+                      >
+                        Banner Image Only
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {(topSectionView === 'all' || isDesignFour || isDesignFive || isDesignSix || isDesignSeven) && (
+                  <>
+                    {/* Main Top Title Tag Line */}
+                    <div className="mb-4">
+                      <Label className="text-sm font-medium text-slate-700 mb-2 block">Main Top Title Tag Line</Label>
+                      <Input type="text" name="secondTitle" value={form.secondTitle} onChange={handleChange} placeholder="Type Here" className="h-11 rounded-xl border-slate-200 focus-visible:ring-blue-500 bg-slate-50/50 text-slate-700" />
+                    </div>
+
+                    {/* Main Top Image (Cloudinary Upload) */}
+                    {!isDesignThree && (
+                      <div className="mb-4">
+                        <Label className="text-sm font-medium text-slate-700 mb-2 block">Main Top Image</Label>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={e => handleCloudinaryImageChange(e, 'imageFirst')}
+                          ref={imageFirstInputRef}
+                          className="hidden"
+                        />
+                        <button
+                          type="button"
+                          className="mb-2 flex items-center gap-2 bg-blue-500 text-white px-4 py-2 rounded"
+                          onClick={() => imageFirstInputRef.current && imageFirstInputRef.current.click()}
+                        >
+                          <span>Upload Here</span>
+                        </button>
+                        {uploadingImageFirst && <div className="text-blue-600 font-semibold">Uploading...</div>}
+                        {form.imageFirst && form.imageFirst.url && (
+                          <div className="relative w-full h-48 border rounded overflow-hidden mb-2">
+                            <Image height={250} width={150}
+                              src={form.imageFirst.url}
+                              alt="Image First Preview"
+                              className="object-contain w-full h-full"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteCloudinaryImage('imageFirst')}
+                              className="absolute top-1 right-1 bg-white bg-opacity-80 rounded-full p-1 hover:bg-red-200"
+                              title="Remove image"
+                            >
+                              <Trash2 className="w-5 h-5 text-red-600" />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {/* Main Short Tag Line */}
+
+                    <div className="mb-4">
+                      <label className="block mb-1 font-semibold">Main Short Tag Line</label>
+                      <input type="text" name="firstTitle" value={form.firstTitle} onChange={handleChange} placeholder="Type Here" className="w-full rounded-md p-3 bg-gray-200 font-semibold text-black" />
+                    </div>
+                    {/* Create Tag */}
+                    {!isDesignFour && !isDesignFive && !isDesignSix && !isDesignSeven && (
+                      <div className="mb-4">
+                        <label className="block mb-1 font-semibold">Create Tag</label>
+                        {form.createTags.map((tag, index) => (
+                          <div key={index} className="flex items-center gap-2 mb-2">
+                            <input
+                              type="text"
+                              value={tag}
+                              onChange={(e) => handleArrayTextChange('createTags', index, e.target.value)}
+                              placeholder="Type Here"
+                              className="flex-1 rounded-md p-3 bg-gray-200 font-semibold"
+                            />
+                            <button type="button" onClick={() => addArrayTextRow('createTags')} className="bg-blue-700 text-white px-3 py-2 rounded">+</button>
+                            {form.createTags.length > 1 && (
+                              <button type="button" onClick={() => removeArrayTextRow('createTags', index)} className="bg-red-500 text-white px-3 py-2 rounded"><Trash2 className="w-4 h-4" /></button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Posted By */}
+                    {!isDesignFour && !isDesignFive && !isDesignSix && !isDesignSeven && (
+                      <div className="mb-4">
+                        <label className="block mb-2 font-semibold">Posted By</label>
+                        <div className="flex items-center gap-6">
+                          <label className="flex items-center gap-2 font-semibold">
+                            <input type="checkbox" checked={!!form.postedBy?.admin} onChange={() => handlePostedByChange('admin')} /> Admin
+                          </label>
+                          <label className="flex items-center gap-2 font-semibold">
+                            <input type="checkbox" checked={!!form.postedBy?.user} onChange={() => handlePostedByChange('user')} /> User
+                          </label>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {/* Main Top Banner Image (Cloudinary Upload) */}
+                {(topSectionView === 'bannerOnly' && !isDesignFour && !isDesignFive && !isDesignSix && !isDesignSeven) && (
+                  <div className="mb-4">
+                    <label className="block mb-1 font-semibold">Main Top Banner Image</label>
                     <input
                       type="file"
                       accept="image/*"
-                      onChange={e => handleCloudinaryImageChange(e, 'imageFirst')}
-                      ref={imageFirstInputRef}
+                      onChange={e => handleCloudinaryImageChange(e, 'bannerImage')}
+                      ref={bannerImageInputRef}
                       className="hidden"
                     />
                     <button
                       type="button"
                       className="mb-2 flex items-center gap-2 bg-blue-500 text-white px-4 py-2 rounded"
-                      onClick={() => imageFirstInputRef.current && imageFirstInputRef.current.click()}
+                      onClick={() => bannerImageInputRef.current && bannerImageInputRef.current.click()}
                     >
                       <span>Upload Here</span>
                     </button>
-                    {uploadingImageFirst && <div className="text-blue-600 font-semibold">Uploading...</div>}
-                    {form.imageFirst && form.imageFirst.url && (
+                    {uploadingBannerImage && <div className="text-blue-600 font-semibold">Uploading...</div>}
+                    {form.bannerImage && form.bannerImage.url && (
                       <div className="relative w-full h-48 border rounded overflow-hidden mb-2">
                         <Image height={250} width={150}
-                          src={form.imageFirst.url}
-                          alt="Image First Preview"
+                          src={form.bannerImage.url}
+                          alt="Banner Image Preview"
                           className="object-contain w-full h-full"
                         />
                         <button
                           type="button"
-                          onClick={() => handleDeleteCloudinaryImage('imageFirst')}
+                          onClick={() => handleDeleteCloudinaryImage('bannerImage')}
                           className="absolute top-1 right-1 bg-white bg-opacity-80 rounded-full p-1 hover:bg-red-200"
                           title="Remove image"
                         >
@@ -789,1014 +872,931 @@ const EditWebpagesContent = ({params}) => {
                     )}
                   </div>
                 )}
-                {/* Main Short Tag Line */}
 
-                <div className="mb-4">
-                  <label className="block mb-1 font-semibold">Main Short Tag Line</label>
-                  <input type="text" name="firstTitle" value={form.firstTitle} onChange={handleChange} placeholder="Type Here" className="w-full rounded-md p-3 bg-gray-200 font-semibold text-black" />
-                </div>
-                {/* Create Tag */}
-                {!isDesignFour && !isDesignFive && !isDesignSix && !isDesignSeven && (
-                  <div className="mb-4">
-                    <label className="block mb-1 font-semibold">Create Tag</label>
-                    {form.createTags.map((tag, index) => (
-                      <div key={index} className="flex items-center gap-2 mb-2">
+
+                {/* Highlights */}
+                {!isDesignFive && !isDesignSix && !isDesignSeven && (
+                  <div className="mb-4 border rounded p-3 bg-blue-50">
+                    <label className="block mb-2 font-semibold">Highlights</label>
+                    {form.highlights.map((row, index) => (
+                      <div key={index} className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-2 mb-2">
                         <input
                           type="text"
-                          value={tag}
-                          onChange={(e) => handleArrayTextChange('createTags', index, e.target.value)}
-                          placeholder="Type Here"
-                          className="flex-1 rounded-md p-3 bg-gray-200 font-semibold"
+                          value={row.title}
+                          onChange={(e) => handleObjectArrayChange('highlights', index, 'title', e.target.value)}
+                          placeholder="Highlight Title"
+                          className="rounded-md p-3 bg-gray-200 font-semibold"
                         />
-                        <button type="button" onClick={() => addArrayTextRow('createTags')} className="bg-blue-700 text-white px-3 py-2 rounded">+</button>
-                        {form.createTags.length > 1 && (
-                          <button type="button" onClick={() => removeArrayTextRow('createTags', index)} className="bg-red-500 text-white px-3 py-2 rounded"><Trash2 className="w-4 h-4" /></button>
-                        )}
+                        <input
+                          type="text"
+                          value={row.point}
+                          onChange={(e) => handleObjectArrayChange('highlights', index, 'point', e.target.value)}
+                          placeholder="Point"
+                          className="rounded-md p-3 bg-gray-200 font-semibold"
+                        />
+                        <div className="flex gap-2">
+                          <button type="button" onClick={() => addObjectArrayRow('highlights', { title: '', point: '' })} className="bg-blue-700 text-white px-3 py-2 rounded">+</button>
+                          {form.highlights.length > 1 && (
+                            <button type="button" onClick={() => removeObjectArrayRow('highlights', index)} className="bg-red-500 text-white px-3 py-2 rounded"><Trash2 className="w-4 h-4" /></button>
+                          )}
+                        </div>
                       </div>
                     ))}
                   </div>
                 )}
 
-                {/* Posted By */}
-                {!isDesignFour && !isDesignFive && !isDesignSix && !isDesignSeven && (
-                  <div className="mb-4">
-                    <label className="block mb-2 font-semibold">Posted By</label>
-                    <div className="flex items-center gap-6">
-                      <label className="flex items-center gap-2 font-semibold">
-                        <input type="checkbox" checked={!!form.postedBy?.admin} onChange={() => handlePostedByChange('admin')} /> Admin
-                      </label>
-                      <label className="flex items-center gap-2 font-semibold">
-                        <input type="checkbox" checked={!!form.postedBy?.user} onChange={() => handlePostedByChange('user')} /> User
-                      </label>
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
-
-            {/* Main Top Banner Image (Cloudinary Upload) */}
-            {(topSectionView === 'bannerOnly' && !isDesignFour && !isDesignFive && !isDesignSix && !isDesignSeven) && (
-              <div className="mb-4">
-                <label className="block mb-1 font-semibold">Main Top Banner Image</label>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={e => handleCloudinaryImageChange(e, 'bannerImage')}
-                  ref={bannerImageInputRef}
-                  className="hidden"
-                />
-                <button
-                  type="button"
-                  className="mb-2 flex items-center gap-2 bg-blue-500 text-white px-4 py-2 rounded"
-                  onClick={() => bannerImageInputRef.current && bannerImageInputRef.current.click()}
-                >
-                  <span>Upload Here</span>
-                </button>
-                {uploadingBannerImage && <div className="text-blue-600 font-semibold">Uploading...</div>}
-                {form.bannerImage && form.bannerImage.url && (
-                  <div className="relative w-full h-48 border rounded overflow-hidden mb-2">
-                    <Image height={250} width={150}
-                      src={form.bannerImage.url}
-                      alt="Banner Image Preview"
-                      className="object-contain w-full h-full"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteCloudinaryImage('bannerImage')}
-                      className="absolute top-1 right-1 bg-white bg-opacity-80 rounded-full p-1 hover:bg-red-200"
-                      title="Remove image"
-                    >
-                      <Trash2 className="w-5 h-5 text-red-600" />
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
-
-
-            {/* Highlights */}
-            {!isDesignFive && !isDesignSix && !isDesignSeven && (
-              <div className="mb-4 border rounded p-3 bg-blue-50">
-                <label className="block mb-2 font-semibold">Highlights</label>
-                {form.highlights.map((row, index) => (
-                  <div key={index} className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-2 mb-2">
-                    <input
-                      type="text"
-                      value={row.title}
-                      onChange={(e) => handleObjectArrayChange('highlights', index, 'title', e.target.value)}
-                      placeholder="Highlight Title"
-                      className="rounded-md p-3 bg-gray-200 font-semibold"
-                    />
-                    <input
-                      type="text"
-                      value={row.point}
-                      onChange={(e) => handleObjectArrayChange('highlights', index, 'point', e.target.value)}
-                      placeholder="Point"
-                      className="rounded-md p-3 bg-gray-200 font-semibold"
-                    />
-                    <div className="flex gap-2">
-                      <button type="button" onClick={() => addObjectArrayRow('highlights', { title: '', point: '' })} className="bg-blue-700 text-white px-3 py-2 rounded">+</button>
-                      {form.highlights.length > 1 && (
-                        <button type="button" onClick={() => removeObjectArrayRow('highlights', index)} className="bg-red-500 text-white px-3 py-2 rounded"><Trash2 className="w-4 h-4" /></button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Paragraph Section */}
-            {!isDesignFive && !isDesignSix && !isDesignSeven && (
-              <div className="mb-4 border rounded p-3 bg-gray-50">
-                <label className="block mb-2 font-semibold">Paragraph Section</label>
-                {form.paragraphSections.map((row, index) => (
-                  <div key={index} className="mb-3 border border-gray-200 rounded p-3">
-                    <label className="block mb-2 font-semibold">Paragraph Heading</label>
-                    <div className="flex gap-2 mb-2">
-                      <input
-                        type="text"
-                        value={row.title}
-                        onChange={(e) => handleObjectArrayChange('paragraphSections', index, 'title', e.target.value)}
-                        placeholder="Title Text Line"
-                        className="flex-1 rounded-md p-3 bg-gray-200 font-semibold"
-                      />
-                      <button type="button" onClick={() => addObjectArrayRow('paragraphSections', createEmptyParagraphSection())} className="bg-blue-700 text-white px-3 py-2 rounded">+</button>
-                      {form.paragraphSections.length > 1 && (
-                        <button type="button" onClick={() => removeObjectArrayRow('paragraphSections', index)} className="bg-red-500 text-white px-3 py-2 rounded"><Trash2 className="w-4 h-4" /></button>
-                      )}
-                    </div>
-                    <label className="block mb-2 font-semibold my-5">Paragraph Description</label>
-                    <InlineRichTextEditor
-                      value={row.description}
-                      onChange={(html) => handleObjectArrayChange('paragraphSections', index, 'description', html)}
-                    />
-                    <div className="flex flex-col gap-3 mt-2">
-                      <div>
-                        <input id={`paragraph-first-image-${index}`} type="file" accept="image/*" onChange={e => handleParagraphSectionImageChange(e, index, 'firstImage')} className="hidden" />
-                        <label htmlFor={`paragraph-first-image-${index}`} className="inline-block bg-yellow-400 my-2 px-4 py-2 rounded cursor-pointer">Upload First Image</label>
-                        {uploadingParagraphFirstImage && <div className="text-blue-600 text-sm my-2">Uploading...</div>}
-                        {row.firstImage?.url && (
-                          <div className="relative w-full h-48 border rounded overflow-hidden mb-2">
-                            <Image height={250} width={150}
-                              src={row.firstImage.url}
-                              alt="Paragraph First Image Preview"
-                              className="object-contain w-full h-full"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteParagraphSectionImage(index, 'firstImage')}
-                              className="absolute top-1 right-1 bg-white bg-opacity-80 rounded-full p-1 hover:bg-red-200"
-                              title="Remove image"
-                            >
-                              <Trash2 className="w-5 h-5 text-red-600" />
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                      <div>
-                        <input id={`paragraph-second-image-${index}`} type="file" accept="image/*" onChange={e => handleParagraphSectionImageChange(e, index, 'secondImage')} className="hidden" />
-                        <label htmlFor={`paragraph-second-image-${index}`} className="inline-block bg-gray-200 px-4 py-2 rounded cursor-pointer">Upload Second Image</label>
-                        {uploadingParagraphSecondImage && <div className="text-blue-600 text-sm my-2">Uploading...</div>}
-                        {row.secondImage?.url && (
-                          <div className="relative w-full h-48 border rounded overflow-hidden mb-2">
-                            <Image height={250} width={150}
-                              src={row.secondImage.url}
-                              alt="Paragraph Second Image Preview"
-                              className="object-contain w-full h-full"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteParagraphSectionImage(index, 'secondImage')}
-                              className="absolute top-1 right-1 bg-white bg-opacity-80 rounded-full p-1 hover:bg-red-200"
-                              title="Remove image"
-                            >
-                              <Trash2 className="w-5 h-5 text-red-600" />
-                            </button>
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="border border-gray-200 rounded p-3 bg-white">
-                        <label className="block mb-2 font-semibold">Bullet Points</label>
-                        {(row.bulletPoints || ['']).map((bullet, bulletIndex) => (
-                          <div key={bulletIndex} className="flex items-center gap-2 mb-2">
-                            <input
-                              type="text"
-                              value={bullet}
-                              onChange={(e) => handleParagraphBulletPointChange(index, bulletIndex, e.target.value)}
-                              placeholder="Add bullet point"
-                              className="flex-1 rounded-md p-3 bg-gray-200 font-semibold"
-                            />
-                            <button type="button" onClick={() => addParagraphBulletPoint(index)} className="bg-blue-700 text-white px-3 py-2 rounded">+</button>
-                            {(row.bulletPoints || []).length > 1 && (
-                              <button type="button" onClick={() => removeParagraphBulletPoint(index, bulletIndex)} className="bg-red-500 text-white px-3 py-2 rounded"><Trash2 className="w-4 h-4" /></button>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {isDesignFour && !isDesignSix && !isDesignSeven && (
-              <>
-                <div className="mb-4 border rounded p-3 bg-red-50">
-                  <label className="block mb-2 font-semibold">Notices (Design 4)</label>
-                  {form.notices.map((row, index) => (
-                    <div key={index} className="mb-3 border border-red-200 rounded p-3 bg-white">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-2">
-                        <div>
-                          <label className="block mb-1 font-semibold text-sm">Notice Title</label>
+                {/* Paragraph Section */}
+                {!isDesignFive && !isDesignSix && !isDesignSeven && (
+                  <div className="mb-4 border rounded p-3 bg-gray-50">
+                    <label className="block mb-2 font-semibold">Paragraph Section</label>
+                    {form.paragraphSections.map((row, index) => (
+                      <div key={index} className="mb-3 border border-gray-200 rounded p-3">
+                        <label className="block mb-2 font-semibold">Paragraph Heading</label>
+                        <div className="flex gap-2 mb-2">
                           <input
                             type="text"
                             value={row.title}
-                            onChange={(e) => handleObjectArrayChange('notices', index, 'title', e.target.value)}
-                            placeholder="Notice Title"
-                            className="w-full rounded-md p-3 bg-gray-200 font-semibold"
+                            onChange={(e) => handleObjectArrayChange('paragraphSections', index, 'title', e.target.value)}
+                            placeholder="Title Text Line"
+                            className="flex-1 rounded-md p-3 bg-gray-200 font-semibold"
                           />
+                          <button type="button" onClick={() => addObjectArrayRow('paragraphSections', createEmptyParagraphSection())} className="bg-blue-700 text-white px-3 py-2 rounded">+</button>
+                          {form.paragraphSections.length > 1 && (
+                            <button type="button" onClick={() => removeObjectArrayRow('paragraphSections', index)} className="bg-red-500 text-white px-3 py-2 rounded"><Trash2 className="w-4 h-4" /></button>
+                          )}
                         </div>
-                        <div>
-                          <label className="block mb-1 font-semibold text-sm">Notice Type</label>
-                          <select
-                            value={row.type}
-                            onChange={(e) => handleObjectArrayChange('notices', index, 'type', e.target.value)}
-                            className="w-full rounded-md p-3 bg-gray-200 font-semibold"
-                          >
-                            <option value="warning">Warning (Yellow/Orange)</option>
-                            <option value="info">Info (Blue)</option>
-                            <option value="danger">Danger (Red)</option>
-                            <option value="success">Success (Green)</option>
-                          </select>
-                        </div>
-                      </div>
-                      <div className="mb-2">
-                        <label className="block mb-1 font-semibold text-sm">Notice Description</label>
-                        <textarea
+                        <label className="block mb-2 font-semibold my-5">Paragraph Description</label>
+                        <InlineRichTextEditor
                           value={row.description}
-                          onChange={(e) => handleObjectArrayChange('notices', index, 'description', e.target.value)}
-                          placeholder="Notice Description"
-                          className="w-full rounded-md p-3 bg-gray-200 font-semibold h-24"
-                        ></textarea>
-                      </div>
-                      <div className="flex gap-2">
-                        <button type="button" onClick={() => addObjectArrayRow('notices', { title: '', description: '', type: 'warning' })} className="bg-blue-700 text-white px-3 py-2 rounded">+</button>
-                        {form.notices.length > 1 && (
-                          <button type="button" onClick={() => removeObjectArrayRow('notices', index)} className="bg-red-500 text-white px-3 py-2 rounded"><Trash2 className="w-4 h-4" /></button>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                <div className="mb-4">
-                  <label className="block mb-2 font-semibold">Bold Paragraph Text</label>
-                  <textarea
-                    name="boldParagraph"
-                    value={form.boldParagraph}
-                    onChange={handleChange}
-                    placeholder="Experience the ultimate spiritual journey..."
-                    className="w-full rounded-md p-3 bg-gray-200 font-semibold h-24"
-                  ></textarea>
-                </div>
-                <div className="mb-4 border rounded p-3 bg-green-50">
-                  <label className="block mb-2 font-semibold">Search Locations Sidebar (Design 4)</label>
-                  {form.searchLocations.map((row, index) => (
-                    <div key={index} className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-2 mb-2">
-                      <input
-                        type="text"
-                        value={row.locationName}
-                        onChange={(e) => handleObjectArrayChange('searchLocations', index, 'locationName', e.target.value)}
-                        placeholder="Location Name"
-                        className="rounded-md p-3 bg-gray-200 font-semibold"
-                      />
-                      <input
-                        type="text"
-                        value={row.count}
-                        onChange={(e) => handleObjectArrayChange('searchLocations', index, 'count', e.target.value)}
-                        placeholder="Count"
-                        className="rounded-md p-3 bg-gray-200 font-semibold"
-                      />
-                      <div className="flex gap-2">
-                        <button type="button" onClick={() => addObjectArrayRow('searchLocations', { locationName: '', count: '' })} className="bg-blue-700 text-white px-3 py-2 rounded">+</button>
-                        {form.searchLocations.length > 1 && (
-                          <button type="button" onClick={() => removeObjectArrayRow('searchLocations', index)} className="bg-red-500 text-white px-3 py-2 rounded"><Trash2 className="w-4 h-4" /></button>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
+                          onChange={(html) => handleObjectArrayChange('paragraphSections', index, 'description', html)}
+                        />
+                        <div className="flex flex-col gap-3 mt-2">
+                          <div>
+                            <input id={`paragraph-first-image-${index}`} type="file" accept="image/*" onChange={e => handleParagraphSectionImageChange(e, index, 'firstImage')} className="hidden" />
+                            <label htmlFor={`paragraph-first-image-${index}`} className="inline-block bg-yellow-400 my-2 px-4 py-2 rounded cursor-pointer">Upload First Image</label>
+                            {uploadingParagraphFirstImage && <div className="text-blue-600 text-sm my-2">Uploading...</div>}
+                            {row.firstImage?.url && (
+                              <div className="relative w-full h-48 border rounded overflow-hidden mb-2">
+                                <Image height={250} width={150}
+                                  src={row.firstImage.url}
+                                  alt="Paragraph First Image Preview"
+                                  className="object-contain w-full h-full"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteParagraphSectionImage(index, 'firstImage')}
+                                  className="absolute top-1 right-1 bg-white bg-opacity-80 rounded-full p-1 hover:bg-red-200"
+                                  title="Remove image"
+                                >
+                                  <Trash2 className="w-5 h-5 text-red-600" />
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                          <div>
+                            <input id={`paragraph-second-image-${index}`} type="file" accept="image/*" onChange={e => handleParagraphSectionImageChange(e, index, 'secondImage')} className="hidden" />
+                            <label htmlFor={`paragraph-second-image-${index}`} className="inline-block bg-gray-200 px-4 py-2 rounded cursor-pointer">Upload Second Image</label>
+                            {uploadingParagraphSecondImage && <div className="text-blue-600 text-sm my-2">Uploading...</div>}
+                            {row.secondImage?.url && (
+                              <div className="relative w-full h-48 border rounded overflow-hidden mb-2">
+                                <Image height={250} width={150}
+                                  src={row.secondImage.url}
+                                  alt="Paragraph Second Image Preview"
+                                  className="object-contain w-full h-full"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteParagraphSectionImage(index, 'secondImage')}
+                                  className="absolute top-1 right-1 bg-white bg-opacity-80 rounded-full p-1 hover:bg-red-200"
+                                  title="Remove image"
+                                >
+                                  <Trash2 className="w-5 h-5 text-red-600" />
+                                </button>
+                              </div>
+                            )}
+                          </div>
 
-            {/* Table Data */}
-            {!isDesignFive && !isDesignSix && !isDesignSeven && (
-              <>
-                <label className="block mb-2 font-semibold">Table Data</label>
-                <div className="mb-4 border rounded p-3 bg-blue-50">
-                  <label className="block mb-2 font-semibold">Table Heading</label>
-                  <input
-                    type="text"
-                    name="tableTitle"
-                    value={form.tableTitle}
-                    onChange={handleChange}
-                    placeholder="Table Title"
-                    className="w-full rounded-md p-3 bg-gray-200 font-semibold mb-2"
-                  />
-                  <label className="block mb-2 font-semibold">Table Description</label>
-
-                  {form.tableRows.map((row, index) => (
-                    <div key={index} className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-2 mb-2">
-
-                      <input type="text" value={row.column1} onChange={(e) => handleObjectArrayChange('tableRows', index, 'column1', e.target.value)} placeholder="Column 1" className="rounded-md p-3 bg-gray-200 font-semibold" />
-                      <input type="text" value={row.column2} onChange={(e) => handleObjectArrayChange('tableRows', index, 'column2', e.target.value)} placeholder="Column 2" className="rounded-md p-3 bg-gray-200 font-semibold" />
-                      <div className="flex gap-2">
-                        <button type="button" onClick={() => addObjectArrayRow('tableRows', { column1: '', column2: '' })} className="bg-blue-700 text-white px-3 py-2 rounded">+</button>
-                        {form.tableRows.length > 1 && (
-                          <button type="button" onClick={() => removeObjectArrayRow('tableRows', index)} className="bg-red-500 text-white px-3 py-2 rounded"><Trash2 className="w-4 h-4" /></button>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
-
-            {/* Blockquote */}
-            {!isDesignFive && !isDesignSix && !isDesignSeven && (
-              <div className="mb-4">
-                <label className="block mb-2 font-semibold">Blockquote Title</label>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-2">
-                  <input type="text" name="blockquoteMainTitle" value={form.blockquoteMainTitle} onChange={handleChange} placeholder="Title Name For Blockquote" className="rounded-md p-3 bg-gray-200 font-semibold" />
-                  <input type="text" name="blockquoteLeftTitle" value={form.blockquoteLeftTitle} onChange={handleChange} placeholder="Blockquote Left Para" className="rounded-md p-3 bg-gray-200 font-semibold" />
-                </div>
-                <label className="block mb-2 font-semibold">BlockQoute Description</label>
-                <InlineRichTextEditor
-                  value={form.blockquoteDescription}
-                  onChange={(html) => setForm((prev) => ({ ...prev, blockquoteDescription: html }))}
-                />
-                <div className="mt-2">
-                  <label className="block mb-2 font-semibold">Blockquote Tags</label>
-                  {form.blockquoteTags.map((tag, index) => (
-                    <div key={index} className="flex items-center gap-2 mb-2">
-                      <input type="text" value={tag} onChange={(e) => handleArrayTextChange('blockquoteTags', index, e.target.value)} placeholder="Blockquote Tag" className="flex-1 rounded-md p-3 bg-gray-200 font-semibold" />
-                      <button type="button" onClick={() => addArrayTextRow('blockquoteTags')} className="bg-blue-700 text-white px-3 py-2 rounded">+</button>
-                      {form.blockquoteTags.length > 1 && (
-                        <button type="button" onClick={() => removeArrayTextRow('blockquoteTags', index)} className="bg-red-500 text-white px-3 py-2 rounded"><Trash2 className="w-4 h-4" /></button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Accordion Tag */}
-            {!isDesignThree && !isDesignFour && !isDesignFive && !isDesignSix && !isDesignSeven && (
-              <div className="mb-4">
-                <label className="block mb-2 font-semibold">Advertisement Section</label>
-                <div className="flex flex-col gap-4">
-                  <div>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={e => handleCloudinaryImageChange(e, 'advertisementImage')}
-                      ref={advertisementImageInputRef}
-                      className="hidden"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => advertisementImageInputRef.current && advertisementImageInputRef.current.click()}
-                      className="rounded-md p-3 bg-blue-400 font-semibold text-left"
-                    >
-                      {form.advertisementImage?.url ? 'Change Advertisement Image' : 'Upload Advertisement Image'}
-                    </button>
-                    {uploadingAdvertisementImage && <div className="text-blue-600 text-sm mt-1">Uploading...</div>}
-                    {form.advertisementImage?.url && (
-                      <div className="relative w-full h-48 border rounded overflow-hidden mt-2">
-                        <Image height={250} width={150} src={form.advertisementImage.url} alt="Advertisement Preview" className="object-contain w-full h-full" />
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteCloudinaryImage('advertisementImage')}
-                          className="absolute top-1 right-1 bg-white bg-opacity-80 rounded-full p-1 hover:bg-red-200"
-                          title="Remove image"
-                        >
-                          <Trash2 className="w-4 h-4 text-red-600" />
-                        </button>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="flex flex-col gap-2">
-                    <h2 className='font-semibold mb-1'>Advertisement URL</h2>
-                    <input
-                      type="text"
-                      name="advertisementUrl"
-                      value={form.advertisementUrl}
-                      onChange={handleChange}
-                      placeholder="https://example.com"
-                      className="rounded-md p-3 bg-gray-200 font-semibold"
-                    />
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {!isDesignThree && !isDesignFour && !isDesignFive && !isDesignSix && !isDesignSeven && (
-              <div className="mb-4">
-                <label className="block mb-2 font-bold">Accordion Tag</label>
-                {form.accordionTags.map((row, index) => (
-                  <div key={index} className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-2 mb-2">
-                    <div className="flex flex-col gap-1">
-                      <label className="block mb-2 font-semibold text-sm">Accordion Main Title</label>
-                      <input type="text" value={row.left} onChange={(e) => handleObjectArrayChange('accordionTags', index, 'left', e.target.value)} placeholder="Title Text Line" className="rounded-md p-3 bg-gray-200 font-semibold" />
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <label className="block mb-2 font-semibold text-sm">Accordion Description</label>
-                      <input type="text" value={row.right} onChange={(e) => handleObjectArrayChange('accordionTags', index, 'right', e.target.value)} placeholder="Accordion Tag Line" className="rounded-md p-3 bg-gray-200 font-semibold" />
-                    </div>
-                    <div className="flex items-end gap-2">
-                      <button type="button" onClick={() => addObjectArrayRow('accordionTags', { left: '', right: '' })} className="bg-blue-700 text-white px-3 py-2 rounded">+</button>
-                      {form.accordionTags.length > 1 && (
-                        <button type="button" onClick={() => removeObjectArrayRow('accordionTags', index)} className="bg-red-500 text-white px-3 py-2 rounded"><Trash2 className="w-4 h-4" /></button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Side Thumb Blog */}
-            {!isDesignThree && !isDesignFour && !isDesignFive && !isDesignSix && !isDesignSeven && (
-              <div className="mb-4">
-                <label className="block mb-2 font-semibold">Side Thumb Blog</label>
-                <div className="flex flex-col gap-5 mb-2">
-                  <div>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={e => handleCloudinaryImageChange(e, 'sideThumbImage')}
-                      ref={sideThumbImageInputRef}
-                      className="hidden"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => sideThumbImageInputRef.current && sideThumbImageInputRef.current.click()}
-                      className="rounded-md p-3 bg-blue-400 font-semibold text-left"
-                    >
-                      {form.sideThumbImage ? 'Change Thumb Image' : 'Upload Thumb Image'}
-                    </button>
-                    {uploadingSideThumbImage && <div className="text-blue-600 text-sm mt-1">Uploading...</div>}
-                    {form.sideThumbImage && (
-                      <div className="relative w-full h-48 border rounded overflow-hidden mt-2">
-                        <Image height={250} width={150} src={form.sideThumbImage} alt="Side Thumb Preview" className="object-contain w-full h-full" />
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteCloudinaryImage('sideThumbImage')}
-                          className="absolute top-1 right-1 bg-white bg-opacity-80 rounded-full p-1 hover:bg-red-200"
-                          title="Remove image"
-                        >
-                          <Trash2 className="w-4 h-4 text-red-600" />
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex flex-col  gap-2">
-                    <h2 className='font-semibold mb-2'>Side Thumb Name</h2>
-                    <input type="text" name="sideThumbName" value={form.sideThumbName} onChange={handleChange} placeholder="Name Here" className="rounded-md p-3 bg-gray-200 text-black font-semibold" />
-                    <h2 className='font-semibold mb-2'>Side Thumb Designation</h2>
-                    <input type="text" name="sideThumbDesignation" value={form.sideThumbDesignation} onChange={handleChange} placeholder="Designation" className="rounded-md p-3 bg-gray-200 text-black font-semibold" />
-                    <h2 className='font-semibold mb-2'>Side Thumb Description</h2>
-                    <input type="text" name="sideThumbDescription" value={form.sideThumbDescription} onChange={handleChange} placeholder="Description" className="rounded-md p-3 bg-gray-200 text-black font-semibold" />
-                  </div>
-                </div>
-                <hr className='my-4 border-black' />
-                <h2 className="text-lg font-bold my-2">Social Media Links</h2>
-                <div className="grid grid-col-1 gap-2">
-                  <h2 className='font-semibold mb-1'>Facebook URL</h2>
-                  <input type="text" name="facebookUrl" value={form.facebookUrl} onChange={handleChange} placeholder="Facebook Url" className="rounded-md p-3 bg-gray-200 font-semibold" />
-                  <h2 className='font-semibold mb-1'>Youtube URL</h2>
-                  <input type="text" name="youtubeUrl" value={form.youtubeUrl} onChange={handleChange} placeholder="Youtube Url" className="rounded-md p-3 bg-gray-200 font-semibold" />
-                  <h2 className='font-semibold mb-1'>Instagram URL</h2>
-                  <input type="text" name="instaUrl" value={form.instaUrl} onChange={handleChange} placeholder="Insta Url" className="rounded-md p-3 bg-gray-200 font-semibold" />
-                  <h2 className='font-semibold mb-1'>Google URL</h2>
-                  <input type="text" name="googleUrl" value={form.googleUrl} onChange={handleChange} placeholder="Google Url" className="rounded-md p-3 bg-gray-200 font-semibold" />
-                </div>
-              </div>
-            )}
-          </>
-        )}
-        {isDesignFive && !isDesignSix && !isDesignSeven && (
-          <>
-            {/* Design 5 Content */}
-            <div className="mb-4 mt-8 border-t border-slate-100 pt-6">
-              <h3 className="text-xl font-bold mb-4">Design 5 Sections</h3>
-
-              <div className="mb-4">
-                <label className="block mb-1 font-semibold">Top Chip Text (e.g. Why Choose Us)</label>
-                <input type="text" name="design5Chip" value={form.design5Chip} onChange={handleChange} placeholder="Type Here" className="w-full rounded-md p-3 bg-gray-200 font-semibold text-black" />
-              </div>
-
-              <div className="mb-4">
-                <label className="block mb-1 font-semibold">Main Heading</label>
-                <input type="text" name="design5MainHeading" value={form.design5MainHeading} onChange={handleChange} placeholder="Type Here" className="w-full rounded-md p-3 bg-gray-200 font-semibold text-black" />
-              </div>
-
-              <div className="mb-4">
-                <label className="block mb-2 font-bold">Grid Cards</label>
-                {form.gridCards.map((card, index) => (
-                  <div key={index} className="border p-4 mb-4 rounded-md bg-gray-50 relative">
-                    <button type="button" onClick={() => {
-                      setForm((prev) => {
-                        const nextGridCards = [...(prev.gridCards || [])];
-                        nextGridCards.splice(index, 1);
-                        return { ...prev, gridCards: nextGridCards };
-                      });
-                    }} className="absolute top-2 right-2 bg-red-500 text-white px-2 py-1 rounded">
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-
-                    <div className="mb-2">
-                      <h2 className="block mb-2 font-semibold text-sm">Card Image</h2>
-                      <div className="flex flex-col gap-2">
-                        <div>
-                          <label className="rounded-md p-3 bg-blue-400 font-semibold text-left cursor-pointer inline-block">
-                            {card.image?.url ? 'Change Card Image' : 'Upload Card Image'}
-                            <input
-                              type="file"
-                              accept="image/*"
-                              onChange={(e) => handleGridCardImageChange(e, index)}
-                              className="hidden"
-                            />
-                          </label>
-                          {card.image?.url && (
-                            <div className="relative w-full h-48 border rounded overflow-hidden mt-2">
-                              <Image height={250} width={150} src={card.image.url} alt="Grid Card Preview" className="object-contain w-full h-full" />
-                              <button
-                                type="button"
-                                onClick={() => handleDeleteGridCardImage(index)}
-                                className="absolute top-1 right-1 bg-white bg-opacity-80 rounded-full p-1 hover:bg-red-200"
-                                title="Remove image"
-                              >
-                                <Trash2 className="w-4 h-4 text-red-600" />
-                              </button>
-                            </div>
-                          )}
+                          <div className="border border-gray-200 rounded p-3 bg-white">
+                            <label className="block mb-2 font-semibold">Bullet Points</label>
+                            {(row.bulletPoints || ['']).map((bullet, bulletIndex) => (
+                              <div key={bulletIndex} className="flex items-center gap-2 mb-2">
+                                <input
+                                  type="text"
+                                  value={bullet}
+                                  onChange={(e) => handleParagraphBulletPointChange(index, bulletIndex, e.target.value)}
+                                  placeholder="Add bullet point"
+                                  className="flex-1 rounded-md p-3 bg-gray-200 font-semibold"
+                                />
+                                <button type="button" onClick={() => addParagraphBulletPoint(index)} className="bg-blue-700 text-white px-3 py-2 rounded">+</button>
+                                {(row.bulletPoints || []).length > 1 && (
+                                  <button type="button" onClick={() => removeParagraphBulletPoint(index, bulletIndex)} className="bg-red-500 text-white px-3 py-2 rounded"><Trash2 className="w-4 h-4" /></button>
+                                )}
+                              </div>
+                            ))}
+                          </div>
                         </div>
                       </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                      <div>
-                        <label className="block mb-1 font-semibold text-sm">Chip Name</label>
-                        <input type="text" value={card.chipName} onChange={(e) => {
-                          setForm((prev) => {
-                            const nextGridCards = [...(prev.gridCards || [])];
-                            nextGridCards[index].chipName = e.target.value;
-                            return { ...prev, gridCards: nextGridCards };
-                          });
-                        }} placeholder="e.g. Fintech" className="w-full rounded-md p-3 bg-white border border-gray-300 font-semibold text-black" />
-                      </div>
-
-                      <div>
-                        <label className="block mb-1 font-semibold text-sm">Title</label>
-                        <input type="text" value={card.title} onChange={(e) => {
-                          setForm((prev) => {
-                            const nextGridCards = [...(prev.gridCards || [])];
-                            nextGridCards[index].title = e.target.value;
-                            return { ...prev, gridCards: nextGridCards };
-                          });
-                        }} placeholder="e.g. Compliance Consulting" className="w-full rounded-md p-3 bg-white border border-gray-300 font-semibold text-black" />
-                      </div>
-
-                      <div className="md:col-span-2">
-                        <label className="block mb-1 font-semibold text-sm">Link URL (for Explore More)</label>
-                        <input type="text" value={card.link} onChange={(e) => {
-                          setForm((prev) => {
-                            const nextGridCards = [...(prev.gridCards || [])];
-                            nextGridCards[index].link = e.target.value;
-                            return { ...prev, gridCards: nextGridCards };
-                          });
-                        }} placeholder="/some-link" className="w-full rounded-md p-3 bg-white border border-gray-300 font-semibold text-black" />
-                      </div>
-                    </div>
+                    ))}
                   </div>
-                ))}
+                )}
 
-                <button type="button" onClick={() => {
-                  setForm((prev) => {
-                    const nextGridCards = [...(prev.gridCards || [])];
-                    nextGridCards.push({ image: { url: '', key: '' }, chipName: '', title: '', link: '' });
-                    return { ...prev, gridCards: nextGridCards };
-                  });
-                }} className="bg-blue-600 text-white px-4 py-2 rounded-md font-semibold mt-2">
-                  + Add Grid Card
-                </button>
-              </div>
-            </div>
-          </>
-        )}
-
-        {isDesignSix && (
-          <>
-            {/* Design 6 Content */}
-            <div className="mb-4 mt-8 border-t border-slate-100 pt-6">
-              <h3 className="text-xl font-bold mb-4">Design 6 (Team Page) Sections</h3>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                <div>
-                  <label className="block mb-1 font-semibold">Top Chip Text</label>
-                  <input type="text" name="design6Chip" value={form.design6Chip} onChange={handleChange} placeholder="e.g. News & Insight" className="w-full rounded-md p-3 bg-gray-200 font-semibold text-black" />
-                </div>
-                <div>
-                  <label className="block mb-1 font-semibold">Explore Area Link</label>
-                  <input type="text" name="design6ExploreLink" value={form.design6ExploreLink} onChange={handleChange} placeholder="/explore" className="w-full rounded-md p-3 bg-gray-200 font-semibold text-black" />
-                </div>
-              </div>
-
-              <div className="mb-4">
-                <label className="block mb-1 font-semibold">Main Heading</label>
-                <input type="text" name="design6MainHeading" value={form.design6MainHeading} onChange={handleChange} placeholder="The latest news and insights..." className="w-full rounded-md p-3 bg-gray-200 font-semibold text-black" />
-              </div>
-
-              <div className="mb-4">
-                <label className="block mb-1 font-semibold">Sub Heading / Paragraph Text</label>
-                <textarea name="design6SubHeading" value={form.design6SubHeading} onChange={handleChange} placeholder="Business consulting is a professional service..." className="w-full rounded-md p-3 bg-gray-200 font-semibold text-black h-24"></textarea>
-              </div>
-
-              <div className="mb-4">
-                <label className="block mb-1 font-semibold">Author Attribution</label>
-                <input type="text" name="design6Author" value={form.design6Author} onChange={handleChange} placeholder="Mr. Daniel Scoot, Mr. Daniel Scoot" className="w-full rounded-md p-3 bg-gray-200 font-semibold text-black" />
-              </div>
-
-              <hr className="my-6 border-slate-300" />
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                <div>
-                  <label className="block mb-1 font-semibold">Mid Section Heading</label>
-                  <input type="text" name="design6MidHeading" value={form.design6MidHeading} onChange={handleChange} placeholder="Excellent Service Provided by..." className="w-full rounded-md p-3 bg-gray-200 font-semibold text-black" />
-                </div>
-                <div>
-                  <label className="block mb-1 font-semibold">Explore People Link</label>
-                  <input type="text" name="design6MidLink" value={form.design6MidLink} onChange={handleChange} placeholder="/people" className="w-full rounded-md p-3 bg-gray-200 font-semibold text-black" />
-                </div>
-              </div>
-
-              <div className="mb-4">
-                <label className="block mb-2 font-bold">Team Cards</label>
-                {form.teamCards.map((card, index) => (
-                  <div key={index} className="border p-4 mb-4 rounded-md bg-gray-50 relative">
-                    <button type="button" onClick={() => {
-                      setForm((prev) => {
-                        const nextCards = [...(prev.teamCards || [])];
-                        nextCards.splice(index, 1);
-                        return { ...prev, teamCards: nextCards };
-                      });
-                    }} className="absolute top-2 right-2 bg-red-500 text-white px-2 py-1 rounded">
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-
-                    <div className="mb-2">
-                      <h2 className="block mb-2 font-semibold text-sm">Card Image</h2>
-                      <div className="flex flex-col gap-2">
-                        <div>
-                          <label className="rounded-md p-3 bg-blue-400 font-semibold text-left cursor-pointer inline-block text-black">
-                            {card.image?.url ? 'Change Image' : 'Upload Image'}
-                            <input
-                              type="file"
-                              accept="image/*"
-                              onChange={(e) => handleTeamCardImageChange(e, index)}
-                              className="hidden"
-                            />
-                          </label>
-                          {card.image?.url && (
-                            <div className="relative w-full h-48 border rounded overflow-hidden mt-2 bg-white">
-                              <Image width={150} height={100} src={card.image.url} alt="Team Preview" className="object-contain w-full h-full" />
-                              <button
-                                type="button"
-                                onClick={() => handleDeleteTeamCardImage(index)}
-                                className="absolute top-1 right-1 bg-white bg-opacity-80 rounded-full p-1 hover:bg-red-200"
-                                title="Remove image"
-                              >
-                                <Trash2 className="w-4 h-4 text-red-600" />
-                              </button>
+                {isDesignFour && !isDesignSix && !isDesignSeven && (
+                  <>
+                    <div className="mb-4 border rounded p-3 bg-red-50">
+                      <label className="block mb-2 font-semibold">Notices (Design 4)</label>
+                      {form.notices.map((row, index) => (
+                        <div key={index} className="mb-3 border border-red-200 rounded p-3 bg-white">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-2">
+                            <div>
+                              <label className="block mb-1 font-semibold text-sm">Notice Title</label>
+                              <input
+                                type="text"
+                                value={row.title}
+                                onChange={(e) => handleObjectArrayChange('notices', index, 'title', e.target.value)}
+                                placeholder="Notice Title"
+                                className="w-full rounded-md p-3 bg-gray-200 font-semibold"
+                              />
                             </div>
+                            <div>
+                              <label className="block mb-1 font-semibold text-sm">Notice Type</label>
+                              <select
+                                value={row.type}
+                                onChange={(e) => handleObjectArrayChange('notices', index, 'type', e.target.value)}
+                                className="w-full rounded-md p-3 bg-gray-200 font-semibold"
+                              >
+                                <option value="warning">Warning (Yellow/Orange)</option>
+                                <option value="info">Info (Blue)</option>
+                                <option value="danger">Danger (Red)</option>
+                                <option value="success">Success (Green)</option>
+                              </select>
+                            </div>
+                          </div>
+                          <div className="mb-2">
+                            <label className="block mb-1 font-semibold text-sm">Notice Description</label>
+                            <textarea
+                              value={row.description}
+                              onChange={(e) => handleObjectArrayChange('notices', index, 'description', e.target.value)}
+                              placeholder="Notice Description"
+                              className="w-full rounded-md p-3 bg-gray-200 font-semibold h-24"
+                            ></textarea>
+                          </div>
+                          <div className="flex gap-2">
+                            <button type="button" onClick={() => addObjectArrayRow('notices', { title: '', description: '', type: 'warning' })} className="bg-blue-700 text-white px-3 py-2 rounded">+</button>
+                            {form.notices.length > 1 && (
+                              <button type="button" onClick={() => removeObjectArrayRow('notices', index)} className="bg-red-500 text-white px-3 py-2 rounded"><Trash2 className="w-4 h-4" /></button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="mb-4">
+                      <label className="block mb-2 font-semibold">Bold Paragraph Text</label>
+                      <textarea
+                        name="boldParagraph"
+                        value={form.boldParagraph}
+                        onChange={handleChange}
+                        placeholder="Experience the ultimate spiritual journey..."
+                        className="w-full rounded-md p-3 bg-gray-200 font-semibold h-24"
+                      ></textarea>
+                    </div>
+                    <div className="mb-4 border rounded p-3 bg-green-50">
+                      <label className="block mb-2 font-semibold">Search Locations Sidebar (Design 4)</label>
+                      {form.searchLocations.map((row, index) => (
+                        <div key={index} className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-2 mb-2">
+                          <input
+                            type="text"
+                            value={row.locationName}
+                            onChange={(e) => handleObjectArrayChange('searchLocations', index, 'locationName', e.target.value)}
+                            placeholder="Location Name"
+                            className="rounded-md p-3 bg-gray-200 font-semibold"
+                          />
+                          <input
+                            type="text"
+                            value={row.count}
+                            onChange={(e) => handleObjectArrayChange('searchLocations', index, 'count', e.target.value)}
+                            placeholder="Count"
+                            className="rounded-md p-3 bg-gray-200 font-semibold"
+                          />
+                          <div className="flex gap-2">
+                            <button type="button" onClick={() => addObjectArrayRow('searchLocations', { locationName: '', count: '' })} className="bg-blue-700 text-white px-3 py-2 rounded">+</button>
+                            {form.searchLocations.length > 1 && (
+                              <button type="button" onClick={() => removeObjectArrayRow('searchLocations', index)} className="bg-red-500 text-white px-3 py-2 rounded"><Trash2 className="w-4 h-4" /></button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+
+                {/* Table Data */}
+                {!isDesignFive && !isDesignSix && !isDesignSeven && (
+                  <>
+                    <label className="block mb-2 font-semibold">Table Data</label>
+                    <div className="mb-4 border rounded p-3 bg-blue-50">
+                      <label className="block mb-2 font-semibold">Table Heading</label>
+                      <input
+                        type="text"
+                        name="tableTitle"
+                        value={form.tableTitle}
+                        onChange={handleChange}
+                        placeholder="Table Title"
+                        className="w-full rounded-md p-3 bg-gray-200 font-semibold mb-2"
+                      />
+                      <label className="block mb-2 font-semibold">Table Description</label>
+
+                      {form.tableRows.map((row, index) => (
+                        <div key={index} className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-2 mb-2">
+
+                          <input type="text" value={row.column1} onChange={(e) => handleObjectArrayChange('tableRows', index, 'column1', e.target.value)} placeholder="Column 1" className="rounded-md p-3 bg-gray-200 font-semibold" />
+                          <input type="text" value={row.column2} onChange={(e) => handleObjectArrayChange('tableRows', index, 'column2', e.target.value)} placeholder="Column 2" className="rounded-md p-3 bg-gray-200 font-semibold" />
+                          <div className="flex gap-2">
+                            <button type="button" onClick={() => addObjectArrayRow('tableRows', { column1: '', column2: '' })} className="bg-blue-700 text-white px-3 py-2 rounded">+</button>
+                            {form.tableRows.length > 1 && (
+                              <button type="button" onClick={() => removeObjectArrayRow('tableRows', index)} className="bg-red-500 text-white px-3 py-2 rounded"><Trash2 className="w-4 h-4" /></button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+
+                {/* Blockquote */}
+                {!isDesignFive && !isDesignSix && !isDesignSeven && (
+                  <div className="mb-4">
+                    <label className="block mb-2 font-semibold">Blockquote Title</label>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-2">
+                      <input type="text" name="blockquoteMainTitle" value={form.blockquoteMainTitle} onChange={handleChange} placeholder="Title Name For Blockquote" className="rounded-md p-3 bg-gray-200 font-semibold" />
+                      <input type="text" name="blockquoteLeftTitle" value={form.blockquoteLeftTitle} onChange={handleChange} placeholder="Blockquote Left Para" className="rounded-md p-3 bg-gray-200 font-semibold" />
+                    </div>
+                    <label className="block mb-2 font-semibold">BlockQoute Description</label>
+                    <InlineRichTextEditor
+                      value={form.blockquoteDescription}
+                      onChange={(html) => setForm((prev) => ({ ...prev, blockquoteDescription: html }))}
+                    />
+                    <div className="mt-2">
+                      <label className="block mb-2 font-semibold">Blockquote Tags</label>
+                      {form.blockquoteTags.map((tag, index) => (
+                        <div key={index} className="flex items-center gap-2 mb-2">
+                          <input type="text" value={tag} onChange={(e) => handleArrayTextChange('blockquoteTags', index, e.target.value)} placeholder="Blockquote Tag" className="flex-1 rounded-md p-3 bg-gray-200 font-semibold" />
+                          <button type="button" onClick={() => addArrayTextRow('blockquoteTags')} className="bg-blue-700 text-white px-3 py-2 rounded">+</button>
+                          {form.blockquoteTags.length > 1 && (
+                            <button type="button" onClick={() => removeArrayTextRow('blockquoteTags', index)} className="bg-red-500 text-white px-3 py-2 rounded"><Trash2 className="w-4 h-4" /></button>
                           )}
                         </div>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block mb-1 font-semibold text-sm">Name</label>
-                        <input type="text" value={card.name} onChange={(e) => {
-                          setForm((prev) => {
-                            const nextCards = [...(prev.teamCards || [])];
-                            nextCards[index].name = e.target.value;
-                            return { ...prev, teamCards: nextCards };
-                          });
-                        }} placeholder="Mr. Anthony Brian" className="w-full rounded-md p-3 bg-white border border-gray-300 font-semibold text-black" />
-                      </div>
-
-                      <div>
-                        <label className="block mb-1 font-semibold text-sm">Designation</label>
-                        <input type="text" value={card.designation} onChange={(e) => {
-                          setForm((prev) => {
-                            const nextCards = [...(prev.teamCards || [])];
-                            nextCards[index].designation = e.target.value;
-                            return { ...prev, teamCards: nextCards };
-                          });
-                        }} placeholder="Senior Consultant" className="w-full rounded-md p-3 bg-white border border-gray-300 font-semibold text-black" />
-                      </div>
-
-                      <div>
-                        <label className="block mb-1 font-semibold text-sm">Phone Number</label>
-                        <input type="text" value={card.phone} onChange={(e) => {
-                          setForm((prev) => {
-                            const nextCards = [...(prev.teamCards || [])];
-                            nextCards[index].phone = e.target.value;
-                            return { ...prev, teamCards: nextCards };
-                          });
-                        }} placeholder="+91 656 786 53" className="w-full rounded-md p-3 bg-white border border-gray-300 font-semibold text-black" />
-                      </div>
-
-                      <div>
-                        <label className="block mb-1 font-semibold text-sm">Facebook URL Link</label>
-                        <input type="text" value={card.facebook} onChange={(e) => {
-                          setForm((prev) => {
-                            const nextCards = [...(prev.teamCards || [])];
-                            nextCards[index].facebook = e.target.value;
-                            return { ...prev, teamCards: nextCards };
-                          });
-                        }} placeholder="https://facebook.com/..." className="w-full rounded-md p-3 bg-white border border-gray-300 font-semibold text-black" />
-                      </div>
-                      <div>
-                        <label className="block mb-1 font-semibold text-sm">Instagram URL Link</label>
-                        <input type="text" value={card.instagram} onChange={(e) => {
-                          setForm((prev) => {
-                            const nextCards = [...(prev.teamCards || [])];
-                            nextCards[index].instagram = e.target.value;
-                            return { ...prev, teamCards: nextCards };
-                          });
-                        }} placeholder="https://instagram.com/..." className="w-full rounded-md p-3 bg-white border border-gray-300 font-semibold text-black" />
-                      </div>
-                      <div>
-                        <label className="block mb-1 font-semibold text-sm">Youtube URL Link</label>
-                        <input type="text" value={card.youtube} onChange={(e) => {
-                          setForm((prev) => {
-                            const nextCards = [...(prev.teamCards || [])];
-                            nextCards[index].youtube = e.target.value;
-                            return { ...prev, teamCards: nextCards };
-                          });
-                        }} placeholder="https://youtube.com/..." className="w-full rounded-md p-3 bg-white border border-gray-300 font-semibold text-black" />
-                      </div>
+                      ))}
                     </div>
                   </div>
-                ))}
+                )}
 
-                <button type="button" onClick={() => {
-                  setForm((prev) => {
-                    const nextCards = [...(prev.teamCards || [])];
-                    nextCards.push({ image: { url: '', key: '' }, name: '', designation: '', phone: '', facebook: '', instagram: '', youtube: '' });
-                    return { ...prev, teamCards: nextCards };
-                  });
-                }} className="bg-blue-600 text-white px-4 py-2 rounded-md font-semibold mt-2">
-                  + Add Team Card
-                </button>
-              </div>
-            </div>
-          </>
-        )}
-
-        {isDesignSeven && (
-          <>
-            {/* Design 7 Content */}
-            <div className="mb-4 mt-4 border-t border-slate-100 pt-6">
-              <h3 className="text-xl font-bold mb-4">Design 7 Sections</h3>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                <div>
-                  <label className="block mb-1 font-semibold">Top Chip Text</label>
-                  <input type="text" name="design7Chip" value={form.design7Chip} onChange={handleChange} placeholder="News & Insight" className="w-full rounded-md p-3 bg-gray-200 font-semibold text-black" />
-                </div>
-                <div>
-                  <label className="block mb-1 font-semibold">Explore Link URL</label>
-                  <input type="text" name="design7ExploreLink" value={form.design7ExploreLink} onChange={handleChange} placeholder="/explore" className="w-full rounded-md p-3 bg-gray-200 font-semibold text-black" />
-                </div>
-              </div>
-
-              <div className="mb-4">
-                <label className="block mb-1 font-semibold">Main Heading</label>
-                <input type="text" name="design7MainHeading" value={form.design7MainHeading} onChange={handleChange} placeholder="The latest news and insights..." className="w-full rounded-md p-3 bg-gray-200 font-semibold text-black" />
-              </div>
-
-              {/* Gallery Grid Cards for Design 7 */}
-              <div className="mb-4 border border-slate-200 rounded-xl p-5 bg-slate-50">
-                <h4 className="font-bold text-lg mb-4">Gallery Image Cards</h4>
-                {form.gridCards.map((card, index) => (
-                  <div key={index} className="mb-4 border border-slate-200 rounded p-4 bg-white relative">
-                    <button type="button" onClick={() => {
-                      setForm((prev) => {
-                        const nextGridCards = [...(prev.gridCards || [])];
-                        nextGridCards.splice(index, 1);
-                        return { ...prev, gridCards: nextGridCards };
-                      });
-                    }} className="absolute top-2 right-2 bg-red-500 text-white px-2 py-1 rounded">
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-
-                    <div className="mb-2">
-                      <h2 className="block mb-2 font-semibold text-sm">Card Image</h2>
-                      <div className="flex flex-col gap-2">
-                        <input id={`grid-card-image-${index}`} type="file" accept="image/*" onChange={(e) => handleGridCardImageChange(e, index)} className="hidden" />
-                        <label htmlFor={`grid-card-image-${index}`} className="inline-block bg-yellow-400 px-4 py-2 rounded cursor-pointer w-max font-semibold text-sm">
-                          Upload Image
-                        </label>
-                        {card.image?.url && (
-                          <div className="relative w-32 h-32 border rounded overflow-hidden mt-2">
-                            <Image height={250} width={150} src={card.image.url} alt="Grid Card" className="object-cover w-full h-full" />
-                            <button type="button" onClick={() => handleDeleteGridCardImage(index)} className="absolute top-1 right-1 bg-white bg-opacity-80 rounded-full p-1 hover:bg-red-200" title="Remove image">
+                {/* Accordion Tag */}
+                {!isDesignThree && !isDesignFour && !isDesignFive && !isDesignSix && !isDesignSeven && (
+                  <div className="mb-4">
+                    <label className="block mb-2 font-semibold">Advertisement Section</label>
+                    <div className="flex flex-col gap-4">
+                      <div>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={e => handleCloudinaryImageChange(e, 'advertisementImage')}
+                          ref={advertisementImageInputRef}
+                          className="hidden"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => advertisementImageInputRef.current && advertisementImageInputRef.current.click()}
+                          className="rounded-md p-3 bg-blue-400 font-semibold text-left"
+                        >
+                          {form.advertisementImage?.url ? 'Change Advertisement Image' : 'Upload Advertisement Image'}
+                        </button>
+                        {uploadingAdvertisementImage && <div className="text-blue-600 text-sm mt-1">Uploading...</div>}
+                        {form.advertisementImage?.url && (
+                          <div className="relative w-full h-48 border rounded overflow-hidden mt-2">
+                            <Image height={250} width={150} src={form.advertisementImage.url} alt="Advertisement Preview" className="object-contain w-full h-full" />
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteCloudinaryImage('advertisementImage')}
+                              className="absolute top-1 right-1 bg-white bg-opacity-80 rounded-full p-1 hover:bg-red-200"
+                              title="Remove image"
+                            >
                               <Trash2 className="w-4 h-4 text-red-600" />
                             </button>
                           </div>
                         )}
                       </div>
-                    </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                      <div>
-                        <label className="block mb-1 font-semibold text-sm">Hover Chip Name</label>
-                        <input type="text" value={card.chipName} onChange={(e) => {
-                          setForm((prev) => {
-                            const nextGridCards = [...(prev.gridCards || [])];
-                            nextGridCards[index].chipName = e.target.value;
-                            return { ...prev, gridCards: nextGridCards };
-                          });
-                        }} placeholder="e.g. Fintech" className="w-full rounded-md p-3 bg-white border border-gray-300 font-semibold text-black" />
+                      <div className="flex flex-col gap-2">
+                        <h2 className='font-semibold mb-1'>Advertisement URL</h2>
+                        <input
+                          type="text"
+                          name="advertisementUrl"
+                          value={form.advertisementUrl}
+                          onChange={handleChange}
+                          placeholder="https://example.com"
+                          className="rounded-md p-3 bg-gray-200 font-semibold"
+                        />
                       </div>
-
-                      <div>
-                        <label className="block mb-1 font-semibold text-sm">Hover Title (Link Text)</label>
-                        <input type="text" value={card.title} onChange={(e) => {
-                          setForm((prev) => {
-                            const nextGridCards = [...(prev.gridCards || [])];
-                            nextGridCards[index].title = e.target.value;
-                            return { ...prev, gridCards: nextGridCards };
-                          });
-                        }} placeholder="e.g. Compliance Consulting" className="w-full rounded-md p-3 bg-white border border-gray-300 font-semibold text-black" />
-                      </div>
-
-                      {/* Expandable Gallery Detail Section */}
-                      <div className="md:col-span-2 mt-4 border border-blue-200 rounded-lg p-4 bg-blue-50">
-                        <h3 className="font-bold text-md mb-3 text-blue-800">Gallery Detail Page Content</h3>
-                        <p className="text-xs text-blue-600 mb-4">Filling this out will generate a detail page at <strong>/gallery/{card.gallerySlug || "<auto-generated>"}</strong></p>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                          <div>
-                            <label className="block mb-1 font-semibold text-sm">Date</label>
-                            <input type="date" value={card.galleryDate || ''} onChange={(e) => {
-                              setForm((prev) => {
-                                const nextGridCards = [...(prev.gridCards || [])];
-                                nextGridCards[index].galleryDate = e.target.value;
-                                return { ...prev, gridCards: nextGridCards };
-                              });
-                            }} className="w-full rounded-md p-3 bg-white border border-gray-300 font-semibold" />
-                          </div>
-                          <div>
-                            <label className="block mb-1 font-semibold text-sm">Posted By</label>
-                            <input type="text" value={card.postedBy || ''} onChange={(e) => {
-                              setForm((prev) => {
-                                const nextGridCards = [...(prev.gridCards || [])];
-                                nextGridCards[index].postedBy = e.target.value;
-                                return { ...prev, gridCards: nextGridCards };
-                              });
-                            }} placeholder="Author Name" className="w-full rounded-md p-3 bg-white border border-gray-300 font-semibold" />
-                          </div>
-                          <div className="md:col-span-2">
-                            <label className="block mb-1 font-semibold text-sm">Description Paragraph</label>
-                            <textarea value={card.galleryDescription || ''} onChange={(e) => {
-                              setForm((prev) => {
-                                const nextGridCards = [...(prev.gridCards || [])];
-                                nextGridCards[index].galleryDescription = e.target.value;
-                                return { ...prev, gridCards: nextGridCards };
-                              });
-                            }} rows="3" className="w-full rounded-md p-3 bg-white border border-gray-300 font-semibold"></textarea>
-                          </div>
-                        </div>
-
-                        <div className="mb-6">
-                          <label className="block mb-2 font-bold text-sm text-blue-900 border-b border-blue-200 pb-1">Bento Gallery Images</label>
-                          <div className="flex flex-wrap gap-2 mb-2">
-                            {(card.bentoImages || []).map((img, imgIdx) => (
-                              <div key={imgIdx} className="relative w-24 h-24 border rounded overflow-hidden">
-                                <Image width={150} height={100} src={img.url} alt="Bento" className="object-cover w-full h-full" />
-                                <button type="button" onClick={() => handleDeleteBentoImage(index, imgIdx)} className="absolute top-1 right-1 bg-white bg-opacity-80 rounded-full p-1 hover:bg-red-200" title="Remove image">
-                                  <Trash2 className="w-3 h-3 text-red-600" />
-                                </button>
-                              </div>
-                            ))}
-                            <div className="w-24 h-24 border-2 border-dashed border-blue-300 rounded flex flex-col items-center justify-center bg-white cursor-pointer hover:bg-blue-50 relative">
-                              <input type="file" multiple accept="image/*" onChange={(e) => handleBentoImageChange(e, index)} className="absolute inset-0 opacity-0 cursor-pointer" />
-                              <span className="text-xl text-blue-400">+</span>
-                              <span className="text-xs text-blue-500 font-semibold mt-1">Upload</span>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="mb-6">
-                          <label className="block mb-2 font-bold text-sm text-blue-900 border-b border-blue-200 pb-1">YouTube Shorts</label>
-                          {(card.youtubeShorts || []).map((short, shortIdx) => (
-                            <div key={shortIdx} className="flex gap-2 mb-2 items-center bg-white p-2 rounded border border-gray-200 w-full">
-                              <div className="w-full">
-                                <input type="text" value={short.url} onChange={(e) => {
-                                  setForm(prev => {
-                                    const newCards = [...prev.gridCards];
-                                    newCards[index].youtubeShorts[shortIdx].url = e.target.value;
-                                    return { ...prev, gridCards: newCards };
-                                  });
-                                }} placeholder="YouTube URL" className="w-full rounded p-2 text-sm border border-gray-300" />
-                              </div>
-                              <div className="md:col-span-1 text-center">
-                                <button type="button" onClick={() => {
-                                  setForm(prev => {
-                                    const newCards = [...prev.gridCards];
-                                    newCards[index].youtubeShorts.splice(shortIdx, 1);
-                                    return { ...prev, gridCards: newCards };
-                                  });
-                                }} className="text-red-500 hover:text-red-700"><Trash2 className="w-4 h-4 inline" /></button>
-                              </div>
-                            </div>
-                          ))}
-                          <button type="button" onClick={() => {
-                            setForm(prev => {
-                              const newCards = [...prev.gridCards];
-                              if (!newCards[index].youtubeShorts) newCards[index].youtubeShorts = [];
-                              newCards[index].youtubeShorts.push({ url: '' });
-                              return { ...prev, gridCards: newCards };
-                            });
-                          }} className="text-xs bg-blue-100 text-blue-700 px-3 py-1 rounded font-semibold hover:bg-blue-200">+ Add Short</button>
-                        </div>
-
-                        <div>
-                          <label className="block mb-2 font-bold text-sm text-blue-900 border-b border-blue-200 pb-1">YouTube Highlight Videos</label>
-                          {(card.youtubeVideos || []).map((vid, vidIdx) => (
-                            <div key={vidIdx} className="flex gap-2 mb-2 items-center bg-white p-2 rounded border border-gray-200 w-full">
-                              <div className="w-full">
-                                <input type="text" value={vid.url} onChange={(e) => {
-                                  setForm(prev => {
-                                    const newCards = [...prev.gridCards];
-                                    newCards[index].youtubeVideos[vidIdx].url = e.target.value;
-                                    return { ...prev, gridCards: newCards };
-                                  });
-                                }} placeholder="YouTube URL" className="w-full rounded p-2 text-sm border border-gray-300" />
-                              </div>
-                              <div className="text-center">
-                                <button type="button" onClick={() => {
-                                  setForm(prev => {
-                                    const newCards = [...prev.gridCards];
-                                    newCards[index].youtubeVideos.splice(vidIdx, 1);
-                                    return { ...prev, gridCards: newCards };
-                                  });
-                                }} className="text-red-500 hover:text-red-700"><Trash2 className="w-4 h-4 inline" /></button>
-                              </div>
-                            </div>
-                          ))}
-                          <button type="button" onClick={() => {
-                            setForm(prev => {
-                              const newCards = [...prev.gridCards];
-                              if (!newCards[index].youtubeVideos) newCards[index].youtubeVideos = [];
-                              newCards[index].youtubeVideos.push({ url: '', });
-                              return { ...prev, gridCards: newCards };
-                            });
-                          }} className="text-xs bg-blue-100 text-blue-700 px-3 py-1 rounded font-semibold hover:bg-blue-200">+ Add Video</button>
-                        </div>
-
-                      </div>
-
                     </div>
                   </div>
-                ))}
+                )}
 
-                <button type="button" onClick={() => {
-                  setForm((prev) => {
-                    const nextGridCards = [...(prev.gridCards || [])];
-                    nextGridCards.push({ image: { url: '', key: '' }, chipName: '', title: '', link: '', galleryDate: '', postedBy: '', galleryDescription: '', bentoImages: [], youtubeShorts: [], youtubeVideos: [] });
-                    return { ...prev, gridCards: nextGridCards };
-                  });
-                }} className="bg-blue-600 text-white px-4 py-2 rounded-md font-semibold mt-2">
-                  + Add Gallery Card
-                </button>
-              </div>
+                {!isDesignThree && !isDesignFour && !isDesignFive && !isDesignSix && !isDesignSeven && (
+                  <div className="mb-4">
+                    <label className="block mb-2 font-bold">Accordion Tag</label>
+                    {form.accordionTags.map((row, index) => (
+                      <div key={index} className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-2 mb-2">
+                        <div className="flex flex-col gap-1">
+                          <label className="block mb-2 font-semibold text-sm">Accordion Main Title</label>
+                          <input type="text" value={row.left} onChange={(e) => handleObjectArrayChange('accordionTags', index, 'left', e.target.value)} placeholder="Title Text Line" className="rounded-md p-3 bg-gray-200 font-semibold" />
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <label className="block mb-2 font-semibold text-sm">Accordion Description</label>
+                          <input type="text" value={row.right} onChange={(e) => handleObjectArrayChange('accordionTags', index, 'right', e.target.value)} placeholder="Accordion Tag Line" className="rounded-md p-3 bg-gray-200 font-semibold" />
+                        </div>
+                        <div className="flex items-end gap-2">
+                          <button type="button" onClick={() => addObjectArrayRow('accordionTags', { left: '', right: '' })} className="bg-blue-700 text-white px-3 py-2 rounded">+</button>
+                          {form.accordionTags.length > 1 && (
+                            <button type="button" onClick={() => removeObjectArrayRow('accordionTags', index)} className="bg-red-500 text-white px-3 py-2 rounded"><Trash2 className="w-4 h-4" /></button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
 
+                {/* Side Thumb Blog */}
+                {!isDesignThree && !isDesignFour && !isDesignFive && !isDesignSix && !isDesignSeven && (
+                  <div className="mb-4">
+                    <label className="block mb-2 font-semibold">Side Thumb Blog</label>
+                    <div className="flex flex-col gap-5 mb-2">
+                      <div>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={e => handleCloudinaryImageChange(e, 'sideThumbImage')}
+                          ref={sideThumbImageInputRef}
+                          className="hidden"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => sideThumbImageInputRef.current && sideThumbImageInputRef.current.click()}
+                          className="rounded-md p-3 bg-blue-400 font-semibold text-left"
+                        >
+                          {form.sideThumbImage ? 'Change Thumb Image' : 'Upload Thumb Image'}
+                        </button>
+                        {uploadingSideThumbImage && <div className="text-blue-600 text-sm mt-1">Uploading...</div>}
+                        {form.sideThumbImage && (
+                          <div className="relative w-full h-48 border rounded overflow-hidden mt-2">
+                            <Image height={250} width={150} src={form.sideThumbImage} alt="Side Thumb Preview" className="object-contain w-full h-full" />
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteCloudinaryImage('sideThumbImage')}
+                              className="absolute top-1 right-1 bg-white bg-opacity-80 rounded-full p-1 hover:bg-red-200"
+                              title="Remove image"
+                            >
+                              <Trash2 className="w-4 h-4 text-red-600" />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex flex-col  gap-2">
+                        <h2 className='font-semibold mb-2'>Side Thumb Name</h2>
+                        <input type="text" name="sideThumbName" value={form.sideThumbName} onChange={handleChange} placeholder="Name Here" className="rounded-md p-3 bg-gray-200 text-black font-semibold" />
+                        <h2 className='font-semibold mb-2'>Side Thumb Designation</h2>
+                        <input type="text" name="sideThumbDesignation" value={form.sideThumbDesignation} onChange={handleChange} placeholder="Designation" className="rounded-md p-3 bg-gray-200 text-black font-semibold" />
+                        <h2 className='font-semibold mb-2'>Side Thumb Description</h2>
+                        <input type="text" name="sideThumbDescription" value={form.sideThumbDescription} onChange={handleChange} placeholder="Description" className="rounded-md p-3 bg-gray-200 text-black font-semibold" />
+                      </div>
+                    </div>
+                    <hr className='my-4 border-black' />
+                    <h2 className="text-lg font-bold my-2">Social Media Links</h2>
+                    <div className="grid grid-col-1 gap-2">
+                      <h2 className='font-semibold mb-1'>Facebook URL</h2>
+                      <input type="text" name="facebookUrl" value={form.facebookUrl} onChange={handleChange} placeholder="Facebook Url" className="rounded-md p-3 bg-gray-200 font-semibold" />
+                      <h2 className='font-semibold mb-1'>Youtube URL</h2>
+                      <input type="text" name="youtubeUrl" value={form.youtubeUrl} onChange={handleChange} placeholder="Youtube Url" className="rounded-md p-3 bg-gray-200 font-semibold" />
+                      <h2 className='font-semibold mb-1'>Instagram URL</h2>
+                      <input type="text" name="instaUrl" value={form.instaUrl} onChange={handleChange} placeholder="Insta Url" className="rounded-md p-3 bg-gray-200 font-semibold" />
+                      <h2 className='font-semibold mb-1'>Google URL</h2>
+                      <input type="text" name="googleUrl" value={form.googleUrl} onChange={handleChange} placeholder="Google Url" className="rounded-md p-3 bg-gray-200 font-semibold" />
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+            {isDesignFive && !isDesignSix && !isDesignSeven && (
+              <>
+                {/* Design 5 Content */}
+                <div className="mb-4 mt-8 border-t border-slate-100 pt-6">
+                  <h3 className="text-xl font-bold mb-4">Design 5 Sections</h3>
+
+                  <div className="mb-4">
+                    <label className="block mb-1 font-semibold">Top Chip Text (e.g. Why Choose Us)</label>
+                    <input type="text" name="design5Chip" value={form.design5Chip} onChange={handleChange} placeholder="Type Here" className="w-full rounded-md p-3 bg-gray-200 font-semibold text-black" />
+                  </div>
+
+                  <div className="mb-4">
+                    <label className="block mb-1 font-semibold">Main Heading</label>
+                    <input type="text" name="design5MainHeading" value={form.design5MainHeading} onChange={handleChange} placeholder="Type Here" className="w-full rounded-md p-3 bg-gray-200 font-semibold text-black" />
+                  </div>
+
+                  <div className="mb-4">
+                    <label className="block mb-2 font-bold">Grid Cards</label>
+                    {form.gridCards.map((card, index) => (
+                      <div key={index} className="border p-4 mb-4 rounded-md bg-gray-50 relative">
+                        <button type="button" onClick={() => {
+                          setForm((prev) => {
+                            const nextGridCards = [...(prev.gridCards || [])];
+                            nextGridCards.splice(index, 1);
+                            return { ...prev, gridCards: nextGridCards };
+                          });
+                        }} className="absolute top-2 right-2 bg-red-500 text-white px-2 py-1 rounded">
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+
+                        <div className="mb-2">
+                          <h2 className="block mb-2 font-semibold text-sm">Card Image</h2>
+                          <div className="flex flex-col gap-2">
+                            <div>
+                              <label className="rounded-md p-3 bg-blue-400 font-semibold text-left cursor-pointer inline-block">
+                                {card.image?.url ? 'Change Card Image' : 'Upload Card Image'}
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  onChange={(e) => handleGridCardImageChange(e, index)}
+                                  className="hidden"
+                                />
+                              </label>
+                              {card.image?.url && (
+                                <div className="relative w-full h-48 border rounded overflow-hidden mt-2">
+                                  <Image height={250} width={150} src={card.image.url} alt="Grid Card Preview" className="object-contain w-full h-full" />
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteGridCardImage(index)}
+                                    className="absolute top-1 right-1 bg-white bg-opacity-80 rounded-full p-1 hover:bg-red-200"
+                                    title="Remove image"
+                                  >
+                                    <Trash2 className="w-4 h-4 text-red-600" />
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                          <div>
+                            <label className="block mb-1 font-semibold text-sm">Chip Name</label>
+                            <input type="text" value={card.chipName} onChange={(e) => {
+                              setForm((prev) => {
+                                const nextGridCards = [...(prev.gridCards || [])];
+                                nextGridCards[index].chipName = e.target.value;
+                                return { ...prev, gridCards: nextGridCards };
+                              });
+                            }} placeholder="e.g. Fintech" className="w-full rounded-md p-3 bg-white border border-gray-300 font-semibold text-black" />
+                          </div>
+
+                          <div>
+                            <label className="block mb-1 font-semibold text-sm">Title</label>
+                            <input type="text" value={card.title} onChange={(e) => {
+                              setForm((prev) => {
+                                const nextGridCards = [...(prev.gridCards || [])];
+                                nextGridCards[index].title = e.target.value;
+                                return { ...prev, gridCards: nextGridCards };
+                              });
+                            }} placeholder="e.g. Compliance Consulting" className="w-full rounded-md p-3 bg-white border border-gray-300 font-semibold text-black" />
+                          </div>
+
+                          <div className="md:col-span-2">
+                            <label className="block mb-1 font-semibold text-sm">Link URL (for Explore More)</label>
+                            <input type="text" value={card.link} onChange={(e) => {
+                              setForm((prev) => {
+                                const nextGridCards = [...(prev.gridCards || [])];
+                                nextGridCards[index].link = e.target.value;
+                                return { ...prev, gridCards: nextGridCards };
+                              });
+                            }} placeholder="/some-link" className="w-full rounded-md p-3 bg-white border border-gray-300 font-semibold text-black" />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+
+                    <button type="button" onClick={() => {
+                      setForm((prev) => {
+                        const nextGridCards = [...(prev.gridCards || [])];
+                        nextGridCards.push({ image: { url: '', key: '' }, chipName: '', title: '', link: '' });
+                        return { ...prev, gridCards: nextGridCards };
+                      });
+                    }} className="bg-blue-600 text-white px-4 py-2 rounded-md font-semibold mt-2">
+                      + Add Grid Card
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {isDesignSix && (
+              <>
+                {/* Design 6 Content */}
+                <div className="mb-4 mt-8 border-t border-slate-100 pt-6">
+                  <h3 className="text-xl font-bold mb-4">Design 6 (Team Page) Sections</h3>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <div>
+                      <label className="block mb-1 font-semibold">Top Chip Text</label>
+                      <input type="text" name="design6Chip" value={form.design6Chip} onChange={handleChange} placeholder="e.g. News & Insight" className="w-full rounded-md p-3 bg-gray-200 font-semibold text-black" />
+                    </div>
+                    <div>
+                      <label className="block mb-1 font-semibold">Explore Area Link</label>
+                      <input type="text" name="design6ExploreLink" value={form.design6ExploreLink} onChange={handleChange} placeholder="/explore" className="w-full rounded-md p-3 bg-gray-200 font-semibold text-black" />
+                    </div>
+                  </div>
+
+                  <div className="mb-4">
+                    <label className="block mb-1 font-semibold">Main Heading</label>
+                    <input type="text" name="design6MainHeading" value={form.design6MainHeading} onChange={handleChange} placeholder="The latest news and insights..." className="w-full rounded-md p-3 bg-gray-200 font-semibold text-black" />
+                  </div>
+
+                  <div className="mb-4">
+                    <label className="block mb-1 font-semibold">Sub Heading / Paragraph Text</label>
+                    <textarea name="design6SubHeading" value={form.design6SubHeading} onChange={handleChange} placeholder="Business consulting is a professional service..." className="w-full rounded-md p-3 bg-gray-200 font-semibold text-black h-24"></textarea>
+                  </div>
+
+                  <div className="mb-4">
+                    <label className="block mb-1 font-semibold">Author Attribution</label>
+                    <input type="text" name="design6Author" value={form.design6Author} onChange={handleChange} placeholder="Mr. Daniel Scoot, Mr. Daniel Scoot" className="w-full rounded-md p-3 bg-gray-200 font-semibold text-black" />
+                  </div>
+
+                  <hr className="my-6 border-slate-300" />
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <div>
+                      <label className="block mb-1 font-semibold">Mid Section Heading</label>
+                      <input type="text" name="design6MidHeading" value={form.design6MidHeading} onChange={handleChange} placeholder="Excellent Service Provided by..." className="w-full rounded-md p-3 bg-gray-200 font-semibold text-black" />
+                    </div>
+                    <div>
+                      <label className="block mb-1 font-semibold">Explore People Link</label>
+                      <input type="text" name="design6MidLink" value={form.design6MidLink} onChange={handleChange} placeholder="/people" className="w-full rounded-md p-3 bg-gray-200 font-semibold text-black" />
+                    </div>
+                  </div>
+
+                  <div className="mb-4">
+                    <label className="block mb-2 font-bold">Team Cards</label>
+                    {form.teamCards.map((card, index) => (
+                      <div key={index} className="border p-4 mb-4 rounded-md bg-gray-50 relative">
+                        <button type="button" onClick={() => {
+                          setForm((prev) => {
+                            const nextCards = [...(prev.teamCards || [])];
+                            nextCards.splice(index, 1);
+                            return { ...prev, teamCards: nextCards };
+                          });
+                        }} className="absolute top-2 right-2 bg-red-500 text-white px-2 py-1 rounded">
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+
+                        <div className="mb-2">
+                          <h2 className="block mb-2 font-semibold text-sm">Card Image</h2>
+                          <div className="flex flex-col gap-2">
+                            <div>
+                              <label className="rounded-md p-3 bg-blue-400 font-semibold text-left cursor-pointer inline-block text-black">
+                                {card.image?.url ? 'Change Image' : 'Upload Image'}
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  onChange={(e) => handleTeamCardImageChange(e, index)}
+                                  className="hidden"
+                                />
+                              </label>
+                              {card.image?.url && (
+                                <div className="relative w-full h-48 border rounded overflow-hidden mt-2 bg-white">
+                                  <Image width={150} height={100} src={card.image.url} alt="Team Preview" className="object-contain w-full h-full" />
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteTeamCardImage(index)}
+                                    className="absolute top-1 right-1 bg-white bg-opacity-80 rounded-full p-1 hover:bg-red-200"
+                                    title="Remove image"
+                                  >
+                                    <Trash2 className="w-4 h-4 text-red-600" />
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block mb-1 font-semibold text-sm">Name</label>
+                            <input type="text" value={card.name} onChange={(e) => {
+                              setForm((prev) => {
+                                const nextCards = [...(prev.teamCards || [])];
+                                nextCards[index].name = e.target.value;
+                                return { ...prev, teamCards: nextCards };
+                              });
+                            }} placeholder="Mr. Anthony Brian" className="w-full rounded-md p-3 bg-white border border-gray-300 font-semibold text-black" />
+                          </div>
+
+                          <div>
+                            <label className="block mb-1 font-semibold text-sm">Designation</label>
+                            <input type="text" value={card.designation} onChange={(e) => {
+                              setForm((prev) => {
+                                const nextCards = [...(prev.teamCards || [])];
+                                nextCards[index].designation = e.target.value;
+                                return { ...prev, teamCards: nextCards };
+                              });
+                            }} placeholder="Senior Consultant" className="w-full rounded-md p-3 bg-white border border-gray-300 font-semibold text-black" />
+                          </div>
+
+                          <div>
+                            <label className="block mb-1 font-semibold text-sm">Phone Number</label>
+                            <input type="text" value={card.phone} onChange={(e) => {
+                              setForm((prev) => {
+                                const nextCards = [...(prev.teamCards || [])];
+                                nextCards[index].phone = e.target.value;
+                                return { ...prev, teamCards: nextCards };
+                              });
+                            }} placeholder="+91 656 786 53" className="w-full rounded-md p-3 bg-white border border-gray-300 font-semibold text-black" />
+                          </div>
+
+                          <div>
+                            <label className="block mb-1 font-semibold text-sm">Facebook URL Link</label>
+                            <input type="text" value={card.facebook} onChange={(e) => {
+                              setForm((prev) => {
+                                const nextCards = [...(prev.teamCards || [])];
+                                nextCards[index].facebook = e.target.value;
+                                return { ...prev, teamCards: nextCards };
+                              });
+                            }} placeholder="https://facebook.com/..." className="w-full rounded-md p-3 bg-white border border-gray-300 font-semibold text-black" />
+                          </div>
+                          <div>
+                            <label className="block mb-1 font-semibold text-sm">Instagram URL Link</label>
+                            <input type="text" value={card.instagram} onChange={(e) => {
+                              setForm((prev) => {
+                                const nextCards = [...(prev.teamCards || [])];
+                                nextCards[index].instagram = e.target.value;
+                                return { ...prev, teamCards: nextCards };
+                              });
+                            }} placeholder="https://instagram.com/..." className="w-full rounded-md p-3 bg-white border border-gray-300 font-semibold text-black" />
+                          </div>
+                          <div>
+                            <label className="block mb-1 font-semibold text-sm">Youtube URL Link</label>
+                            <input type="text" value={card.youtube} onChange={(e) => {
+                              setForm((prev) => {
+                                const nextCards = [...(prev.teamCards || [])];
+                                nextCards[index].youtube = e.target.value;
+                                return { ...prev, teamCards: nextCards };
+                              });
+                            }} placeholder="https://youtube.com/..." className="w-full rounded-md p-3 bg-white border border-gray-300 font-semibold text-black" />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+
+                    <button type="button" onClick={() => {
+                      setForm((prev) => {
+                        const nextCards = [...(prev.teamCards || [])];
+                        nextCards.push({ image: { url: '', key: '' }, name: '', designation: '', phone: '', facebook: '', instagram: '', youtube: '' });
+                        return { ...prev, teamCards: nextCards };
+                      });
+                    }} className="bg-blue-600 text-white px-4 py-2 rounded-md font-semibold mt-2">
+                      + Add Team Card
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {isDesignSeven && (
+              <>
+                {/* Design 7 Content */}
+                <div className="mb-4 mt-4 border-t border-slate-100 pt-6">
+                  <h3 className="text-xl font-bold mb-4">Design 7 Sections</h3>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <div>
+                      <label className="block mb-1 font-semibold">Top Chip Text</label>
+                      <input type="text" name="design7Chip" value={form.design7Chip} onChange={handleChange} placeholder="News & Insight" className="w-full rounded-md p-3 bg-gray-200 font-semibold text-black" />
+                    </div>
+                    <div>
+                      <label className="block mb-1 font-semibold">Explore Link URL</label>
+                      <input type="text" name="design7ExploreLink" value={form.design7ExploreLink} onChange={handleChange} placeholder="/explore" className="w-full rounded-md p-3 bg-gray-200 font-semibold text-black" />
+                    </div>
+                  </div>
+
+                  <div className="mb-4">
+                    <label className="block mb-1 font-semibold">Main Heading</label>
+                    <input type="text" name="design7MainHeading" value={form.design7MainHeading} onChange={handleChange} placeholder="The latest news and insights..." className="w-full rounded-md p-3 bg-gray-200 font-semibold text-black" />
+                  </div>
+
+                  {/* Gallery Grid Cards for Design 7 */}
+                  <div className="mb-4 border border-slate-200 rounded-xl p-5 bg-slate-50">
+                    <h4 className="font-bold text-lg mb-4">Gallery Image Cards</h4>
+                    {form.gridCards.map((card, index) => (
+                      <div key={index} className="mb-4 border border-slate-200 rounded p-4 bg-white relative">
+                        <button type="button" onClick={() => {
+                          setForm((prev) => {
+                            const nextGridCards = [...(prev.gridCards || [])];
+                            nextGridCards.splice(index, 1);
+                            return { ...prev, gridCards: nextGridCards };
+                          });
+                        }} className="absolute top-2 right-2 bg-red-500 text-white px-2 py-1 rounded">
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+
+                        <div className="mb-2">
+                          <h2 className="block mb-2 font-semibold text-sm">Card Image</h2>
+                          <div className="flex flex-col gap-2">
+                            <input id={`grid-card-image-${index}`} type="file" accept="image/*" onChange={(e) => handleGridCardImageChange(e, index)} className="hidden" />
+                            <label htmlFor={`grid-card-image-${index}`} className="inline-block bg-yellow-400 px-4 py-2 rounded cursor-pointer w-max font-semibold text-sm">
+                              Upload Image
+                            </label>
+                            {card.image?.url && (
+                              <div className="relative w-32 h-32 border rounded overflow-hidden mt-2">
+                                <Image height={250} width={150} src={card.image.url} alt="Grid Card" className="object-cover w-full h-full" />
+                                <button type="button" onClick={() => handleDeleteGridCardImage(index)} className="absolute top-1 right-1 bg-white bg-opacity-80 rounded-full p-1 hover:bg-red-200" title="Remove image">
+                                  <Trash2 className="w-4 h-4 text-red-600" />
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                          <div>
+                            <label className="block mb-1 font-semibold text-sm">Hover Chip Name</label>
+                            <input type="text" value={card.chipName} onChange={(e) => {
+                              setForm((prev) => {
+                                const nextGridCards = [...(prev.gridCards || [])];
+                                nextGridCards[index].chipName = e.target.value;
+                                return { ...prev, gridCards: nextGridCards };
+                              });
+                            }} placeholder="e.g. Fintech" className="w-full rounded-md p-3 bg-white border border-gray-300 font-semibold text-black" />
+                          </div>
+
+                          <div>
+                            <label className="block mb-1 font-semibold text-sm">Hover Title (Link Text)</label>
+                            <input type="text" value={card.title} onChange={(e) => {
+                              setForm((prev) => {
+                                const nextGridCards = [...(prev.gridCards || [])];
+                                nextGridCards[index].title = e.target.value;
+                                return { ...prev, gridCards: nextGridCards };
+                              });
+                            }} placeholder="e.g. Compliance Consulting" className="w-full rounded-md p-3 bg-white border border-gray-300 font-semibold text-black" />
+                          </div>
+
+                          {/* Expandable Gallery Detail Section */}
+                          <div className="md:col-span-2 mt-4 border border-blue-200 rounded-lg p-4 bg-blue-50">
+                            <h3 className="font-bold text-md mb-3 text-blue-800">Gallery Detail Page Content</h3>
+                            <p className="text-xs text-blue-600 mb-4">Filling this out will generate a detail page at <strong>/gallery/{card.gallerySlug || "<auto-generated>"}</strong></p>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                              <div>
+                                <label className="block mb-1 font-semibold text-sm">Date</label>
+                                <input type="date" value={card.galleryDate || ''} onChange={(e) => {
+                                  setForm((prev) => {
+                                    const nextGridCards = [...(prev.gridCards || [])];
+                                    nextGridCards[index].galleryDate = e.target.value;
+                                    return { ...prev, gridCards: nextGridCards };
+                                  });
+                                }} className="w-full rounded-md p-3 bg-white border border-gray-300 font-semibold" />
+                              </div>
+                              <div>
+                                <label className="block mb-1 font-semibold text-sm">Posted By</label>
+                                <input type="text" value={card.postedBy || ''} onChange={(e) => {
+                                  setForm((prev) => {
+                                    const nextGridCards = [...(prev.gridCards || [])];
+                                    nextGridCards[index].postedBy = e.target.value;
+                                    return { ...prev, gridCards: nextGridCards };
+                                  });
+                                }} placeholder="Author Name" className="w-full rounded-md p-3 bg-white border border-gray-300 font-semibold" />
+                              </div>
+                              <div className="md:col-span-2">
+                                <label className="block mb-1 font-semibold text-sm">Description Paragraph</label>
+                                <textarea value={card.galleryDescription || ''} onChange={(e) => {
+                                  setForm((prev) => {
+                                    const nextGridCards = [...(prev.gridCards || [])];
+                                    nextGridCards[index].galleryDescription = e.target.value;
+                                    return { ...prev, gridCards: nextGridCards };
+                                  });
+                                }} rows="3" className="w-full rounded-md p-3 bg-white border border-gray-300 font-semibold"></textarea>
+                              </div>
+                            </div>
+
+                            <div className="mb-6">
+                              <label className="block mb-2 font-bold text-sm text-blue-900 border-b border-blue-200 pb-1">Bento Gallery Images</label>
+                              <div className="flex flex-wrap gap-2 mb-2">
+                                {(card.bentoImages || []).map((img, imgIdx) => (
+                                  <div key={imgIdx} className="relative w-24 h-24 border rounded overflow-hidden">
+                                    <Image width={150} height={100} src={img.url} alt="Bento" className="object-cover w-full h-full" />
+                                    <button type="button" onClick={() => handleDeleteBentoImage(index, imgIdx)} className="absolute top-1 right-1 bg-white bg-opacity-80 rounded-full p-1 hover:bg-red-200" title="Remove image">
+                                      <Trash2 className="w-3 h-3 text-red-600" />
+                                    </button>
+                                  </div>
+                                ))}
+                                <div className="w-24 h-24 border-2 border-dashed border-blue-300 rounded flex flex-col items-center justify-center bg-white cursor-pointer hover:bg-blue-50 relative">
+                                  <input type="file" multiple accept="image/*" onChange={(e) => handleBentoImageChange(e, index)} className="absolute inset-0 opacity-0 cursor-pointer" />
+                                  <span className="text-xl text-blue-400">+</span>
+                                  <span className="text-xs text-blue-500 font-semibold mt-1">Upload</span>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="mb-6">
+                              <label className="block mb-2 font-bold text-sm text-blue-900 border-b border-blue-200 pb-1">YouTube Shorts</label>
+                              {(card.youtubeShorts || []).map((short, shortIdx) => (
+                                <div key={shortIdx} className="flex gap-2 mb-2 items-center bg-white p-2 rounded border border-gray-200 w-full">
+                                  <div className="w-full">
+                                    <input type="text" value={short.url} onChange={(e) => {
+                                      setForm(prev => {
+                                        const newCards = [...prev.gridCards];
+                                        newCards[index].youtubeShorts[shortIdx].url = e.target.value;
+                                        return { ...prev, gridCards: newCards };
+                                      });
+                                    }} placeholder="YouTube URL" className="w-full rounded p-2 text-sm border border-gray-300" />
+                                  </div>
+                                  <div className="md:col-span-1 text-center">
+                                    <button type="button" onClick={() => {
+                                      setForm(prev => {
+                                        const newCards = [...prev.gridCards];
+                                        newCards[index].youtubeShorts.splice(shortIdx, 1);
+                                        return { ...prev, gridCards: newCards };
+                                      });
+                                    }} className="text-red-500 hover:text-red-700"><Trash2 className="w-4 h-4 inline" /></button>
+                                  </div>
+                                </div>
+                              ))}
+                              <button type="button" onClick={() => {
+                                setForm(prev => {
+                                  const newCards = [...prev.gridCards];
+                                  if (!newCards[index].youtubeShorts) newCards[index].youtubeShorts = [];
+                                  newCards[index].youtubeShorts.push({ url: '' });
+                                  return { ...prev, gridCards: newCards };
+                                });
+                              }} className="text-xs bg-blue-100 text-blue-700 px-3 py-1 rounded font-semibold hover:bg-blue-200">+ Add Short</button>
+                            </div>
+
+                            <div>
+                              <label className="block mb-2 font-bold text-sm text-blue-900 border-b border-blue-200 pb-1">YouTube Highlight Videos</label>
+                              {(card.youtubeVideos || []).map((vid, vidIdx) => (
+                                <div key={vidIdx} className="flex gap-2 mb-2 items-center bg-white p-2 rounded border border-gray-200 w-full">
+                                  <div className="w-full">
+                                    <input type="text" value={vid.url} onChange={(e) => {
+                                      setForm(prev => {
+                                        const newCards = [...prev.gridCards];
+                                        newCards[index].youtubeVideos[vidIdx].url = e.target.value;
+                                        return { ...prev, gridCards: newCards };
+                                      });
+                                    }} placeholder="YouTube URL" className="w-full rounded p-2 text-sm border border-gray-300" />
+                                  </div>
+                                  <div className="text-center">
+                                    <button type="button" onClick={() => {
+                                      setForm(prev => {
+                                        const newCards = [...prev.gridCards];
+                                        newCards[index].youtubeVideos.splice(vidIdx, 1);
+                                        return { ...prev, gridCards: newCards };
+                                      });
+                                    }} className="text-red-500 hover:text-red-700"><Trash2 className="w-4 h-4 inline" /></button>
+                                  </div>
+                                </div>
+                              ))}
+                              <button type="button" onClick={() => {
+                                setForm(prev => {
+                                  const newCards = [...prev.gridCards];
+                                  if (!newCards[index].youtubeVideos) newCards[index].youtubeVideos = [];
+                                  newCards[index].youtubeVideos.push({ url: '', });
+                                  return { ...prev, gridCards: newCards };
+                                });
+                              }} className="text-xs bg-blue-100 text-blue-700 px-3 py-1 rounded font-semibold hover:bg-blue-200">+ Add Video</button>
+                            </div>
+
+                          </div>
+
+                        </div>
+                      </div>
+                    ))}
+
+                    <button type="button" onClick={() => {
+                      setForm((prev) => {
+                        const nextGridCards = [...(prev.gridCards || [])];
+                        nextGridCards.push({ image: { url: '', key: '' }, chipName: '', title: '', link: '', galleryDate: '', postedBy: '', galleryDescription: '', bentoImages: [], youtubeShorts: [], youtubeVideos: [] });
+                        return { ...prev, gridCards: nextGridCards };
+                      });
+                    }} className="bg-blue-600 text-white px-4 py-2 rounded-md font-semibold mt-2">
+                      + Add Gallery Card
+                    </button>
+                  </div>
+
+                </div>
+              </>
+            )}
+
+            {/* Data Save Button */}
+            <div className="pt-6 mt-8 border-t border-slate-100 flex justify-end">
+              <Button type="submit" className="h-11 px-8 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-medium transition-all shadow-sm">
+                Save Changes
+              </Button>
             </div>
-          </>
-        )}
-
-        {/* Data Save Button */}
-        <div className="pt-6 mt-8 border-t border-slate-100 flex justify-end">
-          <Button type="submit" className="h-11 px-8 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-medium transition-all shadow-sm">
-            Save Changes
-          </Button>
-        </div>
           </form>
         </CardContent>
       </Card>
