@@ -1,5 +1,6 @@
 import { withAuth } from "@/utils/auth";
 import StockCategory from "@/models/stock/StockCategory";
+import StockProduct from "@/models/stock/StockProduct";
 import { sendSuccess } from "@/utils/apiResponse";
 import { sendError } from "@/utils/errorHandler";
 import { logger } from "@/utils/logger";
@@ -10,7 +11,18 @@ export const GET = withAuth(async (request) => {
     const categories = await StockCategory.find({ restaurant: request.restaurant })
       .sort({ createdAt: -1 })
       .lean();
-    return sendSuccess(categories, "Stock categories retrieved successfully");
+      
+    const categoriesWithCount = await Promise.all(
+      categories.map(async (cat) => {
+        const productCount = await StockProduct.countDocuments({ 
+          category: cat._id, 
+          restaurant: request.restaurant 
+        });
+        return { ...cat, productCount };
+      })
+    );
+
+    return sendSuccess(categoriesWithCount, "Stock categories retrieved successfully");
   } catch (error) {
     logger.error("Failed to list stock categories", error);
     return sendError(error, "Failed to retrieve stock categories", 500);

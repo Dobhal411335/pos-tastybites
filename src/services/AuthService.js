@@ -54,7 +54,7 @@ export class AuthService {
   }
 
   async getCurrentUser(userId, role) {
-    if (role === 'ADMIN') {
+    if (role === 'ADMIN' || role === 'Super Admin' || role === 'Admin') {
       return await this.authRepo.findAdminById(userId);
     }
     return await this.authRepo.findEmployeeById(userId);

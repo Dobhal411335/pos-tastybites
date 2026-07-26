@@ -12,6 +12,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { toast, Toaster } from "sonner";
 import { PALETTE } from "@/utils/paletteeColor";
 import DeleteDialog from "@/components/common/DeleteDialog";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export default function StockCategoryPage() {
   const [categories, setCategories] = useState([]);
@@ -218,22 +219,24 @@ export default function StockCategoryPage() {
                 <TableHeader className="bg-zinc-50">
                   <TableRow>
                     <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6">Menu Head</TableHead>
+                    <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6 text-center">Products</TableHead>
                     <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6 text-center">Status</TableHead>
                     <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6 text-center">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {loading ? (
-                    <TableRow>
-                      <TableCell colSpan={3} className="h-24 text-center">
-                        <div className="flex items-center justify-center">
-                          <Loader2 className="h-6 w-6 animate-spin text-zinc-400" />
-                        </div>
-                      </TableCell>
-                    </TableRow>
+                    Array.from({ length: 5 }).map((_, idx) => (
+                      <TableRow key={idx}>
+                        <TableCell className="px-6 py-4"><Skeleton className="h-4 w-32.5" /></TableCell>
+                        <TableCell className="px-6 py-4 text-center"><Skeleton className="h-6 w-15 rounded-full mx-auto" /></TableCell>
+                        <TableCell className="px-6 py-4 text-center"><Skeleton className="h-6 w-17.5 rounded-full mx-auto" /></TableCell>
+                        <TableCell className="px-6 py-4 text-right"><Skeleton className="h-8 w-8 ml-auto" /></TableCell>
+                      </TableRow>
+                    ))
                   ) : categories.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={3} className="h-24 text-center text-zinc-500 text-[14px]">No categories found.</TableCell>
+                      <TableCell colSpan={4} className="h-24 text-center text-zinc-500 text-[14px]">No categories found.</TableCell>
                     </TableRow>
                   ) : (
                     categories.map((c) => (
@@ -243,6 +246,11 @@ export default function StockCategoryPage() {
                             <Tag className="w-4 h-4 text-zinc-400" />
                             <span className="font-semibold text-[15px] text-zinc-900">{c.name}</span>
                           </div>
+                        </TableCell>
+                        <TableCell className="px-6 text-center">
+                          <Badge variant="outline" className="text-zinc-600 bg-zinc-100 font-semibold text-[13px]">
+                            {c.productCount || 0} Products
+                          </Badge>
                         </TableCell>
                         <TableCell className="px-6 text-center">
                           {c.status ? (

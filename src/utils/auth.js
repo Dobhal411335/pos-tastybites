@@ -31,8 +31,15 @@ export const withAuth = (handler, allowedRoles = []) => {
       }
 
       // Role check
-      if (allowedRoles.length > 0 && !allowedRoles.includes(payload.role)) {
-        return sendError(new Error('Forbidden'), 'You do not have permission to access this resource', 403);
+      if (allowedRoles.length > 0) {
+        let expandedRoles = [...allowedRoles];
+        // Automatically allow new Admin roles if legacy ADMIN is required
+        if (expandedRoles.includes('ADMIN')) {
+          expandedRoles.push('Super Admin', 'Admin');
+        }
+        if (!expandedRoles.includes(payload.role)) {
+          return sendError(new Error('Forbidden'), 'You do not have permission to access this resource', 403);
+        }
       }
 
       // Attach context to request object (simulated via custom properties on NextRequest)

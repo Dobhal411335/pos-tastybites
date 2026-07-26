@@ -349,7 +349,7 @@ export default function AdminDashboardPage() {
               <Button
                 variant="ghost"
                 onClick={() => setActiveCategory(null)}
-                className="mb-6 pl-0 text-slate-500 hover:text-slate-900 hover:bg-transparent flex items-center gap-2 font-bold"
+                className="mb-6 px-2 text-white hover:underline border bg-orange-500 hover:bg-orange-600 flex items-center gap-2 font-bold"
               >
                 <ChevronLeft className="w-5 h-5" /> Back to Modules
               </Button>

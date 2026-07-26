@@ -12,6 +12,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { toast, Toaster } from "sonner";
 import { PALETTE } from "@/utils/paletteeColor";
 import { useRouter } from "next/navigation";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export default function StockLevelPage() {
   const router = useRouter();
@@ -125,11 +126,17 @@ export default function StockLevelPage() {
                 </TableHeader>
                 <TableBody>
                   {loading ? (
-                    <TableRow>
-                      <TableCell colSpan={7} className="h-24 text-center">
-                        <Loader2 className="h-6 w-6 animate-spin mx-auto text-zinc-400" />
-                      </TableCell>
-                    </TableRow>
+                    Array.from({ length: 5 }).map((_, idx) => (
+                      <TableRow key={idx}>
+                        <TableCell className="px-6 py-4"><Skeleton className="h-5 w-[150px]" /></TableCell>
+                        <TableCell className="px-6 py-4"><Skeleton className="h-4 w-[60px] mx-auto" /></TableCell>
+                        <TableCell className="px-6 py-4"><Skeleton className="h-8 w-[80px] mx-auto rounded-md" /></TableCell>
+                        <TableCell className="px-6 py-4"><Skeleton className="h-4 w-[50px] mx-auto" /></TableCell>
+                        <TableCell className="px-6 py-4"><Skeleton className="h-8 w-[80px] mx-auto" /></TableCell>
+                        <TableCell className="px-6 py-4"><Skeleton className="h-6 w-[60px] mx-auto rounded-full" /></TableCell>
+                        <TableCell className="px-6 py-4 text-center"><Skeleton className="h-8 w-8 ml-auto" /></TableCell>
+                      </TableRow>
+                    ))
                   ) : stockLevels.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={7} className="h-24 text-center text-zinc-500 text-[14px]">No inventory records found.</TableCell>

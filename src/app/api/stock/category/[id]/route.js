@@ -1,5 +1,6 @@
 import { withAuth } from "@/utils/auth";
 import StockCategory from "@/models/stock/StockCategory";
+import StockProduct from "@/models/stock/StockProduct";
 import { sendSuccess } from "@/utils/apiResponse";
 import { sendError } from "@/utils/errorHandler";
 import { logger } from "@/utils/logger";
@@ -43,6 +44,15 @@ export const DELETE = withAuth(async (request, { params }) => {
 
     if (!id) {
       return sendError(new Error("Missing ID"), "Category ID is required", 400);
+    }
+
+    const productCount = await StockProduct.countDocuments({ category: id, restaurant: request.restaurant });
+    if (productCount > 0) {
+      return sendError(
+        new Error("Category in use"), 
+        `This category has ${productCount} product(s). First delete the products then delete the category.`, 
+        400
+      );
     }
 
     const category = await StockCategory.findOneAndDelete({ _id: id, restaurant: request.restaurant });

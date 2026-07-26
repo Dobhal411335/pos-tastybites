@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { toast, Toaster } from "sonner";
 import { PALETTE } from "@/utils/paletteeColor";
 import DeleteDialog from "@/components/common/DeleteDialog";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export default function StockProductsPage() {
   const [products, setProducts] = useState([]);
@@ -551,11 +552,16 @@ export default function StockProductsPage() {
                 </TableHeader>
                 <TableBody>
                   {loading ? (
-                    <TableRow>
-                      <TableCell colSpan={6} className="h-24 text-center">
-                        <Loader2 className="h-6 w-6 animate-spin mx-auto text-zinc-400" />
-                      </TableCell>
-                    </TableRow>
+                    Array.from({ length: 5 }).map((_, idx) => (
+                      <TableRow key={idx}>
+                        <TableCell className="px-6 py-4"><Skeleton className="h-10 w-full rounded-md" /></TableCell>
+                        <TableCell className="px-6 py-4"><Skeleton className="h-6 w-[80px] rounded-full" /></TableCell>
+                        <TableCell className="px-6 py-4"><Skeleton className="h-8 w-[100px]" /></TableCell>
+                        <TableCell className="px-6 py-4"><Skeleton className="h-10 w-[80px]" /></TableCell>
+                        <TableCell className="px-6 py-4 text-center"><Skeleton className="h-8 w-[60px] mx-auto rounded-md" /></TableCell>
+                        <TableCell className="px-6 py-4 text-center"><Skeleton className="h-8 w-8 mx-auto" /></TableCell>
+                      </TableRow>
+                    ))
                   ) : products.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={6} className="h-24 text-center text-zinc-500 text-[14px]">

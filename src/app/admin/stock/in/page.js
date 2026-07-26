@@ -13,6 +13,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import DeleteDialog from "@/components/common/DeleteDialog";
 import { DatePicker } from "@/components/ui/date-picker";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export default function StockInPage() {
   const [categories, setCategories] = useState([]);
@@ -492,11 +493,15 @@ export default function StockInPage() {
                 </TableHeader>
                 <TableBody>
                   {loading ? (
-                    <TableRow>
-                      <TableCell colSpan={5} className="h-24 text-center">
-                        <Loader2 className="h-6 w-6 animate-spin mx-auto text-zinc-400" />
-                      </TableCell>
-                    </TableRow>
+                    Array.from({ length: 5 }).map((_, idx) => (
+                      <TableRow key={idx}>
+                        <TableCell className="px-6 py-4"><Skeleton className="h-10 w-full rounded-md" /></TableCell>
+                        <TableCell className="px-6 py-4"><Skeleton className="h-5 w-[100px]" /></TableCell>
+                        <TableCell className="px-6 py-4"><Skeleton className="h-8 w-[120px]" /></TableCell>
+                        <TableCell className="px-6 py-4"><Skeleton className="h-8 w-[100px]" /></TableCell>
+                        <TableCell className="px-6 py-4 text-center"><Skeleton className="h-8 w-8 ml-auto" /></TableCell>
+                      </TableRow>
+                    ))
                   ) : stockIns.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={5} className="h-24 text-center text-zinc-500 text-[14px]">No records found.</TableCell>
