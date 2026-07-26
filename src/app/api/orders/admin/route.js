@@ -1,30 +1,20 @@
 import { withAuth } from "@/utils/auth";
 import Order from "@/models/Order";
-import Employee from "@/models/employee/Employee";
 import Giftcard from "@/models/menu/Giftcard";
 import { sendSuccess } from "@/utils/apiResponse";
 import { sendError } from "@/utils/errorHandler";
 import { logger } from "@/utils/logger";
 
-// POST - Create a new staff order
+// POST - Create a new admin order
 export const POST = withAuth(async (request) => {
   try {
     const data = await request.json();
-    const { items, subTotal, taxTotal, discountTotal, discountCode, giftcardCode, giftcardUsedAmount, totalAmount, specialNote, staffId, orderNumber } = data;
+    const { items, subTotal, taxTotal, discountTotal, discountCode, giftcardCode, giftcardUsedAmount, totalAmount, specialNote, orderNumber } = data;
 
     if (!items || items.length === 0) {
       return sendError(new Error("Empty cart"), "Cart cannot be empty", 400);
     }
     
-    if (!staffId) {
-      return sendError(new Error("Staff ID missing"), "Please select a staff member", 400);
-    }
-
-    const staffMember = await Employee.findById(staffId);
-    if (!staffMember) {
-      return sendError(new Error("Invalid Staff"), "Selected staff member not found", 404);
-    }
-
     const newOrder = await Order.create({
       restaurantId: request.restaurant,
       orderNumber,
@@ -45,9 +35,9 @@ export const POST = withAuth(async (request) => {
       giftcardUsedAmount: Number(Number(giftcardUsedAmount).toFixed(2)) || 0,
       totalAmount: Number(Number(totalAmount).toFixed(2)) || 0,
       specialNote: specialNote,
-      guestName: `${staffMember.firstName} ${staffMember.lastName} (Staff)`,
+      guestName: "Admin (Direct)",
       status: "PENDING",
-      source: "STAFF",
+      source: "ADMIN",
       processedBy: request.user.id
     });
 
@@ -66,16 +56,16 @@ export const POST = withAuth(async (request) => {
       }
     }
 
-    logger.info(`Staff Order created: ${orderNumber} for ${staffMember.firstName}`);
-    return sendSuccess(newOrder, "Staff order placed successfully", 201);
+    logger.info(`Admin Order created: ${orderNumber}`);
+    return sendSuccess(newOrder, "Admin order placed successfully", 201);
 
   } catch (error) {
-    logger.error("Failed to place staff order", error);
+    logger.error("Failed to place admin order", error);
     return sendError(error, "Failed to place order", 500);
   }
 }, ["ADMIN", "MANAGER"]);
 
-// GET - List today's staff orders
+// GET - List today's admin orders
 export const GET = withAuth(async (request) => {
   try {
     const startOfToday = new Date();
@@ -83,13 +73,13 @@ export const GET = withAuth(async (request) => {
 
     const orders = await Order.find({
       restaurantId: request.restaurant,
-      source: "STAFF",
+      source: "ADMIN",
       createdAt: { $gte: startOfToday }
     }).sort({ createdAt: -1 });
 
-    return sendSuccess(orders, "Staff orders fetched successfully");
+    return sendSuccess(orders, "Admin orders fetched successfully");
   } catch (error) {
-    logger.error("Failed to fetch staff orders", error);
+    logger.error("Failed to fetch admin orders", error);
     return sendError(error, "Failed to fetch orders", 500);
   }
 }, ["ADMIN", "MANAGER"]);

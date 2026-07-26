@@ -7,16 +7,18 @@ import { logger } from "@/utils/logger";
 // POST - Apply a giftcard
 export const POST = withAuth(async (request) => {
   try {
-    const { name } = await request.json();
-    console.log(name)
+    const { code } = await request.json();
 
-    if (!name) {
+    if (!code) {
       return sendError(new Error("Code missing"), "Please provide a giftcard code", 400);
     }
 
     const giftcard = await Giftcard.findOne({
       restaurant: request.restaurant,
-      name: name.trim(),
+      $or: [
+        { code: code.trim() },
+        { name: code.trim() }
+      ]
     });
 
     if (!giftcard) {

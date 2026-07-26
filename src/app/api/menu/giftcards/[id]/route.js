@@ -4,6 +4,16 @@ import { sendSuccess } from "@/utils/apiResponse";
 import { sendError } from "@/utils/errorHandler";
 import { logger } from "@/utils/logger";
 
+const generateCode = () => {
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  let code = "GIFT-";
+  for (let i = 0; i < 8; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
+    if (i === 3) code += "-";
+  }
+  return code;
+};
+
 // GET - Retrieve all giftcards in a batch
 export const GET = withAuth(async (request, { params }) => {
   try {
@@ -46,6 +56,45 @@ export const PUT = withAuth(async (request, { params }) => {
 
     if (updatedGiftcard.matchedCount === 0) {
       return sendError(new Error("Not Found"), "Giftcard batch not found", 404);
+    }
+
+    // Handle generating new cards or deleting extra ones based on requested total count
+    if (data.count && parseInt(data.count) > 0) {
+      const requestedCount = parseInt(data.count);
+      const currentCards = await Giftcard.find({ batchId: id, restaurant: request.restaurant }).sort({ createdAt: -1 }); // Sort newest first
+      const currentCount = currentCards.length;
+      
+      if (requestedCount > currentCount) {
+        const numToGenerate = requestedCount - currentCount;
+        const baseCard = currentCards[0] || {};
+        const giftcardsToInsert = [];
+        
+        for (let i = 0; i < numToGenerate; i++) {
+          giftcardsToInsert.push({
+            restaurant: request.restaurant,
+            batchId: id,
+            code: generateCode(),
+            name: updateData.name || baseCard.name,
+            discountType: updateData.discountType || baseCard.discountType,
+            value: updateData.value || baseCard.value,
+            validFrom: updateData.validFrom !== undefined ? updateData.validFrom : baseCard.validFrom,
+            validUntil: updateData.validUntil !== undefined ? updateData.validUntil : baseCard.validUntil,
+            status: updateData.status || baseCard.status,
+            createdBy: request.user.id
+          });
+        }
+        await Giftcard.insertMany(giftcardsToInsert);
+        logger.info(`Generated ${numToGenerate} additional giftcards for batch ${id}`);
+        
+      } else if (requestedCount < currentCount) {
+        const numToDelete = currentCount - requestedCount;
+        // Delete the newest ones (since they are sorted by createdAt descending)
+        // Note: In a robust system, we should ideally verify they haven't been used yet.
+        const idsToDelete = currentCards.slice(0, numToDelete).map(c => c._id);
+        
+        await Giftcard.deleteMany({ _id: { $in: idsToDelete } });
+        logger.info(`Deleted ${numToDelete} excess giftcards from batch ${id}`);
+      }
     }
 
     logger.info(`Giftcard batch updated: ${id}`);

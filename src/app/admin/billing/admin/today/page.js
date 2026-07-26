@@ -14,11 +14,27 @@ import { toast } from "sonner";
 import { PALETTE } from "@/utils/paletteeColor";
 
 export default function TodayOrderListPage() {
-  const [orders, setOrders] = useState([
-    { id: 1, orderNumber: "ORD-001", amount: 45.20, status: "pending" },
-    { id: 2, orderNumber: "ORD-002", amount: 12.50, status: "pending" },
-    { id: 3, orderNumber: "ORD-003", amount: 104.99, status: "confirmed" },
-  ]);
+  const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchOrders = async () => {
+    try {
+      setLoading(true);
+      const res = await fetch("/api/orders/admin");
+      const json = await res.json();
+      if (json.success) {
+        setOrders(json.data);
+      }
+    } catch (e) {
+      toast.error("Failed to load today's orders");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  React.useEffect(() => {
+    fetchOrders();
+  }, []);
 
   const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState(null);
@@ -34,24 +50,64 @@ export default function TodayOrderListPage() {
     setTableNo("");
   };
 
-  const handleFinalConfirm = (e) => {
+  const handleFinalConfirm = async (e) => {
     e.preventDefault();
     if (selectedOrder) {
-      setOrders(orders.map(o => o.id === selectedOrder.id ? { ...o, status: "confirmed" } : o));
-      toast.success("Order confirmed!");
+      try {
+        const res = await fetch(`/api/orders/admin/${selectedOrder._id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: "CONFIRMED", guestName, callNumber, tableNo })
+        });
+        const json = await res.json();
+        if (json.success) {
+          setOrders(orders.map(o => o._id === selectedOrder._id ? json.data : o));
+          toast.success("Order confirmed!");
+        } else {
+          toast.error(json.message || "Failed to confirm order");
+        }
+      } catch (e) {
+        toast.error("An error occurred");
+      }
     }
     setIsConfirmModalOpen(false);
     setSelectedOrder(null);
   };
 
-  const handleCancel = (id) => {
-    setOrders(orders.map(o => o.id === id ? { ...o, status: "cancelled" } : o));
-    toast.error("Order cancelled.");
+  const handleCancel = async (id) => {
+    try {
+      const res = await fetch(`/api/orders/admin/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "CANCELLED" })
+      });
+      const json = await res.json();
+      if (json.success) {
+        setOrders(orders.map(o => o._id === id ? json.data : o));
+        toast.error("Order cancelled.");
+      } else {
+        toast.error(json.message || "Failed to cancel order");
+      }
+    } catch (e) {
+      toast.error("An error occurred");
+    }
   };
 
-  const handleDelete = (id) => {
-    setOrders(orders.filter(o => o.id !== id));
-    toast.success("Order deleted.");
+  const handleDelete = async (id) => {
+    try {
+      const res = await fetch(`/api/orders/admin/${id}`, {
+        method: "DELETE",
+      });
+      const json = await res.json();
+      if (json.success) {
+        setOrders(orders.filter(o => o._id !== id));
+        toast.success("Order deleted.");
+      } else {
+        toast.error(json.message || "Failed to delete order");
+      }
+    } catch (e) {
+      toast.error("An error occurred");
+    }
   };
 
   return (
@@ -96,7 +152,13 @@ export default function TodayOrderListPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {orders.length === 0 ? (
+                  {loading ? (
+                    <TableRow>
+                      <TableCell colSpan={5} className="h-32 text-center text-zinc-400 font-medium text-[14px]">
+                        Loading...
+                      </TableCell>
+                    </TableRow>
+                  ) : orders.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={5} className="h-32 text-center text-zinc-400 font-medium text-[14px]">
                         No orders for today.
@@ -104,25 +166,25 @@ export default function TodayOrderListPage() {
                     </TableRow>
                   ) : (
                     orders.map((o) => (
-                      <TableRow key={o.id} className="h-16 hover:bg-zinc-50 transition-colors">
+                      <TableRow key={o._id} className="h-16 hover:bg-zinc-50 transition-colors">
                         <TableCell className="px-6">
                           <span className="font-bold text-[15px] text-zinc-900">{o.orderNumber}</span>
                         </TableCell>
                         <TableCell className="px-6 text-center">
-                          <span className="font-bold text-[15px] text-zinc-700">${o.amount.toFixed(2)}</span>
+                          <span className="font-bold text-[15px] text-zinc-700">${o.totalAmount.toFixed(2)}</span>
                         </TableCell>
                         <TableCell className="px-6 text-center">
-                          {o.status === "confirmed" && (
+                          {o.status === "CONFIRMED" && (
                             <Badge className="bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border-none px-3 py-1.5 text-[13px] font-semibold">
                               Confirmed
                             </Badge>
                           )}
-                          {o.status === "cancelled" && (
+                          {o.status === "CANCELLED" && (
                             <Badge className="bg-red-50 text-red-700 hover:bg-red-100 border-none px-3 py-1.5 text-[13px] font-semibold">
                               Cancelled
                             </Badge>
                           )}
-                          {o.status === "pending" && (
+                          {o.status === "PENDING" && (
                             <Badge className="bg-orange-50 text-orange-700 hover:bg-orange-100 border-none px-3 py-1.5 text-[13px] font-semibold">
                               Pending
                             </Badge>
@@ -133,18 +195,18 @@ export default function TodayOrderListPage() {
                             <Button
                               variant="outline"
                               size="sm"
-                              disabled={o.status === 'confirmed'}
+                              disabled={o.status === 'CONFIRMED'}
                               onClick={() => handleConfirmClick(o)}
-                              className={`h-8 px-3 text-[12px] font-bold ${o.status === 'confirmed' ? 'opacity-50 cursor-not-allowed border-emerald-200 text-emerald-700 bg-emerald-50/50' : 'border-emerald-200 text-emerald-700 hover:bg-emerald-50 hover:border-emerald-300'}`}
+                              className={`h-8 px-3 text-[12px] font-bold ${o.status === 'CONFIRMED' ? 'opacity-50 cursor-not-allowed border-emerald-200 text-emerald-700 bg-emerald-50/50' : 'border-emerald-200 text-emerald-700 hover:bg-emerald-50 hover:border-emerald-300'}`}
                             >
                               <CheckCircle className="w-3.5 h-3.5 mr-1.5" /> Confirm
                             </Button>
                             <Button
                               variant="outline"
                               size="sm"
-                              disabled={o.status === 'cancelled'}
-                              onClick={() => handleCancel(o.id)}
-                              className={`h-8 px-3 text-[12px] font-bold ${o.status === 'cancelled' ? 'opacity-50 cursor-not-allowed border-red-200 text-red-700 bg-red-50/50' : 'border-red-200 text-red-700 hover:bg-red-50 hover:border-red-300'}`}
+                              disabled={o.status === 'CANCELLED'}
+                              onClick={() => handleCancel(o._id)}
+                              className={`h-8 px-3 text-[12px] font-bold ${o.status === 'CANCELLED' ? 'opacity-50 cursor-not-allowed border-red-200 text-red-700 bg-red-50/50' : 'border-red-200 text-red-700 hover:bg-red-50 hover:border-red-300'}`}
                             >
                               <XCircle className="w-3.5 h-3.5 mr-1.5" /> Cancel
                             </Button>
@@ -163,7 +225,7 @@ export default function TodayOrderListPage() {
                               </DropdownMenuItem>
                               <DropdownMenuItem
                                 className="text-[14px] font-medium text-red-600 focus:bg-red-500 focus:text-white cursor-pointer"
-                                onClick={() => handleDelete(o.id)}
+                                onClick={() => handleDelete(o._id)}
                               >
                                 <Trash2 className="mr-2 h-4 w-4" /> Delete
                               </DropdownMenuItem>

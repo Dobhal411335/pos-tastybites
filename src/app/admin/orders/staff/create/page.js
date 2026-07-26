@@ -225,7 +225,7 @@ export default function StaffCreateOrderPage() {
       const res = await fetch("/api/menu/giftcards/apply", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: giftcardCode })
+        body: JSON.stringify({ code: giftcardCode })
       });
       const json = await res.json();
       if (json.success) {
@@ -268,7 +268,7 @@ export default function StaffCreateOrderPage() {
         taxTotal: totalTax,
         discountTotal: orderDiscountTotal + totalItemDiscounts,
         discountCode: appliedDiscount ? appliedDiscount.code : null,
-        giftcardCode: appliedGiftcard ? appliedGiftcard.name : null,
+        giftcardCode: appliedGiftcard ? appliedGiftcard.code : null,
         giftcardUsedAmount: giftcardDeduction,
         totalAmount: grandTotal,
         specialNote,
@@ -528,22 +528,11 @@ export default function StaffCreateOrderPage() {
                 </div>
 
                 <div className="space-y-4">
-                  <div className="flex gap-4 border-b border-zinc-100 pb-2">
-                    <button 
-                      className={`text-[14px] font-bold pb-2 border-b-2 transition-colors ${discountInputType === 'discount' ? 'text-[#F97316] border-[#F97316]' : 'text-zinc-500 border-transparent hover:text-zinc-700'}`}
-                      onClick={() => setDiscountInputType('discount')}
-                    >
-                      <Tag className="w-4 h-4 inline-block mr-1" /> Discount Code
-                    </button>
-                    <button 
-                      className={`text-[14px] font-bold pb-2 border-b-2 transition-colors ${discountInputType === 'giftcard' ? 'text-[#F97316] border-[#F97316]' : 'text-zinc-500 border-transparent hover:text-zinc-700'}`}
-                      onClick={() => setDiscountInputType('giftcard')}
-                    >
-                      <Tag className="w-4 h-4 inline-block mr-1" /> Giftcard
-                    </button>
-                  </div>
-
-                  {discountInputType === 'discount' ? (
+                  {/* Discount Section */}
+                  <div>
+                    <label className="text-[14px] font-bold text-zinc-900 flex items-center mb-2">
+                      <Tag className="w-4 h-4 mr-1 text-[#F97316]" /> Discount Code
+                    </label>
                     <div className="flex gap-2">
                       <Input
                         placeholder="Enter Discount Code"
@@ -562,7 +551,18 @@ export default function StaffCreateOrderPage() {
                         </Button>
                       )}
                     </div>
-                  ) : (
+                    {appliedDiscount && (
+                      <p className="text-[12px] text-emerald-600 font-medium mt-1">
+                        {appliedDiscount.code} applied (-{appliedDiscount.discountType === 'percent' ? `${appliedDiscount.value}%` : `$${appliedDiscount.value}`})
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Giftcard Section */}
+                  <div>
+                    <label className="text-[14px] font-bold text-zinc-900 flex items-center mb-2">
+                      <Tag className="w-4 h-4 mr-1 text-[#F97316]" /> Giftcard
+                    </label>
                     <div className="flex gap-2">
                       <Input
                         placeholder="Enter Giftcard Code"
@@ -581,18 +581,12 @@ export default function StaffCreateOrderPage() {
                         </Button>
                       )}
                     </div>
-                  )}
-
-                  {appliedDiscount && discountInputType === 'discount' && (
-                    <p className="text-[12px] text-emerald-600 font-medium">
-                      {appliedDiscount.code} applied (-{appliedDiscount.discountType === 'percent' ? `${appliedDiscount.value}%` : `$${appliedDiscount.value}`})
-                    </p>
-                  )}
-                  {appliedGiftcard && discountInputType === 'giftcard' && (
-                    <p className="text-[12px] text-emerald-600 font-medium">
-                      {appliedGiftcard.code} applied (Bal: ${appliedGiftcard.balance.toFixed(2)})
-                    </p>
-                  )}
+                    {appliedGiftcard && (
+                      <p className="text-[12px] text-emerald-600 font-medium mt-1">
+                        {appliedGiftcard.code} applied (Bal: ${appliedGiftcard.balance.toFixed(2)})
+                      </p>
+                    )}
+                  </div>
                 </div>
               </CardContent>
             </Card>

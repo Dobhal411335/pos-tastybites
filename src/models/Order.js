@@ -19,6 +19,8 @@ const OrderSchema = new mongoose.Schema(
     taxTotal: { type: Number, default: 0 },
     discountTotal: { type: Number, default: 0 },
     discountCode: { type: String, default: null },
+    giftcardCode: { type: String, default: null },
+    giftcardUsedAmount: { type: Number, default: 0 },
     totalAmount: { type: Number, required: true },
     specialNote: { type: String },
     guestName: { type: String },

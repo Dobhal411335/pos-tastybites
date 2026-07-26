@@ -81,9 +81,7 @@ export default function GiftcardsConfigPage() {
         validUntil: validUntil ? format(validUntil, "yyyy-MM-dd") : null,
       };
 
-      if (!editingId) {
-        payload.count = stickerCount;
-      }
+      payload.count = stickerCount;
 
       const url = editingId ? `/api/menu/giftcards/${editingId}` : "/api/menu/giftcards";
       const method = editingId ? "PUT" : "POST";
@@ -121,6 +119,7 @@ export default function GiftcardsConfigPage() {
     setDiscountValue(g.value);
     setValidFrom(g.validFrom ? new Date(g.validFrom) : undefined);
     setValidUntil(g.validUntil ? new Date(g.validUntil) : undefined);
+    setStickerCount(g.count || 1);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -262,29 +261,29 @@ export default function GiftcardsConfigPage() {
 
             {/* Sidebar Batch Generation */}
             <div className="lg:col-span-4 flex flex-col gap-6">
-              {!editingId && (
-                <Card className="shadow-sm border-zinc-200 bg-white">
-                  <CardHeader className="bg-zinc-50/50 border-b border-zinc-100 pb-4">
-                    <CardTitle className="text-[16px] font-bold text-zinc-900">Batch Options</CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-6 space-y-4">
-                    <div className="space-y-2">
-                      <label className="text-[14px] font-semibold text-zinc-900 flex justify-between">
-                        <span>Number to Generate</span>
-                        <span className="text-zinc-500 font-normal">{stickerCount}</span>
-                      </label>
-                      <input
-                        type="range"
-                        min="1"
-                        max="100"
-                        value={stickerCount}
-                        onChange={(e) => setStickerCount(parseInt(e.target.value))}
-                        className="w-full accent-[#F97316]"
-                      />
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
+              <Card className="shadow-sm border-zinc-200 bg-white">
+                <CardHeader className="bg-zinc-50/50 border-b border-zinc-100 pb-4">
+                  <CardTitle className="text-[16px] font-bold text-zinc-900">
+                    {editingId ? "Batch Card Count" : "Batch Options"}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-6 space-y-4">
+                  <div className="space-y-2">
+                    <label className="text-[14px] font-semibold text-zinc-900 flex justify-between">
+                      <span>{editingId ? "Total Cards" : "Number to Generate"}</span>
+                      <span className="text-zinc-500 font-normal">{stickerCount}</span>
+                    </label>
+                    <input
+                      type="range"
+                      min="1"
+                      max="100"
+                      value={stickerCount}
+                      onChange={(e) => setStickerCount(parseInt(e.target.value))}
+                      className="w-full accent-[#F97316]"
+                    />
+                  </div>
+                </CardContent>
+              </Card>
 
               <div className="flex flex-col">
                 <Button
@@ -294,7 +293,9 @@ export default function GiftcardsConfigPage() {
                   style={{ backgroundColor: PALETTE.accent }}
                 >
                   {isSubmitting && <Loader2 className="w-5 h-5 animate-spin" />}
-                  {editingId ? "Update Giftcard" : `Generate ${stickerCount} Giftcard${stickerCount > 1 ? "s" : ""}`}
+                  {editingId 
+                    ? `Update Giftcard (Total: ${stickerCount})` 
+                    : `Generate ${stickerCount} Giftcard${stickerCount > 1 ? "s" : ""}`}
                 </Button>
                 
                 {editingId && (
