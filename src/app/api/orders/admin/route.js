@@ -9,7 +9,7 @@ import { logger } from "@/utils/logger";
 export const POST = withAuth(async (request) => {
   try {
     const data = await request.json();
-    const { items, subTotal, taxTotal, discountTotal, discountCode, giftcardCode, giftcardUsedAmount, totalAmount, specialNote, orderNumber } = data;
+    const { items, subTotal, taxTotal, discountTotal, discountCode, giftcardCode, giftcardUsedAmount, totalAmount, specialNote, orderNumber, guestName, callNumber, tableNo } = data;
 
     if (!items || items.length === 0) {
       return sendError(new Error("Empty cart"), "Cart cannot be empty", 400);
@@ -34,8 +34,10 @@ export const POST = withAuth(async (request) => {
       giftcardCode: giftcardCode || null,
       giftcardUsedAmount: Number(Number(giftcardUsedAmount).toFixed(2)) || 0,
       totalAmount: Number(Number(totalAmount).toFixed(2)) || 0,
-      specialNote: specialNote,
-      guestName: "Admin (Direct)",
+      specialNote: specialNote || null,
+      guestName: guestName || null,
+      contactNumber: callNumber || null,
+      tableNo: tableNo && tableNo !== "none" ? tableNo : null,
       status: "PENDING",
       source: "ADMIN",
       processedBy: request.user.id

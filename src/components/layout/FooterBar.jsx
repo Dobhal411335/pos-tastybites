@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 export const FooterBar = () => {
   return (
     <footer className="sticky bottom-0 z-40 border-t border-stone-200 bg-white/95 backdrop-blur">
-      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6">
+      <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-6">
 
         {/* Previous */}
         <Button
