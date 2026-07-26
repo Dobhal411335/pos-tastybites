@@ -1,6 +1,7 @@
 import connectDB from "@/lib/db";
 import { NextResponse } from "next/server";
 import NavbarSection from "@/models/Web/NavbarSection";
+import { withAuth } from "@/utils/auth";
 
 const normalizeSubSections = (subSections = []) =>
   subSections
@@ -12,11 +13,11 @@ const normalizeSubSections = (subSections = []) =>
       order: item.order === "" || item.order === undefined ? index + 1 : Number(item.order),
     }));
 
-export async function GET() {
+export const GET = withAuth(async (req) => {
   await connectDB();
 
   try {
-    const sections = await NavbarSection.find({})
+    const sections = await NavbarSection.find({ restaurant: req.restaurant })
       .sort({ order: 1, createdAt: 1 })
       .lean();
 
@@ -24,9 +25,9 @@ export async function GET() {
   } catch (error) {
     return NextResponse.json({ message: "Failed to fetch navbar sections" }, { status: 500 });
   }
-}
+});
 
-export async function POST(req) {
+export const POST = withAuth(async (req) => {
   await connectDB();
 
   try {
@@ -35,8 +36,9 @@ export async function POST(req) {
       return NextResponse.json({ message: "Section title is required" }, { status: 400 });
     }
 
-    const lastSection = await NavbarSection.findOne({}).sort({ order: -1 }).select("order").lean();
+    const lastSection = await NavbarSection.findOne({ restaurant: req.restaurant }).sort({ order: -1 }).select("order").lean();
     const section = await NavbarSection.create({
+      restaurant: req.restaurant,
       title: body.title.trim(),
       url: body.url?.trim() || "#",
       active: body.active ?? true,
@@ -48,9 +50,9 @@ export async function POST(req) {
   } catch (error) {
     return NextResponse.json({ message: error.message || "Failed to create navbar section" }, { status: 500 });
   }
-}
+});
 
-export async function PUT(req) {
+export const PUT = withAuth(async (req) => {
   await connectDB();
 
   try {
@@ -61,8 +63,8 @@ export async function PUT(req) {
       return NextResponse.json({ message: "Section id is required" }, { status: 400 });
     }
 
-    const updatedSection = await NavbarSection.findByIdAndUpdate(
-      id,
+    const updatedSection = await NavbarSection.findOneAndUpdate(
+      { _id: id, restaurant: req.restaurant },
       {
         ...data,
         title: data.title?.trim(),
@@ -81,9 +83,9 @@ export async function PUT(req) {
   } catch (error) {
     return NextResponse.json({ message: error.message || "Failed to update navbar section" }, { status: 500 });
   }
-}
+});
 
-export async function PATCH(req) {
+export const PATCH = withAuth(async (req) => {
   await connectDB();
 
   try {
@@ -93,7 +95,11 @@ export async function PATCH(req) {
       return NextResponse.json({ message: "Section id is required" }, { status: 400 });
     }
 
-    const updatedSection = await NavbarSection.findByIdAndUpdate(id, { active }, { new: true });
+    const updatedSection = await NavbarSection.findOneAndUpdate(
+        { _id: id, restaurant: req.restaurant }, 
+        { active }, 
+        { new: true }
+    );
 
     if (!updatedSection) {
       return NextResponse.json({ message: "Navbar section not found" }, { status: 404 });
@@ -103,9 +109,9 @@ export async function PATCH(req) {
   } catch (error) {
     return NextResponse.json({ message: error.message || "Failed to update navbar section" }, { status: 500 });
   }
-}
+});
 
-export async function DELETE(req) {
+export const DELETE = withAuth(async (req) => {
   await connectDB();
 
   try {
@@ -115,7 +121,7 @@ export async function DELETE(req) {
       return NextResponse.json({ message: "Section id is required" }, { status: 400 });
     }
 
-    const deletedSection = await NavbarSection.findByIdAndDelete(id);
+    const deletedSection = await NavbarSection.findOneAndDelete({ _id: id, restaurant: req.restaurant });
 
     if (!deletedSection) {
       return NextResponse.json({ message: "Navbar section not found" }, { status: 404 });
@@ -125,4 +131,4 @@ export async function DELETE(req) {
   } catch (error) {
     return NextResponse.json({ message: error.message || "Failed to delete navbar section" }, { status: 500 });
   }
-}
+});

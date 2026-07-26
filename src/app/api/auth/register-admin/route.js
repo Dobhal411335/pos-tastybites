@@ -26,7 +26,7 @@ export async function POST(request) {
     }
 
     // Get or Create restaurant
-    const rName = restaurantName || "Tasty Bites";
+    const rName = restaurantName || "";
     const rSlug = rName.toLowerCase().replace(/[^a-z0-9]+/g, "-");
 
     let restaurant = await Restaurant.findOne({ slug: rSlug });
@@ -34,7 +34,7 @@ export async function POST(request) {
       restaurant = await Restaurant.create({
         name: rName,
         slug: rSlug,
-        email: `info@${rSlug}.com`,
+        email: email, // Using Admin's email for the restaurant
         isActive: true,
       });
     }
@@ -47,7 +47,7 @@ export async function POST(request) {
       name,
       email,
       password: hashedPassword,
-      role: "ADMIN",
+      role: "Admin",
       restaurantId: restaurant._id,
     });
 

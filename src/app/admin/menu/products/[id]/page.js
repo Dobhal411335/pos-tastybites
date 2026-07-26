@@ -531,7 +531,7 @@ export default function ProductDetailsConfigPage() {
                       ) : (
                         <div className="p-4 rounded-md border border-zinc-200 bg-zinc-50 text-center">
                           <p className="text-[13px] text-zinc-500">No taxes configured.</p>
-                          <Link href="/admin/settings" className="text-[13px] text-blue-600 font-medium hover:underline mt-1 block">
+                          <Link href="/admin/tax/details" className="text-[13px] text-blue-600 font-medium hover:underline mt-1 block">
                             Configure Taxes
                           </Link>
                         </div>

@@ -8,6 +8,7 @@ const GiftcardSchema = new mongoose.Schema(
     name: { type: String, trim: true }, // e.g. "Welcome Gift", "Holiday Special"
     discountType: { type: String, enum: ['amount', 'percent'], required: true },
     value: { type: Number, required: true },
+    balance: { type: Number },
     validFrom: { type: Date },
     validUntil: { type: Date },
     status: { type: String, enum: ['Active', 'Inactive'], default: 'Active' },

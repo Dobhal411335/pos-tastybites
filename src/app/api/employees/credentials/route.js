@@ -31,7 +31,7 @@ export const GET = withAuth(async (request) => {
     const password = decryptString(employee.encryptedPassword);
     
     if (!password) {
-      return sendError(new Error("Decryption Failed"), "Failed to decrypt password", 500);
+      return sendError(new Error("Decryption Failed"), "Please regenerate the password for this employee.", 400);
     }
 
     logger.info(`Credentials viewed for employee ${employee.email}`);

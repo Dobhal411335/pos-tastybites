@@ -105,6 +105,7 @@ const SearchLocationSchema = new Schema(
 
 const WebpageSchema = new Schema(
   {
+    restaurant: { type: Schema.Types.ObjectId, ref: 'Restaurant', required: true },
     title: { type: String, required: true, trim: true },
     slug: { type: String, required: true, unique: true, trim: true, lowercase: true },
     active: { type: Boolean, default: true },

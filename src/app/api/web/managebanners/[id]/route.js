@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server';
+import { withAuth } from '@/utils/auth';
 import connectDB from "@/lib/db";
 import ManageBanner from "@/models/Web/ManageBanners";
 import { deleteImage } from '@/lib/cloudinary/deleteImage';
 
-export const PUT = async (req, { params }) => {
+export const PUT = withAuth(async (req, { params }) => {
     try {
         await connectDB();
         const { id } = await params; // Await the params
@@ -22,8 +23,8 @@ export const PUT = async (req, { params }) => {
             })
         };
 
-        const updatedPackage = await ManageBanner.findByIdAndUpdate(
-            id,
+        const updatedPackage = await ManageBanner.findOneAndUpdate(
+            { _id: id, restaurant: req.restaurant },
             updateData,
             { new: true, runValidators: true }
         );
@@ -51,14 +52,14 @@ export const PUT = async (req, { params }) => {
             { status: 500 }
         );
     }
-};
+});
 
-export const DELETE = async (req, { params }) => {
+export const DELETE = withAuth(async (req, { params }) => {
     try {
         await connectDB();
         const { id } = await params; // Await the params
 
-        const deletedPackage = await ManageBanner.findByIdAndDelete(id);
+        const deletedPackage = await ManageBanner.findOneAndDelete({ _id: id, restaurant: req.restaurant });
         
         if (!deletedPackage) {
             return NextResponse.json(
@@ -93,4 +94,4 @@ export const DELETE = async (req, { params }) => {
             { status: 500 }
         );
     }
-};
+});

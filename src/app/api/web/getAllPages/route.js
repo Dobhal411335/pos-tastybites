@@ -1,21 +1,20 @@
 import connectDB from "@/lib/db";
 import Page from "@/models/Web/Page";
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
+import { withAuth } from "@/utils/auth";
 import { deleteImage } from "@/lib/cloudinary/deleteImage";
 
-
 // GET all webpages
-export async function GET(req) {
+export const GET = withAuth(async (req) => {
     try {
         await connectDB();
-        const query = {};
+        const query = { restaurant: req.restaurant };
         const pages = await Page.find(query);
         return NextResponse.json({ pages }, { status: 200 });
     } catch (error) {
         return NextResponse.json({ message: "Failed to fetch webpages", error: error.message }, { status: 500 });
     }
-}
+});
 
 const generateSlug = (title) => {
     return title
@@ -26,7 +25,7 @@ const generateSlug = (title) => {
 };
 
 // POST: Create a new webpage
-export async function POST(req) {
+export const POST = withAuth(async (req) => {
     try {
         await connectDB();
         const { title, url } = await req.json();
@@ -37,17 +36,17 @@ export async function POST(req) {
 
         const link = generateSlug(title); // Auto-generate link
 
-        const newPage = new Page({ title, url, link });
+        const newPage = new Page({ restaurant: req.restaurant, title, url, link });
         await newPage.save();
 
         return NextResponse.json({ message: "Webpage created successfully", page: newPage }, { status: 201 });
     } catch (error) {
         return NextResponse.json({ message: error.message }, { status: 500 });
     }
-}
+});
 
 // PATCH: Update an existing webpage
-export async function PATCH(req) {
+export const PATCH = withAuth(async (req) => {
     try {
         await connectDB();
         const { id, title, url } = await req.json();
@@ -59,8 +58,8 @@ export async function PATCH(req) {
         const link = generateSlug(title); // Auto-generate link
         const updateData = { title, url, link };
 
-        const updatedPage = await Page.findByIdAndUpdate(
-            id,
+        const updatedPage = await Page.findOneAndUpdate(
+            { _id: id, restaurant: req.restaurant },
             updateData,
             { new: true }
         );
@@ -74,10 +73,10 @@ export async function PATCH(req) {
     } catch (error) {
         return NextResponse.json({ message: error.message }, { status: 500 });
     }
-}
+});
 
 // DELETE: Remove a webpage
-export async function DELETE(req) {
+export const DELETE = withAuth(async (req) => {
     try {
         await connectDB();
         const { id } = await req.json();
@@ -86,11 +85,10 @@ export async function DELETE(req) {
             return NextResponse.json({ message: "Page ID is required" }, { status: 400 });
         }
 
-        // Find the page to get the image key
-        const pageToDelete = await Page.findById(id);
+        const pageToDelete = await Page.findOne({ _id: id, restaurant: req.restaurant });
 
         if (!pageToDelete) {
-            return NextResponse.json({ message: "Page not found" }, { status: 404 });
+            return NextResponse.json({ message: "Page not found or unauthorized" }, { status: 404 });
         }
 
         // Delete image from Cloudinary before deleting from database
@@ -106,4 +104,4 @@ export async function DELETE(req) {
     } catch (error) {
         return NextResponse.json({ message: error.message }, { status: 500 });
     }
-}
+});

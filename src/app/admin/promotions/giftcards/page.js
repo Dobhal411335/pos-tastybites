@@ -209,7 +209,7 @@ export default function GiftcardsConfigPage() {
                         type="text"
                         placeholder="e.g. Welcome Gift"
                         value={giftcardName}
-                        onChange={(e) => setGiftcardName(e.target.value)}
+                        onChange={(e) => setGiftcardName(e.target.value.toUpperCase())}
                         className="pl-10 h-11 text-[16px] bg-white font-medium"
                       />
                     </div>

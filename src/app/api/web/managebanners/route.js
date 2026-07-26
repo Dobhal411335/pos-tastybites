@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { withAuth } from '@/utils/auth';
 import connectDB from "@/lib/db";
 import ManageBanner from "@/models/Web/ManageBanners";
 
@@ -12,10 +13,10 @@ const shuffleArray = (array) => {
     return newArray;
 };
 
-export const GET = async (req) => {
+export const GET = withAuth(async (req) => {
     try {
         await connectDB();
-        const packages = await ManageBanner.find({}).sort({ createdAt: -1 });
+        const packages = await ManageBanner.find({ restaurant: req.restaurant }).sort({ createdAt: -1 });
         const shuffledPackages = shuffleArray(packages);
         return NextResponse.json({
             success: true,
@@ -28,9 +29,9 @@ export const GET = async (req) => {
             { status: 500 }
         );
     }
-};
+});
 
-export const POST = async (req) => {
+export const POST = withAuth(async (req) => {
     try {
         await connectDB();
         const body = await req.json();
@@ -45,6 +46,7 @@ export const POST = async (req) => {
 
         // Create new package
         const newPackage = new ManageBanner({
+            restaurant: req.restaurant,
             title,
             link: link || '',
             image: {
@@ -74,4 +76,4 @@ export const POST = async (req) => {
             { status: 500 }
         );
     }
-};
+});

@@ -1,6 +1,7 @@
 import { Schema, models, model } from "mongoose";
 
 const BannerSection3rdSchema = new Schema({
+    restaurant: { type: Schema.Types.ObjectId, ref: 'Restaurant', required: true },
     buttonLink: { type: String},
     image: { url: { type: String }, key: { type: String } },
     mobileImage: { url: { type: String }, key: { type: String } }

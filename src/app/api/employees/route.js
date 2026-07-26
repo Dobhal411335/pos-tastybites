@@ -242,7 +242,9 @@ export const PUT = withAuth(async (request) => {
       const crypto = require('@/utils/crypto');
       const pass = crypto.decryptString(existing.encryptedPassword);
 
-      if (!pass) return sendError(new Error("Decryption Failed"), "Could not decrypt password for email", 500);
+      if (!pass) {
+        return sendError(new Error("Decryption Failed"), "Please regenerate the password for this employee.", 400);
+      }
 
       const restaurantModel = mongoose.model('Restaurant');
       const restaurant = await restaurantModel.findById(request.restaurant);

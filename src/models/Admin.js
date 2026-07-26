@@ -7,7 +7,7 @@ const AdminSchema = new mongoose.Schema(
     password: { type: String, required: true }, // Bcrypt hash
     encryptedPassword: { type: String }, // AES encrypted password
     phone: { type: String },
-    role: { type: String, enum: ['Super Admin', 'Admin'], default: 'Admin' },
+    role: { type: String, enum: ['Super Admin', 'Admin'], default: 'Super Admin' },
     status: { type: String, enum: ['Active', 'Inactive'], default: 'Active' },
     lastLogin: { type: Date },
     restaurantId: { type: mongoose.Schema.Types.ObjectId, ref: 'Restaurant', required: true },

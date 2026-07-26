@@ -10,6 +10,7 @@ const imageSchema = new mongoose.Schema(
 
 const CompanyBasicInfoSchema = new mongoose.Schema(
   {
+    restaurant: { type: mongoose.Schema.Types.ObjectId, ref: 'Restaurant', required: true },
     companyName: { type: String, default: '' },
     companyDomainName: { type: String, default: '' },
     contactNumbers: { type: [String], default: [] },

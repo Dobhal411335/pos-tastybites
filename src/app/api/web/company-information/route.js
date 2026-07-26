@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import connectDB from '@/lib/db';
 import CompanyBasicInfo from '@/models/Web/CompanyBasicInfo'
+import { withAuth } from '@/utils/auth';
 
 const normalizeArray = (value) => {
   if (!Array.isArray(value)) {
@@ -44,18 +45,18 @@ const normalizePayload = (payload) => ({
   keywords: normalizeArray(payload?.keywords),
 })
 
-export async function GET() {
+export const GET = withAuth(async (request) => {
   try {
     await connectDB()
 
-    const companyBasicInfo = await CompanyBasicInfo.findOne().sort({ updatedAt: -1 })
+    const companyBasicInfo = await CompanyBasicInfo.findOne({ restaurant: request.restaurant }).sort({ updatedAt: -1 })
     return NextResponse.json({ success: true, data: companyBasicInfo }, { status: 200 })
   } catch (error) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 })
   }
-}
+})
 
-export async function POST(request) {
+export const POST = withAuth(async (request) => {
   try {
     await connectDB()
     const payload = await request.json()
@@ -73,14 +74,17 @@ export async function POST(request) {
       return NextResponse.json({ success: false, error: 'Each contact number must be exactly 10 digits' }, { status: 400 })
     }
 
-    const companyBasicInfo = await CompanyBasicInfo.create(normalizedPayload)
+    const companyBasicInfo = await CompanyBasicInfo.create({ 
+      ...normalizedPayload, 
+      restaurant: request.restaurant 
+    })
     return NextResponse.json({ success: true, data: companyBasicInfo }, { status: 201 })
   } catch (error) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 })
   }
-}
+})
 
-export async function PUT(request) {
+export const PUT = withAuth(async (request) => {
   try {
     await connectDB()
     const payload = await request.json()
@@ -103,29 +107,31 @@ export async function PUT(request) {
     let companyBasicInfo = null
 
     if (id) {
-      companyBasicInfo = await CompanyBasicInfo.findByIdAndUpdate(id, normalizedPayload, {
-        new: true,
-        runValidators: true,
-      })
+      companyBasicInfo = await CompanyBasicInfo.findOneAndUpdate(
+        { _id: id, restaurant: request.restaurant },
+        normalizedPayload, 
+        { new: true, runValidators: true }
+      )
     } else {
-      const existingRecord = await CompanyBasicInfo.findOne().sort({ updatedAt: -1 })
+      const existingRecord = await CompanyBasicInfo.findOne({ restaurant: request.restaurant }).sort({ updatedAt: -1 })
 
       if (!existingRecord) {
         return NextResponse.json({ success: false, error: 'Company basic info not found' }, { status: 404 })
       }
 
-      companyBasicInfo = await CompanyBasicInfo.findByIdAndUpdate(existingRecord._id, normalizedPayload, {
-        new: true,
-        runValidators: true,
-      })
+      companyBasicInfo = await CompanyBasicInfo.findOneAndUpdate(
+        { _id: existingRecord._id, restaurant: request.restaurant },
+        normalizedPayload,
+        { new: true, runValidators: true }
+      )
     }
 
     if (!companyBasicInfo) {
-      return NextResponse.json({ success: false, error: 'Company basic info not found' }, { status: 404 })
+      return NextResponse.json({ success: false, error: 'Company basic info not found or unauthorized' }, { status: 404 })
     }
 
     return NextResponse.json({ success: true, data: companyBasicInfo }, { status: 200 })
   } catch (error) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 })
   }
-}
+})

@@ -28,6 +28,10 @@ export default function StaffCreateOrderPage() {
   const [selectedAddons, setSelectedAddons] = useState([]);
   const [couponCode, setCouponCode] = useState("");
   const [appliedDiscount, setAppliedDiscount] = useState(null);
+  
+  const [discountInputType, setDiscountInputType] = useState("discount"); // 'discount' or 'giftcard'
+  const [giftcardCode, setGiftcardCode] = useState("");
+  const [appliedGiftcard, setAppliedGiftcard] = useState(null);
 
   // Final Confirmation Modal state
   const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
@@ -85,13 +89,18 @@ export default function StaffCreateOrderPage() {
       handleOpenOptions(item);
     } else {
       const price = item.variants && item.variants.length > 0 ? item.variants[0].price : 0;
-      const itemTax = calculateItemTax(item, price);
+      const discountAmount = calculateItemDiscount(item, price);
+      const discountedPrice = Math.max(0, price - discountAmount);
+      const itemTax = calculateItemTax(item, discountedPrice);
 
       setCart([...cart, {
         id: item._id,
         name: item.name,
-        price: price,
+        price: discountedPrice,
         tax: itemTax,
+        basePriceTotal: price,
+        itemDiscountTotal: discountAmount,
+        hasItemDiscount: discountAmount > 0,
         cartId: Date.now(),
         qty: 1,
         size: "Standard",
@@ -110,6 +119,17 @@ export default function StaffCreateOrderPage() {
     }
   };
 
+  const calculateItemDiscount = (item, basePrice) => {
+    if (item.discount && item.discount.status === 'Active') {
+      if (item.discount.discountType === 'percent') {
+        return basePrice * (item.discount.value / 100);
+      } else {
+        return item.discount.value;
+      }
+    }
+    return 0;
+  };
+
   const addOptionToCart = () => {
     if (!selectedItem) return;
     let basePrice = selectedItem.variants && selectedItem.variants.length > 0 ? selectedItem.variants[0].price : 0;
@@ -119,16 +139,26 @@ export default function StaffCreateOrderPage() {
       if (variant) basePrice = variant.price;
     }
 
+    const discountAmount = calculateItemDiscount(selectedItem, basePrice);
+    const discountedBasePrice = Math.max(0, basePrice - discountAmount);
+
     const addonsPrice = selectedAddons.reduce((sum, a) => sum + a.price, 0);
-    const finalPrice = basePrice + addonsPrice;
-    const finalTax = calculateItemTax(selectedItem, finalPrice);
+    const addonsDiscountAmount = selectedAddons.reduce((sum, a) => sum + calculateItemDiscount(selectedItem, a.price), 0);
+    const discountedAddonsPrice = Math.max(0, addonsPrice - addonsDiscountAmount);
+
+    const totalItemDiscount = discountAmount + addonsDiscountAmount;
+    const finalSubtotal = discountedBasePrice + discountedAddonsPrice;
+    const finalTax = calculateItemTax(selectedItem, finalSubtotal);
     const optionNames = selectedAddons.map(a => a.name);
 
     setCart([...cart, {
       id: selectedItem._id,
       name: selectedItem.name,
-      price: finalPrice,
+      price: finalSubtotal,
       tax: finalTax,
+      basePriceTotal: basePrice + addonsPrice,
+      itemDiscountTotal: totalItemDiscount,
+      hasItemDiscount: totalItemDiscount > 0,
       cartId: Date.now(),
       qty: 1,
       size: selectedSize || "Standard",
@@ -143,9 +173,23 @@ export default function StaffCreateOrderPage() {
     setCart(cart.filter(c => c.cartId !== cartId));
   };
 
+  const handleUpdateQty = (cartId, delta) => {
+    setCart(cart.map(c => {
+      if (c.cartId === cartId) {
+        const newQty = c.qty + delta;
+        return { ...c, qty: newQty };
+      }
+      return c;
+    }).filter(c => c.qty > 0));
+  };
+
   const applyCoupon = async () => {
     if (!couponCode) {
       toast.error("Enter a coupon code");
+      return;
+    }
+    if (cart.some(c => c.hasItemDiscount)) {
+      toast.error("Order discount cannot be applied because the cart contains items that are already discounted.");
       return;
     }
     try {
@@ -172,6 +216,35 @@ export default function StaffCreateOrderPage() {
     setCouponCode("");
   };
 
+  const applyGiftcard = async () => {
+    if (!giftcardCode) {
+      toast.error("Enter a giftcard code");
+      return;
+    }
+    try {
+      const res = await fetch("/api/menu/giftcards/apply", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: giftcardCode })
+      });
+      const json = await res.json();
+      if (json.success) {
+        setAppliedGiftcard(json.data);
+        toast.success("Giftcard applied!");
+      } else {
+        toast.error(json.message);
+        setAppliedGiftcard(null);
+      }
+    } catch (error) {
+      toast.error("Failed to apply giftcard");
+    }
+  };
+
+  const removeGiftcard = () => {
+    setAppliedGiftcard(null);
+    setGiftcardCode("");
+  };
+
   const handlePlaceOrderClick = () => {
     if (cart.length === 0) {
       toast.error("Cart is empty");
@@ -191,10 +264,12 @@ export default function StaffCreateOrderPage() {
       const payload = {
         orderNumber: generatedOrderId,
         items: cart,
-        subTotal: totalAmount,
+        subTotal: grossSubtotal,
         taxTotal: totalTax,
-        discountTotal,
+        discountTotal: orderDiscountTotal + totalItemDiscounts,
         discountCode: appliedDiscount ? appliedDiscount.code : null,
+        giftcardCode: appliedGiftcard ? appliedGiftcard.name : null,
+        giftcardUsedAmount: giftcardDeduction,
         totalAmount: grandTotal,
         specialNote,
         staffId: selectedStaff
@@ -215,6 +290,8 @@ export default function StaffCreateOrderPage() {
         setSpecialNote("");
         setAppliedDiscount(null);
         setCouponCode("");
+        setAppliedGiftcard(null);
+        setGiftcardCode("");
         setGeneratedOrderId(generateStaffOrderNumber());
       } else {
         toast.error(json.message);
@@ -226,19 +303,32 @@ export default function StaffCreateOrderPage() {
     }
   };
 
-  const totalAmount = cart.reduce((acc, item) => acc + (item.price * item.qty), 0);
+  const grossSubtotal = cart.reduce((acc, item) => acc + ((item.basePriceTotal || item.price) * item.qty), 0);
+  const totalItemDiscounts = cart.reduce((acc, item) => acc + ((item.itemDiscountTotal || 0) * item.qty), 0);
   const totalTax = cart.reduce((acc, item) => acc + ((item.tax || 0) * item.qty), 0);
+  const netSubtotal = grossSubtotal - totalItemDiscounts;
 
-  let discountTotal = 0;
+  let orderDiscountTotal = 0;
   if (appliedDiscount) {
     if (appliedDiscount.discountType === 'percent') {
-      discountTotal = totalAmount * (appliedDiscount.value / 100);
+      orderDiscountTotal = netSubtotal * (appliedDiscount.value / 100);
     } else {
-      discountTotal = appliedDiscount.value;
+      orderDiscountTotal = appliedDiscount.value;
     }
   }
 
-  const grandTotal = Math.max(0, totalAmount + totalTax - discountTotal);
+  const preGiftcardTotal = Math.max(0, netSubtotal + totalTax - orderDiscountTotal);
+
+  let giftcardDeduction = 0;
+  if (appliedGiftcard) {
+    if (appliedGiftcard.discountType === 'percent') {
+      giftcardDeduction = preGiftcardTotal * (appliedGiftcard.value / 100);
+    } else {
+      giftcardDeduction = Math.min(appliedGiftcard.balance, preGiftcardTotal);
+    }
+  }
+
+  const grandTotal = Math.max(0, preGiftcardTotal - giftcardDeduction);
 
   return (
     <div className="flex flex-col overflow-hidden min-h-screen" style={{ backgroundColor: PALETTE.canvas, color: PALETTE.ink }}>
@@ -258,10 +348,10 @@ export default function StaffCreateOrderPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 xl:grid-cols-12 gap-8">
+          <div className="grid grid-cols-2 gap-8">
 
             {/* Left Column: Menu Selection */}
-            <div className="xl:col-span-5 space-y-6">
+            <div className="space-y-6">
               <Card className="shadow-sm border-zinc-200 bg-white overflow-hidden h-full flex flex-col">
                 <CardHeader className="bg-zinc-50/50 border-b border-zinc-100 pb-4 flex flex-row items-center justify-between gap-4">
                   <div className="flex items-center gap-2">
@@ -332,7 +422,7 @@ export default function StaffCreateOrderPage() {
             </div>
 
             {/* Right Column: Cart & Billing */}
-            <div className="xl:col-span-7 space-y-6">
+            <div className="space-y-6">
 
               {/* Cart Table */}
               <Card className="shadow-sm border-zinc-200 bg-white overflow-hidden">
@@ -368,9 +458,9 @@ export default function StaffCreateOrderPage() {
                           <TableRow key={c.cartId} className="hover:bg-zinc-50 transition-colors h-14">
                             <TableCell className="px-4">
                               <span className="font-bold text-[14px] text-zinc-900">{c.name}</span>
-                              <div className="text-[11px] text-zinc-500 font-medium">${c.price.toFixed(2)} + ${c.tax.toFixed(2)} tax</div>
+                              <div className="text-[11px] text-zinc-900 font-medium">${c.price.toFixed(2)} + ${c.tax.toFixed(2)} tax</div>
                               {c.options && c.options.length > 0 && (
-                                <div className="text-[11px] text-zinc-400 mt-0.5 italic">
+                                <div className="text-[11px] text-zinc-900 mt-0.5 italic">
                                   + {c.options.join(", ")}
                                 </div>
                               )}
@@ -380,18 +470,31 @@ export default function StaffCreateOrderPage() {
                                 {c.size}
                               </Badge>
                             </TableCell>
-                            <TableCell className="px-4 text-center font-bold text-[14px] text-zinc-700">{c.qty}</TableCell>
+                            <TableCell className="px-4 text-center">
+                              <div className="flex items-center justify-center gap-2">
+                                <button
+                                  className="w-6 h-6 flex items-center justify-center rounded-md bg-zinc-100 hover:bg-zinc-200 text-zinc-600 transition-colors font-bold text-[14px]"
+                                  onClick={() => handleUpdateQty(c.cartId, -1)}
+                                >
+                                  -
+                                </button>
+                                <span className="font-bold text-[14px] text-zinc-700 w-4 text-center">{c.qty}</span>
+                                <button
+                                  className="w-6 h-6 flex items-center justify-center rounded-md bg-zinc-100 hover:bg-zinc-200 text-zinc-600 transition-colors font-bold text-[14px]"
+                                  onClick={() => handleUpdateQty(c.cartId, 1)}
+                                >
+                                  +
+                                </button>
+                              </div>
+                            </TableCell>
                             <TableCell className="px-4 text-center font-bold text-[14px] text-[#F97316]">
                               ${((c.price + c.tax) * c.qty).toFixed(2)}
                             </TableCell>
                             <TableCell className="px-4 text-center">
                               <div className="flex items-center justify-center gap-2">
-                                <button className="text-zinc-400 hover:text-zinc-800 transition-colors p-1">
-                                  <Edit className="h-4 w-4" />
-                                </button>
                                 <button
                                   className="text-red-400 hover:text-red-600 transition-colors p-1"
-                                  onClick={() => setCart(cart.filter(x => x.cartId !== c.cartId))}
+                                  onClick={() => removeFromCart(c.cartId)}
                                 >
                                   <Trash2 className="h-4 w-4" />
                                 </button>
@@ -405,96 +508,141 @@ export default function StaffCreateOrderPage() {
                 </CardContent>
               </Card>
 
-              {/* Billing Summary */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-
-                {/* Notes & Discounts */}
-                <Card className="shadow-sm border-zinc-200 bg-white overflow-hidden">
-                  <CardContent className="p-6 space-y-6">
-                    <div className="space-y-2">
-                      <label className="text-[14px] font-semibold text-zinc-900">Special Note</label>
-                      <textarea
-                        placeholder="Add any special instructions here..."
-                        className="w-full bg-zinc-50 border border-zinc-200 rounded-md min-h-20 p-3 text-[14px] text-zinc-700 focus:outline-none focus:ring-2 focus:ring-[#F97316]"
-                        value={specialNote}
-                        onChange={(e) => setSpecialNote(e.target.value)}
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <label className="text-[14px] font-semibold text-zinc-900 flex items-center gap-2">
-                        <Tag className="w-4 h-4 text-zinc-500" /> Discount Code
-                      </label>
-                      <div className="flex gap-2">
-                        <Input
-                          placeholder="Enter Code"
-                          className="h-10 text-[14px] border-zinc-200 bg-white focus:ring-[#F97316]"
-                          value={couponCode}
-                          onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
-                          disabled={!!appliedDiscount}
-                        />
-                        {appliedDiscount ? (
-                          <Button variant="outline" className="h-10 px-4 font-bold text-red-600 hover:bg-red-50 border-red-200" onClick={removeCoupon}>
-                            Remove
-                          </Button>
-                        ) : (
-                          <Button variant="outline" className="h-10 px-4 font-bold text-zinc-700 hover:bg-zinc-50 border-zinc-200" onClick={applyCoupon}>
-                            Apply
-                          </Button>
-                        )}
-                      </div>
-                      {appliedDiscount && (
-                        <p className="text-[12px] text-emerald-600 font-medium">
-                          {appliedDiscount.code} applied (-{appliedDiscount.discountType === 'percent' ? `${appliedDiscount.value}%` : `$${appliedDiscount.value}`})
-                        </p>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-
-                {/* Totals & Checkout */}
-                <Card className="shadow-sm border-zinc-200 bg-zinc-900 text-white overflow-hidden flex flex-col">
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-[18px] font-bold flex items-center gap-2">
-                      <Receipt className="w-5 h-5 text-[#F97316]" /> Order Summary
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-6 flex-1 flex flex-col justify-between space-y-6">
-                    <div className="space-y-3 border-b border-zinc-700 pb-4">
-                      <div className="flex justify-between items-center text-[14px] text-zinc-300 font-medium">
-                        <span>Subtotal</span>
-                        <span>${totalAmount.toFixed(2)}</span>
-                      </div>
-                      <div className="flex justify-between items-center text-[14px] text-zinc-300 font-medium">
-                        <span>Tax & Fees</span>
-                        <span>${totalTax.toFixed(2)}</span>
-                      </div>
-                      {discountTotal > 0 && (
-                        <div className="flex justify-between items-center text-[14px] text-green-400 font-medium">
-                          <span>Discount</span>
-                          <span>-${discountTotal.toFixed(2)}</span>
-                        </div>
-                      )}
-                    </div>
-
-                    <div>
-                      <div className="flex justify-between items-center mb-6">
-                        <span className="text-[18px] font-bold text-zinc-100">Total Amount</span>
-                        <span className="text-[28px] font-black text-[#F97316]">${grandTotal.toFixed(2)}</span>
-                      </div>
-                      <Button
-                        onClick={handlePlaceOrderClick}
-                        className="w-full h-14 text-[16px] font-bold bg-[#F97316] hover:bg-[#e06510] text-white rounded-md shadow-lg transition-transform hover:scale-[1.02]"
-                      >
-                        Place Order
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-
-              </div>
 
             </div>
+          </div>
+          {/* Billing Summary */}
+          <div className="flex item-center w-full gap-6">
+
+            {/* Notes & Discounts */}
+            <Card className="shadow-sm border-zinc-200 bg-white overflow-hidden w-1/2">
+              <CardContent className="p-6 space-y-6">
+                <div className="space-y-2">
+                  <label className="text-[14px] font-semibold text-zinc-900">Special Note</label>
+                  <textarea
+                    placeholder="Add any special instructions here..."
+                    className="w-full bg-zinc-50 border border-zinc-200 rounded-md min-h-20 p-3 text-[14px] text-zinc-700 focus:outline-none focus:ring-2 focus:ring-[#F97316]"
+                    value={specialNote}
+                    onChange={(e) => setSpecialNote(e.target.value)}
+                  />
+                </div>
+
+                <div className="space-y-4">
+                  <div className="flex gap-4 border-b border-zinc-100 pb-2">
+                    <button 
+                      className={`text-[14px] font-bold pb-2 border-b-2 transition-colors ${discountInputType === 'discount' ? 'text-[#F97316] border-[#F97316]' : 'text-zinc-500 border-transparent hover:text-zinc-700'}`}
+                      onClick={() => setDiscountInputType('discount')}
+                    >
+                      <Tag className="w-4 h-4 inline-block mr-1" /> Discount Code
+                    </button>
+                    <button 
+                      className={`text-[14px] font-bold pb-2 border-b-2 transition-colors ${discountInputType === 'giftcard' ? 'text-[#F97316] border-[#F97316]' : 'text-zinc-500 border-transparent hover:text-zinc-700'}`}
+                      onClick={() => setDiscountInputType('giftcard')}
+                    >
+                      <Tag className="w-4 h-4 inline-block mr-1" /> Giftcard
+                    </button>
+                  </div>
+
+                  {discountInputType === 'discount' ? (
+                    <div className="flex gap-2">
+                      <Input
+                        placeholder="Enter Discount Code"
+                        className="h-10 text-[14px] border-zinc-200 bg-white focus:ring-[#F97316]"
+                        value={couponCode}
+                        onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                        disabled={!!appliedDiscount}
+                      />
+                      {appliedDiscount ? (
+                        <Button variant="outline" className="h-10 px-4 font-bold text-red-600 hover:bg-red-50 border-red-200" onClick={removeCoupon}>
+                          Remove
+                        </Button>
+                      ) : (
+                        <Button variant="outline" className="h-10 px-4 font-bold text-zinc-700 hover:bg-zinc-50 border-zinc-200" onClick={applyCoupon}>
+                          Apply
+                        </Button>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="flex gap-2">
+                      <Input
+                        placeholder="Enter Giftcard Code"
+                        className="h-10 text-[14px] border-zinc-200 bg-white focus:ring-[#F97316]"
+                        value={giftcardCode}
+                        onChange={(e) => setGiftcardCode(e.target.value.toUpperCase())}
+                        disabled={!!appliedGiftcard}
+                      />
+                      {appliedGiftcard ? (
+                        <Button variant="outline" className="h-10 px-4 font-bold text-red-600 hover:bg-red-50 border-red-200" onClick={removeGiftcard}>
+                          Remove
+                        </Button>
+                      ) : (
+                        <Button variant="outline" className="h-10 px-4 font-bold text-zinc-700 hover:bg-zinc-50 border-zinc-200" onClick={applyGiftcard}>
+                          Apply
+                        </Button>
+                      )}
+                    </div>
+                  )}
+
+                  {appliedDiscount && discountInputType === 'discount' && (
+                    <p className="text-[12px] text-emerald-600 font-medium">
+                      {appliedDiscount.code} applied (-{appliedDiscount.discountType === 'percent' ? `${appliedDiscount.value}%` : `$${appliedDiscount.value}`})
+                    </p>
+                  )}
+                  {appliedGiftcard && discountInputType === 'giftcard' && (
+                    <p className="text-[12px] text-emerald-600 font-medium">
+                      {appliedGiftcard.code} applied (Bal: ${appliedGiftcard.balance.toFixed(2)})
+                    </p>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Totals & Checkout */}
+            <Card className="shadow-sm border-zinc-200 bg-zinc-900 text-white overflow-hidden flex flex-col w-1/2">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-[18px] font-bold flex items-center gap-2">
+                  <Receipt className="w-5 h-5 text-[#F97316]" /> Order Summary
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-6 flex-1 flex flex-col justify-between space-y-6">
+                <div className="space-y-3 border-b border-zinc-700 pb-4">
+                  <div className="flex justify-between items-center text-[14px] text-zinc-300 font-medium">
+                    <span>Subtotal</span>
+                    <span>${grossSubtotal.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-[14px] text-zinc-300 font-medium">
+                    <span>Tax & Fees</span>
+                    <span>${totalTax.toFixed(2)}</span>
+                  </div>
+                  {(totalItemDiscounts > 0 || orderDiscountTotal > 0) && (
+                    <div className="flex justify-between items-center text-[14px] text-green-400 font-medium">
+                      <span>Total Discounts</span>
+                      <span>-${(totalItemDiscounts + orderDiscountTotal).toFixed(2)}</span>
+                    </div>
+                  )}
+                  {giftcardDeduction > 0 && (
+                    <div className="flex justify-between items-center text-[14px] text-[#3b82f6] font-medium">
+                      <span>Giftcard Applied</span>
+                      <span>-${giftcardDeduction.toFixed(2)}</span>
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <div className="flex justify-between items-center mb-6">
+                    <span className="text-[18px] font-bold text-zinc-100">Total Amount</span>
+                    <span className="text-[28px] font-black text-[#F97316]">${grandTotal.toFixed(2)}</span>
+                  </div>
+                  <Button
+                    onClick={handlePlaceOrderClick}
+                    className="w-full h-14 text-[16px] font-bold bg-[#F97316] hover:bg-[#e06510] text-white rounded-md shadow-lg transition-transform hover:scale-[1.02]"
+                  >
+                    Place Order
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
           </div>
 
         </div>
@@ -520,30 +668,49 @@ export default function StaffCreateOrderPage() {
             <CardContent className="p-6 space-y-4">
               <div className="flex text-[11px] font-bold uppercase tracking-wider text-zinc-400 mb-2 border-b border-zinc-100 pb-2 px-3">
                 <div className="flex-1">Option</div>
-                <div className="w-24 text-center">Discount</div>
-                <div className="w-24 text-center">Price</div>
+                <div className="w-16 text-center">Base</div>
+                <div className="w-20 text-center">Discount</div>
+                <div className="w-20 text-center">Tax</div>
+                <div className="w-24 text-right">Final Price</div>
               </div>
 
               {/* Radio Options */}
               {selectedItem.variants && selectedItem.variants.length > 0 && (
                 <div className="space-y-2">
                   <span className="text-[13px] font-bold text-zinc-900 mb-2 block">Variants</span>
-                  {selectedItem.variants.map((v, idx) => (
-                    <label key={idx} className={`flex items-center border p-3 rounded-lg cursor-pointer transition-colors group ${selectedSize === v.size ? 'border-[#F97316] bg-orange-50/30' : 'border-zinc-200 hover:border-[#F97316]'}`}>
-                      <div className={`flex-1 flex items-center gap-3 text-[14px] font-bold ${selectedSize === v.size ? 'text-zinc-900' : 'text-zinc-700 group-hover:text-zinc-900'}`}>
-                        <input
-                          type="radio"
-                          name="size"
-                          checked={selectedSize === v.size}
-                          onChange={() => setSelectedSize(v.size)}
-                          className="w-4 h-4 accent-[#F97316]"
-                        />
-                        <span>{v.size}</span>
-                      </div>
-                      <div className="w-24 text-center text-zinc-400 font-medium text-[13px]">-</div>
-                      <div className="w-24 text-center font-bold text-[14px] text-zinc-900">${v.price.toFixed(2)}</div>
-                    </label>
-                  ))}
+                  {selectedItem.variants.map((v, idx) => {
+                    const discountAmount = calculateItemDiscount(selectedItem, v.price);
+                    const discountedPrice = Math.max(0, v.price - discountAmount);
+                    const taxAmount = calculateItemTax(selectedItem, discountedPrice);
+                    const finalPrice = discountedPrice + taxAmount;
+
+                    return (
+                      <label key={idx} className={`flex items-center border p-3 rounded-lg cursor-pointer transition-colors group ${selectedSize === v.size ? 'border-[#F97316] bg-orange-50/30' : 'border-zinc-200 hover:border-[#F97316]'}`}>
+                        <div className={`flex-1 flex items-center gap-3 text-[14px] font-bold ${selectedSize === v.size ? 'text-zinc-900' : 'text-zinc-700 group-hover:text-zinc-900'}`}>
+                          <input
+                            type="radio"
+                            name="size"
+                            checked={selectedSize === v.size}
+                            onChange={() => setSelectedSize(v.size)}
+                            className="w-4 h-4 accent-[#F97316]"
+                          />
+                          <span>{v.size}</span>
+                        </div>
+                        <div className="w-16 text-center font-bold text-[13px] text-zinc-900">
+                          ${v.price.toFixed(2)}
+                        </div>
+                        <div className="w-20 text-center text-red-500 font-medium text-[13px]">
+                          {discountAmount > 0 ? `-$${discountAmount.toFixed(2)}` : "-"}
+                        </div>
+                        <div className="w-20 text-center text-zinc-500 font-medium text-[13px]">
+                          +${taxAmount.toFixed(2)}
+                        </div>
+                        <div className="w-24 text-right font-bold text-[14px] text-zinc-900">
+                          ${finalPrice.toFixed(2)}
+                        </div>
+                      </label>
+                    );
+                  })}
                 </div>
               )}
 
@@ -553,6 +720,12 @@ export default function StaffCreateOrderPage() {
                   <span className="text-[13px] font-bold text-zinc-900 mb-3 block">Extras</span>
                   {selectedItem.addons.map((addon) => {
                     const isChecked = selectedAddons.some(a => a._id === addon._id);
+
+                    const discountAmount = calculateItemDiscount(selectedItem, addon.price);
+                    const discountedPrice = Math.max(0, addon.price - discountAmount);
+                    const taxAmount = calculateItemTax(selectedItem, discountedPrice);
+                    const finalPrice = discountedPrice + taxAmount;
+
                     return (
                       <label key={addon._id} className="flex items-center border border-zinc-200 p-3 rounded-lg cursor-pointer hover:border-[#F97316] transition-colors group mb-2">
                         <div className="flex-1 flex items-center gap-3 text-[14px] font-bold text-zinc-700 group-hover:text-zinc-900">
@@ -564,8 +737,18 @@ export default function StaffCreateOrderPage() {
                           />
                           <span>{addon.name}</span>
                         </div>
-                        <div className="w-24 text-center text-zinc-400 font-medium text-[13px]">-</div>
-                        <div className="w-24 text-center font-bold text-[14px] text-zinc-900">+${addon.price.toFixed(2)}</div>
+                        <div className="w-16 text-center font-bold text-[13px] text-zinc-900">
+                          +${addon.price.toFixed(2)}
+                        </div>
+                        <div className="w-20 text-center text-red-500 font-medium text-[13px]">
+                          {discountAmount > 0 ? `-$${discountAmount.toFixed(2)}` : "-"}
+                        </div>
+                        <div className="w-20 text-center text-zinc-500 font-medium text-[13px]">
+                          +${taxAmount.toFixed(2)}
+                        </div>
+                        <div className="w-24 text-right font-bold text-[14px] text-zinc-900">
+                          +${finalPrice.toFixed(2)}
+                        </div>
                       </label>
                     );
                   })}

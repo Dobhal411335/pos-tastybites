@@ -1,6 +1,7 @@
 import { withAuth } from "@/utils/auth";
 import Order from "@/models/Order";
 import Employee from "@/models/employee/Employee";
+import Giftcard from "@/models/menu/Giftcard";
 import { sendSuccess } from "@/utils/apiResponse";
 import { sendError } from "@/utils/errorHandler";
 import { logger } from "@/utils/logger";
@@ -9,7 +10,7 @@ import { logger } from "@/utils/logger";
 export const POST = withAuth(async (request) => {
   try {
     const data = await request.json();
-    const { items, subTotal, taxTotal, discountTotal, discountCode, totalAmount, specialNote, staffId, orderNumber } = data;
+    const { items, subTotal, taxTotal, discountTotal, discountCode, giftcardCode, giftcardUsedAmount, totalAmount, specialNote, staffId, orderNumber } = data;
 
     if (!items || items.length === 0) {
       return sendError(new Error("Empty cart"), "Cart cannot be empty", 400);
@@ -47,6 +48,21 @@ export const POST = withAuth(async (request) => {
       source: "STAFF",
       processedBy: request.user.id
     });
+
+    if (giftcardCode && giftcardUsedAmount > 0) {
+      const giftcard = await Giftcard.findOne({ code: giftcardCode, restaurant: request.restaurant });
+      if (giftcard) {
+        // Fallback to value if balance is undefined
+        const currentBalance = giftcard.balance !== undefined ? giftcard.balance : giftcard.value;
+        const newBalance = Math.max(0, currentBalance - giftcardUsedAmount);
+        
+        giftcard.balance = newBalance;
+        if (newBalance === 0) {
+          giftcard.status = "Inactive";
+        }
+        await giftcard.save();
+      }
+    }
 
     logger.info(`Staff Order created: ${orderNumber} for ${staffMember.firstName}`);
     return sendSuccess(newOrder, "Staff order placed successfully", 201);

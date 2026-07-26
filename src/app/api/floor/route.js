@@ -66,7 +66,14 @@ export const POST = withAuth(async (request) => {
     });
 
     logger.info(`Floor created: ${floor.name}`);
-    return sendSuccess(floor, "Floor created successfully", 201);
+    const result = {
+      id: floor._id,
+      floorName: floor.name,
+      tableCount: 0,
+      isActive: floor.isActive,
+      createdAt: floor.createdAt
+    };
+    return sendSuccess(result, "Floor created successfully", 201);
   } catch (error) {
     logger.error("Failed to create floor", error);
     return sendError(error, "Failed to create floor", 500);

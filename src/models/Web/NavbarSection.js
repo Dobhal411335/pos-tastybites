@@ -12,6 +12,7 @@ const NavbarSubSectionSchema = new Schema(
 
 const NavbarSectionSchema = new Schema(
   {
+    restaurant: { type: Schema.Types.ObjectId, ref: 'Restaurant', required: true },
     title: { type: String, required: true, trim: true },
     url: { type: String, default: "#", trim: true },
     active: { type: Boolean, default: true },

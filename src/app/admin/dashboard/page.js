@@ -210,7 +210,7 @@ export default function AdminDashboardPage() {
                 </Badge>
               </div>
               <h1 className="text-4xl md:text-5xl font-black tracking-tight text-slate-900 drop-shadow-sm">
-                Good {today.getHours() < 12 ? "Morning" : today.getHours() < 17 ? "Afternoon" : "Evening"}, {adminUser?.name?.split(' ')[0] || "Admin"}
+                Good {today.getHours() < 12 ? "Morning" : today.getHours() < 17 ? "Afternoon" : "Evening"}, {adminUser?.name?.split(' ')[0] || ""}
               </h1>
               <div className="flex items-center gap-3 pt-2 text-slate-500 font-medium text-sm">
                 <CalendarDays className="w-4 h-4 text-blue-500" />
