@@ -7,10 +7,9 @@ import { sendSuccess } from "@/utils/apiResponse";
 import { sendError } from "@/utils/errorHandler";
 import { logger } from "@/utils/logger";
 import mongoose from "mongoose";
-import crypto from "crypto";
 import ShiftTemplate from "@/models/employee/ShiftTemplate";
 import EmployeeShift from "@/models/employee/EmployeeShift";
-import { encryptString } from "@/utils/crypto";
+import { encryptString, decryptString } from "@/utils/crypto";
 import { sendEmployeeCredentials } from "@/lib/brevo/sendEmployeeCredentials";
 import Restaurant from "@/models/Restaurant"
 // GET - List all employees
@@ -238,11 +237,7 @@ export const PUT = withAuth(async (request) => {
     if (action === "sendCredentials") {
       if (!existing.credentialGenerated) return sendError(new Error("Invalid State"), "Credentials not yet generated", 400);
       
-      const decryptedPassword = encryptString ? existing.encryptedPassword /* NOTE: Need decryptString here! */ : "";
-      
-      // We will send email using the employee's raw password that they just got, or we can just say "Contact admin for password". Wait, if we send email, we need the raw password. We decrypt it here.
-      const crypto = require('@/utils/crypto');
-      const pass = crypto.decryptString(existing.encryptedPassword);
+      const pass = decryptString(existing.encryptedPassword);
 
       if (!pass) {
         return sendError(new Error("Decryption Failed"), "Please regenerate the password for this employee.", 400);

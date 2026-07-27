@@ -1,41 +1,15 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
-import { useRouter, usePathname } from "next/navigation";
+import React, { useState } from "react";
+import { usePathname } from "next/navigation";
 import TopNavbar from "@/components/layout/TopNavbar";
 import ModuleSidebar from "@/components/layout/ModuleSidebar";
-import { Loader2 } from "lucide-react";
 import { FooterBar } from "@/components/layout/FooterBar";
 
 export default function MenuModuleLayout({ children }) {
-    const router = useRouter();
     const pathname = usePathname();
-    const [adminUser, setAdminUser] = useState(null);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const isPrintPage = pathname?.includes("/print/");
-
-    // Authenticate user on mount
-    useEffect(() => {
-        const verifyAuth = async () => {
-            try {
-                const res = await fetch("/api/auth/me");
-                if (!res.ok) {
-                    throw new Error("Unauthorized");
-                }
-                const data = await res.json();
-                if (data.success && data.data) {
-                    setAdminUser(data.data);
-                } else {
-                    throw new Error("Unauthorized");
-                }
-            } catch (err) {
-                if (err.message === "Unauthorized") {
-                    router.replace("/login");
-                }
-            }
-        };
-        verifyAuth();
-    }, [router]);
 
     const sidebarGroups = [
         {
@@ -63,7 +37,6 @@ export default function MenuModuleLayout({ children }) {
             {/* Shared top navbar */}
             {!isPrintPage && (
                 <TopNavbar
-                    adminName={adminUser?.name}
                     onMenuToggle={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
                 />
             )}

@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { useAdmin } from "@/context/AdminContext";
 import {
   UtensilsCrossed,
   BarChart3,
@@ -73,29 +74,8 @@ const orderData = [
 ];
 
 export default function AdminDashboardPage() {
-  const router = useRouter();
-  const [adminUser, setAdminUser] = useState(null);
+  const { adminUser } = useAdmin();
   const [activeCategory, setActiveCategory] = useState(null);
-
-  useEffect(() => {
-    const verifyAuth = async () => {
-      try {
-        const res = await fetch("/api/auth/me");
-        if (!res.ok) throw new Error("Unauthorized");
-        const data = await res.json();
-        if (data.success && data.data) {
-          setAdminUser(data.data);
-        } else {
-          throw new Error("Unauthorized");
-        }
-      } catch (err) {
-        if (err.message === "Unauthorized") {
-          router.replace("/login");
-        }
-      }
-    };
-    verifyAuth();
-  }, [router]);
 
   const handleLogout = async () => {
     try {

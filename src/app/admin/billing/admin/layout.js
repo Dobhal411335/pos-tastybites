@@ -1,39 +1,17 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { useRouter, usePathname } from "next/navigation";
+import React, { useState } from "react";
+import { usePathname } from "next/navigation";
 import TopNavbar from "@/components/layout/TopNavbar";
 import ModuleSidebar from "@/components/layout/ModuleSidebar";
 import { FooterBar } from "@/components/layout/FooterBar";
-import { UtensilsCrossed, CalendarClock } from "lucide-react";
+import { UtensilsCrossed } from "lucide-react";
 
 export default function AdminBillingLayout({ children }) {
-  const router = useRouter();
   const pathname = usePathname();
-  const [adminUser, setAdminUser] = useState(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   
   const isPosPage = pathname === "/admin/billing/admin/create";
-
-  useEffect(() => {
-    const verifyAuth = async () => {
-      try {
-        const res = await fetch("/api/auth/me");
-        if (!res.ok) throw new Error("Unauthorized");
-        const data = await res.json();
-        if (data.success && data.data) {
-          setAdminUser(data.data);
-        } else {
-          throw new Error("Unauthorized");
-        }
-      } catch (err) {
-        if (err.message === "Unauthorized") {
-          router.replace("/login");
-        }
-      }
-    };
-    verifyAuth();
-  }, [router]);
 
   const sidebarGroups = [
     {
@@ -51,7 +29,6 @@ export default function AdminBillingLayout({ children }) {
     <div className={`${isPosPage ? "h-screen overflow-hidden" : "min-h-screen"} bg-[#FAF9F6] flex flex-col antialiased text-[#1F2937] font-sans`}>
       
         <TopNavbar
-          adminName={adminUser?.name}
           onMenuToggle={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
         />
       

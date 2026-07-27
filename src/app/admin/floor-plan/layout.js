@@ -1,39 +1,17 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import React, { useState } from "react";
+import { usePathname } from "next/navigation";
 import TopNavbar from "@/components/layout/TopNavbar";
 import ModuleSidebar from "@/components/layout/ModuleSidebar";
 import { FooterBar } from "@/components/layout/FooterBar";
 
 export default function TablesModuleLayout({ children }) {
-  const router = useRouter();
   const pathname = usePathname();
-  const [adminUser, setAdminUser] = useState(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   
   // Check if we are in the floor plan editor
   const isEditor = pathname?.includes("/admin/floor-plan/floor/") && pathname !== "/admin/floor-plan/floor";
-
-  useEffect(() => {
-    const verifyAuth = async () => {
-      try {
-        const res = await fetch("/api/auth/me");
-        if (!res.ok) throw new Error("Unauthorized");
-        const data = await res.json();
-        if (data.success && data.data) {
-          setAdminUser(data.data);
-        } else {
-          throw new Error("Unauthorized");
-        }
-      } catch (err) {
-        if (err.message === "Unauthorized") {
-          router.replace("/login");
-        }
-      }
-    };
-    verifyAuth();
-  }, [router]);
 
   const sidebarGroups = [
     {
@@ -51,7 +29,6 @@ export default function TablesModuleLayout({ children }) {
 
       {!isEditor && (
         <TopNavbar
-          adminName={adminUser?.name}
           onMenuToggle={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
         />
       )}

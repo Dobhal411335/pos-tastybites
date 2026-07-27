@@ -9,7 +9,7 @@ import mongoose from "mongoose";
 // GET - List all categories with product counts
 export const GET = withAuth(async (request) => {
   try {
-    const categories = await Category.find({ restaurant: request.restaurant }).sort({ createdAt: -1 }).lean();
+    const categories = await Category.find({ restaurant: request.restaurant }).lean();
 
     // Get product counts per category
     const categoryIds = categories.map(c => c._id);

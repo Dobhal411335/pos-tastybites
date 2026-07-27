@@ -1,35 +1,12 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import React, { useState } from "react";
 import TopNavbar from "@/components/layout/TopNavbar";
 import ModuleSidebar from "@/components/layout/ModuleSidebar";
 import { FooterBar } from "@/components/layout/FooterBar";
 
 export default function UsersModuleLayout({ children }) {
-  const router = useRouter();
-  const [adminUser, setAdminUser] = useState(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-
-  useEffect(() => {
-    const verifyAuth = async () => {
-      try {
-        const res = await fetch("/api/auth/me");
-        if (!res.ok) throw new Error("Unauthorized");
-        const data = await res.json();
-        if (data.success && data.data) {
-          setAdminUser(data.data);
-        } else {
-          throw new Error("Unauthorized");
-        }
-      } catch (err) {
-        if (err.message === "Unauthorized") {
-          router.replace("/login");
-        }
-      }
-    };
-    verifyAuth();
-  }, [router]);
 
   const sidebarGroups = [
     {
@@ -51,7 +28,6 @@ export default function UsersModuleLayout({ children }) {
     <div className="min-h-screen bg-[#FAF9F6] flex flex-col antialiased text-[#1F2937] font-sans">
 
       <TopNavbar
-        adminName={adminUser?.name}
         onMenuToggle={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
       />
 
