@@ -7,6 +7,7 @@ const EmployeeSchema = new mongoose.Schema(
     firstName: { type: String, required: true },
     lastName: { type: String, required: true },
     email: { type: String, required: true, lowercase: true, trim: true },
+    countryCode: { type: String, default: '+1' },
     phoneNumber: { type: String, required: true },
     username: { type: String, lowercase: true, trim: true },
     password: { type: String }, // Bcrypt hash, generated on approval

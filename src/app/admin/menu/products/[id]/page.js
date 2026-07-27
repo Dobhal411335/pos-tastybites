@@ -212,6 +212,7 @@ export default function ProductDetailsConfigPage() {
       const json = await res.json();
       if (json.success) {
         toast.success("Product configuration saved successfully!");
+        router.push("/admin/menu/products");
       } else {
         toast.error(json.message);
       }

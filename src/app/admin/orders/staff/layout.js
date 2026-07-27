@@ -11,6 +11,8 @@ export default function StaffOrderLayout({ children }) {
   const [adminUser, setAdminUser] = useState(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
+  const isPosPage = true; // For now we assume this layout is only wrapping the create order page or we can check pathname
+
   useEffect(() => {
     const verifyAuth = async () => {
       try {
@@ -42,7 +44,7 @@ export default function StaffOrderLayout({ children }) {
   ];
 
   return (
-    <div className="min-h-screen bg-[#FAF9F6] flex flex-col antialiased text-[#1F2937] font-sans">
+    <div className={`${isPosPage ? "h-screen overflow-hidden" : "min-h-screen"} bg-[#FAF9F6] flex flex-col antialiased text-[#1F2937] font-sans`}>
 
       <TopNavbar
         adminName={adminUser?.name}
@@ -50,26 +52,12 @@ export default function StaffOrderLayout({ children }) {
       />
 
       <div className="flex-1 flex overflow-hidden relative">
-        <div className="hidden md:block">
-          <ModuleSidebar groups={sidebarGroups} />
-        </div>
-
-        {isMobileMenuOpen && (
-          <div className="fixed inset-0 z-50 flex md:hidden">
-            <div className="fixed inset-0 bg-black/50" onClick={() => setIsMobileMenuOpen(false)}></div>
-            <div className="relative flex w-64 max-w-xs flex-col bg-zinc-900">
-              <ModuleSidebar groups={sidebarGroups} />
-            </div>
-          </div>
-        )}
-
-        <main className="flex-1 overflow-y-auto bg-white p-6 sm:p-8">
-          <div className="mx-auto max-w-7xl">
+        <main className={`flex-1 flex flex-col bg-white ${isPosPage ? 'overflow-hidden' : 'overflow-y-auto p-6 sm:p-8'}`}>
+          <div className={`mx-auto w-full ${isPosPage ? 'flex-1 h-full max-w-full' : 'max-w-7xl'}`}>
             {children}
           </div>
         </main>
       </div>
-      <FooterBar />
 
     </div>
   );

@@ -44,7 +44,7 @@ export const GET = withAuth(async (request) => {
 export const POST = withAuth(async (request) => {
   try {
     const data = await request.json();
-    const { firstName, lastName, email, phoneNumber, role, password, status, profileImage, defaultFloor, employeeColor, assignedFloor, assignedTables, defaultShiftTemplate, weeklyOff, availableDays } = data;
+    const { firstName, lastName, email, countryCode, phoneNumber, role, password, status, profileImage, defaultFloor, employeeColor, assignedFloor, assignedTables, defaultShiftTemplate, weeklyOff, availableDays } = data;
 
     // Validation
     if (!firstName || !lastName || !email || !phoneNumber) {
@@ -67,6 +67,7 @@ export const POST = withAuth(async (request) => {
       firstName,
       lastName,
       email: email.toLowerCase(),
+      countryCode: countryCode || "+1",
       phoneNumber,
       role: role || "Staff",
       status: "Pending Approval",
@@ -155,7 +156,7 @@ export const POST = withAuth(async (request) => {
 export const PUT = withAuth(async (request) => {
   try {
     const data = await request.json();
-    const { _id, action, firstName, lastName, phoneNumber, role, status, profileImage, defaultFloor, employeeColor, assignedFloor, assignedTables, defaultShiftTemplate, weeklyOff, availableDays } = data;
+    const { _id, action, firstName, lastName, countryCode, phoneNumber, role, status, profileImage, defaultFloor, employeeColor, assignedFloor, assignedTables, defaultShiftTemplate, weeklyOff, availableDays } = data;
 
     if (!_id) {
       return sendError(new Error("Missing ID"), "Employee ID is required", 400);
@@ -178,6 +179,7 @@ export const PUT = withAuth(async (request) => {
     if (action === "updateEmployee") {
       if (firstName) existing.firstName = firstName;
       if (lastName) existing.lastName = lastName;
+      if (countryCode) existing.countryCode = countryCode;
       if (phoneNumber) existing.phoneNumber = phoneNumber;
       if (role) existing.role = role;
       if (employeeColor) existing.employeeColor = employeeColor;

@@ -83,6 +83,8 @@ export default function TaxDetailsPage() {
 
       if (json.success) {
         toast.success(`Tax ${editId ? "updated" : "created"} successfully`);
+        setForm({ name: "", value: "", type: "Percent" });
+        setEditId(null);
         setIsDialogOpen(false);
         fetchTaxes();
       } else {

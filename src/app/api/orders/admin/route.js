@@ -1,6 +1,6 @@
 import { withAuth } from "@/utils/auth";
 import Order from "@/models/Order";
-import Giftcard from "@/models/menu/Giftcard";
+
 import { sendSuccess } from "@/utils/apiResponse";
 import { sendError } from "@/utils/errorHandler";
 import { logger } from "@/utils/logger";
@@ -9,7 +9,7 @@ import { logger } from "@/utils/logger";
 export const POST = withAuth(async (request) => {
   try {
     const data = await request.json();
-    const { items, subTotal, taxTotal, discountTotal, discountCode, giftcardCode, giftcardUsedAmount, totalAmount, specialNote, orderNumber, guestName, callNumber, tableNo } = data;
+    const { items, subTotal, taxTotal, discountTotal, discountCode, totalAmount, specialNote, orderNumber, guestName, callNumber, tableNo } = data;
 
     if (!items || items.length === 0) {
       return sendError(new Error("Empty cart"), "Cart cannot be empty", 400);
@@ -31,8 +31,6 @@ export const POST = withAuth(async (request) => {
       taxTotal: Number(taxTotal) || 0,
       discountTotal: Number(Number(discountTotal).toFixed(2)) || 0,
       discountCode: discountCode || null,
-      giftcardCode: giftcardCode || null,
-      giftcardUsedAmount: Number(Number(giftcardUsedAmount).toFixed(2)) || 0,
       totalAmount: Number(Number(totalAmount).toFixed(2)) || 0,
       specialNote: specialNote || null,
       guestName: guestName || null,
@@ -43,20 +41,6 @@ export const POST = withAuth(async (request) => {
       processedBy: request.user.id
     });
 
-    if (giftcardCode && giftcardUsedAmount > 0) {
-      const giftcard = await Giftcard.findOne({ code: giftcardCode, restaurant: request.restaurant });
-      if (giftcard) {
-        // Fallback to value if balance is undefined
-        const currentBalance = giftcard.balance !== undefined ? giftcard.balance : giftcard.value;
-        const newBalance = Math.max(0, currentBalance - giftcardUsedAmount);
-        
-        giftcard.balance = newBalance;
-        if (newBalance === 0) {
-          giftcard.status = "Inactive";
-        }
-        await giftcard.save();
-      }
-    }
 
     logger.info(`Admin Order created: ${orderNumber}`);
     return sendSuccess(newOrder, "Admin order placed successfully", 201);

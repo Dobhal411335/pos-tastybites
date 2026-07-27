@@ -11,6 +11,7 @@ import { useRouter } from "next/navigation";
 import { PALETTE } from "@/utils/paletteeColor";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { countryCodes } from "@/utils/countryCodes";
 
 export default function CreateServerAccountPage() {
   const router = useRouter();
@@ -74,14 +75,8 @@ export default function CreateServerAccountPage() {
             setFirstName(emp.firstName || "");
             setLastName(emp.lastName || "");
             setEmail(emp.email || "");
-            // Basic parsing of phone if it has country code
-            const phoneParts = (emp.phoneNumber || "").split(" ");
-            if (phoneParts.length > 1) {
-              setCountryCode(phoneParts[0]);
-              setPhoneNumber(phoneParts.slice(1).join(" "));
-            } else {
-              setPhoneNumber(emp.phoneNumber || "");
-            }
+            if (emp.countryCode) setCountryCode(emp.countryCode);
+            setPhoneNumber(emp.phoneNumber || "");
             if (emp.role) setRole(emp.role);
             if (emp.employeeColor) setEmployeeColor(emp.employeeColor);
             if (emp.defaultShiftTemplate) setDefaultShiftTemplate(emp.defaultShiftTemplate);
@@ -103,12 +98,11 @@ export default function CreateServerAccountPage() {
 
     setLoading(true);
     try {
-      const fullPhone = `${countryCode} ${phoneNumber.trim()}`;
-      
       const payload = {
         firstName: firstName.trim(),
         lastName: lastName.trim(),
-        phoneNumber: fullPhone,
+        countryCode,
+        phoneNumber: phoneNumber.trim(),
         role: role,
         employeeColor: employeeColor,
         defaultShiftTemplate: defaultShiftTemplate || null
@@ -276,15 +270,11 @@ export default function CreateServerAccountPage() {
                           <SelectValue placeholder="+1" />
                         </SelectTrigger>
                         <SelectContent className="bg-white max-h-60 overflow-y-auto">
-                          <SelectItem value="+1">🇨🇦 +1 (Canada/US)</SelectItem>
-                          <SelectItem value="+44">🇬🇧 +44 (UK)</SelectItem>
-                          <SelectItem value="+91">🇮🇳 +91 (India)</SelectItem>
-                          <SelectItem value="+61">🇦🇺 +61 (Australia)</SelectItem>
-                          <SelectItem value="+33">🇫🇷 +33 (France)</SelectItem>
-                          <SelectItem value="+49">🇩🇪 +49 (Germany)</SelectItem>
-                          <SelectItem value="+81">🇯🇵 +81 (Japan)</SelectItem>
-                          <SelectItem value="+52">🇲🇽 +52 (Mexico)</SelectItem>
-                          <SelectItem value="+971">🇦🇪 +971 (UAE)</SelectItem>
+                          {countryCodes.map(c => (
+                            <SelectItem key={c.code} value={c.code}>
+                              {c.code} {c.country}
+                            </SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                       <Input

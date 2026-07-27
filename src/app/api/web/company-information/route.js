@@ -17,8 +17,16 @@ const normalizeContactNumbers = (value) => {
   }
 
   return value
-    .map((item) => String(item ?? '').replace(/\D/g, '').slice(0, 10))
-    .filter(Boolean)
+    .map((item) => {
+      if (typeof item === 'object' && item !== null) {
+        return {
+          code: String(item.code || '+1'),
+          number: String(item.number || '').replace(/\D/g, '').slice(0, 10)
+        }
+      }
+      return null
+    })
+    .filter((item) => item && item.number)
 }
 
 const normalizeImage = (value) => ({
@@ -69,7 +77,7 @@ export const POST = withAuth(async (request) => {
     if (!normalizedPayload.companyDomainName) {
       return NextResponse.json({ success: false, error: 'Company domain name is required' }, { status: 400 })
     }
-    const invalidContactNumber = normalizedPayload.contactNumbers.find((number) => String(number).length !== 10)
+    const invalidContactNumber = normalizedPayload.contactNumbers.find((contact) => String(contact.number).length !== 10)
     if (invalidContactNumber) {
       return NextResponse.json({ success: false, error: 'Each contact number must be exactly 10 digits' }, { status: 400 })
     }
@@ -99,7 +107,7 @@ export const PUT = withAuth(async (request) => {
       return NextResponse.json({ success: false, error: 'Youtube link is required' }, { status: 400 })
     }
 
-    const invalidContactNumber = normalizedPayload.contactNumbers.find((number) => String(number).length !== 10)
+    const invalidContactNumber = normalizedPayload.contactNumbers.find((contact) => String(contact.number).length !== 10)
     if (invalidContactNumber) {
       return NextResponse.json({ success: false, error: 'Each contact number must be exactly 10 digits' }, { status: 400 })
     }

@@ -30,15 +30,17 @@ export default function AdminCreateOrderPage() {
   const [couponCode, setCouponCode] = useState("");
   const [appliedDiscount, setAppliedDiscount] = useState(null);
 
-  const [giftcardCode, setGiftcardCode] = useState("");
-  const [appliedGiftcard, setAppliedGiftcard] = useState(null);
+
 
   const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
+  const [isClearOrderModalOpen, setIsClearOrderModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [generatedOrderId, setGeneratedOrderId] = useState("");
 
   // New POS specific state
   const [searchQuery, setSearchQuery] = useState("");
+  const [visibleCount, setVisibleCount] = useState(15);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [orderType, setOrderType] = useState("Dine In"); // Dine In, Takeaway, Delivery
   const [tableNumber, setTableNumber] = useState("");
   const [customerName, setCustomerName] = useState("");
@@ -46,7 +48,6 @@ export default function AdminCreateOrderPage() {
   const [callNumber, setCallNumber] = useState("");
   const [tables, setTables] = useState([]);
   const [showDiscountInput, setShowDiscountInput] = useState(false);
-  const [showGiftcardInput, setShowGiftcardInput] = useState(false);
 
   const fetchInitialData = async () => {
     try {
@@ -226,34 +227,6 @@ export default function AdminCreateOrderPage() {
     setCouponCode("");
   };
 
-  const applyGiftcard = async () => {
-    if (!giftcardCode) {
-      toast.error("Enter a giftcard code");
-      return;
-    }
-    try {
-      const res = await fetch("/api/menu/giftcards/apply", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code: giftcardCode })
-      });
-      const json = await res.json();
-      if (json.success) {
-        setAppliedGiftcard(json.data);
-        toast.success("Giftcard applied!");
-      } else {
-        toast.error(json.message);
-        setAppliedGiftcard(null);
-      }
-    } catch (error) {
-      toast.error("Failed to apply giftcard");
-    }
-  };
-
-  const removeGiftcard = () => {
-    setAppliedGiftcard(null);
-    setGiftcardCode("");
-  };
 
   const handlePlaceOrderClick = () => {
     if (cart.length === 0) {
@@ -273,8 +246,6 @@ export default function AdminCreateOrderPage() {
         taxTotal: totalTax,
         discountTotal: orderDiscountTotal + totalItemDiscounts,
         discountCode: appliedDiscount ? appliedDiscount.code : null,
-        giftcardCode: appliedGiftcard ? appliedGiftcard.code : null,
-        giftcardUsedAmount: giftcardDeduction,
         totalAmount: grandTotal,
         specialNote,
         guestName: customerName,
@@ -296,8 +267,6 @@ export default function AdminCreateOrderPage() {
         setSpecialNote("");
         setAppliedDiscount(null);
         setCouponCode("");
-        setAppliedGiftcard(null);
-        setGiftcardCode("");
         setCustomerName("");
         setCallNumber("");
         setTableNumber("");
@@ -326,32 +295,21 @@ export default function AdminCreateOrderPage() {
     }
   }
 
-  const preGiftcardTotal = Math.max(0, netSubtotal + totalTax - orderDiscountTotal);
-
-  let giftcardDeduction = 0;
-  if (appliedGiftcard) {
-    if (appliedGiftcard.discountType === 'percent') {
-      giftcardDeduction = preGiftcardTotal * (appliedGiftcard.value / 100);
-    } else {
-      giftcardDeduction = Math.min(appliedGiftcard.balance, preGiftcardTotal);
-    }
-  }
-
-  const grandTotal = Math.max(0, preGiftcardTotal - giftcardDeduction);
+  const grandTotal = Math.max(0, netSubtotal + totalTax - orderDiscountTotal);
 
   return (
     <div className="flex flex-col h-full w-full overflow-hidden bg-zinc-50 font-sans" style={{ backgroundColor: PALETTE.canvas }}>
       <div className="flex-1 flex flex-row overflow-hidden relative">
         {/* LEFT COLUMN: Categories (20%) */}
-        <div className="w-24 md:w-32 lg:w-48 xl:w-56 shrink-0 border-r border-zinc-200 bg-white flex flex-col h-full overflow-y-auto no-scrollbar">
+        <div className="w-24 md:w-32 lg:w-48 xl:w-56 shrink-0 border-r border-zinc-200 bg-white flex flex-col h-full overflow-y-auto custom-scrollbar">
           <div className="p-4 border-b border-zinc-100 sticky top-0 bg-white z-10 flex items-center gap-2">
             <List className="w-5 h-5 text-zinc-400" />
             <h2 className="font-bold text-zinc-900 text-[13px] uppercase tracking-wider hidden md:block">Categories</h2>
           </div>
           <div className="flex-1 p-3 space-y-1">
             <button
-              onClick={() => setMenuCategory("all")}
-              className={`w-full flex items-center gap-3 px-2 py-3 rounded-lg font-bold transition-all ${menuCategory === "all" ? "bg-orange-50 text-orange-600 border-l-4 border-orange-500 shadow-sm" : "text-zinc-600 hover:bg-zinc-50 border-l-4 border-transparent"}`}
+              onClick={() => { setMenuCategory("all"); setVisibleCount(15); }}
+              className={`w-full flex items-center gap-3 px-2 py-3 rounded-lg font-bold transition-all ${menuCategory === "all" ? "bg-orange-50 text-orange-600 border-l-4 border-orange-500 shadow-sm" : "text-zinc-600 hover:bg-zinc-200 border-l-4 border-transparent"}`}
             >
               <Store className={`w-5 h-5 ${menuCategory === "all" ? "text-orange-500" : "text-zinc-400"}`} />
               <span className="hidden md:block">All Items</span>
@@ -359,11 +317,11 @@ export default function AdminCreateOrderPage() {
             {categories.map((c) => (
               <button
                 key={c._id}
-                onClick={() => setMenuCategory(c._id)}
-                className={`w-full flex items-center gap-3 px-3 py-3 rounded-lg font-bold transition-all ${menuCategory === c._id ? "bg-orange-50 text-orange-600 border-l-4 border-orange-500 shadow-sm" : "text-zinc-600 hover:bg-zinc-50 border-l-4 border-transparent"}`}
+                onClick={() => { setMenuCategory(c._id); setVisibleCount(15); }}
+                className={`w-full flex items-center gap-3 px-3 py-3 rounded-lg font-bold transition-all ${menuCategory === c._id ? "bg-orange-50 text-orange-600 border-l-4 border-orange-500 shadow-sm" : "text-zinc-600 hover:bg-zinc-200 border-l-4 border-transparent"}`}
               >
                 <Package className={`w-5 h-5 ${menuCategory === c._id ? "text-orange-500" : "text-zinc-400"}`} />
-                <span className="hidden md:block text-left truncate">{c.name}</span>
+                <span className="hidden md:block text-left truncate text-sm text-wrap">{c.name}</span>
               </button>
             ))}
           </div>
@@ -378,7 +336,7 @@ export default function AdminCreateOrderPage() {
                 placeholder="Search products..."
                 className="w-full pl-10 pr-10 h-11 text-[14px] bg-zinc-50 border-zinc-200 focus:ring-orange-500 rounded-xl"
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(e) => { setSearchQuery(e.target.value); setVisibleCount(15); }}
               />
               {searchQuery && (
                 <button
@@ -391,21 +349,39 @@ export default function AdminCreateOrderPage() {
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto custom-scrollbar p-4 bg-zinc-50/50">
+          <div 
+            className="flex-1 overflow-y-auto custom-scrollbar p-4 bg-zinc-50/50 flex flex-col"
+            onScroll={(e) => {
+              const bottom = e.target.scrollHeight - e.target.scrollTop - e.target.clientHeight < 50;
+              if (bottom && !isLoadingMore) {
+                // Determine if we actually have more to load
+                const filteredItems = menuItems.filter(item => (menuCategory === "all" || item.category?._id === menuCategory) && item.name.toLowerCase().includes(searchQuery.toLowerCase()));
+                if (visibleCount < filteredItems.length) {
+                  setIsLoadingMore(true);
+                  setTimeout(() => {
+                    setVisibleCount(prev => prev + 15);
+                    setIsLoadingMore(false);
+                  }, 400); // Small artificial delay to show skeletons smoothly
+                }
+              }
+            }}
+          >
             {loading ? (
               <div className="flex justify-center items-center h-full"><Loader2 className="w-8 h-8 animate-spin text-orange-500" /></div>
-            ) : (
-              <div className="flex flex-col gap-3">
-                {menuItems.filter(item => (menuCategory === "all" || item.category?._id === menuCategory) && item.name.toLowerCase().includes(searchQuery.toLowerCase())).length === 0 ? (
-                  <div className="h-full flex flex-col items-center justify-center text-zinc-400 space-y-4 py-12 bg-white rounded-xl border border-zinc-200">
-                    <Package className="w-16 h-16 opacity-20" />
-                    <p className="font-bold text-lg text-zinc-500">No products found</p>
-                    <p className="text-sm">Try searching or selecting another category.</p>
-                  </div>
-                ) : (
-                  menuItems
-                    .filter(item => (menuCategory === "all" || item.category?._id === menuCategory) && item.name.toLowerCase().includes(searchQuery.toLowerCase()))
-                    .map((item, index) => {
+            ) : (() => {
+              const filteredItems = menuItems.filter(item => (menuCategory === "all" || item.category?._id === menuCategory) && item.name.toLowerCase().includes(searchQuery.toLowerCase()));
+              const paginatedItems = filteredItems.slice(0, visibleCount);
+
+              return (
+                <div className="flex flex-col gap-3 flex-1 pb-10">
+                  {filteredItems.length === 0 ? (
+                    <div className="h-full flex flex-col items-center justify-center text-zinc-400 space-y-4 py-12 bg-white rounded-xl border border-zinc-200">
+                      <Package className="w-16 h-16 opacity-20" />
+                      <p className="font-bold text-lg text-zinc-500">No products found</p>
+                      <p className="text-sm">Try searching or selecting another category.</p>
+                    </div>
+                  ) : (
+                    paginatedItems.map((item, index) => {
                       const itemPrice = item.variants && item.variants.length > 0 ? item.variants[0].price : (item.price || 0);
                       const hasOptions = (item.variants && item.variants.length > 0) || (item.addons && item.addons.length > 0);
                       const taxAmount = calculateItemTax(item, itemPrice);
@@ -446,18 +422,50 @@ export default function AdminCreateOrderPage() {
                           {/* Add To Cart Button */}
                           <div className="w-full sm:w-40 shrink-0 p-3 bg-zinc-50/50 flex items-center justify-center">
                             <Button
-                              className="w-full h-full min-h-5 bg-red-500 hover:bg-red-600 text-black font-bold text-[14px] rounded shadow-sm transition-colors"
+                              className="w-full h-full min-h-5 bg-red-500 hover:bg-red-600 text-white font-bold text-[14px] rounded shadow-sm transition-colors"
                               onClick={() => hasOptions ? handleOpenOptions(item) : handleAddToCart(item)}
                             >
+                              <ShoppingCart className="w-4 h-4 mr-2" />
                               ADD TO CART
                             </Button>
                           </div>
                         </div>
                       );
                     })
-                )}
-              </div>
-            )}
+                  )}
+                  {isLoadingMore && (
+                    <div className="flex flex-col gap-3">
+                      {[1, 2, 3].map((_, i) => (
+                        <div key={i} className="flex flex-col sm:flex-row items-stretch bg-white rounded border border-zinc-200 shadow-sm overflow-hidden min-h-10 animate-pulse">
+                          {/* Skeleton Food Item Info */}
+                          <div className="flex-1 flex flex-col justify-center px-4 py-3 border-b sm:border-b-0 sm:border-r border-zinc-200">
+                            <div className="h-4 bg-zinc-200 rounded w-3/4 mb-2"></div>
+                            <div className="h-3 bg-zinc-100 rounded w-1/4"></div>
+                          </div>
+
+                          {/* Skeleton Price & Tax */}
+                          <div className="flex items-center">
+                            <div className="w-24 flex flex-col items-center justify-center px-3 py-2 border-r border-zinc-200 h-full">
+                              <div className="h-3 bg-zinc-100 rounded w-10 mb-1"></div>
+                              <div className="h-4 bg-zinc-200 rounded w-12"></div>
+                            </div>
+                            <div className="w-24 flex flex-col items-center justify-center px-3 py-2 border-r border-zinc-200 h-full">
+                              <div className="h-3 bg-zinc-100 rounded w-10 mb-1"></div>
+                              <div className="h-4 bg-zinc-200 rounded w-12"></div>
+                            </div>
+                          </div>
+
+                          {/* Skeleton Add To Cart Button */}
+                          <div className="w-full sm:w-40 shrink-0 p-3 bg-zinc-50/50 flex items-center justify-center">
+                            <div className="w-full h-10 bg-zinc-200 rounded"></div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </div>
         </div>
         < div className="w-[320px] lg:w-[25%] shrink-0 bg-white border-l border-zinc-200 flex flex-col h-full z-10" >
@@ -469,16 +477,14 @@ export default function AdminCreateOrderPage() {
             </div>
             <button
               className="text-red-500 hover:text-red-600 text-[13px] font-bold"
-              onClick={() => {
-                if (window.confirm('Clear current order?')) { setCart([]); setAppliedDiscount(null); setAppliedGiftcard(null); }
-              }}
+              onClick={() => setIsClearOrderModalOpen(true)}
             >
               Clear All
             </button>
           </div>
 
           {/* Cart Items (Scrollable) */}
-          <div className="flex-1 overflow-y-auto bg-zinc-50/50  scrollbar-thin scrollbar-thumb-orange-500    scrollbar-track-zinc-100 flex flex-col">
+          <div className="flex-1 overflow-y-auto bg-zinc-50/50 scrollbar-thin scrollbar-thumb-orange-500 scrollbar-track-zinc-100 flex flex-col">
             {cart.length === 0 ? (
               <div className="flex-1 flex items-center justify-center flex-col text-zinc-400 p-6 text-center space-y-4">
                 <Package className="w-16 h-16 opacity-20" />
@@ -565,35 +571,6 @@ export default function AdminCreateOrderPage() {
                     </div>
                   )}
                 </div>
-
-                {/* Collapsible Gift Card */}
-                <div className="px-3">
-                  <button
-                    className="w-full flex items-center justify-between py-3 text-[13px] font-bold text-zinc-700 hover:text-orange-600 transition-colors"
-                    onClick={() => setShowGiftcardInput(!showGiftcardInput)}
-                  >
-                    <span className="flex items-center gap-2"><Tag className="w-4 h-4" /> Use Gift Card</span>
-                    {showGiftcardInput ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                  </button>
-                  {showGiftcardInput && (
-                    <div className="pb-3 flex gap-2">
-                      <Input
-                        placeholder="Gift Card Code"
-                        className="text-[12px] h-10 bg-zinc-50 border-zinc-200 uppercase focus:ring-orange-500 rounded-lg flex-1"
-                        value={giftcardCode}
-                        onChange={(e) => setGiftcardCode(e.target.value.toUpperCase())}
-                        disabled={!!appliedGiftcard}
-                      />
-                      <Button
-                        onClick={appliedGiftcard ? removeGiftcard : applyGiftcard}
-                        variant={appliedGiftcard ? "destructive" : "default"}
-                        className={`h-10 px-4 font-bold rounded-lg ${appliedGiftcard ? '' : 'bg-zinc-900 hover:bg-zinc-800 text-white'}`}
-                      >
-                        {appliedGiftcard ? 'Remove' : 'Apply'}
-                      </Button>
-                    </div>
-                  )}
-                </div>
               </div>
             </div>
 
@@ -610,12 +587,7 @@ export default function AdminCreateOrderPage() {
                     <span>-${(totalItemDiscounts + orderDiscountTotal).toFixed(2)}</span>
                   </div>
                 )}
-                {giftcardDeduction > 0 && (
-                  <div className="flex justify-between text-[14px] font-bold text-emerald-600">
-                    <span>Gift Card</span>
-                    <span>-${giftcardDeduction.toFixed(2)}</span>
-                  </div>
-                )}
+                {/* Discount display */}
                 <div className="flex justify-between text-[14px] font-medium text-zinc-500">
                   <span>Tax</span>
                   <span className="text-zinc-900">${totalTax.toFixed(2)}</span>
@@ -763,7 +735,7 @@ export default function AdminCreateOrderPage() {
             <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
               <Card className="w-full max-w-md shadow-2xl border-none bg-white animate-in zoom-in-95 duration-200 p-2">
                 <CardHeader className="text-center pb-2">
-                  <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <div className="w-14 h-14 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-4">
                     <CheckCircle className="w-8 h-8 text-[#1e40af]" />
                   </div>
                   <CardTitle className="text-[22px] font-bold text-zinc-900">Confirm Order</CardTitle>
@@ -798,10 +770,10 @@ export default function AdminCreateOrderPage() {
                       <label className="text-[13px] font-bold text-zinc-700">Call Number</label>
                       <div className="flex gap-2">
                         <Select value={countryCode} onValueChange={setCountryCode}>
-                          <SelectTrigger className="w-[150px] h-10 text-[13px] bg-white border-zinc-500 focus:ring-orange-500 font-bold">
+                          <SelectTrigger className="w-37.5 h-10 text-[13px] bg-white border-zinc-500 focus:ring-orange-500 font-bold">
                             <SelectValue placeholder="Code" />
                           </SelectTrigger>
-                          <SelectContent className="max-h-[250px]">
+                          <SelectContent className="max-h-62.5">
                             {countryCodes.map(c => (
                               <SelectItem key={c.code} value={c.code}>
                                 {c.code}<span className="text-black font-normal ml-1 truncate">({c.country})</span>
@@ -859,6 +831,42 @@ export default function AdminCreateOrderPage() {
                 </CardContent>
               </Card>
             </div>
+          )
+        }
+        {
+          isClearOrderModalOpen && (
+            <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+              <Card className="w-full max-w-sm shadow-2xl border-none bg-white animate-in zoom-in-95 duration-200 p-2">
+                <CardHeader className="text-center pb-2">
+                  <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <Trash2 className="w-8 h-8 text-red-500" />
+                  </div>
+                  <CardTitle className="text-[20px] font-bold text-zinc-900">Clear Order?</CardTitle>
+                  <CardDescription className="text-[14px]">Are you sure you want to remove all items from the current order?</CardDescription>
+                </CardHeader>
+                <CardContent className="p-6 pt-4">
+                  <div className="flex gap-3">
+                    <Button
+                      variant="outline"
+                      className="flex-1 h-11 font-bold text-zinc-700 border-zinc-200 hover:bg-zinc-50"
+                      onClick={() => setIsClearOrderModalOpen(false)}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      className="flex-1 h-11 font-bold text-white shadow-sm transition-transform hover:scale-[1.02] bg-red-500 hover:bg-red-600"
+                      onClick={() => {
+                        setCart([]); 
+                        setAppliedDiscount(null);
+                        setIsClearOrderModalOpen(false);
+                      }}
+                    >
+                      Clear All
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>  
           )
         }
       </div>

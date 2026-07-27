@@ -33,16 +33,10 @@ export default function UsersModuleLayout({ children }) {
 
   const sidebarGroups = [
     {
-      title: "Web Admin",
+      title: "Settings",
       color: "bg-[#0F6B7A]",
       items: [
-        { label: "Manage Banner", href: "/admin/web/manage-banners" },
-        { label: "Banner Section 1st", href: "/admin/web/banner1st" },
-        { label: "Banner Section 2nd", href: "/admin/web/banner2nd" },
-        { label: "Banner Section 3rd", href: "/admin/web/banner3rd" },
-        { label: "Navbar Section", href: "/admin/web/navbar-section" },
-        { label: "Create WebPages", href: "/admin/web/create-webpages" },
-        { label: "Manage WebPages", href: "/admin/web/manage-webpages" },
+        { label: "Company Information", href: "/admin/settings" },
       ],
     },
   ];

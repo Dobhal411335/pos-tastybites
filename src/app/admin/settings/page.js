@@ -10,6 +10,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { countryCodes } from "@/utils/countryCodes"
 
 const logoFields = [
   { key: 'mainLogo', label: 'Main Logo', desc: 'Primary brand logo' },
@@ -20,7 +22,7 @@ const logoFields = [
 const createEmptyFormData = () => ({
   companyName: '',
   companyDomainName: '',
-  contactNumbers: [''],
+  contactNumbers: [{ code: '+1', number: '' }],
   mainLogo: { url: '', key: '' },
   footerLogo: { url: '', key: '' },
   mobileUiLogo: { url: '', key: '' },
@@ -51,7 +53,9 @@ const normalizeArray = (value) => {
 const normalizeCompanyInfo = (record) => ({
   companyName: record?.companyName || '',
   companyDomainName: record?.companyDomainName || '',
-  contactNumbers: normalizeArray(record?.contactNumbers),
+  contactNumbers: Array.isArray(record?.contactNumbers) 
+    ? record.contactNumbers.map(c => ({ code: c?.code || '+1', number: c?.number || '' }))
+    : [{ code: '+1', number: '' }],
   mainLogo: record?.mainLogo || { url: '', key: '' },
   footerLogo: record?.footerLogo || { url: '', key: '' },
   mobileUiLogo: record?.mobileUiLogo || { url: '', key: '' },
@@ -103,19 +107,31 @@ const CompanyBasicInformation = () => {
   const handleArrayChange = (field, index, value) => {
     setFormData((prev) => {
       const nextValues = [...prev[field]]
-      nextValues[index] = field === 'contactNumbers' ? value.replace(/\D/g, '').slice(0, 10) : value
+      if (field === 'contactNumbers') {
+        if (typeof value === 'object') {
+          nextValues[index] = { ...nextValues[index], ...value }
+        }
+      } else {
+        nextValues[index] = value
+      }
       return { ...prev, [field]: nextValues }
     })
   }
 
   const addArrayItem = (field) => {
-    setFormData((prev) => ({ ...prev, [field]: [...prev[field], ''] }))
+    setFormData((prev) => ({ 
+      ...prev, 
+      [field]: [...prev[field], field === 'contactNumbers' ? { code: '+1', number: '' } : ''] 
+    }))
   }
 
   const removeArrayItem = (field, index) => {
     setFormData((prev) => {
       const nextValues = prev[field].filter((_, itemIndex) => itemIndex !== index)
-      return { ...prev, [field]: nextValues.length > 0 ? nextValues : [''] }
+      return { 
+        ...prev, 
+        [field]: nextValues.length > 0 ? nextValues : [field === 'contactNumbers' ? { code: '+1', number: '' } : ''] 
+      }
     })
   }
 
@@ -189,8 +205,11 @@ const CompanyBasicInformation = () => {
       return
     }
 
-    const invalidContactNumber = formData.contactNumbers.find((number) => String(number).trim() && String(number).trim().length !== 10)
-    if (invalidContactNumber !== undefined) {
+    const invalidContactNumber = formData.contactNumbers.find((contact) => {
+      const numStr = String(contact.number || '').trim();
+      return numStr.length > 0 && numStr.length !== 10;
+    })
+    if (invalidContactNumber) {
       toast.error('Each contact number must be exactly 10 digits', { style: { borderRadius: "10px", border: "1px solid #fee2e2", background: "#fef2f2", color: "#991b1b" } })
       return
     }
@@ -199,7 +218,7 @@ const CompanyBasicInformation = () => {
     try {
       const payload = {
         ...formData,
-        contactNumbers: normalizeArray(formData.contactNumbers),
+        contactNumbers: formData.contactNumbers,
         emails: normalizeArray(formData.emails),
         officeAddresses: normalizeArray(formData.officeAddresses),
         keywords: normalizeArray(formData.keywords),
@@ -342,32 +361,46 @@ const CompanyBasicInformation = () => {
                     </Button>
                   </div>
                   <div className="space-y-3">
-                    {formData.contactNumbers.map((value, index) => (
-                      <div key={`contact-${index}`} className="flex gap-3 group items-center">
-                        <div className="flex h-11 w-14 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-sm font-medium text-slate-500">
-                          +91
-                        </div>
-                        <Input
-                          type="tel"
-                          inputMode="numeric"
-                          maxLength={10}
-                          value={value}
-                          onChange={(event) => handleArrayChange('contactNumbers', index, event.target.value)}
-                          placeholder="1234567890"
-                          className="h-11 rounded-xl border-slate-200 focus-visible:ring-slate-200 focus-visible:border-slate-400 bg-slate-50/50 transition-colors hover:bg-slate-50"
-                        />
-                        {formData.contactNumbers.length > 1 ? (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            className="h-11 w-11 shrink-0 rounded-xl text-slate-400 hover:text-red-600 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-all focus:opacity-100"
-                            onClick={() => removeArrayItem('contactNumbers', index)}
+                    {formData.contactNumbers.map((value, index) => {
+                      return (
+                        <div key={`contact-${index}`} className="flex gap-3 group items-center">
+                          <Select 
+                            value={value.code} 
+                            onValueChange={(newCode) => handleArrayChange('contactNumbers', index, { code: newCode })}
                           >
-                            <Trash2 className="h-5 w-5" />
-                          </Button>
-                        ) : null}
-                      </div>
-                    ))}
+                            <SelectTrigger className="w-32 h-11 text-xs rounded-xl border-slate-200 bg-slate-50 font-medium">
+                              <SelectValue placeholder="+1" />
+                            </SelectTrigger>
+                            <SelectContent className="max-h-60 bg-white">
+                              {countryCodes.map(c => (
+                                <SelectItem key={c.code} value={c.code}>
+                                  {c.code} {c.country}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <Input
+                            type="tel"
+                            inputMode="numeric"
+                            maxLength={10}
+                            value={value.number}
+                            onChange={(event) => handleArrayChange('contactNumbers', index, { number: event.target.value.replace(/\D/g, '').slice(0, 10) })}
+                            placeholder="1234567890"
+                            className="h-11 rounded-xl border-slate-200 focus-visible:ring-slate-200 focus-visible:border-slate-400 bg-slate-50/50 transition-colors hover:bg-slate-50 flex-1"
+                          />
+                          {formData.contactNumbers.length > 1 ? (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              className="h-11 w-11 shrink-0 rounded-xl text-slate-400 hover:text-red-600 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-all focus:opacity-100"
+                              onClick={() => removeArrayItem('contactNumbers', index)}
+                            >
+                              <Trash2 className="h-5 w-5" />
+                            </Button>
+                          ) : null}
+                        </div>
+                      )
+                    })}
                   </div>
                 </div>
               </CardContent>

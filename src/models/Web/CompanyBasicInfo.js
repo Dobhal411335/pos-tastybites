@@ -13,7 +13,10 @@ const CompanyBasicInfoSchema = new mongoose.Schema(
     restaurant: { type: mongoose.Schema.Types.ObjectId, ref: 'Restaurant', required: true },
     companyName: { type: String, default: '' },
     companyDomainName: { type: String, default: '' },
-    contactNumbers: { type: [String], default: [] },
+    contactNumbers: [{
+      code: { type: String, default: '+1' },
+      number: { type: String, default: '' }
+    }],
     mainLogo: { type: imageSchema, default: () => ({ url: '', key: '' }) },
     footerLogo: { type: imageSchema, default: () => ({ url: '', key: '' }) },
     mobileUiLogo: { type: imageSchema, default: () => ({ url: '', key: '' }) },
