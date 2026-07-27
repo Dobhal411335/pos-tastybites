@@ -222,7 +222,7 @@ export default function ProductsPage() {
                         <p className="text-[12px] text-zinc-500 mb-1">Enter one product name per line to create multiple at once.</p>
                         <textarea
                           autoFocus
-                          placeholder="e.g. Classic Cheese Beef Burger&#10;Spicy Chicken Wrap&#10;Veggie Delight"
+                          placeholder="Enter one product name per line to create multiple at once"
                           className="w-full bg-white border border-zinc-200 rounded-md min-h-30 p-3 text-[16px] focus:outline-none focus:ring-2 focus:ring-[#F97316]"
                           value={newProductName}
                           onChange={(e) => setNewProductName(e.target.value)}

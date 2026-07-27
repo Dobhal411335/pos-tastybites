@@ -52,7 +52,6 @@ export default function GiftcardsConfigPage() {
       setLoading(false);
     }
   };
-
   React.useEffect(() => {
     fetchGiftcards(currentPage);
   }, [currentPage]);

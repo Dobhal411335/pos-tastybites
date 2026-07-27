@@ -67,9 +67,13 @@ export const PUT = withAuth(async (request, { params }) => {
 
     const updateObj = { $set: updateData };
     if (data.discount === null) {
-      updateObj.$unset = { discount: 1 };
+      updateObj.$unset = { discount: 1, discountActive: 1 };
     } else if (data.discount !== undefined) {
       updateObj.$set.discount = data.discount;
+      updateObj.$set.discountActive = true;
+    }
+    if (data.discountActive !== undefined) {
+      updateObj.$set.discountActive = data.discountActive;
     }
 
     const updatedProduct = await Product.findOneAndUpdate(

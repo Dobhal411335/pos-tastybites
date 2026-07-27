@@ -27,6 +27,7 @@ const ProductSchema = new mongoose.Schema(
     },
     status: { type: String, enum: ['Active', 'Inactive'], default: 'Active' },
     discount: { type: mongoose.Schema.Types.ObjectId, ref: 'Coupon' },
+    discountActive: { type: Boolean, default: true },
     image: { url: { type: String }, key: { type: String } },
     variants: [VariantSchema],
     addons: [AddonSchema],

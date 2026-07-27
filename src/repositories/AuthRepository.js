@@ -21,7 +21,7 @@ export class AuthRepository {
           return null;
         }
       }
-      return await Admin.findById(queryId).select('-password').lean();
+      return await Admin.findById(queryId).select('-password -plainPassword -verificationOtpHash -verificationOtpExpiresAt').lean();
     } catch (err) {
       return null;
     }

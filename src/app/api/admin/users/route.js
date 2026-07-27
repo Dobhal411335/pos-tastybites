@@ -3,8 +3,9 @@ import { withAuth } from '@/utils/auth';
 import { sendSuccess } from '@/utils/apiResponse';
 import { sendError } from '@/utils/errorHandler';
 import Admin from '@/models/Admin';
-import { hashPassword } from '@/utils/password';
-import { encryptString } from '@/utils/crypto';
+import { hashPassword, comparePassword } from '@/utils/password';
+import crypto from 'crypto';
+import { sendAdminVerificationEmail } from '@/lib/brevo/sendAdminVerificationEmail';
 
 async function getUsersHandler(request) {
   try {
@@ -31,7 +32,7 @@ async function getUsersHandler(request) {
       ];
     }
     
-    const admins = await Admin.find(query).select('-password -encryptedPassword').sort({ createdAt: -1 }).lean();
+    const admins = await Admin.find(query).select('-password -plainPassword -verificationOtpHash -verificationOtpExpiresAt').sort({ createdAt: -1 }).lean();
     return sendSuccess(admins, 'Admins retrieved successfully');
   } catch (error) {
     return sendError(error, error.message, 500);
@@ -58,14 +59,14 @@ async function createAdminHandler(request) {
       return sendError(new Error('An admin with this email already exists'), 'Validation Error', 400);
     }
     
-    // Hash and encrypt password
     const hashedPassword = await hashPassword(password);
-    const encrypted = encryptString(password);
+    const verificationCode = crypto.randomInt(0, 1000000).toString().padStart(6, '0');
     
     // Get total admin count to determine if this should be a Super Admin fallback.
     const totalAdmins = await Admin.countDocuments();
     let finalRole = role || 'Admin';
-    if (totalAdmins === 0) finalRole = 'Super Admin';
+    const isBootstrapSuperAdmin = totalAdmins === 0;
+    if (isBootstrapSuperAdmin) finalRole = 'Super Admin';
     
     // Get restaurantId from the creator
     const creatorAdmin = await Admin.findById(request.user.id);
@@ -76,17 +77,108 @@ async function createAdminHandler(request) {
       email,
       phone,
       password: hashedPassword,
-      encryptedPassword: encrypted,
+      plainPassword: password,
       role: finalRole,
       status: status || 'Active',
+      isVerified: isBootstrapSuperAdmin,
+      verifiedAt: isBootstrapSuperAdmin ? new Date() : undefined,
       restaurantId: restaurantId
     });
+
+    if (!isBootstrapSuperAdmin) {
+      newAdmin.verificationOtpHash = await hashPassword(verificationCode);
+      newAdmin.verificationOtpExpiresAt = new Date(Date.now() + 10 * 60 * 1000);
+      newAdmin.isVerified = false;
+      await newAdmin.save();
+
+      const adminDashboardUrl = process.env.NEXT_PUBLIC_BASE_URL
+        ? `${process.env.NEXT_PUBLIC_BASE_URL}/admin/users`
+        : undefined;
+
+      try {
+        await sendAdminVerificationEmail({
+          to: creatorAdmin?.email,
+          superAdminName: creatorAdmin?.name || 'Super Admin',
+          adminName: newAdmin.name,
+          adminEmail: newAdmin.email,
+          adminRole: newAdmin.role,
+          verificationCode,
+          adminDashboardUrl,
+        });
+      } catch (emailError) {
+        await Admin.findByIdAndDelete(newAdmin._id);
+        throw emailError;
+      }
+    } else {
+      await newAdmin.save();
+    }
     
     const adminObj = newAdmin.toObject();
     delete adminObj.password;
-    delete adminObj.encryptedPassword;
+    delete adminObj.plainPassword;
+    delete adminObj.verificationOtpHash;
+    delete adminObj.verificationOtpExpiresAt;
     
-    return sendSuccess(adminObj, 'Admin created successfully', 201);
+    return sendSuccess(adminObj, isBootstrapSuperAdmin ? 'Super admin created successfully' : 'Admin created successfully. Verification code sent to the super admin email.', 201);
+  } catch (error) {
+    return sendError(error, error.message, 500);
+  }
+}
+
+async function verifyAdminHandler(request) {
+  try {
+    await connectDB();
+
+    if (request.role !== 'Super Admin' && request.role !== 'ADMIN') {
+      return sendError(new Error('Only Super Admins can verify admin accounts.'), 'Forbidden', 403);
+    }
+
+    const { adminId, otp } = await request.json();
+
+    if (!adminId || !otp) {
+      return sendError(new Error('Admin ID and verification code are required'), 'Validation Error', 400);
+    }
+
+    const admin = await Admin.findById(adminId);
+    if (!admin) {
+      return sendError(new Error('Admin not found'), 'Not Found', 404);
+    }
+
+    if (admin.isVerified === true) {
+      const verifiedAdmin = admin.toObject();
+      delete verifiedAdmin.password;
+      delete verifiedAdmin.plainPassword;
+      delete verifiedAdmin.verificationOtpHash;
+      delete verifiedAdmin.verificationOtpExpiresAt;
+      return sendSuccess(verifiedAdmin, 'Admin is already verified');
+    }
+
+    if (!admin.verificationOtpHash || !admin.verificationOtpExpiresAt) {
+      return sendError(new Error('No verification code pending for this admin'), 'Validation Error', 400);
+    }
+
+    if (admin.verificationOtpExpiresAt.getTime() < Date.now()) {
+      return sendError(new Error('Verification code has expired'), 'Validation Error', 400);
+    }
+
+    const isMatch = await comparePassword(String(otp).trim(), admin.verificationOtpHash);
+    if (!isMatch) {
+      return sendError(new Error('Invalid verification code'), 'Validation Error', 400);
+    }
+
+    admin.isVerified = true;
+    admin.verifiedAt = new Date();
+    admin.verificationOtpHash = undefined;
+    admin.verificationOtpExpiresAt = undefined;
+    await admin.save();
+
+    const verifiedAdmin = admin.toObject();
+    delete verifiedAdmin.password;
+    delete verifiedAdmin.plainPassword;
+    delete verifiedAdmin.verificationOtpHash;
+    delete verifiedAdmin.verificationOtpExpiresAt;
+
+    return sendSuccess(verifiedAdmin, 'Admin verified successfully');
   } catch (error) {
     return sendError(error, error.message, 500);
   }
@@ -94,3 +186,4 @@ async function createAdminHandler(request) {
 
 export const GET = withAuth(getUsersHandler);
 export const POST = withAuth(createAdminHandler);
+export const PATCH = withAuth(verifyAdminHandler);

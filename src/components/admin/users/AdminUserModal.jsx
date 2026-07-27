@@ -1,15 +1,20 @@
 "use client";
 
-import React, { useState } from "react";
-import { X, Loader2, Save } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { X, Loader2, Save, Eye, EyeOff } from "lucide-react";
 import {toast} from "sonner";
 
-export default function AdminUserModal({ admin, onClose, currentUser }) {
+export default function AdminUserModal({ admin, onClose, currentUser, onViewCredentials }) {
   const isEdit = !!admin;
   const isSuperAdmin = currentUser?.role === 'Super Admin' || currentUser?.role === 'ADMIN';
   const isEditingSelf = currentUser?._id === admin?._id;
+  const canEditPassword = isSuperAdmin || isEditingSelf;
 
   const [loading, setLoading] = useState(false);
+  const [passwordLoading, setPasswordLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [originalPassword, setOriginalPassword] = useState("");
   
   const [formData, setFormData] = useState({
     name: admin?.name || "",
@@ -21,16 +26,46 @@ export default function AdminUserModal({ admin, onClose, currentUser }) {
     confirmPassword: ""
   });
 
+  useEffect(() => {
+    if (!isEdit || !admin?._id || !canEditPassword) return;
+
+    const fetchPassword = async () => {
+      setPasswordLoading(true);
+      try {
+        const res = await fetch(`/api/admin/users/credentials?id=${admin._id}`);
+        const data = await res.json();
+        if (res.ok && data.data?.password) {
+          setFormData((prev) => ({
+            ...prev,
+            password: data.data.password,
+            confirmPassword: data.data.password,
+          }));
+          setOriginalPassword(data.data.password);
+        }
+      } catch {
+        // Legacy admins may not have plainPassword stored
+      } finally {
+        setPasswordLoading(false);
+      }
+    };
+
+    fetchPassword();
+  }, [isEdit, admin?._id, canEditPassword]);
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
   };
+
+  const passwordChanged = isEdit && formData.password !== originalPassword;
 
   const validate = () => {
     if (!formData.name.trim()) return "Full Name is required";
     if (!isEdit && !formData.email.trim()) return "Email is required";
     if (!isEdit && formData.password.length < 8) return "Password must be at least 8 characters";
     if (!isEdit && formData.password !== formData.confirmPassword) return "Passwords do not match";
+    if (passwordChanged && formData.password.length < 8) return "Password must be at least 8 characters";
+    if (passwordChanged && formData.password !== formData.confirmPassword) return "Passwords do not match";
     return null;
   };
 
@@ -52,8 +87,10 @@ export default function AdminUserModal({ admin, onClose, currentUser }) {
       const payload = { ...formData };
       if (isEdit) {
         delete payload.email;
-        delete payload.password;
         delete payload.confirmPassword;
+        if (!passwordChanged) {
+          delete payload.password;
+        }
       }
 
       const res = await fetch(url, {
@@ -67,7 +104,11 @@ export default function AdminUserModal({ admin, onClose, currentUser }) {
       if (!res.ok) throw new Error(data.message || "Something went wrong");
       
       toast.success(data.message || (isEdit ? "Admin updated successfully" : "Admin created successfully"));
-      onClose(true); // Close and refresh
+      onClose(true);
+
+      if (!isEdit && onViewCredentials && data.data) {
+        onViewCredentials(data.data, formData.password);
+      }
       
     } catch (err) {
       toast.error(err.message);
@@ -131,31 +172,73 @@ export default function AdminUserModal({ admin, onClose, currentUser }) {
               </div>
             </div>
 
-            {!isEdit && (
+            {(!isEdit || canEditPassword) && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-gray-100 pt-4 mt-2">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Password *</label>
-                  <input
-                    type="password"
-                    name="password"
-                    value={formData.password}
-                    onChange={handleChange}
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#E3B12F]/50 focus:border-[#E3B12F]"
-                    required={!isEdit}
-                    minLength={8}
-                  />
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Password {!isEdit && "*"}
+                  </label>
+                  {isEdit && passwordLoading ? (
+                    <div className="flex items-center gap-2 text-sm text-gray-500 px-4 py-2.5 border border-gray-300 rounded-lg bg-gray-50">
+                      <Loader2 className="w-4 h-4 animate-spin" /> Loading password...
+                    </div>
+                  ) : (
+                    <div className="relative">
+                      <input
+                        type="text"
+                        name="password"
+                        value={formData.password}
+                        onChange={handleChange}
+                        autoComplete="new-password"
+                        style={{ WebkitTextSecurity: showPassword ? "none" : "disc" }}
+                        className="no-native-password-reveal w-full px-4 py-2.5 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#E3B12F]/50 focus:border-[#E3B12F] font-mono"
+                        required={!isEdit}
+                        minLength={isEdit ? undefined : 8}
+                        placeholder={isEdit && !originalPassword ? "Enter new password" : undefined}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword((prev) => !prev)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                        title={showPassword ? "Hide password" : "Show password"}
+                      >
+                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  )}
+                  {isEdit && !passwordLoading && !originalPassword && (
+                    <p className="text-xs text-gray-500 mt-1">No password on file. Enter a new one to set it.</p>
+                  )}
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Confirm Password *</label>
-                  <input
-                    type="password"
-                    name="confirmPassword"
-                    value={formData.confirmPassword}
-                    onChange={handleChange}
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#E3B12F]/50 focus:border-[#E3B12F]"
-                    required={!isEdit}
-                    minLength={8}
-                  />
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Confirm Password {!isEdit && "*"}
+                  </label>
+                  {isEdit && passwordLoading ? (
+                    <div className="px-4 py-2.5 border border-gray-300 rounded-lg bg-gray-50 h-[42px]" />
+                  ) : (
+                    <div className="relative">
+                      <input
+                        type="text"
+                        name="confirmPassword"
+                        value={formData.confirmPassword}
+                        onChange={handleChange}
+                        autoComplete="new-password"
+                        style={{ WebkitTextSecurity: showConfirmPassword ? "none" : "disc" }}
+                        className="no-native-password-reveal w-full px-4 py-2.5 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#E3B12F]/50 focus:border-[#E3B12F] font-mono"
+                        required={!isEdit}
+                        minLength={isEdit ? undefined : 8}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowConfirmPassword((prev) => !prev)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                        title={showConfirmPassword ? "Hide password" : "Show password"}
+                      >
+                        {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -171,7 +254,6 @@ export default function AdminUserModal({ admin, onClose, currentUser }) {
                   disabled={!isSuperAdmin}
                 >
                   <option value="Admin">Admin</option>
-                  <option value="Super Admin">Super Admin</option>
                 </select>
                 {!isSuperAdmin && (
                   <p className="text-xs text-gray-500 mt-1">Only Super Admins can change roles.</p>
@@ -209,7 +291,7 @@ export default function AdminUserModal({ admin, onClose, currentUser }) {
             <button
               type="submit"
               disabled={loading}
-              className="px-5 py-2.5 text-sm font-medium text-white bg-[#E3B12F] hover:bg-[#D4AF37] rounded-lg transition-colors flex items-center gap-2"
+              className="px-5 py-2.5 text-sm font-medium text-white bg-orange-500 hover:bg-orange-600 shadow-md rounded-lg transition-colors flex items-center gap-2"
             >
               {loading ? (
                 <>

@@ -1,9 +1,7 @@
-import { NextResponse } from "next/server";
 import connectDB from "@/lib/db";
 import Employee from "@/models/employee/Employee";
 import { sendError } from "@/utils/errorHandler";
 import { withAuth } from '@/utils/auth';
-import { decryptString } from "@/utils/crypto";
 import { logger } from "@/utils/logger";
 import { sendSuccess } from '@/utils/apiResponse';
 
@@ -18,27 +16,26 @@ export const GET = withAuth(async (request) => {
       return sendError(new Error("Missing ID"), "Employee ID is required", 400);
     }
 
-    const employee = await Employee.findOne({ _id: id, restaurant: request.restaurant });
+    const employee = await Employee.findOne({ _id: id, restaurant: request.restaurant })
+      .select("email plainPassword credentialGenerated");
     
     if (!employee) {
       return sendError(new Error("Not Found"), "Employee not found", 404);
     }
 
-    if (!employee.encryptedPassword) {
-      return sendError(new Error("No Password"), "No encrypted password found for this employee", 404);
-    }
-
-    const password = decryptString(employee.encryptedPassword);
-    
-    if (!password) {
-      return sendError(new Error("Decryption Failed"), "Please regenerate the password for this employee.", 400);
+    if (!employee.plainPassword) {
+      return sendError(
+        new Error("No Password"),
+        "No password found for this employee. Please approve or regenerate credentials.",
+        404
+      );
     }
 
     logger.info(`Credentials viewed for employee ${employee.email}`);
 
-    return sendSuccess({ password }, "Credentials decrypted successfully");
+    return sendSuccess({ password: employee.plainPassword }, "Credentials retrieved successfully");
   } catch (error) {
-    logger.error("Failed to decrypt credentials", error);
-    return sendError(error, "Failed to decrypt credentials", 500);
+    logger.error("Failed to fetch credentials", error);
+    return sendError(error, "Failed to fetch credentials", 500);
   }
 }, ["ADMIN", "MANAGER"]);

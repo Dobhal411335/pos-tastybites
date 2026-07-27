@@ -63,3 +63,9 @@ body {
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background: #ea580c;
 }
+
+/* Hide browser-native password reveal (Edge/Chrome on Windows) */
+.no-native-password-reveal::-ms-reveal,
+.no-native-password-reveal::-ms-clear {
+  display: none;
+}

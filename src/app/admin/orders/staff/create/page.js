@@ -127,7 +127,7 @@ export default function StaffCreateOrderPage() {
   };
 
   const calculateItemDiscount = (item, basePrice) => {
-    if (item.discount && item.discount.status === 'Active') {
+    if (item.discount && item.discount.status === 'Active' && item.discountActive !== false) {
       if (item.discount.discountType === 'percent') {
         return basePrice * (item.discount.value / 100);
       } else {
@@ -293,6 +293,7 @@ export default function StaffCreateOrderPage() {
   }
 
   const grandTotal = Math.max(0, netSubtotal + totalTax - orderDiscountTotal);
+  const cartItemCount = cart.reduce((acc, item) => acc + (item.qty || 1), 0);
 
   return (
     <div className="flex flex-col h-full w-full overflow-hidden bg-zinc-50 font-sans" style={{ backgroundColor: PALETTE.canvas }}>
@@ -469,8 +470,20 @@ export default function StaffCreateOrderPage() {
           {/* Cart Header */}
           <div className="p-4 border-b border-zinc-200 bg-white shrink-0 flex items-center justify-between">
             <div className="flex items-center gap-2 pb-px">
-              <ShoppingCart className="w-5 h-5 text-zinc-900" />
-              <h2 className="text-[17px] font-black text-zinc-900">Current Order</h2>
+              <div className="relative">
+                <ShoppingCart className="w-5 h-5 text-zinc-900" />
+                {cartItemCount > 0 && (
+                  <span className="absolute -top-1.5 -right-2 min-w-[16px] h-4 px-1 flex items-center justify-center rounded-full bg-orange-500 text-white text-[10px] font-bold leading-none">
+                    {cartItemCount}
+                  </span>
+                )}
+              </div>
+              <h2 className="text-[17px] font-black text-zinc-900">
+                Current Order
+                {cartItemCount > 0 && (
+                  <span className="text-orange-500 ml-1">({cartItemCount})</span>
+                )}
+              </h2>
             </div>
             <button
               className="text-red-500 hover:text-red-600 text-[13px] font-bold"

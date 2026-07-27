@@ -146,18 +146,17 @@ export default function ApplyDiscountsPage() {
     }
   };
 
-  const handleToggleStatus = async (couponId, currentActive) => {
-    const newStatus = currentActive ? "Inactive" : "Active";
+  const handleToggleStatus = async (productId, currentActive) => {
     try {
-      const res = await fetch(`/api/menu/coupons/${couponId}`, {
+      const res = await fetch(`/api/menu/products/${productId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: newStatus })
+        body: JSON.stringify({ discountActive: !currentActive })
       });
       const json = await res.json();
       if (json.success) {
-        toast.success(`Coupon set to ${newStatus}`);
-        fetchData(); // reload products to show new status
+        toast.success(`Product discount ${currentActive ? "deactivated" : "activated"}`);
+        fetchData();
       } else {
         toast.error(json.message);
       }
@@ -174,7 +173,8 @@ export default function ApplyDiscountsPage() {
       code: p.discount.code,
       targetType: "Product",
       targetName: p.name,
-      active: p.discount.status === "Active"
+      active: p.discountActive !== false,
+      couponActive: p.discount.status === "Active"
     }));
 
 
@@ -183,7 +183,7 @@ export default function ApplyDiscountsPage() {
     <div className="flex flex-col overflow-hidden min-h-screen" style={{ backgroundColor: PALETTE.canvas, color: PALETTE.ink }}>
 
       <div className="flex-1 overflow-y-auto p-8">
-        <div className="max-w-300 mx-auto space-y-8 pb-16 font-sans">
+        <div className="max-w-300 mx-auto space-y-8 pb-10 font-sans">
 
           {/* Header */}
           <div className="flex flex-col sm:flex-row justify-between sm:items-end gap-4 border-b border-zinc-200 pb-5">
@@ -361,7 +361,7 @@ export default function ApplyDiscountsPage() {
             </div>
 
               {/* Sidebar Action Section */}
-              <div className="lg:col-span-4 flex flex-col justify-end">
+              <div className="flex flex-col justify-end">
                 <Button
                   type="submit"
                   className="w-full h-12 text-[15px] font-bold text-white transition-transform hover:scale-[1.02] shadow-md"
@@ -443,13 +443,13 @@ export default function ApplyDiscountsPage() {
                       </TableCell>
                       <TableCell className="px-6 text-center">
                         <Badge 
-                          className={ad.active 
+                          className={ad.active && ad.couponActive
                             ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border-none px-2.5 py-1 text-[13px] font-semibold inline-flex items-center gap-1"
                             : "bg-red-50 text-red-700 hover:bg-red-100 border-none px-2.5 py-1 text-[13px] font-semibold inline-flex items-center gap-1"
                           }
                         >
-                          {ad.active ? <CheckCircle2 className="h-3.5 w-3.5" /> : null}
-                          {ad.active ? "Active" : "Inactive"}
+                          {ad.active && ad.couponActive ? <CheckCircle2 className="h-3.5 w-3.5" /> : null}
+                          {!ad.couponActive ? "Coupon Inactive" : ad.active ? "Active" : "Inactive"}
                         </Badge>
                       </TableCell>
                       <TableCell className="px-6 text-center">
@@ -462,7 +462,7 @@ export default function ApplyDiscountsPage() {
                           <DropdownMenuContent align="end" className="w-40 bg-white">
                             <DropdownMenuItem
                               className="text-[14px] font-medium text-zinc-600 focus:bg-zinc-100 cursor-pointer"
-                              onClick={() => handleToggleStatus(ad.couponId, ad.active)}
+                              onClick={() => handleToggleStatus(ad.id, ad.active)}
                             >
                               <ArrowUpDown className="mr-2 h-4 w-4" /> {ad.active ? "Mark Inactive" : "Mark Active"}
                             </DropdownMenuItem>

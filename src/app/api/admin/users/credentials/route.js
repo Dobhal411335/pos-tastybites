@@ -1,20 +1,13 @@
-import { NextResponse } from "next/server";
 import connectDB from "@/lib/db";
 import Admin from "@/models/Admin";
 import { sendError } from "@/utils/errorHandler";
 import { withAuth } from '@/utils/auth';
-import { decryptString } from "@/utils/crypto";
 import { logger } from "@/utils/logger";
 import { sendSuccess } from '@/utils/apiResponse';
 
 export const GET = withAuth(async (request) => {
   try {
     await connectDB();
-    
-    // Only Super Admin can view admin credentials
-    if (request.role !== 'Super Admin' && request.role !== 'ADMIN') {
-      return sendError(new Error("Forbidden"), "Only Super Admins can view credentials", 403);
-    }
     
     const { searchParams } = new URL(request.url);
     const id = searchParams.get("id");
@@ -23,27 +16,32 @@ export const GET = withAuth(async (request) => {
       return sendError(new Error("Missing ID"), "Admin ID is required", 400);
     }
 
-    const admin = await Admin.findById(id);
+    const isSuperAdmin = request.role === 'Super Admin' || request.role === 'ADMIN';
+    const isSelf = String(request.user.id) === String(id);
+
+    if (!isSuperAdmin && !isSelf) {
+      return sendError(new Error("Forbidden"), "You can only view your own credentials", 403);
+    }
+
+    const admin = await Admin.findById(id).select("email plainPassword");
     
     if (!admin) {
       return sendError(new Error("Not Found"), "Admin not found", 404);
     }
 
-    if (!admin.encryptedPassword) {
-      return sendError(new Error("No Password"), "No encrypted password found for this admin", 404);
-    }
-
-    const password = decryptString(admin.encryptedPassword);
-    
-    if (!password) {
-      return sendError(new Error("Decryption Failed"), "Failed to decrypt password", 500);
+    if (!admin.plainPassword) {
+      return sendError(
+        new Error("No Password"),
+        "No password found for this admin. Please reset their password.",
+        404
+      );
     }
 
     logger.info(`Credentials viewed for admin ${admin.email} by user ${request.user.id}`);
 
-    return sendSuccess({ password }, "Credentials decrypted successfully");
+    return sendSuccess({ password: admin.plainPassword }, "Credentials retrieved successfully");
   } catch (error) {
-    logger.error("Failed to decrypt credentials", error);
-    return sendError(error, "Failed to decrypt credentials", 500);
+    logger.error("Failed to fetch credentials", error);
+    return sendError(error, "Failed to fetch credentials", 500);
   }
 });

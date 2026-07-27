@@ -10,28 +10,18 @@ const yellowtail = Yellowtail({
   weight: "400",
 });
 export default function GiftCardTemplate({ card, index }) {
-  const qrData = JSON.stringify({
-    number: card.code,
-    name: "Tasty Bites",
-    amount: card.value,
-    expires: card.validUntil ? new Date(card.validUntil).toLocaleDateString() : "Never"
-  });
-
-  const issueDate = card.validFrom ? new Date(card.validFrom).toLocaleDateString() : new Date(card.createdAt).toLocaleDateString();
   const amountStr = `$${parseFloat(card.value).toFixed(2)}`;
-  const displayCode = `TB-${String(index + 1).padStart(6, '0')}`; // Example display number
-
   return (
     <div className="flex w-full h-full bg-white text-black font-sans box-border overflow-hidden rounded shadow-sm border border-gray-300 relative print:border-none print:shadow-none">
 
       {/* LEFT STUB (30%) */}
       <div className="w-[30%] flex flex-col h-full relative">
         {/* Top Header */}
-        <div className="bg-black text-white px-3 py-2 flex flex-col justify-center h-[20%] print:!bg-black print:text-white print:color-adjust-exact">
+        <div className="bg-black text-white p-2 flex flex-col justify-center h-[20%] print:bg-black! print:text-white print:color-adjust-exact">
           <div className={`${yellowtail.className} text-[#E3B12F] text-[22px] leading-none print:text-[#E3B12F]`}>Tasty Bites</div>
           <div className="text-[9px] mt-1 font-bold flex gap-1 items-end">
             Card Number:
-            <span className="flex-1 border-b border-[#FFD700] pb-3 px-2 inline-block h-2">{displayCode}</span>
+            <span className="flex-1 border-b border-[#FFD700] pb-3 inline-block h-2">{card.code}</span>
           </div>
         </div>
 
@@ -72,7 +62,7 @@ export default function GiftCardTemplate({ card, index }) {
             <div className="text-[11px] mt-1 font-bold flex gap-2 items-center">
               Card Number:
               <span className="bg-[#FFD700] text-black px-2 py-0.5 min-w-[100px] text-center font-bold print:!bg-[#FFD700] print:text-black">
-                {displayCode}
+                {card.code}
               </span>
             </div>
           </div>
@@ -87,10 +77,10 @@ export default function GiftCardTemplate({ card, index }) {
           <div className="flex justify-between items-start gap-3">
             <div className="flex-1 flex flex-col gap-2.5 text-[12px] font-bold">
               <div className="flex items-end gap-2">
-                <span className="w-12">Date:</span>
+                <span className="w-8">Date:</span>
                 <span className="border-b-2 border-black border-dotted flex-1 font-normal text-center"></span>
-                <span className="w-16 ml-4">Amount:</span>
-                <span className="bg-[#FFD700] border-2 border-black min-w-[80px] h-6 flex items-center justify-center font-bold px-2 print:!bg-[#FFD700] print:border-black">{amountStr}</span>
+                <span className="w-12 ml-4">Amount:</span>
+                <span className="bg-[#FFD700] border-2 border-black min-w-[80px] h-6 flex items-center justify-center font-bold print:!bg-[#FFD700] print:border-black">{amountStr}</span>
               </div>
               <div className="flex items-end gap-2">
                 <span className="w-8">For:</span>

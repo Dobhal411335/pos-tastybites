@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef, use } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   ChevronLeft,
   Undo,
@@ -211,8 +211,11 @@ function CanvasTable({ table, isSelected, onSelect, onResizeStart, zoom, isPrevi
 
 export default function FloorPlanEditorPage({ params }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const unwrappedParams = React.use(params);
   const floorId = unwrappedParams.floorId || "f1";
+  // Auto-enter preview mode when loaded with ?preview=1 (e.g. from the floor listing modal)
+  const [isPreviewMode, setIsPreviewMode] = useState(() => searchParams.get('preview') === '1');
 
   const [tables, setTables] = useState([]);
   const [unassignedTables, setUnassignedTables] = useState([]);
@@ -276,12 +279,26 @@ export default function FloorPlanEditorPage({ params }) {
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [snapToGrid, setSnapToGrid] = useState(true);
   const [gridMode, setGridMode] = useState("lines"); // "lines" | "dots" | "none"
-  const [isPreviewMode, setIsPreviewMode] = useState(false);
   const [history, setHistory] = useState({ past: [], future: [] });
   const [currentSection, setCurrentSection] = useState("Dining Hall");
 
   const tablesRef = useRef(tables);
   useEffect(() => { tablesRef.current = tables; }, [tables]);
+
+  // Keyboard Delete to remove selected element
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Delete' && selectedTableId && !isPreviewMode) {
+        // Don't fire if user is typing in an input/textarea
+        const tag = document.activeElement?.tagName;
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+        deleteTable();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedTableId, isPreviewMode]);
 
   const saveHistory = () => {
     setHistory(h => ({
@@ -388,7 +405,7 @@ export default function FloorPlanEditorPage({ params }) {
       const newElement = {
         id: `shape-${Date.now()}`,
         floorId: currentFloor._id || currentFloor.id,
-        name: "Unassigned",
+        name: tool.label,
         type: tool.id,
         seats: tool.id.includes("round") ? 4 : 2,
         section: currentSection,
@@ -433,7 +450,7 @@ export default function FloorPlanEditorPage({ params }) {
     const newElement = {
       id: `shape-${Date.now()}`,
       floorId: currentFloor._id || currentFloor.id,
-      name: "Unassigned",
+      name: tool.label,
       type: tool.id,
       seats: tool.id.includes("round") ? 4 : 2,
       section: currentSection,
@@ -783,39 +800,53 @@ export default function FloorPlanEditorPage({ params }) {
                     <AccordionItem value="general" className="border-stone-200 px-5">
                       <AccordionTrigger className="text-[14px] font-bold text-stone-900 hover:no-underline py-4">General</AccordionTrigger>
                       <AccordionContent className="space-y-5 pb-5">
-                        <div className="space-y-2">
-                          <label className="text-[13px] font-bold text-stone-700">Table Name / Assignment</label>
-                          {selectedTable.isShape ? (
-                            <Select
-                              onValueChange={(val) => {
-                                const t = unassignedTables.find(tbl => tbl._id === val);
-                                if (t) assignTable(t);
-                              }}
-                            >
-                              <SelectTrigger className="w-full h-10 bg-white focus:ring-[#1e40af]">
-                                <SelectValue placeholder="Select a table..." />
-                              </SelectTrigger>
-                              <SelectContent className="bg-white max-h-60 overflow-y-auto">
-                                {unassignedTables.map(t => (
-                                  <SelectItem key={t._id} value={t._id}>{t.tableNumber}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          ) : (
-                            <Input
-                              value={selectedTable.name}
-                              onChange={(e) => updateSelectedTable({ name: e.target.value })}
-                              className="h-10 text-[14px] bg-white border-stone-200 focus:ring-[#1e40af] focus:border-[#1e40af]"
-                              disabled={!["kitchen", "door", "register", "bar", "wall", "divider"].includes(selectedTable.type)}
-                            />
-                          )}
-                        </div>
-                        {!["kitchen", "door", "register", "bar", "wall", "divider"].includes(selectedTable.type) && (
-                          <div className="space-y-2">
-                            <label className="text-[13px] font-bold text-stone-700">Seats</label>
-                            <Input type="number" value={selectedTable.seats} onChange={(e) => updateSelectedTable({ seats: parseInt(e.target.value) || 0 })} className="h-10 text-[14px] bg-white border-stone-200 focus:ring-[#1e40af] focus:border-[#1e40af]" />
-                          </div>
-                        )}
+                        {(() => {
+                          const isStructural = ["kitchen", "door", "register", "bar", "wall", "divider"].includes(selectedTable.type);
+                          return (
+                            <>
+                              <div className="space-y-2">
+                                <label className="text-[13px] font-bold text-stone-700">
+                                  {isStructural ? "Element Name" : "Table Name / Assignment"}
+                                </label>
+                                {isStructural ? (
+                                  <Input
+                                    value={selectedTable.name}
+                                    onChange={(e) => updateSelectedTable({ name: e.target.value })}
+                                    className="h-10 text-[14px] bg-white border-stone-200 focus:ring-[#1e40af] focus:border-[#1e40af]"
+                                  />
+                                ) : selectedTable.isShape ? (
+                                  <Select
+                                    onValueChange={(val) => {
+                                      const t = unassignedTables.find(tbl => tbl._id === val);
+                                      if (t) assignTable(t);
+                                    }}
+                                  >
+                                    <SelectTrigger className="w-full h-10 bg-white focus:ring-[#1e40af]">
+                                      <SelectValue placeholder="Select a table..." />
+                                    </SelectTrigger>
+                                    <SelectContent className="bg-white max-h-60 overflow-y-auto">
+                                      {unassignedTables.map(t => (
+                                        <SelectItem key={t._id} value={t._id}>{t.tableNumber}</SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                ) : (
+                                  <Input
+                                    value={selectedTable.name}
+                                    disabled
+                                    className="h-10 text-[14px] bg-white border-stone-200 opacity-70"
+                                  />
+                                )}
+                              </div>
+                              {!isStructural && (
+                                <div className="space-y-2">
+                                  <label className="text-[13px] font-bold text-stone-700">Seats</label>
+                                  <Input type="number" value={selectedTable.seats} onChange={(e) => updateSelectedTable({ seats: parseInt(e.target.value) || 0 })} className="h-10 text-[14px] bg-white border-stone-200 focus:ring-[#1e40af] focus:border-[#1e40af]" />
+                                </div>
+                              )}
+                            </>
+                          );
+                        })()}
                       </AccordionContent>
                     </AccordionItem>
 

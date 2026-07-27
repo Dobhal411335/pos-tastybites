@@ -29,7 +29,7 @@ export default function EmployeeListPage() {
   const [isEmailOpen, setIsEmailOpen] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [showPassword, setShowPassword] = useState(false);
-  const [decryptedPassword, setDecryptedPassword] = useState("");
+  const [viewPassword, setViewPassword] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
 
   const fetchInitialData = useCallback(async () => {
@@ -139,7 +139,7 @@ export default function EmployeeListPage() {
         setIsApproveOpen(false);
         fetchInitialData();
         // Immediately show credentials
-        handleOpenCredentials(json.data);
+        handleOpenCredentials(json.data, json.data.plainPassword);
       } else {
         toast.error(json.message || "Approval failed");
       }
@@ -161,6 +161,7 @@ export default function EmployeeListPage() {
       if (json.success) {
         toast.success("Password regenerated successfully.");
         fetchInitialData();
+        handleOpenCredentials(json.data, json.data.plainPassword);
       } else {
         toast.error(json.message || "Failed to regenerate password");
       }
@@ -193,27 +194,23 @@ export default function EmployeeListPage() {
     }
   };
 
-  // Helper to call backend to decrypt if we don't have the AES key on frontend
-  // Wait, AES is on backend. Let's create a quick API to decrypt.
-  // Actually, we can return the raw password during `approve` or `regenerate` or use a dedicated decrypt endpoint.
-  // Let's create a dedicated decrypt endpoint: `/api/employees/credentials?id=`
-  const handleOpenCredentials = async (emp) => {
-    // Wait for dropdown to close to avoid pointer events lock
+  const handleOpenCredentials = async (emp, knownPassword = null) => {
     await new Promise(resolve => setTimeout(resolve, 150));
-    
+
     setSelectedEmployee(emp);
-    setDecryptedPassword("");
+    setViewPassword(knownPassword || "");
     setShowPassword(false);
     setIsCredentialsOpen(true);
-    
-    // Fetch decrypted password
+
+    if (knownPassword) return;
+
     try {
       const res = await fetch(`/api/employees/credentials?id=${emp._id}`);
       const json = await res.json();
       if (json.success) {
-        setDecryptedPassword(json.data.password);
+        setViewPassword(json.data.password);
       } else {
-        toast.error("Could not decrypt password for viewing");
+        toast.error(json.message || "Could not load password for viewing");
       }
     } catch (err) {
       toast.error("Failed to fetch credentials");
@@ -433,7 +430,7 @@ export default function EmployeeListPage() {
                 <span className="col-span-3 font-semibold">{selectedEmployee.role}</span>
               </div>
               <div className="border-t border-zinc-100 pt-4">
-                <p className="text-xs text-zinc-500 italic">Credentials will be generated securely using AES-256 encryption.</p>
+                <p className="text-xs text-zinc-500 italic">A unique Employee ID, username, and password will be generated automatically.</p>
               </div>
             </div>
           )}
@@ -471,11 +468,11 @@ export default function EmployeeListPage() {
                 <div>
                   <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-1 block">Password</label>
                   <div className="flex gap-2">
-                    <Input readOnly type={showPassword ? "text" : "password"} value={decryptedPassword || "Loading..."} className="bg-zinc-50 font-mono" />
+                    <Input readOnly type={showPassword ? "text" : "password"} value={viewPassword || "Loading..."} className="bg-zinc-50 font-mono" />
                     <Button variant="outline" size="icon" onClick={() => setShowPassword(!showPassword)}>
                       {showPassword ? <EyeOff className="h-4 w-4 text-zinc-600" /> : <Eye className="h-4 w-4 text-zinc-600" />}
                     </Button>
-                    <Button variant="outline" size="icon" onClick={() => copyToClipboard(decryptedPassword, "Password")}>
+                    <Button variant="outline" size="icon" onClick={() => copyToClipboard(viewPassword, "Password")}>
                       <Copy className="h-4 w-4 text-zinc-600" />
                     </Button>
                   </div>
@@ -483,7 +480,7 @@ export default function EmployeeListPage() {
               </div>
               <div className="flex flex-col gap-2 pt-2 border-t border-zinc-100">
                 <Button variant="outline" className="w-full font-bold" onClick={() => {
-                  copyToClipboard(`Employee ID: ${selectedEmployee.employeeId}\nPassword: ${decryptedPassword}`, "Credentials");
+                  copyToClipboard(`Employee ID: ${selectedEmployee.employeeId}\nPassword: ${viewPassword}`, "Credentials");
                 }}>
                   Copy Employee ID & Password
                 </Button>

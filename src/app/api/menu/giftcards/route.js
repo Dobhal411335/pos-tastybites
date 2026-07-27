@@ -6,14 +6,13 @@ import { logger } from "@/utils/logger";
 import mongoose from "mongoose";
 
 // Helper to generate a random code
-const generateCode = () => {
-  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-  let code = "GIFT-";
-  for (let i = 0; i < 8; i++) {
-    code += chars.charAt(Math.floor(Math.random() * chars.length));
-    if (i === 3) code += "-";
-  }
-  return code;
+const generateGiftCardCode = () => {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // Removed O, I, 0, 1
+
+  const randomPart = (length) =>
+    Array.from({ length }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
+
+  return `TB-GC-${randomPart(4)}-${randomPart(4)}`;
 };
 
 // GET - List all giftcards grouped by batch
@@ -22,13 +21,15 @@ export const GET = withAuth(async (request) => {
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get("page")) || 1;
     const limit = parseInt(searchParams.get("limit")) || 10;
-    
+
     // Aggregate by batchId
     const pipeline = [
       { $match: { restaurant: new mongoose.Types.ObjectId(request.restaurant) } },
-      { $group: {
+      {
+        $group: {
           _id: "$batchId",
           name: { $first: "$name" },
+          codes: { $push: "$code" },
           discountType: { $first: "$discountType" },
           value: { $first: "$value" },
           validFrom: { $first: "$validFrom" },
@@ -36,12 +37,15 @@ export const GET = withAuth(async (request) => {
           status: { $first: "$status" },
           count: { $sum: 1 },
           createdAt: { $first: "$createdAt" }
-      }},
+        }
+      },
       { $sort: { createdAt: -1 } },
-      { $facet: {
+      {
+        $facet: {
           metadata: [{ $count: "total" }, { $addFields: { page } }],
           data: [{ $skip: (page - 1) * limit }, { $limit: limit }]
-      }}
+        }
+      }
     ];
 
     const result = await Giftcard.aggregate(pipeline);

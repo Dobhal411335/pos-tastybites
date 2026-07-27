@@ -16,6 +16,10 @@ export class AuthService {
       throw new Error('Account is inactive. Please contact your administrator.');
     }
 
+    if (admin.isVerified === false) {
+      throw new Error('Account is pending verification. Please contact a super admin.');
+    }
+
     const isMatch = await comparePassword(password, admin.password);
     if (!isMatch) throw new Error('Invalid credentials');
 

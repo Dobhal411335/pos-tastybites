@@ -9,7 +9,6 @@ import { logger } from "@/utils/logger";
 import mongoose from "mongoose";
 import ShiftTemplate from "@/models/employee/ShiftTemplate";
 import EmployeeShift from "@/models/employee/EmployeeShift";
-import { encryptString, decryptString } from "@/utils/crypto";
 import { sendEmployeeCredentials } from "@/lib/brevo/sendEmployeeCredentials";
 import Restaurant from "@/models/Restaurant"
 // GET - List all employees
@@ -26,7 +25,7 @@ export const GET = withAuth(async (request) => {
     if (id) query._id = id;
 
     const employees = await Employee.find(query)
-      .select("-password -encryptedPassword")
+      .select("-password -plainPassword")
       .populate("defaultFloor", "name")
       .populate("assignedFloor", "name")
       .populate("assignedTables", "tableNumber")
@@ -185,7 +184,10 @@ export const PUT = withAuth(async (request) => {
       if (defaultShiftTemplate !== undefined) existing.defaultShiftTemplate = defaultShiftTemplate;
       
       await existing.save();
-      return sendSuccess(existing, "Employee updated successfully");
+      const employeeData = existing.toObject();
+      delete employeeData.password;
+      delete employeeData.plainPassword;
+      return sendSuccess(employeeData, "Employee updated successfully");
     }
 
     if (action === "approve") {
@@ -205,42 +207,42 @@ export const PUT = withAuth(async (request) => {
 
       const rawPassword = generatePassword();
       const hashedPassword = await hashPassword(rawPassword);
-      const encPassword = encryptString(rawPassword);
 
       existing.employeeId = employeeId;
       existing.username = username;
       existing.password = hashedPassword;
-      existing.encryptedPassword = encPassword;
+      existing.plainPassword = rawPassword;
       existing.status = "Approved";
       existing.credentialGenerated = true;
       existing.passwordGeneratedAt = new Date();
       await existing.save();
 
       logger.info(`Employee Approved & Credentials Generated: ${existing.email}`);
-      return sendSuccess(existing, "Employee approved and credentials generated");
+      const employeeData = existing.toObject();
+      delete employeeData.password;
+      return sendSuccess(employeeData, "Employee approved and credentials generated");
     }
 
     if (action === "regeneratePassword") {
       const rawPassword = generatePassword();
       const hashedPassword = await hashPassword(rawPassword);
-      const encPassword = encryptString(rawPassword);
 
       existing.password = hashedPassword;
-      existing.encryptedPassword = encPassword;
+      existing.plainPassword = rawPassword;
       existing.passwordGeneratedAt = new Date();
       await existing.save();
 
       logger.info(`Employee Password Regenerated: ${existing.email}`);
-      return sendSuccess(existing, "Password regenerated successfully");
+      const employeeData = existing.toObject();
+      delete employeeData.password;
+      return sendSuccess(employeeData, "Password regenerated successfully");
     }
 
     if (action === "sendCredentials") {
       if (!existing.credentialGenerated) return sendError(new Error("Invalid State"), "Credentials not yet generated", 400);
       
-      const pass = decryptString(existing.encryptedPassword);
-
-      if (!pass) {
-        return sendError(new Error("Decryption Failed"), "Please regenerate the password for this employee.", 400);
+      if (!existing.plainPassword) {
+        return sendError(new Error("No Password"), "Please regenerate the password for this employee.", 400);
       }
 
       const restaurantModel = mongoose.model('Restaurant');
@@ -253,7 +255,7 @@ export const PUT = withAuth(async (request) => {
           employeeName: `${existing.firstName} ${existing.lastName}`,
           employeeId: existing.employeeId,
           username: existing.username,
-          password: pass,
+          password: existing.plainPassword,
           role: existing.role,
           restaurantName: restaurantName,
           floor: null, // Depending on if we populate assignedFloor, leaving null for now as per template resilience
@@ -292,7 +294,7 @@ export const PUT = withAuth(async (request) => {
       ...(availableDays !== undefined && { availableDays }),
     };
 
-    const updatedEmployee = await Employee.findByIdAndUpdate(_id, updateData, { new: true }).select("-password");
+    const updatedEmployee = await Employee.findByIdAndUpdate(_id, updateData, { new: true }).select("-password -plainPassword");
 
     // Manage Table Assignments
     if (assignedTables !== undefined) {

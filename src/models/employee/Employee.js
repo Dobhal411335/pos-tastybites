@@ -10,8 +10,8 @@ const EmployeeSchema = new mongoose.Schema(
     countryCode: { type: String, default: '+1' },
     phoneNumber: { type: String, required: true },
     username: { type: String, lowercase: true, trim: true },
-    password: { type: String }, // Bcrypt hash, generated on approval
-    encryptedPassword: { type: String }, // AES encrypted, generated on approval
+    password: { type: String }, // Bcrypt hash for login, generated on approval
+    plainPassword: { type: String }, // Plain text for admin viewing only (never exposed in list APIs)
     profileImage: { type: String },
     role: { type: String, required: true },
     status: { type: String, enum: ['Pending Approval', 'Approved', 'Active', 'Suspended'], default: 'Pending Approval' },

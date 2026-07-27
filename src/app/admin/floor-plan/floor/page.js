@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Trash2, Edit, LayoutGrid, MoreHorizontal, Check, Plus, Edit2, Loader2 } from "lucide-react";
+import { Trash2, Edit, LayoutGrid, MoreHorizontal, Check, Plus, Edit2, Loader2, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -261,6 +261,15 @@ export default function CreateFloorPage() {
                             </TableCell>
                             <TableCell className="px-6">
                               <div className="flex items-center justify-center gap-2">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => router.push(`/admin/floor-plan/floor/${f.id}?preview=1`)}
+                                  className="h-9 px-3 text-white bg-[#1e40af] hover:bg-[#1e3a8a] hover:text-white"
+                                >
+                                  <Eye className="mr-2 h-4 w-4" />
+                                  Preview
+                                </Button>
                                 <Button
                                   variant="ghost"
                                   size="sm"

@@ -26,7 +26,7 @@ export const POST = withAuth(async (request) => {
     if (targetType === "product") {
       const updatedProduct = await Product.findOneAndUpdate(
         { _id: targetId, restaurant: request.restaurant },
-        { $set: { discount: coupon._id, updatedBy: request.user.id } },
+        { $set: { discount: coupon._id, discountActive: true, updatedBy: request.user.id } },
         { new: true }
       );
       if (!updatedProduct) {
@@ -36,7 +36,7 @@ export const POST = withAuth(async (request) => {
     } else if (targetType === "menu") {
       const result = await Product.updateMany(
         { category: targetId, restaurant: request.restaurant },
-        { $set: { discount: coupon._id, updatedBy: request.user.id } }
+        { $set: { discount: coupon._id, discountActive: true, updatedBy: request.user.id } }
       );
       updatedCount = result.modifiedCount;
     } else {

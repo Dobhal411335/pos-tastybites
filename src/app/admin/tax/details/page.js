@@ -51,6 +51,17 @@ export default function TaxDetailsPage() {
     return matchesName && matchesStatus;
   });
 
+  // HST = combined total of all taxes (Percent-type summed, Amount-type summed separately)
+  const hstPercentTotal = taxes
+    .filter(t => t.type === "Percent")
+    .reduce((sum, t) => sum + (parseFloat(t.value) || 0), 0);
+
+  const hstAmountTotal = taxes
+    .filter(t => t.type === "Amount")
+    .reduce((sum, t) => sum + (parseFloat(t.value) || 0), 0);
+
+  const showHstRow = taxes.length > 0;
+
   const handleOpenCreate = () => {
     setForm({ name: "", value: "", type: "Percent" });
     setEditId(null);
@@ -300,6 +311,34 @@ export default function TaxDetailsPage() {
                           </TableCell>
                         </TableRow>
                       ))
+                    )}
+                    {/* HST Total Row */}
+                    {showHstRow && !loading && (
+                      <TableRow className="h-16 bg-blue-50 border-t-2 border-[#1e40af]">
+                        <TableCell className="px-6">
+                          <span className="font-black text-[15px] text-[#1e40af] uppercase tracking-wide">HST Tax (Total)</span>
+                        </TableCell>
+                        <TableCell className="px-6 text-center">
+                          <span className="inline-flex flex-col items-center justify-center gap-0.5">
+                            {hstPercentTotal > 0 && (
+                              <span className="inline-flex items-center justify-center bg-blue-100 text-[#1e40af] px-3 py-1 rounded-md text-[14px] font-extrabold border border-blue-200">
+                                {hstPercentTotal.toFixed(2)}%
+                              </span>
+                            )}
+                            {hstAmountTotal > 0 && (
+                              <span className="inline-flex items-center justify-center bg-blue-100 text-[#1e40af] px-3 py-1 rounded-md text-[13px] font-bold border border-blue-200 mt-0.5">
+                                ${hstAmountTotal.toFixed(2)}
+                              </span>
+                            )}
+                          </span>
+                        </TableCell>
+                        <TableCell className="px-6 text-center font-bold text-[14px] text-[#1e40af]">
+                          Combined
+                        </TableCell>
+                        <TableCell className="px-6 text-center" colSpan={2}>
+                          <span className="text-[13px] font-semibold text-zinc-500 italic">Sum of all tax rates above</span>
+                        </TableCell>
+                      </TableRow>
                     )}
                   </TableBody>
                 </Table>
