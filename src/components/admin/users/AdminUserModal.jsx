@@ -105,10 +105,6 @@ export default function AdminUserModal({ admin, onClose, currentUser, onViewCred
       
       toast.success(data.message || (isEdit ? "Admin updated successfully" : "Admin created successfully"));
       onClose(true);
-
-      if (!isEdit && onViewCredentials && data.data) {
-        onViewCredentials(data.data, formData.password);
-      }
       
     } catch (err) {
       toast.error(err.message);

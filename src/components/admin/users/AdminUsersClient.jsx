@@ -1,10 +1,19 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { Search, Plus, Filter, Loader2, Edit, Shield, User, Clock, Eye, EyeOff, Copy, Check, X } from "lucide-react";
-import {toast} from "sonner";
+import { Search, Plus, Loader2, Edit, Shield, User, Clock, Eye, EyeOff, Copy, Check, X, MoreHorizontal, Send } from "lucide-react";
+import { toast } from "sonner";
 import AdminUserModal from "./AdminUserModal";
 import { useAdmin } from "@/context/AdminContext";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+  DropdownMenuLabel,
+} from "@/components/ui/dropdown-menu";
 
 export default function AdminUsersClient() {
   const { adminUser, ready } = useAdmin();
@@ -15,7 +24,7 @@ export default function AdminUsersClient() {
   const [statusFilter, setStatusFilter] = useState("All Status");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingAdmin, setEditingAdmin] = useState(null);
-  
+
   // Credentials View State
   const [viewCredsOpen, setViewCredsOpen] = useState(false);
   const [viewingAdmin, setViewingAdmin] = useState(null);
@@ -23,10 +32,14 @@ export default function AdminUsersClient() {
   const [credsLoading, setCredsLoading] = useState(false);
   const [copied, setCopied] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+
+  // Verify Admin State
   const [verifyModalOpen, setVerifyModalOpen] = useState(false);
   const [verifyingAdmin, setVerifyingAdmin] = useState(null);
   const [verificationCode, setVerificationCode] = useState("");
   const [verifyLoading, setVerifyLoading] = useState(false);
+  const [sendingOtp, setSendingOtp] = useState(false);
+
   const currentUser = adminUser;
 
   const fetchAdmins = useCallback(async () => {
@@ -47,6 +60,7 @@ export default function AdminUsersClient() {
       setLoading(false);
     }
   }, [roleFilter, statusFilter, search]);
+
   useEffect(() => {
     const loadAdmins = async () => {
       if (!ready) return;
@@ -71,7 +85,6 @@ export default function AdminUsersClient() {
 
     void loadAdmins();
   }, [ready, roleFilter, statusFilter, search]);
-
 
   const handleCreate = () => {
     setEditingAdmin(null);
@@ -104,7 +117,6 @@ export default function AdminUsersClient() {
       const res = await fetch(`/api/admin/users/credentials?id=${admin._id}`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Failed to fetch credentials");
-      
       setAdminPassword(data.data.password);
     } catch (err) {
       toast.error(err.message);
@@ -134,6 +146,28 @@ export default function AdminUsersClient() {
     setVerificationCode("");
   };
 
+  // Send OTP to super admin email, then open verify modal
+  const handleRequestVerification = async (admin) => {
+    setSendingOtp(true);
+    try {
+      const res = await fetch("/api/admin/users/send-verification", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ adminId: admin._id }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Failed to send verification email");
+
+      toast.success("Verification OTP sent to super admin email");
+      openVerifyModal(admin);
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setSendingOtp(false);
+    }
+  };
+
   const handleVerifyAdmin = async (e) => {
     e.preventDefault();
 
@@ -156,7 +190,7 @@ export default function AdminUsersClient() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Failed to verify admin");
 
-      toast.success(data.message || "Admin verified successfully");
+      toast.success(data.message || "Admin verified and activated successfully");
       closeVerifyModal();
       fetchAdmins();
     } catch (err) {
@@ -166,7 +200,7 @@ export default function AdminUsersClient() {
     }
   };
 
-  const isSuperAdmin = currentUser?.role === 'Super Admin' || currentUser?.role === 'ADMIN';
+  const isSuperAdmin = currentUser?.role === "Super Admin" || currentUser?.role === "ADMIN";
 
   return (
     <div className="flex flex-col h-full bg-white relative">
@@ -176,7 +210,7 @@ export default function AdminUsersClient() {
           <p className="text-sm text-gray-500 mt-1">Manage system administrators and permissions</p>
         </div>
         {isSuperAdmin && (
-          <button 
+          <button
             onClick={handleCreate}
             className="bg-orange-500 hover:bg-orange-600 shadow-md text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2"
           >
@@ -198,7 +232,7 @@ export default function AdminUsersClient() {
           />
         </div>
         <div className="flex gap-4">
-          <select 
+          <select
             className="border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[#E3B12F]/50 focus:border-[#E3B12F] bg-white text-gray-700"
             value={roleFilter}
             onChange={(e) => setRoleFilter(e.target.value)}
@@ -207,7 +241,7 @@ export default function AdminUsersClient() {
             <option>Admin</option>
             <option>Super Admin</option>
           </select>
-          <select 
+          <select
             className="border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[#E3B12F]/50 focus:border-[#E3B12F] bg-white text-gray-700"
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
@@ -258,13 +292,29 @@ export default function AdminUsersClient() {
                     </div>
                   </td>
                   <td className="px-6 py-4">
-                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${admin.role === 'Super Admin' || admin.role === 'ADMIN' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
-                      {admin.role === 'Super Admin' || admin.role === 'ADMIN' ? <Shield className="w-3.5 h-3.5" /> : <User className="w-3.5 h-3.5" />}
-                      {admin.role === 'ADMIN' ? 'Super Admin' : admin.role}
+                    <span
+                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
+                        admin.role === "Super Admin" || admin.role === "ADMIN"
+                          ? "bg-purple-100 text-purple-700"
+                          : "bg-blue-100 text-blue-700"
+                      }`}
+                    >
+                      {admin.role === "Super Admin" || admin.role === "ADMIN" ? (
+                        <Shield className="w-3.5 h-3.5" />
+                      ) : (
+                        <User className="w-3.5 h-3.5" />
+                      )}
+                      {admin.role === "ADMIN" ? "Super Admin" : admin.role}
                     </span>
                   </td>
                   <td className="px-6 py-4">
-                    <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium ${admin.status === 'Active' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                    <span
+                      className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium ${
+                        admin.status === "Active"
+                          ? "bg-green-100 text-green-700"
+                          : "bg-red-100 text-red-700"
+                      }`}
+                    >
                       {admin.status}
                     </span>
                   </td>
@@ -282,39 +332,66 @@ export default function AdminUsersClient() {
                   <td className="px-6 py-4 text-gray-500">
                     <div className="flex items-center gap-1.5">
                       <Clock className="w-3.5 h-3.5 text-gray-400" />
-                      {admin.lastLogin ? new Date(admin.lastLogin).toLocaleDateString() : 'Never'}
+                      {admin.lastLogin
+                        ? new Date(admin.lastLogin).toLocaleDateString()
+                        : "Never"}
                     </div>
                   </td>
                   <td className="px-6 py-4 text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      {isSuperAdmin && admin.isVerified === false && (
-                        <button
-                          onClick={() => openVerifyModal(admin)}
-                          className="text-amber-700 hover:text-amber-900 hover:bg-amber-50 py-1 px-4 gap-2 flex items-center justify-center rounded-md border-2 border-amber-400 transition-colors"
-                          title="Verify Admin"
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 border text-zinc-500 hover:text-zinc-900 cursor-pointer"
+                          disabled={sendingOtp}
                         >
-                          <Shield className="w-4 h-4" /> Verify
-                        </button>
-                      )}
-                      {isSuperAdmin && (
-                        <button
-                          onClick={() => handleViewCredentials(admin)}
-                          className="text-gray-500 hover:text-gray-900 hover:bg-gray-100 py-1 px-4 gap-2 flex items-center justify-center rounded-md border-2 border-gray-500 transition-colors"
-                          title="View Credentials"
-                        >
-                          <Eye className="w-4 h-4" /> View
-                        </button>
-                      )}
-                      {(isSuperAdmin || currentUser?._id === admin._id) && (
-                        <button
-                          onClick={() => handleEdit(admin)}
-                          className="text-indigo-600 hover:text-indigo-900 hover:bg-indigo-50 p-2 rounded-md transition-colors"
-                          title="Edit Admin"
-                        >
-                          <Edit className="w-4 h-4" />
-                        </button>
-                      )}
-                    </div>
+                          {sendingOtp ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <MoreHorizontal className="h-4 w-4" />
+                          )}
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-48 bg-white">
+                        <DropdownMenuLabel className="text-xs font-semibold text-gray-400 uppercase tracking-wide px-2 py-1.5">
+                          Actions
+                        </DropdownMenuLabel>
+
+                        {/* Verify section – only for unverified admins, only super admin can do this */}
+                        {isSuperAdmin && admin.isVerified === false && (
+                          <>
+                            <DropdownMenuItem
+                              className="text-[14px] font-medium cursor-pointer text-amber-700 focus:bg-amber-50 focus:text-amber-900"
+                              onClick={() => setTimeout(() => handleRequestVerification(admin), 150)}
+                            >
+                              <Send className="mr-2 h-4 w-4" /> Send OTP &amp; Verify
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                          </>
+                        )}
+
+                        {/* View Credentials – super admin only, and only after admin is verified */}
+                        {isSuperAdmin && admin.isVerified === true && (
+                          <DropdownMenuItem
+                            className="text-[14px] font-medium cursor-pointer"
+                            onClick={() => setTimeout(() => handleViewCredentials(admin), 150)}
+                          >
+                            <Eye className="mr-2 h-4 w-4" /> View Credentials
+                          </DropdownMenuItem>
+                        )}
+
+                        {/* Edit – super admin or self */}
+                        {(isSuperAdmin || currentUser?._id === admin._id) && (
+                          <DropdownMenuItem
+                            className="text-[14px] font-medium cursor-pointer"
+                            onClick={() => setTimeout(() => handleEdit(admin), 150)}
+                          >
+                            <Edit className="mr-2 h-4 w-4" /> Edit Admin
+                          </DropdownMenuItem>
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </td>
                 </tr>
               ))
@@ -324,20 +401,21 @@ export default function AdminUsersClient() {
       </div>
 
       {isModalOpen && (
-        <AdminUserModal 
-          admin={editingAdmin} 
-          onClose={handleModalClose} 
+        <AdminUserModal
+          admin={editingAdmin}
+          onClose={handleModalClose}
           currentUser={currentUser}
           onViewCredentials={handleViewCredentials}
         />
       )}
 
+      {/* View Credentials Modal */}
       {viewCredsOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in-95 duration-200">
             <div className="px-5 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
               <h2 className="text-lg font-bold text-gray-900">Admin Credentials</h2>
-              <button 
+              <button
                 onClick={() => setViewCredsOpen(false)}
                 className="text-gray-400 hover:text-gray-600 hover:bg-gray-100 p-1.5 rounded-full transition-colors"
               >
@@ -346,13 +424,17 @@ export default function AdminUsersClient() {
             </div>
             <div className="p-5 space-y-4">
               <div>
-                <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Email / Login</label>
+                <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">
+                  Email / Login
+                </label>
                 <div className="text-sm font-medium text-gray-900 bg-gray-50 px-3 py-2 rounded-lg border border-gray-200">
                   {viewingAdmin?.email}
                 </div>
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Password</label>
+                <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">
+                  Password
+                </label>
                 {credsLoading ? (
                   <div className="flex items-center gap-2 text-sm text-gray-500 px-3 py-2 bg-gray-50 rounded-lg border border-gray-200">
                     <Loader2 className="w-4 h-4 animate-spin" /> Loading...
@@ -369,7 +451,7 @@ export default function AdminUsersClient() {
                     >
                       {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
-                    <button 
+                    <button
                       onClick={() => copyToClipboard(adminPassword)}
                       className="text-gray-400 hover:text-gray-700 transition-colors shrink-0"
                       title="Copy Password"
@@ -392,12 +474,16 @@ export default function AdminUsersClient() {
         </div>
       )}
 
+      {/* OTP Verification Modal */}
       {verifyModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-200">
             <div className="px-5 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
-              <h2 className="text-lg font-bold text-gray-900">Verify Admin</h2>
-              <button 
+              <div>
+                <h2 className="text-lg font-bold text-gray-900">Verify Admin Account</h2>
+                <p className="text-xs text-gray-500 mt-0.5">OTP sent to super admin email</p>
+              </div>
+              <button
                 onClick={closeVerifyModal}
                 className="text-gray-400 hover:text-gray-600 hover:bg-gray-100 p-1.5 rounded-full transition-colors"
               >
@@ -405,12 +491,21 @@ export default function AdminUsersClient() {
               </button>
             </div>
             <form onSubmit={handleVerifyAdmin} className="p-5 space-y-4">
-              <div>
-                <p className="text-sm font-semibold text-gray-900">{verifyingAdmin?.name}</p>
-                <p className="text-xs text-gray-500">{verifyingAdmin?.email}</p>
+              {/* Admin info */}
+              <div className="flex items-center gap-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
+                  <Shield className="w-4 h-4 text-amber-700" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-gray-900">{verifyingAdmin?.name}</p>
+                  <p className="text-xs text-gray-500">{verifyingAdmin?.email}</p>
+                </div>
               </div>
+
               <div>
-                <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Verification Code</label>
+                <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">
+                  Enter Verification OTP
+                </label>
                 <input
                   type="text"
                   value={verificationCode}
@@ -418,12 +513,15 @@ export default function AdminUsersClient() {
                   inputMode="numeric"
                   maxLength={6}
                   placeholder="000000"
-                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#E3B12F]/50 focus:border-[#E3B12F] font-mono tracking-[0.35em] text-center"
+                  className="w-full px-3 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#E3B12F]/50 focus:border-[#E3B12F] font-mono tracking-[0.5em] text-center text-lg"
                 />
               </div>
+
               <p className="text-sm text-gray-500">
-                Enter the OTP sent to the super admin email to approve this account.
+                Enter the 6-digit OTP sent to the super admin email. Once verified, the admin&apos;s
+                status will be set to <span className="font-semibold text-green-600">Active</span>.
               </p>
+
               <div className="flex justify-end gap-3 pt-2">
                 <button
                   type="button"
@@ -444,7 +542,10 @@ export default function AdminUsersClient() {
                       Verifying...
                     </>
                   ) : (
-                    'Verify Admin'
+                    <>
+                      <Shield className="w-4 h-4" />
+                      Verify &amp; Activate
+                    </>
                   )}
                 </button>
               </div>

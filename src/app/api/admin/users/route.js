@@ -72,6 +72,7 @@ async function createAdminHandler(request) {
     const creatorAdmin = await Admin.findById(request.user.id);
     const restaurantId = creatorAdmin ? creatorAdmin.restaurantId : null;
     
+    // Non-bootstrap admins always start as Inactive + unverified until OTP is confirmed
     const newAdmin = await Admin.create({
       name,
       email,
@@ -79,7 +80,7 @@ async function createAdminHandler(request) {
       password: hashedPassword,
       plainPassword: password,
       role: finalRole,
-      status: status || 'Active',
+      status: isBootstrapSuperAdmin ? (status || 'Active') : 'Inactive',
       isVerified: isBootstrapSuperAdmin,
       verifiedAt: isBootstrapSuperAdmin ? new Date() : undefined,
       restaurantId: restaurantId
@@ -168,6 +169,7 @@ async function verifyAdminHandler(request) {
 
     admin.isVerified = true;
     admin.verifiedAt = new Date();
+    admin.status = 'Active'; // Activate the admin after successful OTP verification
     admin.verificationOtpHash = undefined;
     admin.verificationOtpExpiresAt = undefined;
     await admin.save();

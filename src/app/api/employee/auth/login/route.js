@@ -4,9 +4,10 @@ import Employee from '@/models/employee/Employee';
 import RegisteredDevice from '@/models/RegisteredDevice';
 import EmployeeShift from '@/models/employee/EmployeeShift';
 import EmployeeSession from '@/models/employee/EmployeeSession';
-import EmployeeLog from '@/models/employee/EmployeeLog';
+import DutyChange from '@/models/employee/DutyChange';
 import { comparePassword } from '@/utils/password';
 import { signToken } from '@/utils/jwt';
+import { upsertAttendanceOnClockIn } from '@/lib/attendance';
 
 export async function POST(request) {
   try {
@@ -19,7 +20,6 @@ export async function POST(request) {
       return NextResponse.json({ success: false, message: 'Missing required fields' }, { status: 400 });
     }
 
-    // 1. Verify Employee
     const employee = await Employee.findOne({ 
       $or: [
         { employeeId: employeeId },
@@ -30,21 +30,16 @@ export async function POST(request) {
       return NextResponse.json({ success: false, message: 'Invalid credentials' }, { status: 401 });
     }
 
-    // 2. Verify Password
     const isMatch = await comparePassword(password, employee.password);
     if (!isMatch) {
       return NextResponse.json({ success: false, message: 'Invalid credentials' }, { status: 401 });
     }
 
-    // 3. Verify Active Status
     if (employee.status !== 'Active' && employee.status !== 'Approved') {
       return NextResponse.json({ success: false, message: 'Employee account is not active' }, { status: 403 });
     }
 
-    // 4. Verify Registered Device
     let device = await RegisteredDevice.findOne({ browserFingerprint, status: 'Active' });
-    
-    // Fallback to assigned device if fingerprint check fails (useful if browser fingerprint changed)
     if (!device && employee.assignedDevice) {
       device = await RegisteredDevice.findById(employee.assignedDevice);
     }
@@ -53,24 +48,35 @@ export async function POST(request) {
       return NextResponse.json({ success: false, message: 'Unrecognized or inactive device' }, { status: 403 });
     }
 
-    // Update device last login
     device.lastLogin = new Date();
     await device.save();
 
-    // 5. Verify Current Shift (Timezone robust validation)
     const now = new Date();
-    // Query a 48-hour window so we don't miss shifts due to timezone differences
+    const todayStart = new Date(now); todayStart.setHours(0, 0, 0, 0);
+    const todayEnd   = new Date(now); todayEnd.setHours(23, 59, 59, 999);
+
+    const todayDutyChange = await DutyChange.findOne({
+      employee: employee._id,
+      date: { $gte: todayStart, $lte: todayEnd },
+      status: 'Approved',
+    });
+
+    const blockedDutyTypes = ['MarkLeave', 'MarkHoliday', 'MarkAbsent'];
+    if (todayDutyChange && blockedDutyTypes.includes(todayDutyChange.changeType)) {
+      const label = todayDutyChange.leaveType || (todayDutyChange.changeType === 'MarkAbsent' ? 'Absent' : 'Leave');
+      return NextResponse.json({
+        success: false,
+        message: `Login is not permitted today. You are marked as: ${label}.`
+      }, { status: 403 });
+    }
+
     const windowStart = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-    const windowEnd = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+    const windowEnd   = new Date(now.getTime() + 24 * 60 * 60 * 1000);
 
     const recentShifts = await EmployeeShift.find({ 
       employee: employee._id, 
       startTime: { $gte: windowStart, $lte: windowEnd }
     });
-
-    if (!recentShifts || recentShifts.length === 0) {
-      return NextResponse.json({ success: false, message: 'You have no shift scheduled around this time.' }, { status: 403 });
-    }
 
     let currentValidShift = null;
     let shiftTooEarly = false;
@@ -80,7 +86,6 @@ export async function POST(request) {
 
     for (const shift of recentShifts) {
       if (['Leave', 'Sick Leave', 'Vacation', 'Holiday'].includes(shift.shiftType)) {
-        // If they have a leave shift spanning this exact moment
         const sStart = new Date(shift.startTime.getTime());
         const sEnd = shift.endTime ? new Date(shift.endTime.getTime()) : new Date(sStart.getTime() + 24 * 60 * 60 * 1000);
         if (now >= sStart && now <= sEnd) {
@@ -89,18 +94,15 @@ export async function POST(request) {
         continue;
       }
 
-      // Allow 15 min buffer before start
       const shiftStart = new Date(shift.startTime.getTime() - 15 * 60000);
       const shiftEnd = shift.endTime ? new Date(shift.endTime.getTime()) : null;
 
       if (now < shiftStart) {
-        // Starts within 12 hours -> upcoming
         if (shiftStart.getTime() - now.getTime() < 12 * 60 * 60 * 1000) {
           shiftTooEarly = true;
           hasRelevantShifts = true;
         }
       } else if (shiftEnd && now > shiftEnd) {
-        // Ended within the last 12 hours -> past
         if (now.getTime() - shiftEnd.getTime() < 12 * 60 * 60 * 1000) {
           shiftTooLate = true;
           hasRelevantShifts = true;
@@ -109,6 +111,31 @@ export async function POST(request) {
         currentValidShift = shift;
         hasRelevantShifts = true;
         break;
+      }
+    }
+
+    if (!currentValidShift && todayDutyChange && ['AssignDuty', 'ChangeShift'].includes(todayDutyChange.changeType)) {
+      const tempStart = todayDutyChange.newStartTime ? new Date(todayDutyChange.newStartTime.getTime() - 15 * 60000) : null;
+      const tempEnd = todayDutyChange.newEndTime ? new Date(todayDutyChange.newEndTime) : null;
+
+      if (tempStart && now < tempStart) {
+        shiftTooEarly = true;
+        hasRelevantShifts = true;
+      } else if (tempEnd && now > tempEnd) {
+        shiftTooLate = true;
+        hasRelevantShifts = true;
+      } else {
+        hasRelevantShifts = true;
+        currentValidShift = {
+          _id: null,
+          startTime: todayDutyChange.newStartTime || null,
+          endTime: todayDutyChange.newEndTime || null,
+          assignedFloor: todayDutyChange.assignedFloor || employee.assignedFloor,
+          assignedTables: todayDutyChange.assignedTables?.length
+            ? todayDutyChange.assignedTables
+            : (employee.assignedTables || []),
+          _fromDutyChange: true,
+        };
       }
     }
 
@@ -125,7 +152,6 @@ export async function POST(request) {
       return NextResponse.json({ success: false, message: 'You are not scheduled to work at this current time.' }, { status: 403 });
     }
 
-    // 6. Create EmployeeSession
     const session = await EmployeeSession.create({
       employee: employee._id,
       restaurant: employee.restaurant,
@@ -136,19 +162,13 @@ export async function POST(request) {
       status: 'Active'
     });
 
-    // 7. Create EmployeeLog
-    await EmployeeLog.create({
-      employee: employee._id,
-      restaurant: employee.restaurant,
-      shift: currentValidShift._id,
-      date: new Date(),
-      loginTime: new Date(),
-      device: device._id,
-      floor: currentValidShift.assignedFloor || employee.assignedFloor,
-      tablesAssigned: currentValidShift.assignedTables || []
+    await upsertAttendanceOnClockIn({
+      employee,
+      shiftId: currentValidShift._id,
+      device,
+      loginTime: now,
     });
 
-    // 7. Return JWT
     const accessToken = await signToken({
       employeeId: employee._id.toString(),
       restaurantId: employee.restaurant.toString(),
@@ -176,19 +196,18 @@ export async function POST(request) {
       }
     });
 
-    // Set Cookies
     response.cookies.set('employee_access_token', accessToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'strict',
-      maxAge: 3600 // 1 hour
+      maxAge: 3600
     });
 
     response.cookies.set('employee_refresh_token', refreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'strict',
-      maxAge: 604800 // 7 days
+      maxAge: 604800
     });
 
     return response;

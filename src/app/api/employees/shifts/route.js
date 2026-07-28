@@ -9,6 +9,8 @@ import Floor from "@/models/floor/Floor";
 import Table from "@/models/floor/Table";
 import RegisteredDevice from "@/models/RegisteredDevice";
 import ShiftTemplate from "@/models/employee/ShiftTemplate";
+import ShiftHistory from "@/models/employee/ShiftHistory";
+import { GET as getDutyChanges, POST as postDutyChange } from "./duty-changes/route";
 
 // Helper function to recalculate all shifts for an employee in a given week
 async function calculateWeeklyHours(employeeId, restaurantId, targetDate) {
@@ -82,6 +84,10 @@ export const GET = withAuth(async (request) => {
       return sendSuccess(templates, "Templates retrieved successfully");
     }
 
+    if (action === "dutyChanges") {
+      return getDutyChanges(request);
+    }
+
     const query = { restaurant: request.restaurant };
 
     if (date) {
@@ -114,8 +120,20 @@ export const GET = withAuth(async (request) => {
 // POST - Create new shift(s) or template or copy week
 export const POST = withAuth(async (request) => {
   try {
+    const dutyChangeRequest = request.clone();
+    const { searchParams } = new URL(request.url);
+    const routeAction = searchParams.get("action");
+
+    if (routeAction === "dutyChanges") {
+      return postDutyChange(dutyChangeRequest);
+    }
+
     const data = await request.json();
     const { action } = data;
+
+    if (action === "dutyChanges") {
+      return postDutyChange(dutyChangeRequest);
+    }
 
     if (action === "createTemplate") {
       const { name, startTime, endTime, color, workingDays, repeatPattern } = data;
@@ -190,7 +208,7 @@ export const POST = withAuth(async (request) => {
     }
 
     if (action === "applyTemplateEngine") {
-      const { templateId, employeeIds, startDate, endDate } = data;
+      const { templateId, employeeIds, startDate, endDate, overwrite = false } = data;
       
       const template = await ShiftTemplate.findById(templateId);
       if (!template) return sendError(new Error("Not Found"), "Template not found", 404);
@@ -199,46 +217,77 @@ export const POST = withAuth(async (request) => {
       if (employees.length !== employeeIds.length) return sendError(new Error("Not Found"), "One or more employees not found", 404);
 
       const shiftStartTemplate = new Date(`1970-01-01T${template.startTime}:00`);
-      const shiftEndTemplate = new Date(`1970-01-01T${template.endTime}:00`);
+      const shiftEndTemplate   = new Date(`1970-01-01T${template.endTime}:00`);
 
-      const startD = new Date(startDate);
-      startD.setHours(0,0,0,0);
-      const endD = new Date(endDate);
-      endD.setHours(23,59,59,999);
+      const startD = new Date(startDate); startD.setHours(0, 0, 0, 0);
+      const endD   = new Date(endDate);   endD.setHours(23, 59, 59, 999);
 
+      // ── Duplicate check ──────────────────────────────────────────────────
+      const existingShifts = await EmployeeShift.find({
+        employee:   { $in: employeeIds },
+        restaurant: request.restaurant,
+        date: { $gte: startD, $lte: endD },
+        isPlanned: true,
+      }).select('employee date').lean();
+
+      const existingSet = new Set(
+        existingShifts.map(s =>
+          `${s.employee}_${new Date(s.date).toISOString().split('T')[0]}`
+        )
+      );
+
+      if (overwrite && existingShifts.length > 0) {
+        await EmployeeShift.deleteMany({
+          employee:   { $in: employeeIds },
+          restaurant: request.restaurant,
+          date: { $gte: startD, $lte: endD },
+          isPlanned: true,
+        });
+        existingSet.clear();
+        logger.info(`applyTemplateEngine: overwrite=true — deleted ${existingShifts.length} existing planned shifts`);
+      }
+
+      // ── Build shifts list ────────────────────────────────────────────────
       const shiftsToCreate = [];
       let skippedCount = 0;
+      const now = new Date();
 
       for (const emp of employees) {
         let currentDate = new Date(startD);
         while (currentDate <= endD) {
           const dayOfWeek = currentDate.toLocaleDateString('en-US', { weekday: 'long' });
+          const month     = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
+          const dateKey   = `${emp._id}_${currentDate.toISOString().split('T')[0]}`;
 
           let shouldSchedule = true;
-          if (emp.weeklyOff && emp.weeklyOff.includes(dayOfWeek)) shouldSchedule = false;
-          if (emp.availableDays && emp.availableDays.length > 0 && !emp.availableDays.includes(dayOfWeek)) shouldSchedule = false;
-          if (emp.leaveStatus && emp.leaveStatus !== 'None') shouldSchedule = false;
-          if (template.workingDays && template.workingDays.length > 0 && !template.workingDays.includes(dayOfWeek)) shouldSchedule = false;
+          if (!overwrite && existingSet.has(dateKey))           { shouldSchedule = false; } // duplicate guard
+          if (emp.weeklyOff?.includes(dayOfWeek))               shouldSchedule = false;
+          if (emp.availableDays?.length > 0 && !emp.availableDays.includes(dayOfWeek)) shouldSchedule = false;
+          if (emp.leaveStatus && emp.leaveStatus !== 'None')     shouldSchedule = false;
+          if (template.workingDays?.length > 0 && !template.workingDays.includes(dayOfWeek)) shouldSchedule = false;
 
           if (shouldSchedule) {
             const sTime = new Date(currentDate);
             sTime.setHours(shiftStartTemplate.getHours(), shiftStartTemplate.getMinutes(), 0, 0);
-
             const eTime = new Date(currentDate);
             eTime.setHours(shiftEndTemplate.getHours(), shiftEndTemplate.getMinutes(), 0, 0);
             if (eTime <= sTime) eTime.setDate(eTime.getDate() + 1);
 
             shiftsToCreate.push({
-              employee: emp._id,
-              restaurant: request.restaurant,
-              date: new Date(currentDate),
-              startTime: sTime,
-              endTime: eTime,
-              status: "Scheduled",
-              shiftType: "Regular",
-              templateId: template._id,
-              assignedFloor: emp.assignedFloor || emp.defaultFloor || null,
-              assignedTables: emp.assignedTables || []
+              employee:       emp._id,
+              restaurant:     request.restaurant,
+              date:           new Date(currentDate),
+              startTime:      sTime,
+              endTime:        eTime,
+              status:         "Scheduled",
+              shiftType:      "Regular",
+              templateId:     template._id,
+              assignedFloor:  emp.assignedFloor || emp.defaultFloor || null,
+              assignedTables: emp.assignedTables || [],
+              // Planned schedule metadata
+              isPlanned:      true,
+              month,
+              generatedAt:    now,
             });
           } else {
             skippedCount++;
@@ -248,27 +297,46 @@ export const POST = withAuth(async (request) => {
       }
 
       if (shiftsToCreate.length === 0) {
-        return sendError(new Error("Validation"), "No shifts could be scheduled due to availability constraints.", 400);
+        return sendError(new Error("Validation"), "No shifts could be scheduled. All dates are either already scheduled (use overwrite) or blocked by availability constraints.", 400);
       }
 
       const insertedShifts = await EmployeeShift.insertMany(shiftsToCreate);
 
-      // Recalc unique employees weeks
+      // ── Weekly hours recalc ──────────────────────────────────────────────
       const uniqueEmp = [...new Set(shiftsToCreate.map(s => s.employee.toString()))];
       const uniqueWeeks = [...new Set(shiftsToCreate.map(s => {
-        const d = new Date(s.date);
-        const day = d.getDay();
+        const d = new Date(s.date), day = d.getDay();
         return new Date(d.setDate(d.getDate() - day + (day === 0 ? -6 : 1))).toISOString();
       }))];
-
       for (const uEmp of uniqueEmp) {
         for (const wDate of uniqueWeeks) {
           await calculateWeeklyHours(uEmp, request.restaurant, new Date(wDate));
         }
       }
 
-      logger.info(`Bulk applyTemplateEngine shifts created: ${insertedShifts.length}`);
-      return sendSuccess(insertedShifts, `Scheduled ${insertedShifts.length} shift(s). Skipped ${skippedCount} due to availability/working days.`, 201);
+      // ── ShiftHistory audit — one record per employee ──────────────────────
+      const historyDocs = employees.map(emp => ({
+        employee:     emp._id,
+        restaurant:   request.restaurant,
+        date:         startD,
+        eventType:    'ScheduleGenerated',
+        originalData: null,
+        updatedData:  {
+          templateId:   template._id,
+          templateName: template.name,
+          startDate:    startD,
+          endDate:      endD,
+          totalShifts:  shiftsToCreate.filter(s => s.employee.toString() === emp._id.toString()).length,
+          overwrite,
+        },
+        reason:        `Schedule generated from template: ${template.name}`,
+        performedBy:   'Admin',
+        performedById: request.user.id,
+      }));
+      if (historyDocs.length > 0) await ShiftHistory.insertMany(historyDocs);
+
+      logger.info(`applyTemplateEngine: ${insertedShifts.length} shifts created, ${skippedCount} skipped. overwrite=${overwrite}`);
+      return sendSuccess(insertedShifts, `Scheduled ${insertedShifts.length} shift(s). Skipped ${skippedCount}.`, 201);
     }
 
     let { employeeIds, employeeId, date, startTime, endTime, status, notes, shiftType, templateId, repeatUntil } = data;
@@ -403,11 +471,29 @@ export const PUT = withAuth(async (request) => {
     // Recalculate hours for the week containing this shift
     await calculateWeeklyHours(existingShift.employee, request.restaurant, existingShift.date);
 
+    logger.warn(`DEPRECATED: Direct mutation via PUT /api/employees/shifts — shift:${_id}. Use POST /api/employees/shifts/duty-changes instead.`);
+
     const updatedShift = await EmployeeShift.findById(_id)
       .populate("employee", "firstName lastName email role");
 
-    logger.info(`Shift updated for employee ${existingShift.employee}`);
-    return sendSuccess(updatedShift, "Shift updated successfully");
+    logger.info(`Shift directly mutated (deprecated) for employee ${existingShift.employee}`);
+
+    // Return with X-Deprecated header so API consumers can detect the deprecation
+    return new Response(
+      JSON.stringify({
+        success: true,
+        message: "Shift updated. Note: direct shift mutation is deprecated — use POST /api/employees/shifts/duty-changes for schedule modifications.",
+        data: updatedShift,
+      }),
+      {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Deprecated': 'true',
+          'X-Deprecated-Message': 'Use POST /api/employees/shifts/duty-changes instead of direct PUT mutations.',
+        },
+      }
+    );
   } catch (error) {
     logger.error("Failed to update shift", error);
     return sendError(error, "Failed to update shift", 500);

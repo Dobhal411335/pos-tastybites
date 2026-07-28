@@ -17,7 +17,11 @@ const EmployeeShiftSchema = new mongoose.Schema(
     overtimeHours: { type: Number, default: 0 },
     shiftType: { type: String, enum: ['Regular', 'Overtime', 'Holiday', 'Emergency'], default: 'Regular' },
     templateId: { type: mongoose.Schema.Types.ObjectId, ref: 'ShiftTemplate' },
-    notes: { type: String }
+    notes: { type: String },
+    // Planned schedule metadata (immutable after generation)
+    isPlanned: { type: Boolean, default: true },        // true = generated from template; false = ad-hoc
+    month: { type: String, index: true },               // 'YYYY-MM' — used for duplicate-generation guard
+    generatedAt: { type: Date }                         // when this planned batch was generated
   },
   { timestamps: true }
 );
@@ -27,5 +31,8 @@ EmployeeShiftSchema.index(
   { employee: 1, status: 1 },
   { unique: true, partialFilterExpression: { status: 'Active' } }
 );
+
+// Fast lookup by employee + month for duplicate-generation prevention
+EmployeeShiftSchema.index({ employee: 1, month: 1, restaurant: 1 });
 
 export default mongoose.models.EmployeeShift || mongoose.model('EmployeeShift', EmployeeShiftSchema);

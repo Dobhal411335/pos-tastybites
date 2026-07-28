@@ -10,8 +10,21 @@ export const superAdminVerificationTemplate = ({
   const currentYear = new Date().getFullYear();
   const logo = companyInfo?.mainLogo?.url || null;
   const brandName = companyInfo?.companyName || 'Restaurant Management';
-  const emailContact = companyInfo?.emails?.[0] || '';
-  const phoneContact = companyInfo?.contactNumbers?.[0] || '';
+  const emailContact = (() => {
+    const e = companyInfo?.emails?.[0];
+    if (!e) return '';
+    return typeof e === 'object' ? (e.email || e.address || '') : e;
+  })();
+  const phoneContact = (() => {
+    const p = companyInfo?.contactNumbers?.[0];
+    if (!p) return '';
+    if (typeof p === 'object') {
+      const num = p.number || p.phone || '';
+      const code = p.code ? p.code : '';
+      return code ? `${code} ${num}` : num;
+    }
+    return p;
+  })();
 
   return `
     <!DOCTYPE html>
