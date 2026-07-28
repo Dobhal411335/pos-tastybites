@@ -11,7 +11,7 @@ import {toast} from "sonner";
 import { PencilIcon, Trash2Icon, LayoutTemplate, UploadCloud, Link as LinkIcon, Image as ImageIcon, Type, AlignLeft } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 
-const PopUpBanner = ({section="frontend"}) => {
+const PopUpBanner = () => {
     const [showDeleteModal, setShowDeleteModal] = useState(false);
     const [bannerToDelete, setBannerToDelete] = useState(null);
     const [banners, setBanners] = useState([]);
@@ -30,7 +30,7 @@ const PopUpBanner = ({section="frontend"}) => {
     useEffect(() => {
         const fetchBanners = async () => {
             try {
-                const response = await fetch(`/api/web/popupBanner?section=${section}`);
+                const response = await fetch(`/api/web/popupBanner`);
                 const data = await response.json();
                 setBanners(data);
             } catch (error) {
@@ -78,7 +78,6 @@ const PopUpBanner = ({section="frontend"}) => {
             const payload = {
                 ...formData,
                 id: editBanner,
-                section: section
             };
             const response = await fetch("/api/web/popupBanner", {
                 method,
@@ -92,7 +91,7 @@ const PopUpBanner = ({section="frontend"}) => {
                 toast.success(`Banner ${editBanner ? "updated" : "added"} successfully`, { style: { borderRadius: "10px", border: "1px solid #dcfce7", background: "#f0fdf4", color: "#166534" } });
                 setEditBanner(null);
 
-                const updatedBanners = await fetch(`/api/web/popupBanner?section=${section}`).then((res) => res.json());
+                const updatedBanners = await fetch(`/api/web/popupBanner`).then((res) => res.json());
                 setBanners(updatedBanners);
 
                 setFormData({

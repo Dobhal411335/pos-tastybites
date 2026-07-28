@@ -2,22 +2,23 @@ import { Schema, models, model } from "mongoose";
 
 const OfferDetailsSchema = new Schema(
     {
-        // Section 1: More Offers card (SearchSection right sidebar)
+        restaurant: { type: Schema.Types.ObjectId, ref: 'Restaurant', required: true },
+        // More Offers card (SearchSection right sidebar)
         moreOffers: {
-            title: { type: String, },
-            description: { type: String, },
-            knowMoreLink: { type: String, },
+            title: { type: String },
+            description: { type: String },
+            knowMoreLink: { type: String },
         },
-        // Section 2: Last Minute Deal banner (AboutUsSection)
+        // Last Minute Deal banner (AboutUsSection)
         lastMinuteDeal: {
-            heading: { type: String,},
-            description: { type: String, },
-            link: { type: String, },
+            heading: { type: String },
+            description: { type: String },
+            link: { type: String },
         },
-        // Section 3: Promo banner (AboutUsSection)
+        // Promo banner (AboutUsSection)
         promoBanner: {
-            description: { type: String, },
-            link: { type: String,},
+            description: { type: String },
+            link: { type: String },
         },
     },
     { timestamps: true }

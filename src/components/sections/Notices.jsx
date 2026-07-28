@@ -7,7 +7,7 @@ import { useEffect, useState } from "react";
 export default function Notices() {
     const [offerDetails, setOfferDetails] = useState(null);
       useEffect(() => {
-        fetch("/api/offerDetails")
+        fetch("/api/web/offerDetails")
             .then(res => res.json())
             .then(data => { if (data) setOfferDetails(data); })
             .catch(() => { });

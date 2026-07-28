@@ -1,26 +1,27 @@
 import connectDB from "@/lib/db";
 import OfferDetails from "@/models/Web/OfferDetails";
 import { NextResponse } from "next/server";
+import { withAuth } from "@/utils/auth";
 
-// GET — returns the single offer details document (or empty defaults)
-export async function GET() {
+// GET — returns the single offer details document for this restaurant
+export const GET = withAuth(async (req) => {
     await connectDB();
     try {
-        let doc = await OfferDetails.findOne({});
+        const doc = await OfferDetails.findOne({ restaurant: req.restaurant });
         return NextResponse.json(doc);
     } catch (error) {
         return NextResponse.json({ error: "Failed to fetch offer details" }, { status: 500 });
     }
-}
+});
 
-// POST / PUT — create or update the single document
-export async function POST(req) {
+// POST — create or update the single document for this restaurant
+export const POST = withAuth(async (req) => {
     await connectDB();
     try {
         const body = await req.json();
         const { moreOffers, lastMinuteDeal, promoBanner } = body;
 
-        let doc = await OfferDetails.findOne({});
+        let doc = await OfferDetails.findOne({ restaurant: req.restaurant });
         if (doc) {
             // Update existing
             if (moreOffers) doc.moreOffers = moreOffers;
@@ -29,7 +30,7 @@ export async function POST(req) {
             await doc.save();
         } else {
             // Create new
-            doc = new OfferDetails({ moreOffers, lastMinuteDeal, promoBanner });
+            doc = new OfferDetails({ restaurant: req.restaurant, moreOffers, lastMinuteDeal, promoBanner });
             await doc.save();
         }
 
@@ -37,4 +38,4 @@ export async function POST(req) {
     } catch (error) {
         return NextResponse.json({ error: "Failed to save offer details" }, { status: 500 });
     }
-}
+});
