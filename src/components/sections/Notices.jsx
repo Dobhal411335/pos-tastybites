@@ -1,68 +1,61 @@
 "use client";
 
 import React from "react";
-import { Compass, Sparkles, ArrowRight } from "lucide-react";
-import { Button } from "@/components/ui/button";
-
+import Image from "next/image";
+import Link from "next/link";
+import { useEffect, useState } from "react";
 export default function Notices() {
-  const notices = [
-    {
-      id: "heli-tour",
-      icon: Compass,
-      heading: "Two Sacred Dhams. One Divine Day. Zero Compromise.",
-      text: "Why spend days trekking when you can witness the majesty of the Himalayas in a single, seamless journey? Our Exclusive Same-Day Heli Tour is meticulously engineered for those who value both their time and their spiritual calling.",
-      btnText: "Know More",
-      colorClass: "bg-[#FAF9F6] border-zinc-200 text-zinc-800",
-      iconColor: "text-[#0F6B7A]",
-    },
-    {
-      id: "predictive-rec",
-      icon: Sparkles,
-      heading: "We don't just suggest we predict.",
-      text: "Based on your current interests, we've gathered a collection of insights and products designed to complement your style. Whether you're looking to dive deeper into this topic or find the perfect finishing touch, these recommendations are tailored to meet you right where you are.",
-      btnText: "Apply",
-      colorClass: "bg-[#F5F6F8] border-zinc-200 text-zinc-800",
-      iconColor: "text-[#12A594]",
-    },
-  ];
-
+    const [offerDetails, setOfferDetails] = useState(null);
+      useEffect(() => {
+        fetch("/api/offerDetails")
+            .then(res => res.json())
+            .then(data => { if (data) setOfferDetails(data); })
+            .catch(() => { });
+    }, []);
   return (
-    <section className="mx-auto max-w-7xl px-6 py-6 sm:px-8 flex flex-col gap-6">
-      {notices.map((notice) => {
-        const IconComponent = notice.icon;
-        return (
-          <div
-            key={notice.id}
-            className={`flex flex-col md:flex-row items-start md:items-center justify-between p-8 rounded-xl border ${notice.colorClass} shadow-sm gap-6 transition-all duration-200 hover:shadow-md`}
-          >
-            {/* Left Content */}
-            <div className="flex items-start gap-5 flex-1">
-              <div className="p-3 rounded-lg bg-white border border-zinc-200 shadow-xs shrink-0 mt-0.5">
-                <IconComponent className={`h-5 w-5 ${notice.iconColor}`} />
-              </div>
-              <div className="space-y-1.5">
-                <h4 className="font-bold text-base text-zinc-950 font-serif">
-                  {notice.heading}
-                </h4>
-                <p className="text-xs text-zinc-550 leading-relaxed font-light">
-                  {notice.text}
-                </p>
-              </div>
-            </div>
+    <section className="w-full md:w-[95%] mx-auto py-4 space-y-3 px-3 sm:px-4 md:px-0">
+      {/* Banner 1 */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-linear-to-r from-[#fde8e2] via-[#fdf0ec] to-[#fef6f4] rounded-xl px-4 sm:px-5 py-4 shadow-sm border border-orange-100/60">
 
-            {/* CTA Button */}
-            <div className="shrink-0 self-end md:self-center">
-              <Button
-                variant="outline"
-                className="bg-white border-zinc-200 hover:bg-zinc-50 text-zinc-800 font-bold px-6 py-5 rounded-none text-xs uppercase tracking-widest transition-all shadow-xs"
-              >
-                <span>{notice.btnText}</span>
-                <ArrowRight className="h-3.5 w-3.5 ml-1.5" />
-              </Button>
-            </div>
+        <div className="flex items-start sm:items-center gap-3 sm:gap-4">
+          <Image src="/clockImage.png" alt="clock" width={40} height={40} className="w-8 h-8 sm:w-10 sm:h-10 object-contain" />
+
+          <div>
+            <h4 className="text-sm sm:text-base md:text-lg font-bold text-gray-900">
+              {offerDetails?.lastMinuteDeal?.heading || 'Last Minute Deal'}
+            </h4>
+            <p className="text-xs sm:text-sm text-gray-500">
+              {offerDetails?.lastMinuteDeal?.description || 'Up to 75% off on selected hotels'}
+            </p>
           </div>
-        );
-      })}
+        </div>
+
+        <Link href={offerDetails?.lastMinuteDeal?.link || ''}
+          className="w-full sm:w-auto text-center text-sm text-nowrap bg-white font-medium text-gray-700 border border-gray-300 rounded-full px-4 sm:px-5 py-2 hover:bg-gray-800 hover:text-white transition-all duration-200"
+        >
+          Know More
+        </Link>
+      </div>
+
+      {/* Banner 2 */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-linear-to-r from-[#ede4f5] via-[#f3eef9] to-[#f8f5fc] rounded-xl px-4 sm:px-5 py-4 shadow-sm border border-purple-100/60">
+
+        <div className="flex items-start sm:items-center gap-3 sm:gap-4">
+          <Image src="/banner1.png" alt="card" width={40} height={40} className="w-8 h-8 sm:w-10 sm:h-10 object-contain" />
+
+          <p className="text-xs sm:text-sm md:text-base text-gray-700">
+            {offerDetails?.promoBanner?.description || 'Save ₹2,000 on Hotels by using Adani One ICICI Bank credit card.'}
+          </p>
+        </div>
+
+        <Link
+          href={offerDetails?.promoBanner?.link || ''}
+          className="w-full sm:w-auto text-center text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-full px-5 py-2 hover:bg-gray-800 hover:text-white transition-all duration-200"
+        >
+          Apply
+        </Link>
+      </div>
+
     </section>
   );
 }

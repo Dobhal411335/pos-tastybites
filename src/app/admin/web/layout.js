@@ -13,7 +13,9 @@ export default function UsersModuleLayout({ children }) {
       title: "Web Admin",
       color: "bg-[#0F6B7A]",
       items: [
+        { label: "PopUp Banner", href: "/admin/web/popup-banner" },
         { label: "Manage Banner", href: "/admin/web/manage-banners" },
+        { label: "Offer Details", href: "/admin/web/offer-details" },
         { label: "Banner Section 1st", href: "/admin/web/banner1st" },
         { label: "Banner Section 2nd", href: "/admin/web/banner2nd" },
         { label: "Banner Section 3rd", href: "/admin/web/banner3rd" },
@@ -22,8 +24,8 @@ export default function UsersModuleLayout({ children }) {
         { label: "Manage WebPages", href: "/admin/web/manage-webpages" },
       ],
     },
-  ];
 
+  ];
   return (
     <div className="min-h-screen bg-[#FAF9F6] flex flex-col antialiased text-[#1F2937] font-sans">
 

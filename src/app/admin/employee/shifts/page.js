@@ -18,6 +18,10 @@ import { PALETTE } from "@/utils/paletteeColor";
 import DeleteDialog from "@/components/common/DeleteDialog";
 
 const DAYS_OF_WEEK = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+const SCHEDULE_MONTH_OPTIONS = Array.from({ length: 12 }, (_, index) => ({
+  value: String(index + 1),
+  label: `${index + 1} Month${index === 0 ? '' : 's'}`,
+}));
 
 // ─── Display helpers ─────────────────────────────────────────────────────────
 
@@ -109,7 +113,7 @@ export default function ShiftManagementPage() {
   // ── Apply template ───────────────────────────────────────────────────────────
   const [isApplyDialogOpen,       setIsApplyDialogOpen]       = useState(false);
   const [selectedTemplateToApply, setSelectedTemplateToApply] = useState(null);
-  const [applyRange,              setApplyRange]              = useState("thisMonth");
+  const [applyRange,              setApplyRange]              = useState("1");
   const [selectedEmployees,       setSelectedEmployees]       = useState([]);
   const [overwriteExisting,       setOverwriteExisting]       = useState(false);
   const [applyLoading,            setApplyLoading]            = useState(false);
@@ -216,21 +220,18 @@ export default function ShiftManagementPage() {
   const openApplyTemplate = (template) => {
     setTimeout(() => {
       setSelectedTemplateToApply(template);
-      setSelectedEmployees([]); setApplyRange("thisMonth"); setOverwriteExisting(false);
+      setSelectedEmployees([]); setApplyRange("1"); setOverwriteExisting(false);
       setIsApplyDialogOpen(true);
     }, 150);
   };
 
   const applyPreview = useMemo(() => {
     if (!selectedTemplateToApply) return null;
-    let startDate = new Date(), endDate = new Date();
-    if (applyRange === "thisMonth") {
-      startDate = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
-      endDate   = new Date(startDate.getFullYear(), startDate.getMonth() + 1, 0);
-    } else {
-      startDate = new Date(startDate.getFullYear(), startDate.getMonth() + 1, 1);
-      endDate   = new Date(startDate.getFullYear(), startDate.getMonth() + 1, 0);
-    }
+    const monthsToGenerate = Number(applyRange) || 1;
+    const startDate = new Date();
+    startDate.setDate(1);
+    startDate.setHours(0, 0, 0, 0);
+    const endDate = new Date(startDate.getFullYear(), startDate.getMonth() + monthsToGenerate, 0);
     let workingDays = 0, totalDays = 0;
     const cur = new Date(startDate);
     while (cur <= endDate) {
@@ -243,14 +244,11 @@ export default function ShiftManagementPage() {
 
   const handleApplyTemplate = async () => {
     if (selectedEmployees.length === 0) { toast.error("Select at least one employee."); return; }
-    let startDate = new Date(), endDate = new Date();
-    if (applyRange === "thisMonth") {
-      startDate.setDate(1);
-      endDate = new Date(startDate.getFullYear(), startDate.getMonth() + 1, 0);
-    } else {
-      startDate.setMonth(startDate.getMonth() + 1, 1);
-      endDate = new Date(startDate.getFullYear(), startDate.getMonth() + 1, 0);
-    }
+    const monthsToGenerate = Number(applyRange) || 1;
+    const startDate = new Date();
+    startDate.setDate(1);
+    startDate.setHours(0, 0, 0, 0);
+    const endDate = new Date(startDate.getFullYear(), startDate.getMonth() + monthsToGenerate, 0);
     setApplyLoading(true);
     try {
       const res  = await fetch("/api/employees/shifts", {
@@ -697,16 +695,17 @@ export default function ShiftManagementPage() {
         <DialogContent className="sm:max-w-lg bg-white rounded-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-xl font-bold">Generate Schedule: {selectedTemplateToApply?.name}</DialogTitle>
-            <DialogDescription>Apply this template to build a monthly planned schedule.</DialogDescription>
+            <DialogDescription>Apply this template once and generate a planned schedule for up to 12 months.</DialogDescription>
           </DialogHeader>
           <div className="grid gap-5 py-4">
             <div className="space-y-2">
-              <label className="text-[13px] font-bold text-zinc-700">Target Month</label>
+              <label className="text-[13px] font-bold text-zinc-700">Target Duration</label>
               <Select value={applyRange} onValueChange={setApplyRange}>
                 <SelectTrigger className="border-zinc-200"><SelectValue /></SelectTrigger>
                 <SelectContent className="bg-white">
-                  <SelectItem value="thisMonth">This Month</SelectItem>
-                  <SelectItem value="nextMonth">Next Month</SelectItem>
+                  {SCHEDULE_MONTH_OPTIONS.map(option => (
+                    <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -718,8 +717,9 @@ export default function ShiftManagementPage() {
                 <div className="grid grid-cols-2 gap-2">
                   {[
                     { label: 'Period', value: `${applyPreview.startDate.toLocaleDateString([], { month:'short', day:'numeric' })} – ${applyPreview.endDate.toLocaleDateString([], { month:'short', day:'numeric', year:'numeric' })}` },
+                    { label: 'Duration', value: `${applyRange} month${applyRange === '1' ? '' : 's'}` },
                     { label: 'Selected Employees', value: `${selectedEmployees.length}` },
-                    { label: 'Working Days / Month', value: `${applyPreview.workingDays} days`, color: 'text-green-700' },
+                    { label: 'Working Days / Period', value: `${applyPreview.workingDays} days`, color: 'text-green-700' },
                     { label: 'Total Shifts to Generate', value: `${applyPreview.totalShifts}`, color: 'text-blue-700' },
                   ].map(({ label, value, color = 'text-zinc-900' }) => (
                     <div key={label} className="bg-white rounded-lg p-3 border border-blue-200">

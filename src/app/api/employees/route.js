@@ -9,6 +9,12 @@ import { logger } from "@/utils/logger";
 import mongoose from "mongoose";
 import ShiftTemplate from "@/models/employee/ShiftTemplate";
 import EmployeeShift from "@/models/employee/EmployeeShift";
+import EmployeeSession from "@/models/employee/EmployeeSession";
+import EmployeeLog from "@/models/employee/EmployeeLog";
+import DutyChange from "@/models/employee/DutyChange";
+import OvertimeRecord from "@/models/employee/OvertimeRecord";
+import ShiftHistory from "@/models/employee/ShiftHistory";
+import RegisteredDevice from "@/models/RegisteredDevice";
 import { sendEmployeeCredentials } from "@/lib/brevo/sendEmployeeCredentials";
 import Restaurant from "@/models/Restaurant"
 // GET - List all employees
@@ -331,14 +337,36 @@ export const DELETE = withAuth(async (request) => {
       return sendError(new Error("Missing ID"), "Employee ID is required", 400);
     }
 
-    const employee = await Employee.findOneAndDelete({ _id: id, restaurant: request.restaurant });
+    const employee = await Employee.findOne({ _id: id, restaurant: request.restaurant });
 
     if (!employee) {
       return sendError(new Error("Not Found"), "Employee not found", 404);
     }
 
+    await Promise.all([
+      Table.updateMany(
+        { assignedEmployee: employee._id, restaurant: request.restaurant },
+        { $set: { assignedEmployee: null } }
+      ),
+      RegisteredDevice.updateMany(
+        { assignedEmployee: employee._id, restaurant: request.restaurant },
+        { $set: { assignedEmployee: null } }
+      ),
+    ]);
+
+    await Promise.all([
+      EmployeeShift.deleteMany({ employee: employee._id, restaurant: request.restaurant }),
+      EmployeeSession.deleteMany({ employee: employee._id, restaurant: request.restaurant }),
+      EmployeeLog.deleteMany({ employee: employee._id, restaurant: request.restaurant }),
+      DutyChange.deleteMany({ employee: employee._id, restaurant: request.restaurant }),
+      OvertimeRecord.deleteMany({ employee: employee._id, restaurant: request.restaurant }),
+      ShiftHistory.deleteMany({ employee: employee._id, restaurant: request.restaurant }),
+    ]);
+
+    await Employee.deleteOne({ _id: employee._id, restaurant: request.restaurant });
+
     logger.info(`Employee deleted: ${employee.email}`);
-    return sendSuccess(null, "Employee deleted successfully");
+    return sendSuccess(null, "Employee and related records deleted successfully");
   } catch (error) {
     logger.error("Failed to delete employee", error);
     return sendError(error, "Failed to delete employee", 500);
