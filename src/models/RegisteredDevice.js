@@ -14,6 +14,16 @@ const RegisteredDeviceSchema = new mongoose.Schema(
     updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee' },
     lastLoginAt: { type: Date },
     lastSeenAt: { type: Date },
+    lastPlatform: { type: String },
+    lastBrowser: { type: String },
+    lastIPAddress: { type: String },
+    
+    // Activation & Security
+    activationCode: { type: String, unique: true, sparse: true },
+    activationStatus: { type: String, enum: ['Pending', 'Activated', 'Expired', 'Reset Required'], default: 'Pending' },
+    activatedAt: { type: Date },
+    activatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee' },
+    deviceTokenVersion: { type: Number, default: 1 },
     
     // Placeholders for future offline/PWA support (Not used currently)
     deviceUUID: { type: String },

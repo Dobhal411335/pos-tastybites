@@ -15,6 +15,7 @@ export default function MenuModuleLayout({ children }) {
       items: [
         { label: "Menu Category", href: "/admin/menu/categories" },
         { label: "Create Product", href: "/admin/menu/products" },
+        { label: "Short & Direct Product", href: "/admin/menu/short_direct_products" },
       ],
     },
   ];

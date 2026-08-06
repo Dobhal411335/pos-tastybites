@@ -4,6 +4,7 @@ import { cookies } from 'next/headers';
 import connectDB from '@/lib/db';
 import EmployeeSession from '@/models/employee/EmployeeSession';
 import Employee from '@/models/employee/Employee';
+import RegisteredDevice from '@/models/RegisteredDevice';
 
 export const withEmployeeAuth = (handler, allowedPermissions = []) => {
   return async (request, context) => {
@@ -32,6 +33,29 @@ export const withEmployeeAuth = (handler, allowedPermissions = []) => {
       const employee = await Employee.findById(payload.employeeId).populate('permissionGroup');
       if (!employee || !employee.isActive || (employee.status !== 'Active' && employee.status !== 'Approved')) {
         return NextResponse.json({ success: false, message: 'Account suspended or inactive' }, { status: 403 });
+      }
+
+      // 3. Verify Device Token
+      const deviceToken = cookieStore.get('device_token')?.value;
+      if (!deviceToken) {
+        return NextResponse.json({ success: false, message: 'Device token missing' }, { status: 401 });
+      }
+      const decodedDeviceToken = await verifyToken(deviceToken);
+      if (!decodedDeviceToken || decodedDeviceToken.type !== 'device') {
+        return NextResponse.json({ success: false, message: 'Invalid device token' }, { status: 401 });
+      }
+
+      const device = await RegisteredDevice.findById(decodedDeviceToken.deviceId);
+      if (!device || device.status !== 'Active') {
+        return NextResponse.json({ success: false, message: 'Device is inactive' }, { status: 403 });
+      }
+
+      if (device.deviceTokenVersion !== decodedDeviceToken.version) {
+        return NextResponse.json({ success: false, message: 'Device has been reset' }, { status: 401 });
+      }
+
+      if (employee.assignedDevice && employee.assignedDevice.toString() !== device._id.toString()) {
+        return NextResponse.json({ success: false, message: 'Employee assigned to another device' }, { status: 403 });
       }
 
       // 3. Check specific permissions if required

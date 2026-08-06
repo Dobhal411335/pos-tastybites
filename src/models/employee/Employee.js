@@ -30,6 +30,13 @@ const EmployeeSchema = new mongoose.Schema(
     weeklyOff: [{ type: String, enum: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] }],
     leaveStatus: { type: String, enum: ['None', 'Vacation', 'Sick Leave'], default: 'None' },
     
+    // Device & Login Tracking
+    deviceActivationRequired: { type: Boolean, default: true },
+    lastLoginAt: { type: Date },
+    lastLoginIP: { type: String },
+    lastLoginPlatform: { type: String },
+    lastLoginBrowser: { type: String },
+    
     // Credential tracking
     credentialGenerated: { type: Boolean, default: false },
     credentialSent: { type: Boolean, default: false },

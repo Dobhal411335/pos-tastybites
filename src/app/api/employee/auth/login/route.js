@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 import connectDB from '@/lib/db';
 import Employee from '@/models/employee/Employee';
 import RegisteredDevice from '@/models/RegisteredDevice';
@@ -14,9 +15,9 @@ export async function POST(request) {
     await connectDB();
 
     const body = await request.json();
-    const { employeeId, password, browserFingerprint, ipAddress } = body;
+    const { employeeId, password, browserFingerprint, ipAddress, platform } = body;
 
-    if (!employeeId || !password || !browserFingerprint) {
+    if (!employeeId || !password) {
       return NextResponse.json({ success: false, message: 'Missing required fields' }, { status: 400 });
     }
 
@@ -39,16 +40,65 @@ export async function POST(request) {
       return NextResponse.json({ success: false, message: 'Employee account is not active' }, { status: 403 });
     }
 
-    let device = await RegisteredDevice.findOne({ browserFingerprint, status: 'Active' });
-    if (!device && employee.assignedDevice) {
-      device = await RegisteredDevice.findById(employee.assignedDevice);
+    const cookieStore = await cookies();
+    const deviceTokenCookie = cookieStore.get('device_token')?.value;
+
+    let device = null;
+
+    if (!deviceTokenCookie) {
+      return NextResponse.json({ 
+        success: false, 
+        action: 'DEVICE_ACTIVATION_REQUIRED', 
+        message: 'Device activation required.' 
+      }, { status: 403 });
+    } else {
+      const decodedDeviceToken = await verifyToken(deviceTokenCookie);
+      if (!decodedDeviceToken || decodedDeviceToken.type !== 'device') {
+        return NextResponse.json({ 
+          success: false, 
+          action: 'DEVICE_ACTIVATION_REQUIRED', 
+          message: 'Invalid or expired device token. Please activate again.' 
+        }, { status: 403 });
+      }
+      
+      device = await RegisteredDevice.findById(decodedDeviceToken.deviceId);
+      
+      if (!device || device.status !== 'Active' || device.activationStatus !== 'Activated') {
+        return NextResponse.json({ 
+          success: false, 
+          action: 'DEVICE_ACTIVATION_REQUIRED', 
+          message: 'Device unrecognized or inactive. Please activate again.' 
+        }, { status: 403 });
+      }
+
+      if (device.deviceTokenVersion !== decodedDeviceToken.version) {
+        return NextResponse.json({ 
+          success: false, 
+          action: 'DEVICE_ACTIVATION_REQUIRED', 
+          message: 'Device token revoked. Please activate again.' 
+        }, { status: 403 });
+      }
+      
+      // Ensure the device belongs to the employee or is generally assigned
+      if (device.assignedEmployee && device.assignedEmployee.toString() !== employee._id.toString()) {
+        return NextResponse.json({ 
+          success: false, 
+          message: 'This device is assigned to another employee.' 
+        }, { status: 403 });
+      }
     }
 
-    if (!device) {
-      return NextResponse.json({ success: false, message: 'Unrecognized or inactive device' }, { status: 403 });
-    }
+    // Update login tracking on Employee
+    employee.lastLoginAt = new Date();
+    employee.lastLoginIP = ipAddress || 'unknown';
+    employee.lastLoginPlatform = platform || 'unknown';
+    employee.lastLoginBrowser = browserFingerprint || 'unknown';
+    await employee.save();
 
-    device.lastLogin = new Date();
+    device.lastLoginAt = new Date();
+    device.lastIPAddress = ipAddress || 'unknown';
+    device.lastPlatform = platform || 'unknown';
+    device.lastBrowser = browserFingerprint || 'unknown';
     await device.save();
 
     const now = new Date();
@@ -157,7 +207,8 @@ export async function POST(request) {
       restaurant: employee.restaurant,
       shift: currentValidShift._id,
       device: device._id,
-      browserFingerprint,
+      browserFingerprint: browserFingerprint || 'unknown',
+      platform: platform || 'unknown',
       ipAddress: ipAddress || 'unknown',
       status: 'Active'
     });

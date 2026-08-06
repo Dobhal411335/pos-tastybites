@@ -15,7 +15,8 @@ export const sendEmployeeCredentials = async ({
   floor,
   device,
   loginUrl,
-  email
+  email,
+  activationCode
 }) => {
   if (!email) {
     throw new Error("Missing recipient email address");
@@ -40,7 +41,8 @@ export const sendEmployeeCredentials = async ({
     floor,
     device,
     loginUrl,
-    companyInfo
+    companyInfo,
+    activationCode
   });
 
   // Call the existing Brevo wrapper

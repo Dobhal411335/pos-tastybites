@@ -228,6 +228,37 @@ export default function DeviceAssignmentPage() {
       default: return 'bg-slate-100 text-slate-700 border-slate-200';
     }
   };
+  
+  const getActivationBadgeColor = (status) => {
+    switch (status) {
+      case 'Activated': return 'bg-emerald-100 text-emerald-700 border-emerald-200';
+      case 'Pending': return 'bg-amber-100 text-amber-700 border-amber-200';
+      case 'Reset Required': return 'bg-rose-100 text-rose-700 border-rose-200';
+      default: return 'bg-slate-100 text-slate-700 border-slate-200';
+    }
+  };
+
+  const handleResetDevice = async (device) => {
+    if (!confirm(`Are you sure you want to reset device ${device.deviceName}? This will revoke access and generate a new activation code.`)) return;
+    try {
+      const res = await fetch(`/api/devices/${device._id}/reset`, {
+        method: "POST",
+      });
+      const json = await res.json();
+      if (json.success) {
+        toast.success(json.message);
+        fetchData();
+        // If drawer is open for this device, update it
+        if (viewDeviceDrawerOpen && deviceToView?._id === device._id) {
+          setDeviceToView(json.data);
+        }
+      } else {
+        toast.error(json.message || "Failed to reset device");
+      }
+    } catch (err) {
+      toast.error("Failed to reset device");
+    }
+  };
   const filteredDevices = devices.filter(d => {
     const matchesSearch = d.deviceName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       d.deviceCode?.toLowerCase().includes(searchQuery.toLowerCase());
@@ -324,6 +355,7 @@ export default function DeviceAssignmentPage() {
                       <TableHead className="text-xs font-bold uppercase tracking-wider text-slate-500 py-5 px-6">Assigned Floor</TableHead>
                       <TableHead className="text-xs font-bold uppercase tracking-wider text-slate-500 py-5 px-6">Assigned Employee</TableHead>
                       <TableHead className="text-xs font-bold uppercase tracking-wider text-slate-500 py-5 px-6">Status</TableHead>
+                      <TableHead className="text-xs font-bold uppercase tracking-wider text-slate-500 py-5 px-6">Activation</TableHead>
                       <TableHead className="text-xs font-bold uppercase tracking-wider text-slate-500 py-5 px-6">Last Login</TableHead>
                       <TableHead className="text-xs font-bold uppercase tracking-wider text-slate-500 py-5 px-6 text-right">Actions</TableHead>
                     </TableRow>
@@ -338,6 +370,7 @@ export default function DeviceAssignmentPage() {
                           <TableCell className="px-6 py-5"><div className="h-4 w-24 bg-zinc-200 rounded animate-pulse" /></TableCell>
                           <TableCell className="px-6 py-5"><div className="h-4 w-32 bg-zinc-200 rounded animate-pulse" /></TableCell>
                           <TableCell className="px-6 py-5"><div className="h-6 w-20 bg-zinc-200 rounded-md animate-pulse" /></TableCell>
+                          <TableCell className="px-6 py-5"><div className="h-6 w-24 bg-zinc-200 rounded-md animate-pulse" /></TableCell>
                           <TableCell className="px-6 py-5"><div className="h-4 w-24 bg-zinc-200 rounded animate-pulse" /></TableCell>
                           <TableCell className="px-6 py-5 text-right">
                             <div className="flex justify-end">
@@ -378,6 +411,11 @@ export default function DeviceAssignmentPage() {
                                 {d.status}
                               </Badge>
                             </TableCell>
+                            <TableCell className="px-6 py-4">
+                              <Badge className={`shadow-none ${getActivationBadgeColor(d.activationStatus || 'Pending')}`}>
+                                {d.activationStatus || 'Pending'}
+                              </Badge>
+                            </TableCell>
                             <TableCell className="px-6 py-4 text-sm text-slate-500">
                               {d.lastLoginAt ? new Date(d.lastLoginAt).toLocaleDateString() : "Never Logged In"}
                             </TableCell>
@@ -400,6 +438,9 @@ export default function DeviceAssignmentPage() {
                                   <div className="border-t border-zinc-100 my-1"></div>
                                   <DropdownMenuItem className="text-[14px] font-medium cursor-pointer" onSelect={() => setTimeout(() => handleOpenEditDevice(d), 150)}>
                                     <Pencil className="mr-2 h-4 w-4" /> Edit Device
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem className="text-[14px] font-medium text-rose-600 focus:text-rose-600 focus:bg-rose-50 cursor-pointer" onSelect={() => setTimeout(() => handleResetDevice(d), 150)}>
+                                    <TabletSmartphone className="mr-2 h-4 w-4" /> Reset Device
                                   </DropdownMenuItem>
                                 </DropdownMenuContent>
                               </DropdownMenu>
@@ -725,6 +766,31 @@ export default function DeviceAssignmentPage() {
                     <div className="flex flex-col">
                       <span className="text-slate-500 text-sm font-medium mb-1">Description</span>
                       <span className="font-medium text-slate-700 text-sm">{deviceToView.description || "—"}</span>
+                    </div>
+                  </div>
+                </section>
+                <section>
+                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Security & Activation</h3>
+                  <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-4">
+                    <div className="flex justify-between border-b border-slate-100 pb-3">
+                      <span className="text-slate-500 text-sm font-medium">Activation Status</span>
+                      <Badge className={`shadow-none ${getActivationBadgeColor(deviceToView.activationStatus || 'Pending')}`}>
+                        {deviceToView.activationStatus || 'Pending'}
+                      </Badge>
+                    </div>
+                    {deviceToView.activationCode && (
+                      <div className="flex flex-col border-b border-slate-100 pb-3">
+                        <span className="text-slate-500 text-sm font-medium mb-1">Pending Activation Code</span>
+                        <div className="bg-amber-50 border border-amber-200 text-amber-800 font-mono p-2 rounded text-center text-lg font-bold tracking-widest">
+                          {deviceToView.activationCode}
+                        </div>
+                      </div>
+                    )}
+                    <div className="flex justify-between">
+                      <span className="text-slate-500 text-sm font-medium">Activated At</span>
+                      <span className="font-semibold text-slate-700 text-sm">
+                        {deviceToView.activatedAt ? new Date(deviceToView.activatedAt).toLocaleString() : "—"}
+                      </span>
                     </div>
                   </div>
                 </section>

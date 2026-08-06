@@ -8,7 +8,8 @@ export const employeeCredentialsTemplate = ({
   floor,
   device,
   loginUrl,
-  companyInfo
+  companyInfo,
+  activationCode
 }) => {
   const currentYear = new Date().getFullYear();
 
@@ -279,6 +280,12 @@ export const employeeCredentialsTemplate = ({
               
               <p class="cred-label">Password</p>
               <div class="cred-value">${password}</div>
+
+              ${activationCode ? `
+              <p class="cred-label">Device Activation Code</p>
+              <div class="cred-value" style="background-color: #FEF3C7; color: #B45309; border-color: #FCD34D;">${activationCode}</div>
+              <p style="font-size: 13px; color: #78350F; margin-bottom: 20px;">Use this code to activate your POS device for the first time.</p>
+              ` : ''}
               
               <p class="cred-label">Login Portal URL</p>
               <p style="font-size: 15px; font-weight: 700; margin: 8px 0 0 0;">

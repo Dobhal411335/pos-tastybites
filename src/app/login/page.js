@@ -12,6 +12,14 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 
 export default function UnifiedLoginPage() {
   const router = useRouter();
@@ -19,9 +27,14 @@ export default function UnifiedLoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [loginType, setLoginType] = useState("admin"); // 'admin' | 'employee'
 
-  // Employee specific states
   const [rememberDevice, setRememberDevice] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
+
+  // Activation State
+  const [showActivationDialog, setShowActivationDialog] = useState(false);
+  const [activationCode, setActivationCode] = useState("");
+  const [activating, setActivating] = useState(false);
+  const [pendingCredentials, setPendingCredentials] = useState(null);
 
   const {
     register: registerAdmin,
@@ -104,12 +117,53 @@ export default function UnifiedLoginPage() {
           router.push("/employee/dashboard");
         }, 1000);
       } else {
+        if (json.action === 'DEVICE_ACTIVATION_REQUIRED') {
+          setPendingCredentials({ employeeId: data.employeeId, password: data.password });
+          setShowActivationDialog(true);
+          return; // Exit early to wait for activation
+        }
         throw new Error(json.message || "Authentication failed");
       }
     } catch (err) {
       toast.error(err.message || "Network error occurred during login. Please try again.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleActivationSubmit = async (e) => {
+    e.preventDefault();
+    if (!activationCode.trim()) {
+      toast.error("Please enter an activation code");
+      return;
+    }
+
+    setActivating(true);
+    try {
+      const res = await fetch("/api/employee/auth/activate-device", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          employeeId: pendingCredentials.employeeId,
+          password: pendingCredentials.password,
+          activationCode: activationCode.trim().toUpperCase(),
+        }),
+      });
+
+      const json = await res.json();
+      if (res.ok && json.success) {
+        toast.success("Device activated successfully! Completing login...");
+        setShowActivationDialog(false);
+        setActivationCode("");
+        // Retry login now that device is activated
+        await onEmployeeSubmit(pendingCredentials);
+      } else {
+        throw new Error(json.message || "Activation failed");
+      }
+    } catch (err) {
+      toast.error(err.message || "Network error occurred during activation. Please try again.");
+    } finally {
+      setActivating(false);
     }
   };
 
@@ -308,6 +362,54 @@ export default function UnifiedLoginPage() {
           </div>
         </div>
       </div>
+
+      <Dialog open={showActivationDialog} onOpenChange={setShowActivationDialog}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold text-zinc-900">Activate POS Device</DialogTitle>
+            <DialogDescription className="text-zinc-500 font-medium pt-1">
+              This device has not yet been registered. Please enter the activation code provided by your administrator.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleActivationSubmit} className="space-y-4 pt-4">
+            <div className="space-y-2">
+              <Label htmlFor="activationCode" className="text-xs font-bold text-zinc-600 uppercase tracking-wider">
+                Activation Code
+              </Label>
+              <Input
+                id="activationCode"
+                value={activationCode}
+                onChange={(e) => setActivationCode(e.target.value)}
+                placeholder="EMP-XXXX-XXXX"
+                className="bg-zinc-50 border-zinc-200 h-12 uppercase tracking-widest font-mono text-center text-lg focus:ring-blue-500 focus:border-blue-500"
+                required
+              />
+            </div>
+            <DialogFooter className="pt-4 flex justify-end gap-2">
+              <Button 
+                type="button" 
+                variant="outline" 
+                onClick={() => setShowActivationDialog(false)}
+                disabled={activating}
+                className="rounded-lg h-10 font-bold"
+              >
+                Cancel
+              </Button>
+              <Button 
+                type="submit" 
+                disabled={activating}
+                className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg h-10 font-bold"
+              >
+                {activating ? (
+                  <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Activating...</>
+                ) : (
+                  "Activate Device"
+                )}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

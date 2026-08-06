@@ -10,6 +10,7 @@ const EmployeeSessionSchema = new mongoose.Schema(
     logoutTime: { type: Date },
     duration: { type: Number },
     browserFingerprint: { type: String, required: true },
+    platform: { type: String },
     ipAddress: { type: String, required: true },
     status: { type: String, enum: ['Active', 'Terminated', 'Expired'], default: 'Active' }
   },

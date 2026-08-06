@@ -16,6 +16,7 @@ import OvertimeRecord from "@/models/employee/OvertimeRecord";
 import ShiftHistory from "@/models/employee/ShiftHistory";
 import RegisteredDevice from "@/models/RegisteredDevice";
 import { sendEmployeeCredentials } from "@/lib/brevo/sendEmployeeCredentials";
+import { generateActivationCode } from "@/utils/crypto";
 import Restaurant from "@/models/Restaurant"
 // GET - List all employees
 export const GET = withAuth(async (request) => {
@@ -214,6 +215,18 @@ export const PUT = withAuth(async (request) => {
       const rawPassword = generatePassword();
       const hashedPassword = await hashPassword(rawPassword);
 
+      // Auto-create a RegisteredDevice for this employee
+      const activationCode = generateActivationCode();
+      const newDevice = await RegisteredDevice.create({
+        restaurant: request.restaurant,
+        deviceCode: `DEV-${Date.now()}`,
+        deviceName: `${existing.firstName}'s Device`,
+        deviceType: 'Tablet',
+        activationCode,
+        activationStatus: 'Pending',
+        assignedEmployee: existing._id,
+      });
+
       existing.employeeId = employeeId;
       existing.username = username;
       existing.password = hashedPassword;
@@ -221,11 +234,13 @@ export const PUT = withAuth(async (request) => {
       existing.status = "Approved";
       existing.credentialGenerated = true;
       existing.passwordGeneratedAt = new Date();
+      existing.assignedDevice = newDevice._id;
       await existing.save();
 
       logger.info(`Employee Approved & Credentials Generated: ${existing.email}`);
       const employeeData = existing.toObject();
       delete employeeData.password;
+      employeeData.activationCode = activationCode; // Pass back for UI
       return sendSuccess(employeeData, "Employee approved and credentials generated");
     }
 
@@ -256,6 +271,14 @@ export const PUT = withAuth(async (request) => {
       const restaurantName = restaurant ? restaurant.name : "";
       const loginUrl = process.env.NEXT_PUBLIC_BASE_URL ? `${process.env.NEXT_PUBLIC_BASE_URL}/login` : "https://pos.tastybitesrestaurant.com/login";
 
+      let activationCode = null;
+      if (existing.assignedDevice) {
+        const device = await RegisteredDevice.findById(existing.assignedDevice);
+        if (device && device.activationCode) {
+          activationCode = device.activationCode;
+        }
+      }
+
       try {
         await sendEmployeeCredentials({
           employeeName: `${existing.firstName} ${existing.lastName}`,
@@ -268,7 +291,8 @@ export const PUT = withAuth(async (request) => {
           device: null,
           loginUrl: loginUrl,
           email: existing.email,
-          logoUrl: null
+          logoUrl: null,
+          activationCode: activationCode
         });
 
         logger.info(`Sending credentials email to ${existing.email}`);
