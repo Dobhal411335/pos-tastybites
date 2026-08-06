@@ -42,7 +42,7 @@ export const PUT = withAuth(async (request, { params }) => {
 
     const data = await request.json();
     // Allow updating description, taxes, status, variants, addons, image, discount
-    const { description, taxes, status, variants, addons, image } = data;
+    const { description, taxes, status, variants, addons, image, preparationStyles } = data;
 
     const updateData = { updatedBy: request.user.id };
     
@@ -64,6 +64,7 @@ export const PUT = withAuth(async (request, { params }) => {
     if (variants) updateData.variants = variants;
     if (addons) updateData.addons = addons;
     if (image !== undefined) updateData.image = image;
+    if (preparationStyles !== undefined) updateData.preparationStyles = preparationStyles;
 
     const updateObj = { $set: updateData };
     if (data.discount === null) {

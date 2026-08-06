@@ -36,6 +36,7 @@ export default function ProductDetailsConfigPage() {
   const [taxValue, setTaxValue] = useState("0");
   const [availableTaxes, setAvailableTaxes] = useState([]);
   const [selectedTaxes, setSelectedTaxes] = useState([]);
+  const [preparationStyles, setPreparationStyles] = useState([""]);
 
 
 
@@ -61,6 +62,7 @@ export default function ProductDetailsConfigPage() {
         setTaxValue(p.taxValue?.toString() || "0");
         setVariants(p.variants || []);
         setAddons(p.addons || []);
+        setPreparationStyles(p.preparationStyles?.length ? p.preparationStyles : [""]);
         setSelectedTaxes(p.taxes?.map(t => typeof t === 'object' ? t._id : t) || []);
       } else {
         toast.error("Failed to load product details");
@@ -206,6 +208,7 @@ export default function ProductDetailsConfigPage() {
           taxes: availableTaxes.map(t => t._id),
           variants: variants.filter(v => v.size).map(v => ({ ...v, price: parseFloat(v.price) || 0 })),
           addons: addons.filter(a => a.name).map(a => ({ ...a, price: parseFloat(a.price) || 0 })),
+          preparationStyles: preparationStyles.filter(s => s.trim() !== ""),
           image: product?.image
         })
       });
@@ -334,8 +337,55 @@ export default function ProductDetailsConfigPage() {
                         className="w-full h-auto bg-white border border-zinc-200 rounded-md p-3 text-[16px] focus:outline-none focus:ring-2 focus:ring-[#F97316] focus:border-transparent transition-shadow"
                       />
                     </div>
+                    
+                    <div className="space-y-3 pt-2">
+                      <label className="text-[14px] font-semibold text-zinc-900">
+                        Style of Preparation
+                      </label>
+                      {preparationStyles.map((style, index) => (
+                        <div key={index} className="flex items-center gap-3">
+                          <Input
+                            placeholder="preparing of dish using differnt styles , etc"
+                            value={style}
+                            onChange={(e) => {
+                              const newStyles = [...preparationStyles];
+                              newStyles[index] = e.target.value;
+                              setPreparationStyles(newStyles);
+                            }}
+                            className="flex-1 h-11 bg-white border-zinc-200"
+                          />
+                          {index === preparationStyles.length - 1 ? (
+                            <Button 
+                              type="button" 
+                              variant="outline" 
+                              size="icon" 
+                              onClick={() => setPreparationStyles([...preparationStyles, ""])}
+                              className="h-11 w-11 shrink-0"
+                            >
+                              <Plus className="h-4 w-4" />
+                            </Button>
+                          ) : (
+                            <Button 
+                              type="button" 
+                              variant="outline" 
+                              size="icon" 
+                              onClick={() => {
+                                const newStyles = [...preparationStyles];
+                                newStyles.splice(index, 1);
+                                setPreparationStyles(newStyles);
+                              }}
+                              className="h-11 w-11 shrink-0 text-red-500 hover:text-red-600 hover:bg-red-50 border-zinc-200"
+                            >
+                              <Trash className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
                   </CardContent>
                 </Card>
+
+                
 
                 {/* Pricing, Size, Addons Card */}
                 <Card className="shadow-sm border-zinc-200 bg-white overflow-hidden">

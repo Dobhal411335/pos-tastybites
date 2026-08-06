@@ -49,7 +49,7 @@ export const GET = withAuth(async (request) => {
 export const POST = withAuth(async (request) => {
   try {
     const data = await request.json();
-    const { firstName, lastName, email, countryCode, phoneNumber, role, password, status, profileImage, defaultFloor, employeeColor, assignedFloor, assignedTables, defaultShiftTemplate, weeklyOff, availableDays } = data;
+    const { firstName, lastName, email, countryCode, phoneNumber, role, password, status, profileImage, defaultFloor, employeeColor, assignedFloor, assignedTables, defaultShiftTemplate, weeklyOff, availableDays, hourlyPaid, staffDiscount } = data;
 
     // Validation
     if (!firstName || !lastName || !email || !phoneNumber) {
@@ -84,6 +84,8 @@ export const POST = withAuth(async (request) => {
       defaultShiftTemplate: defaultShiftTemplate || null,
       weeklyOff: weeklyOff || [],
       availableDays: availableDays || [],
+      hourlyPaid: hourlyPaid || undefined,
+      staffDiscount: staffDiscount !== undefined ? staffDiscount : undefined,
     });
 
     // Update tables with this employee assignment
@@ -161,7 +163,7 @@ export const POST = withAuth(async (request) => {
 export const PUT = withAuth(async (request) => {
   try {
     const data = await request.json();
-    const { _id, action, firstName, lastName, countryCode, phoneNumber, role, status, profileImage, defaultFloor, employeeColor, assignedFloor, assignedTables, defaultShiftTemplate, weeklyOff, availableDays } = data;
+    const { _id, action, firstName, lastName, countryCode, phoneNumber, role, status, profileImage, defaultFloor, employeeColor, assignedFloor, assignedTables, defaultShiftTemplate, weeklyOff, availableDays, hourlyPaid, staffDiscount } = data;
 
     if (!_id) {
       return sendError(new Error("Missing ID"), "Employee ID is required", 400);
@@ -189,6 +191,8 @@ export const PUT = withAuth(async (request) => {
       if (role) existing.role = role;
       if (employeeColor) existing.employeeColor = employeeColor;
       if (defaultShiftTemplate !== undefined) existing.defaultShiftTemplate = defaultShiftTemplate;
+      if (hourlyPaid !== undefined) existing.hourlyPaid = hourlyPaid;
+      if (staffDiscount !== undefined) existing.staffDiscount = staffDiscount;
       
       await existing.save();
       const employeeData = existing.toObject();
@@ -322,6 +326,8 @@ export const PUT = withAuth(async (request) => {
       ...(defaultShiftTemplate !== undefined && { defaultShiftTemplate }),
       ...(weeklyOff !== undefined && { weeklyOff }),
       ...(availableDays !== undefined && { availableDays }),
+      ...(hourlyPaid !== undefined && { hourlyPaid }),
+      ...(staffDiscount !== undefined && { staffDiscount }),
     };
 
     const updatedEmployee = await Employee.findByIdAndUpdate(_id, updateData, { new: true }).select("-password -plainPassword");

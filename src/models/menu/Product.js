@@ -31,6 +31,7 @@ const ProductSchema = new mongoose.Schema(
     image: { url: { type: String }, key: { type: String } },
     variants: [VariantSchema],
     addons: [AddonSchema],
+    preparationStyles: [{ type: String }],
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee' },
     updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee' },
   },

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState,useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { ArrowLeft, Loader2, UserPlus, Mail, Phone, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -24,11 +24,14 @@ export default function CreateServerAccountPage() {
   const [countryCode, setCountryCode] = useState("+1");
   const [role, setRole] = useState("Staff");
   const [employeeColor, setEmployeeColor] = useState("#4ade80");
-  
+  const [totalWorkingHours, setTotalWorkingHours] = useState("");
+  const [amountPerHour, setAmountPerHour] = useState("");
+  const [staffDiscount, setStaffDiscount] = useState("");
+
   // Default Shift Assignment
   const [defaultShiftTemplate, setDefaultShiftTemplate] = useState("");
   const [templates, setTemplates] = useState([]);
-  
+
   const [roles, setRoles] = useState([]);
   const [isAddRoleOpen, setIsAddRoleOpen] = useState(false);
   const [newRoleName, setNewRoleName] = useState("");
@@ -53,7 +56,7 @@ export default function CreateServerAccountPage() {
           fetch("/api/roles"),
           fetch("/api/employees/shifts?action=templates", { cache: "no-store" })
         ]);
-        
+
         const rolesJson = await rolesRes.json();
         if (rolesJson.success) {
           setRoles(rolesJson.data);
@@ -80,6 +83,9 @@ export default function CreateServerAccountPage() {
             if (emp.role) setRole(emp.role);
             if (emp.employeeColor) setEmployeeColor(emp.employeeColor);
             if (emp.defaultShiftTemplate) setDefaultShiftTemplate(emp.defaultShiftTemplate);
+            if (emp.hourlyPaid?.totalWorkingHours) setTotalWorkingHours(emp.hourlyPaid.totalWorkingHours);
+            if (emp.hourlyPaid?.amountPerHour) setAmountPerHour(emp.hourlyPaid.amountPerHour.toString());
+            if (emp.staffDiscount !== undefined) setStaffDiscount(emp.staffDiscount.toString());
           }
         }
       } catch (err) {
@@ -105,7 +111,12 @@ export default function CreateServerAccountPage() {
         phoneNumber: phoneNumber.trim(),
         role: role,
         employeeColor: employeeColor,
-        defaultShiftTemplate: defaultShiftTemplate || null
+        defaultShiftTemplate: defaultShiftTemplate && defaultShiftTemplate !== "none" ? defaultShiftTemplate : null,
+        hourlyPaid: (totalWorkingHours || amountPerHour) ? {
+          totalWorkingHours: totalWorkingHours.trim(),
+          amountPerHour: amountPerHour ? Number(amountPerHour) : null
+        } : undefined,
+        staffDiscount: staffDiscount ? Number(staffDiscount) : undefined
       };
 
       if (!isEditMode) {
@@ -133,6 +144,10 @@ export default function CreateServerAccountPage() {
       setPhoneNumber("");
       setRole("Staff");
       setEmployeeColor("#4ade80");
+      setTotalWorkingHours("");
+      setAmountPerHour("");
+      setStaffDiscount("");
+      setDefaultShiftTemplate("");
 
       // Redirect to list page
       setTimeout(() => {
@@ -291,49 +306,106 @@ export default function CreateServerAccountPage() {
 
                 <div className=" flex items-center w-full gap-5">
                   <div className="w-full">
-                  <label className="text-[14px] font-semibold text-zinc-900 block">
-                    Role <span className="text-red-500">*</span>
-                  </label>
+                    <label className="text-[14px] font-semibold text-zinc-900 block">
+                      Role <span className="text-red-500">*</span>
+                    </label>
 
-                  <div className="flex gap-2">
-                    <Select value={role} onValueChange={setRole}>
-                      <SelectTrigger className="w-full h-12 text-[15px] border-zinc-200 focus:ring-2 focus:ring-[#1e40af] bg-white">
-                        <SelectValue placeholder="Select role..." />
-                      </SelectTrigger>
-                      <SelectContent className="bg-white max-h-60 overflow-y-auto">
-                        {roles.map(r => (
-                          <SelectItem key={r.name} value={r.name}>{r.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <Button
-                      type="button"
-                      onClick={() => setIsAddRoleOpen(true)}
-                      className="h-12 w-12 shrink-0 bg-stone-100 text-stone-600 hover:bg-stone-200 border border-stone-200"
-                    >
-                      <UserPlus className="h-5 w-5" />
-                    </Button>
+                    <div className="flex gap-2">
+                      <Select value={role} onValueChange={setRole}>
+                        <SelectTrigger className="w-full h-12 text-[15px] border-zinc-200 focus:ring-2 focus:ring-[#1e40af] bg-white">
+                          <SelectValue placeholder="Select role..." />
+                        </SelectTrigger>
+                        <SelectContent className="bg-white max-h-60 overflow-y-auto">
+                          {roles.map(r => (
+                            <SelectItem key={r.name} value={r.name}>{r.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Button
+                        type="button"
+                        onClick={() => setIsAddRoleOpen(true)}
+                        className="h-12 w-12 shrink-0 bg-stone-100 text-stone-600 hover:bg-stone-200 border border-stone-200"
+                      >
+                        <UserPlus className="h-5 w-5" />
+                      </Button>
+                    </div>
                   </div>
+
+                  <div className="w-full gap-6">
+                    <div className="space-y-2">
+                      <label className="text-[14px] font-semibold text-zinc-900 block">
+                        Employee Color
+                      </label>
+                      <div className="flex gap-2 items-center">
+                        <Input
+                          type="color"
+                          value={employeeColor}
+                          onChange={(e) => setEmployeeColor(e.target.value)}
+                          className="h-12 w-16 p-1 border-zinc-200 cursor-pointer"
+                        />
+                        <span className="text-[14px] text-zinc-600 font-medium font-mono">{employeeColor.toUpperCase()}</span>
+                      </div>
+                    </div>
                   </div>
+                </div>
 
                 <div className="w-full gap-6">
                   <div className="space-y-2">
                     <label className="text-[14px] font-semibold text-zinc-900 block">
-                      Employee Color
+                      Hourly Paid
                     </label>
-                    <div className="flex gap-2 items-center">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <Input
-                        type="color"
-                        value={employeeColor}
-                        onChange={(e) => setEmployeeColor(e.target.value)}
-                        className="h-12 w-16 p-1 border-zinc-200 cursor-pointer"
+                        type="text"
+                        placeholder="Total working hour a day"
+                        value={totalWorkingHours}
+                        onChange={(e) => setTotalWorkingHours(e.target.value)}
+                        className="h-12 text-[15px] bg-white border-zinc-200 focus:ring-[#1e40af]"
                       />
-                      <span className="text-[14px] text-zinc-600 font-medium font-mono">{employeeColor.toUpperCase()}</span>
+                      <Input
+                        type="number"
+                        placeholder="Amount per hour paid"
+                        value={amountPerHour}
+                        onChange={(e) => setAmountPerHour(e.target.value)}
+                        className="h-12 text-[15px] bg-white border-zinc-200 focus:ring-[#1e40af]"
+                      />
                     </div>
                   </div>
                 </div>
+
+                <div className="w-full gap-6">
+                  <div className="space-y-2">
+                    <label className="text-[14px] font-semibold text-zinc-900 block">
+                      Staff Discount Offer
+                    </label>
+                    <Input
+                      type="number"
+                      placeholder="Enter for percent"
+                      value={staffDiscount}
+                      onChange={(e) => setStaffDiscount(e.target.value)}
+                      className="h-12 text-[15px] bg-white border-zinc-200 focus:ring-[#1e40af]"
+                    />
+                  </div>
                 </div>
 
+                <div className="w-full gap-6">
+                  <div className="space-y-2">
+                    <label className="text-[14px] font-semibold text-zinc-900 block">
+                      Day Shift
+                    </label>
+                    <Select value={defaultShiftTemplate || "none"} onValueChange={setDefaultShiftTemplate}>
+                      <SelectTrigger className="w-full h-12 text-[15px] border-zinc-200 focus:ring-2 focus:ring-[#1e40af] bg-white">
+                        <SelectValue placeholder="Select shift..." />
+                      </SelectTrigger>
+                      <SelectContent className="bg-white max-h-60 overflow-y-auto">
+                        <SelectItem value="none">None</SelectItem>
+                        {templates.map(t => (
+                          <SelectItem key={t._id} value={t._id}>{t.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
                 <div className="pt-6 border-t border-zinc-100 flex justify-end gap-3">
                   {isEditMode && (
                     <Button type="button" variant="outline" className="w-full md:w-auto h-12 px-8 text-[15px] font-bold" asChild>

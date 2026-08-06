@@ -23,6 +23,11 @@ const EmployeeSchema = new mongoose.Schema(
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee' },
     updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee' },
     employeeColor: { type: String, default: '#4ade80' },
+    hourlyPaid: {
+      totalWorkingHours: { type: String },
+      amountPerHour: { type: Number }
+    },
+    staffDiscount: { type: Number },
     assignedFloor: { type: mongoose.Schema.Types.ObjectId, ref: 'Floor' },
     assignedTables: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Table' }],
     assignedDevice: { type: mongoose.Schema.Types.ObjectId, ref: 'RegisteredDevice' },
