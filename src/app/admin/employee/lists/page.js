@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { ArrowLeft, Trash2, Loader2, MoreHorizontal, UserCheck, Mail, Phone, ShieldAlert, Edit2, CheckCircle, Key, Send, RefreshCw, Eye, EyeOff, Copy, Edit } from "lucide-react";
+import { ArrowLeft, Trash2, Loader2, MoreHorizontal, UserCheck, Mail, Phone, ShieldAlert, Edit2, CheckCircle, Key, Send, RefreshCw, Eye, EyeOff, Copy, Edit, Smartphone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -23,6 +23,7 @@ export default function EmployeeListPage() {
   // Dialog states
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [employeeToDelete, setEmployeeToDelete] = useState(null);
+  const [isDeviceTokenOpen, setIsDeviceTokenOpen] = useState(false);
   
   const [isApproveOpen, setIsApproveOpen] = useState(false);
   const [isCredentialsOpen, setIsCredentialsOpen] = useState(false);
@@ -167,6 +168,30 @@ export default function EmployeeListPage() {
       }
     } catch (err) {
       toast.error("Error regenerating password");
+    }
+  };
+
+  const handleGenerateDeviceToken = async () => {
+    if (!selectedEmployee) return;
+    setActionLoading(true);
+    try {
+      const res = await fetch("/api/employees", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ _id: selectedEmployee._id, action: "generateDeviceToken" }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        toast.success("New device token generated and sent via email.");
+        setIsDeviceTokenOpen(false);
+        fetchInitialData();
+      } else {
+        toast.error(json.message || "Failed to generate device token");
+      }
+    } catch (err) {
+      toast.error("Error generating device token");
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -375,6 +400,9 @@ export default function EmployeeListPage() {
                                         <DropdownMenuItem className="text-[14px] font-medium text-amber-600 focus:bg-amber-50 cursor-pointer" onClick={() => handleRegeneratePassword(emp._id)}>
                                           <RefreshCw className="mr-2 h-4 w-4" /> Regenerate Password
                                         </DropdownMenuItem>
+                                        <DropdownMenuItem className="text-[14px] font-medium cursor-pointer" onClick={() => { setSelectedEmployee(emp); setTimeout(() => setIsDeviceTokenOpen(true), 150); }}>
+                                          <Smartphone className="mr-2 h-4 w-4" /> Generate Device Token
+                                        </DropdownMenuItem>
                                       </>
                                     )}
                                     <div className="border-t border-zinc-100 my-1"></div>
@@ -524,6 +552,33 @@ export default function EmployeeListPage() {
             <Button disabled={actionLoading} onClick={handleSendEmail} className="bg-emerald-600 text-white hover:bg-emerald-700">
               {actionLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Send Email
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Device Token Dialog */}
+      <Dialog open={isDeviceTokenOpen} onOpenChange={setIsDeviceTokenOpen}>
+        <DialogContent className="sm:max-w-md bg-white">
+          <DialogHeader>
+            <DialogTitle>Generate New Device Token</DialogTitle>
+            <DialogDescription>
+              This will retire the employee&apos;s current device token and generate a new one. An email with the new credentials and activation code will be sent to the employee.
+            </DialogDescription>
+          </DialogHeader>
+          {selectedEmployee && (
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-4 items-center gap-4 text-sm">
+                <span className="font-bold text-zinc-600">Employee</span>
+                <span className="col-span-3 font-semibold">{selectedEmployee.firstName} {selectedEmployee.lastName}</span>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsDeviceTokenOpen(false)}>Cancel</Button>
+            <Button disabled={actionLoading} onClick={handleGenerateDeviceToken} className="bg-amber-600 text-white hover:bg-amber-700">
+              {actionLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Generate & Send
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -6,8 +6,9 @@ import EmployeeSidebar from "@/components/employee/EmployeeSidebar";
 import EmployeeTopNav from "@/components/employee/EmployeeTopNav";
 import { Loader2 } from "lucide-react";
 import { EmployeeFooter } from "@/components/employee/EmployeeFooter";
+import { SocketProvider } from "@/components/providers/SocketProvider";
 
-export default function EmployeeMainLayout({ children }) {
+export default function SalesMainLayout({ children }) {
   const router = useRouter();
   const pathname = usePathname();
   const [employeeUser, setEmployeeUser] = useState(null);
@@ -16,7 +17,7 @@ export default function EmployeeMainLayout({ children }) {
   useEffect(() => {
     const verifyAuth = async () => {
       try {
-        const res = await fetch("/api/employee/auth/me");
+        const res = await fetch("/api/auth/me");
         if (!res.ok) throw new Error("Unauthorized");
         const data = await res.json();
         if (data.success && data.data) {
@@ -42,7 +43,11 @@ export default function EmployeeMainLayout({ children }) {
   }
 
   return (
-    <div className="min-h-screen bg-[#FAFAFA] flex flex-col antialiased text-zinc-900 font-sans">
+    <SocketProvider 
+      employeeId={(employeeUser?.employee || employeeUser)?._id || (employeeUser?.employee || employeeUser)?.id}
+      restaurantId={(employeeUser?.employee || employeeUser)?.restaurant}
+    >
+      <div className="min-h-screen bg-[#FAFAFA] flex flex-col antialiased text-zinc-900 font-sans">
 
       <EmployeeTopNav
         employeeName={
@@ -55,20 +60,7 @@ export default function EmployeeMainLayout({ children }) {
       />
 
       <div className="flex-1 flex overflow-hidden relative">
-        <div className="hidden md:block">
-          <EmployeeSidebar />
-        </div>
-
-        {isMobileMenuOpen && (
-          <div className="fixed inset-0 z-50 flex md:hidden">
-            <div className="fixed inset-0 bg-black/50" onClick={() => setIsMobileMenuOpen(false)}></div>
-            <div className="relative flex w-72 max-w-xs flex-col bg-white">
-              <EmployeeSidebar />
-            </div>
-          </div>
-        )}
-
-        <main className="flex-1 overflow-y-auto p-4">
+        <main className="flex-1 overflow-y-auto p-2">
           <div className="mx-auto max-w-8xl">
             {children}
           </div>
@@ -76,5 +68,6 @@ export default function EmployeeMainLayout({ children }) {
       </div>
       <EmployeeFooter />
     </div>
+    </SocketProvider>
   );
 }

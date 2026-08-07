@@ -22,11 +22,17 @@ const OrderSchema = new mongoose.Schema(
     giftcardCode: { type: String, default: null },
     giftcardUsedAmount: { type: Number, default: 0 },
     totalAmount: { type: Number, required: true },
+    tipAmount: { type: Number, default: 0 },
     specialNote: { type: String },
     guestName: { type: String },
     contactNumber: { type: String },
-    tableNo: { type: String },
-    status: { type: String, enum: ['PENDING', 'CONFIRMED', 'CANCELLED'], default: 'PENDING' },
+    tableNo: { type: String }, // Legacy string reference
+    tableSession: { type: mongoose.Schema.Types.ObjectId, ref: 'TableSession' },
+    table: { type: mongoose.Schema.Types.ObjectId, ref: 'Table' },
+    floor: { type: mongoose.Schema.Types.ObjectId, ref: 'Floor' },
+    status: { type: String, enum: ['PENDING', 'CONFIRMED', 'COMPLETED', 'PAID', 'CANCELLED'], default: 'PENDING' },
+    paymentStatus: { type: String, enum: ['UNPAID', 'PARTIAL', 'PAID', 'REFUNDED'], default: 'UNPAID' },
+    paymentMethod: { type: String },
     source: { type: String, default: 'POS' }, // E.g., 'POS', 'STAFF', 'ONLINE'
     processedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee' }, // Who took the order
   },

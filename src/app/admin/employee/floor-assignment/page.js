@@ -152,10 +152,10 @@ export default function TableAssignmentPage() {
           <div className="flex flex-col sm:flex-row justify-between sm:items-end gap-4 border-b border-zinc-200 pb-5">
             <div>
               <h1 className="text-[32px] font-bold leading-tight" style={{ color: PALETTE.ink }}>
-                Table Assignment
+                Default Table Assignment
               </h1>
               <p className="text-[15px] mt-1" style={{ color: PALETTE.inkMuted }}>
-                Assign floors and tables to your staff.
+                Set each employee&apos;s default service section. Active employees may still serve any available table when needed.
               </p>
             </div>
             <div className="flex gap-2">
@@ -180,7 +180,7 @@ export default function TableAssignmentPage() {
                   <TableRow>
                     <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6">Employee</TableHead>
                     <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6">Role</TableHead>
-                    <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6">Assigned Tables</TableHead>
+                    <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6">Default Tables</TableHead>
                     <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6 text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -267,7 +267,7 @@ export default function TableAssignmentPage() {
                                 onClick={() => handleOpenDialog(emp)}
                               >
                                 <Edit className="w-3.5 h-3.5" />
-                                Assign Tables
+                                Set Default Tables
                               </Button>
                             </TableCell>
                           </TableRow>
@@ -285,7 +285,7 @@ export default function TableAssignmentPage() {
         <DialogContent className="sm:max-w-150 bg-white max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-xl">
-              Assign Floors & Tables - {selectedEmployee?.firstName} {selectedEmployee?.lastName}
+              Set Default Floors &amp; Tables &mdash; {selectedEmployee?.firstName} {selectedEmployee?.lastName}
             </DialogTitle>
           </DialogHeader>
 
@@ -364,7 +364,7 @@ export default function TableAssignmentPage() {
             <Button variant="ghost" onClick={() => setIsDialogOpen(false)} className="font-semibold">Cancel</Button>
             <Button onClick={handleSave} disabled={saving} className="bg-[#F97316] hover:bg-[#ea580c] text-white font-bold px-6">
               {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-              Save Assignments
+              Save Default Tables
             </Button>
           </DialogFooter>
         </DialogContent>

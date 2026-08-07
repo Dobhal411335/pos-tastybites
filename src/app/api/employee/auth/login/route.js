@@ -7,7 +7,7 @@ import EmployeeShift from '@/models/employee/EmployeeShift';
 import EmployeeSession from '@/models/employee/EmployeeSession';
 import DutyChange from '@/models/employee/DutyChange';
 import { comparePassword } from '@/utils/password';
-import { signToken } from '@/utils/jwt';
+import { signToken, verifyToken } from '@/utils/jwt';
 import { upsertAttendanceOnClockIn } from '@/lib/attendance';
 
 export async function POST(request) {
@@ -79,11 +79,12 @@ export async function POST(request) {
         }, { status: 403 });
       }
       
-      // Ensure the device belongs to the employee or is generally assigned
-      if (device.assignedEmployee && device.assignedEmployee.toString() !== employee._id.toString()) {
+      // Enforce that this device is exactly the one assigned to the employee
+      if (!employee.assignedDevice || device._id.toString() !== employee.assignedDevice.toString()) {
         return NextResponse.json({ 
           success: false, 
-          message: 'This device is assigned to another employee.' 
+          action: 'DEVICE_ACTIVATION_REQUIRED',
+          message: 'You cannot login from this device. Please use your assigned device or ask an admin to generate a new device token.' 
         }, { status: 403 });
       }
     }

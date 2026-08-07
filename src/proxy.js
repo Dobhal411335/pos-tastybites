@@ -13,10 +13,17 @@ export async function proxy(request) {
 
   const adminToken = request.cookies.get('token')?.value;
   const employeeToken = request.cookies.get('employee_access_token')?.value;
+  
   const { pathname } = request.nextUrl;
+  const hostname = request.headers.get('host') || '';
 
+  // Determine subdomains
+  const isPos = hostname.includes('pos.tastybitesrestaurant.com') || hostname.includes('pos.localhost') || hostname === 'localhost:3000';
+  const isSales = hostname.includes('sales.tastybitesrestaurant.com') || hostname.includes('sales.localhost');
+
+  // We are renaming employee to sales
   const isAdminPage = pathname.startsWith('/admin');
-  const isEmployeePage = pathname.startsWith('/employee');
+  const isSalesPage = pathname.startsWith('/sales');
   const isAuthPage = pathname === '/login';
 
   let adminPayload = null;
@@ -37,29 +44,57 @@ export async function proxy(request) {
 
   let response;
 
-  // Route protection
-  if (isAdminPage) {
+  // Subdomain Routing (Rewrite logic)
+  // If the user visits pos.tastybitesrestaurant.com/foo, we map it to /admin/foo
+  // If the user visits sales.tastybitesrestaurant.com/foo, we map it to /sales/foo
+  let targetPath = pathname;
+  
+  // To avoid rewriting already prefixed paths (e.g., API routes or static files)
+  if (!pathname.startsWith('/api') && !pathname.startsWith('/_next') && pathname !== '/login') {
+    if (isPos && !isAdminPage && !isSalesPage) {
+      targetPath = `/admin${pathname === '/' ? '/dashboard' : pathname}`;
+    } else if (isSales && !isSalesPage && !isAdminPage) {
+      targetPath = `/sales${pathname === '/' ? '/floor' : pathname}`;
+    }
+  }
+
+  // Auth Protection Logic (applying on the resolved targetPath)
+  const isTargetAdmin = targetPath.startsWith('/admin');
+  const isTargetSales = targetPath.startsWith('/sales');
+
+  if (isTargetAdmin) {
     if (!adminPayload) {
       response = NextResponse.redirect(new URL('/login', request.url));
     } else {
-      response = NextResponse.next({ request: { headers: requestHeaders } });
+      // If we need to rewrite
+      response = targetPath !== pathname 
+        ? NextResponse.rewrite(new URL(targetPath, request.url), { request: { headers: requestHeaders } })
+        : NextResponse.next({ request: { headers: requestHeaders } });
     }
-  } else if (isEmployeePage) {
-    if (!employeePayload) {
+  } else if (isTargetSales) {
+    if (!employeePayload && !adminPayload) {
       response = NextResponse.redirect(new URL('/login', request.url));
     } else {
-      response = NextResponse.next({ request: { headers: requestHeaders } });
+      response = targetPath !== pathname 
+        ? NextResponse.rewrite(new URL(targetPath, request.url), { request: { headers: requestHeaders } })
+        : NextResponse.next({ request: { headers: requestHeaders } });
     }
   } else if (isAuthPage) {
-    if (adminPayload) {
+    if (isSales && (adminPayload || employeePayload)) {
+      response = NextResponse.redirect(new URL('/floor', request.url));
+    } else if (isPos && adminPayload) {
+      response = NextResponse.redirect(new URL('/admin/dashboard', request.url));
+    } else if (adminPayload) {
       response = NextResponse.redirect(new URL('/admin/dashboard', request.url));
     } else if (employeePayload) {
-      response = NextResponse.redirect(new URL('/employee/orders/create', request.url));
+      response = NextResponse.redirect(new URL('/sales/floor', request.url));
     } else {
       response = NextResponse.next({ request: { headers: requestHeaders } });
     }
   } else {
-    response = NextResponse.next({ request: { headers: requestHeaders } });
+    response = targetPath !== pathname 
+      ? NextResponse.rewrite(new URL(targetPath, request.url), { request: { headers: requestHeaders } })
+      : NextResponse.next({ request: { headers: requestHeaders } });
   }
 
   // 2. Set the Request ID on response headers

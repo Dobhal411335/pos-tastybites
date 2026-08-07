@@ -78,7 +78,11 @@ export default function UnifiedLoginPage() {
 
       toast.success("Admin login successful! Redirecting...");
       setTimeout(() => {
-        router.push("/admin/dashboard");
+        if (window.location.hostname.includes('sales')) {
+          router.push("/floor");
+        } else {
+          router.push("/admin/dashboard");
+        }
       }, 1000);
     } catch (err) {
       toast.error(err.message || "Something went wrong. Please try again.");
@@ -114,7 +118,11 @@ export default function UnifiedLoginPage() {
         }
 
         setTimeout(() => {
-          router.push("/employee/dashboard");
+          if (window.location.hostname.includes('sales')) {
+            router.push("/floor");
+          } else {
+            router.push("/sales/floor"); // Fallback for employee logging in elsewhere
+          }
         }, 1000);
       } else {
         if (json.action === 'DEVICE_ACTIVATION_REQUIRED') {

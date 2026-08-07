@@ -36,6 +36,7 @@ export const GET = withAuth(async (request) => {
       .populate("defaultFloor", "name")
       .populate("assignedFloor", "name")
       .populate("assignedTables", "tableNumber")
+      .populate("assignedDevice")
       .lean();
 
     return sendSuccess(employees, "Employees retrieved successfully");
@@ -309,6 +310,65 @@ export const PUT = withAuth(async (request) => {
       } catch (err) {
         logger.error(`Error sending credentials to ${existing.email}`, err);
         return sendError(err, "Failed to send credentials via email", 500);
+      }
+    }
+
+    if (action === "generateDeviceToken") {
+      if (existing.status !== "Active" && existing.status !== "Approved") {
+        return sendError(new Error("Invalid State"), "Employee must be active or approved to generate a new device token", 400);
+      }
+
+      // 1. Retire old device if exists
+      if (existing.assignedDevice) {
+        await RegisteredDevice.findByIdAndUpdate(existing.assignedDevice, {
+          status: 'Retired',
+          activationStatus: 'Reset Required'
+        });
+      }
+
+      // 2. Generate new device and activation code
+      const activationCode = generateActivationCode();
+      const newDevice = await RegisteredDevice.create({
+        restaurant: request.restaurant,
+        deviceCode: `DEV-${Date.now()}`,
+        deviceName: `${existing.firstName}'s Device`,
+        deviceType: 'Tablet',
+        activationCode,
+        activationStatus: 'Pending',
+        assignedEmployee: existing._id,
+      });
+
+      existing.assignedDevice = newDevice._id;
+      existing.deviceActivationRequired = true;
+      await existing.save();
+
+      // 3. Send email with new credentials
+      const restaurantModel = mongoose.model('Restaurant');
+      const restaurant = await restaurantModel.findById(request.restaurant);
+      const restaurantName = restaurant ? restaurant.name : "";
+      const loginUrl = process.env.NEXT_PUBLIC_BASE_URL ? `${process.env.NEXT_PUBLIC_BASE_URL}/login` : "https://pos.tastybitesrestaurant.com/login";
+
+      try {
+        await sendEmployeeCredentials({
+          employeeName: `${existing.firstName} ${existing.lastName}`,
+          employeeId: existing.employeeId,
+          username: existing.username,
+          password: existing.plainPassword || "******** (Password remains unchanged)",
+          role: existing.role,
+          restaurantName: restaurantName,
+          floor: null,
+          device: null,
+          loginUrl: loginUrl,
+          email: existing.email,
+          logoUrl: null,
+          activationCode: activationCode
+        });
+
+        logger.info(`Sending NEW device activation code to ${existing.email}`);
+        return sendSuccess({ activationCode }, "New device token generated and sent via email");
+      } catch (err) {
+        logger.error(`Error sending new device token to ${existing.email}`, err);
+        return sendError(err, "Device token generated but failed to send email", 500);
       }
     }
 

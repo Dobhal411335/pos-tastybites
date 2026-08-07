@@ -32,12 +32,21 @@ export const withAuth = (handler, allowedRoles = []) => {
 
       // Role check
       if (allowedRoles.length > 0) {
-        let expandedRoles = [...allowedRoles];
+        let expandedRoles = allowedRoles.map(r => r.toUpperCase());
         // Automatically allow new Admin roles if legacy ADMIN is required
         if (expandedRoles.includes('ADMIN')) {
-          expandedRoles.push('Super Admin', 'Admin');
+          expandedRoles.push('SUPER ADMIN');
         }
-        if (!expandedRoles.includes(payload.role)) {
+        
+        // Automatically allow all floor staff variations if SERVER or EMPLOYEE is required
+        if (expandedRoles.includes('SERVER') || expandedRoles.includes('EMPLOYEE')) {
+          expandedRoles.push('STAFF', 'WAIT STAFF', 'BARTENDER', 'SERVER', 'EMPLOYEE');
+        }
+        
+        const userRoleUpper = (payload.role || '').toUpperCase();
+        
+        if (!expandedRoles.includes(userRoleUpper)) {
+          console.log(`[Auth Forbidden] User role: "${payload.role}" (Upper: "${userRoleUpper}") not in allowed roles:`, expandedRoles);
           return sendError(new Error('Forbidden'), 'You do not have permission to access this resource', 403);
         }
       }
