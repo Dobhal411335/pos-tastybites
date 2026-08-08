@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
+import Image from "next/image";
 import { useParams, useRouter } from "next/navigation";
 import { useSocket } from "@/components/providers/SocketProvider";
 import {
@@ -20,6 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import PrintPreviewModal from "@/components/receipts/PrintPreviewModal";
 
 export default function OrderPage() {
   const params = useParams();
@@ -59,6 +61,8 @@ export default function OrderPage() {
   const [paymentMethod, setPaymentMethod] = useState("Card"); // Card, Cash, GiftCard
   const [amountTendered, setAmountTendered] = useState("");
   const [tipAmount, setTipAmount] = useState(0);
+  const [selectedCardType, setSelectedCardType] = useState("");
+  const [cardAmountTendered, setCardAmountTendered] = useState("");
 
   // Split payment / Gift card states
   const [isGiftCardModalOpen, setIsGiftCardModalOpen] = useState(false);
@@ -68,6 +72,14 @@ export default function OrderPage() {
   const [giftCardError, setGiftCardError] = useState("");
   const [isVerifyingGiftCard, setIsVerifyingGiftCard] = useState(false);
   const [giftCardSplitAmount, setGiftCardSplitAmount] = useState(0);
+
+  // Print State
+  const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
+  const [printType, setPrintType] = useState('customer'); // 'customer' | 'kot'
+  const [printOrderData, setPrintOrderData] = useState(null);
+  const [printKotItems, setPrintKotItems] = useState([]);
+  const [printTaxBreakdown, setPrintTaxBreakdown] = useState([]);
+  const [redirectAfterPrint, setRedirectAfterPrint] = useState(false);
 
   // View States
   const [viewMode, setViewMode] = useState("grid"); // 'grid' | 'list'
@@ -89,9 +101,9 @@ export default function OrderPage() {
   };
 
   const getHeadIcon = (headName) => {
-    if (headName === 'All') return <LayoutGrid className="w-8 h-8 mb-1" strokeWidth={1.5} />;
+    if (headName === 'All') return <LayoutGrid className="w-6 h-6 mb-1" strokeWidth={1.5} />;
     const Icon = headIconMap[headName] || Utensils;
-    return <Icon className="w-8 h-8 mb-1" strokeWidth={1.5} />;
+    return <Icon className="w-6 h-6 mb-1" strokeWidth={1.5} />;
   };
 
   useEffect(() => {
@@ -252,6 +264,24 @@ export default function OrderPage() {
     return 0;
   };
 
+  const generateTaxBreakdown = () => {
+    const breakdown = {};
+    cart.forEach(item => {
+      const taxesToUse = (item.taxes && Array.isArray(item.taxes) && item.taxes.length > 0) ? item.taxes : globalTaxes;
+      if (taxesToUse) {
+        taxesToUse.forEach(t => {
+          const name = t.name || (t.type && t.type.toLowerCase().includes('percent') ? `Tax (${t.value}%)` : `Tax Fixed`);
+          const amount = t.type && t.type.toLowerCase().includes('percent') 
+            ? (item.price * item.qty) * (t.value / 100) 
+            : (t.value * item.qty);
+          if (!breakdown[name]) breakdown[name] = 0;
+          breakdown[name] += amount;
+        });
+      }
+    });
+    return Object.keys(breakdown).map(k => ({ name: k, amount: breakdown[k] }));
+  };
+
   const handleOpenOptions = (item) => {
     setSelectedProduct(item);
     setSelectedSize(item.variants && item.variants.length > 0 ? item.variants[0].size : "Standard");
@@ -386,10 +416,19 @@ export default function OrderPage() {
         setIsKitchenModalOpen(false);
         setActiveOrder(json.data);
         setOrderStatus("PENDING");
-        // Don't clear cart, keep them on the screen or redirect back to floor
-        setTimeout(() => {
-          router.push("/sales/floor");
-        }, 1000);
+        
+        // Check if there are items to print for KOT
+        if (json.data.kotPayload && json.data.kotPayload.length > 0) {
+          setPrintOrderData(json.data);
+          setPrintKotItems(json.data.kotPayload);
+          setPrintType('kot');
+          setRedirectAfterPrint(true);
+          setIsPrintModalOpen(true);
+        } else {
+          setTimeout(() => {
+            router.push("/sales/floor");
+          }, 1000);
+        }
       } else {
         toast.error(json.message);
       }
@@ -509,6 +548,11 @@ export default function OrderPage() {
         tipAmount: paymentMethod === 'Cash' ? tipAmount : 0,
       };
 
+      if (paymentMethod === 'Card') {
+        paymentPayload.cardType = selectedCardType;
+        paymentPayload.cardAmount = cardAmountTendered ? parseFloat(cardAmountTendered) : (giftCardBalance !== null ? giftCardSplitAmount : total);
+      }
+
       if (giftCardBalance !== null) {
         paymentPayload.giftCardCode = giftCardCode;
         paymentPayload.splitAmount = giftCardSplitAmount;
@@ -538,7 +582,13 @@ export default function OrderPage() {
         toast.success("Payment collected successfully!");
         setOrderStatus("PAID");
         setIsPaymentModalOpen(false);
-        setTimeout(() => router.push("/sales/floor"), 1000);
+        
+        // Open Customer Receipt Print Preview
+        setPrintOrderData(currentOrder);
+        setPrintTaxBreakdown(generateTaxBreakdown());
+        setPrintType('customer');
+        setRedirectAfterPrint(true);
+        setIsPrintModalOpen(true);
       } else {
         toast.error(json.message);
       }
@@ -575,7 +625,7 @@ export default function OrderPage() {
   }
 
   return (
-    <div className="flex flex-col h-[calc(100vh-160px)] w-full bg-zinc-50 font-sans overflow-hidden border border-zinc-200 rounded-xl shadow-sm">
+    <div className="flex flex-col h-[calc(100vh-140px)] w-full bg-zinc-50 font-sans overflow-hidden border border-zinc-200 rounded-xl shadow-sm">
 
       {/* SPLIT PANELS */}
       <div className="flex-1 flex min-h-0 overflow-hidden">
@@ -604,19 +654,19 @@ export default function OrderPage() {
 
           {/* Heads Grid (GRID VIEW) */}
           {viewMode === "grid" && (
-            <div className="flex items-center gap-3 px-4 py-4 bg-white border-b border-zinc-200 shrink-0 overflow-x-auto custom-scrollbar">
+            <div className="flex items-center gap-2 px-3 py-2.5 bg-white border-b border-zinc-200 shrink-0 overflow-x-auto custom-scrollbar">
               {heads.map(head => (
                 <button
                   key={head._id}
                   onClick={() => setActiveHead(head.name)}
-                  className={`flex flex-col items-center justify-center min-w-[96px] h-[84px] rounded-xl transition-all border ${
+                  className={`flex flex-col items-center justify-center min-w-[76px] h-[64px] rounded-lg transition-all border ${
                     activeHead === head.name 
-                      ? "bg-orange-500 text-white border-orange-500 shadow-md" 
+                      ? "bg-orange-500 text-white border-orange-500 shadow-sm" 
                       : "bg-zinc-100 text-zinc-700 border-zinc-200 hover:bg-zinc-200"
                   }`}
                 >
                   {getHeadIcon(head.name)}
-                  <span className="text-[11px] font-black uppercase tracking-wider">{head.name}</span>
+                  <span className="text-[10px] mt-1 font-black uppercase tracking-wider">{head.name}</span>
                 </button>
               ))}
             </div>
@@ -962,6 +1012,7 @@ export default function OrderPage() {
                         <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-400" />
                         <input
                           type="number"
+                          min="0"
                           value={amountTendered}
                           onChange={(e) => setAmountTendered(e.target.value)}
                           placeholder="0.00"
@@ -1001,12 +1052,76 @@ export default function OrderPage() {
               )}
 
               {paymentMethod === 'Card' && (
-                <div className="flex flex-col items-center justify-center py-8 text-center animate-in fade-in duration-200">
-                  <div className="w-16 h-16 bg-blue-50 text-blue-500 rounded-full flex items-center justify-center mb-4">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg>
+                <div className="space-y-4 animate-in fade-in duration-200">
+                  <label className="text-xs font-bold text-zinc-900 uppercase tracking-wider">Select Card Type</label>
+                  <div className="grid grid-cols-5 gap-2">
+                    {[
+                      { name: 'Visa', image: '/card/visa.png' },
+                      { name: 'Mastercard', image: '/card/mastercard.webp' },
+                      { name: 'RuPay', image: '/card/rupay.webp' },
+                      { name: 'Amex', image: '/card/american-express.webp' },
+                      { name: 'Discover', image: '/card/discover.png' },
+                    ].map(card => (
+                      <button
+                        key={card.name}
+                        onClick={() => setSelectedCardType(card.name)}
+                        className={`flex flex-col items-center justify-center p-2 rounded-xl border transition-all ${
+                          selectedCardType === card.name 
+                            ? 'border-orange-500 bg-orange-50 ring-1 ring-orange-500' 
+                            : 'border-zinc-200 bg-white hover:border-orange-300'
+                        }`}
+                      >
+                        <div className="relative w-10 h-6 mb-1.5">
+                          <Image src={card.image} alt={card.name} fill className="object-contain" />
+                        </div>
+                        <span className="text-[9px] font-bold text-zinc-600 text-center leading-tight">{card.name}</span>
+                      </button>
+                    ))}
                   </div>
-                  <h3 className="text-lg font-bold text-zinc-900 mb-1">Process Card Payment</h3>
-                  <p className="text-sm font-medium text-zinc-500">Tap or insert card on the terminal</p>
+
+                  {selectedCardType && (
+                    <div className="space-y-2 animate-in fade-in duration-200">
+                      <label className="text-xs font-bold text-zinc-900 uppercase tracking-wider">Amount to Charge</label>
+                      <div className="relative">
+                        <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-400" />
+                        <input
+                          type="number"
+                          min="0"
+                          value={cardAmountTendered}
+                          onChange={(e) => setCardAmountTendered(e.target.value)}
+                          placeholder={(giftCardBalance !== null ? giftCardSplitAmount : total).toFixed(2)}
+                          className="w-full pl-10 pr-4 py-3 bg-white border border-zinc-200 rounded-xl font-bold text-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {selectedCardType && cardAmountTendered && parseFloat(cardAmountTendered) > (giftCardBalance !== null ? giftCardSplitAmount : total) && (
+                    <div className="p-4 bg-orange-50 border border-orange-200 rounded-xl">
+                      <div className="flex justify-between items-center mb-3">
+                        <span className="text-sm font-bold text-orange-900">Overpayment / Tip</span>
+                        <span className="text-xl font-black text-orange-600">${(parseFloat(cardAmountTendered) - (giftCardBalance !== null ? giftCardSplitAmount : total)).toFixed(2)}</span>
+                      </div>
+                      <label className="flex items-center gap-3 cursor-pointer group">
+                        <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${tipAmount > 0 ? 'bg-orange-500 border-orange-500' : 'bg-white border-zinc-300 group-hover:border-orange-400'}`}>
+                          {tipAmount > 0 && <CheckCircle2 className="w-3.5 h-3.5 text-white" />}
+                        </div>
+                        <input
+                          type="checkbox"
+                          className="hidden"
+                          checked={tipAmount > 0}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setTipAmount(Math.round((parseFloat(cardAmountTendered) - (giftCardBalance !== null ? giftCardSplitAmount : total)) * 100) / 100);
+                            } else {
+                              setTipAmount(0);
+                            }
+                          }}
+                        />
+                        <span className="text-sm font-bold text-orange-900">Keep as Tip</span>
+                      </label>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -1069,7 +1184,9 @@ export default function OrderPage() {
                   isSubmitting || 
                   (paymentMethod === 'Cash' && giftCardSplitAmount > 0 && (!amountTendered || parseFloat(amountTendered) < giftCardSplitAmount)) ||
                   (paymentMethod === 'Cash' && giftCardBalance === null && (!amountTendered || parseFloat(amountTendered) < total)) ||
-                  (paymentMethod === 'GiftCard' && (giftCardBalance === null))
+                  (paymentMethod === 'GiftCard' && (giftCardBalance === null)) ||
+                  (paymentMethod === 'Card' && !selectedCardType) ||
+                  (paymentMethod === 'Card' && cardAmountTendered && parseFloat(cardAmountTendered) < (giftCardBalance !== null ? giftCardSplitAmount : total))
                 }
                 className="flex-2 h-12 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-bold shadow-none"
               >
@@ -1307,6 +1424,21 @@ export default function OrderPage() {
           </div>
         </div>
       )}
+
+      {/* Print Preview Modal */}
+      <PrintPreviewModal 
+        isOpen={isPrintModalOpen}
+        onClose={() => {
+          setIsPrintModalOpen(false);
+          if (redirectAfterPrint) {
+            router.push("/sales/floor");
+          }
+        }}
+        printType={printType}
+        order={printOrderData}
+        kotItems={printKotItems}
+        taxBreakdown={printTaxBreakdown}
+      />
     </div>
   );
 }

@@ -10,7 +10,7 @@ import { logger } from "@/utils/logger";
 export const POST = withAuth(async (request) => {
   try {
     const data = await request.json();
-    const { orderId, amount, method, sessionId, tipAmount } = data;
+    const { orderId, amount, method, sessionId, tipAmount, cardType } = data;
 
     if (!orderId) {
       return sendError(new Error("Missing ID"), "orderId is required", 400);
@@ -25,7 +25,7 @@ export const POST = withAuth(async (request) => {
     // For now, we assume the payment succeeds and just update the DB.
 
     order.paymentStatus = "PAID";
-    order.paymentMethod = method || "Cash";
+    order.paymentMethod = method === 'Card' && cardType ? `Card - ${cardType}` : (method || "Cash");
     order.status = "PAID"; 
     
     // Save tip if provided

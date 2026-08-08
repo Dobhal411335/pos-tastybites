@@ -1,0 +1,152 @@
+import React from 'react';
+import './print.css';
+import moment from 'moment';
+
+const CustomerReceipt = ({ order, restaurantDetails, taxBreakdown = [] }) => {
+  if (!order) return null;
+
+  const {
+    orderNumber,
+    items = [],
+    subTotal = 0,
+    totalAmount = 0,
+    guestName,
+    tableNo,
+    processedBy,
+    createdAt
+  } = order;
+
+  // Use fallback data if restaurant details not fully provided
+  const restName = restaurantDetails?.name || 'TASTY BITES';
+  const restAddress = restaurantDetails?.address || '345 Main Street South\nExeter, ON, Canada, N0M 1S6';
+  const restPhone = restaurantDetails?.phone || 'Tel: +1 519 235 0050';
+  const hstNumber = restaurantDetails?.hstNumber || '123456789 RT0001';
+
+  // Calculate tip guide dynamically
+  const tip15 = (subTotal * 0.15).toFixed(2);
+  const tip18 = (subTotal * 0.18).toFixed(2);
+  const tip20 = (subTotal * 0.20).toFixed(2);
+
+  return (
+    <div className="receipt-font text-xs p-4 bg-white" style={{ width: 'var(--print-width, 80mm)', margin: '0 auto' }}>
+      {/* Header */}
+      <div className="text-center mb-4">
+        <h1 className="text-lg receipt-bold mb-1">{restName}</h1>
+        <div className="whitespace-pre-line">{restAddress}</div>
+        <div>{restPhone}</div>
+        <div className="mt-2 text-[10px]">
+          Printed {moment().format('MMM DD, YYYY')} at {moment().format('hh:mm A')}
+        </div>
+      </div>
+
+      <div className="receipt-divider" />
+
+      {/* Order Info */}
+      <div className="mb-4">
+        <div className="flex justify-between">
+          <span>Order #:</span>
+          <span className="receipt-bold">{orderNumber}</span>
+        </div>
+        <div className="flex justify-between">
+          <span>Date:</span>
+          <span>{moment(createdAt).format('MMM DD, YYYY hh:mm A')}</span>
+        </div>
+        {processedBy && (
+          <div className="flex justify-between">
+            <span>Server:</span>
+            <span>{typeof processedBy === 'object' ? (processedBy.name || processedBy.firstName) : 'Server'}</span>
+          </div>
+        )}
+        {tableNo && (
+          <div className="flex justify-between">
+            <span>Table:</span>
+            <span className="receipt-bold">{tableNo}</span>
+          </div>
+        )}
+        {guestName && (
+          <div className="flex justify-between">
+            <span>Party Name:</span>
+            <span>{guestName}</span>
+          </div>
+        )}
+        <div className="mt-2">
+          <div>HST #: {hstNumber}</div>
+        </div>
+      </div>
+
+      <div className="receipt-divider" />
+
+      {/* Items List */}
+      <div className="mb-4">
+        <div className="flex justify-between receipt-bold mb-2">
+          <span>ITEM DESCRIPTION</span>
+          <span>AMOUNT</span>
+        </div>
+        {items.map((item, idx) => (
+          <div key={idx} className="mb-2">
+            <div className="flex justify-between items-start">
+              <div className="flex-1 pr-2">
+                {item.qty > 1 ? `${item.qty} × ` : ''}
+                {item.name}
+              </div>
+              <span>${(item.price * item.qty).toFixed(2)}</span>
+            </div>
+            {/* Options / Modifiers */}
+            {item.options && item.options.length > 0 && (
+              <div className="pl-4 text-[10px] mt-0.5">
+                {item.options.map((opt, oIdx) => (
+                  <div key={oIdx}>+ {opt}</div>
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      <div className="receipt-divider" />
+
+      {/* Totals */}
+      <div className="mb-4 space-y-1">
+        <div className="flex justify-between">
+          <span>Sub Total:</span>
+          <span>${subTotal.toFixed(2)}</span>
+        </div>
+        
+        {/* Dynamic Tax Breakdown */}
+        {taxBreakdown.map((tax, idx) => (
+          <div key={idx} className="flex justify-between">
+            <span>{tax.name}:</span>
+            <span>${tax.amount.toFixed(2)}</span>
+          </div>
+        ))}
+      </div>
+
+      <div className="receipt-divider" />
+      
+      <div className="flex justify-between text-base receipt-bold mb-4">
+        <span>Total:</span>
+        <span>${totalAmount.toFixed(2)}</span>
+      </div>
+      
+      <div className="receipt-divider" />
+
+      {/* Tip Guide */}
+      <div className="mb-6 text-center">
+        <div className="receipt-bold mb-2">SUGGESTED TIP GUIDE</div>
+        <div className="flex justify-between text-[10px]">
+          <span>15% = ${tip15}</span>
+          <span>18% = ${tip18}</span>
+          <span>20% = ${tip20}</span>
+        </div>
+      </div>
+
+      {/* Footer */}
+      <div className="text-center text-[10px] space-y-1">
+        <div className="receipt-bold">Thank You! Please Come Again!</div>
+        <div>Printed from Tasty Bites POS</div>
+      </div>
+    </div>
+  );
+};
+
+export default CustomerReceipt;

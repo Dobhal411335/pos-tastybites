@@ -1,0 +1,42 @@
+@media print {
+  @page {
+    margin: 0;
+  }
+  
+  body * {
+    visibility: hidden;
+  }
+  
+  #receipt-print-container, #receipt-print-container * {
+    visibility: visible;
+  }
+  
+  #receipt-print-container {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: var(--print-width, 80mm);
+    margin: 0;
+    padding: 0;
+  }
+
+  /* Hide scrollbars during print */
+  ::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+.receipt-font {
+  font-family: 'Courier New', Courier, monospace;
+  color: #000;
+  line-height: 1.2;
+}
+
+.receipt-divider {
+  border-bottom: 1px dashed #000;
+  margin: 8px 0;
+}
+
+.receipt-bold {
+  font-weight: 700;
+}

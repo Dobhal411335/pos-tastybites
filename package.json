@@ -53,6 +53,7 @@
     "jose": "^6.2.3",
     "jsonwebtoken": "^9.0.3",
     "lucide-react": "^1.24.0",
+    "moment": "^2.30.1",
     "mongoose": "^9.7.4",
     "next": "16.2.10",
     "next-auth": "^4.24.15",
@@ -66,9 +67,9 @@
     "react-icons": "^5.7.0",
     "react-qr-code": "^2.2.0",
     "recharts": "^3.9.2",
-    "sonner": "^2.0.7",
     "socket.io": "^4.7.5",
     "socket.io-client": "^4.7.5",
+    "sonner": "^2.0.7",
     "tailwind-merge": "^3.6.0",
     "zod": "^4.4.3"
   },

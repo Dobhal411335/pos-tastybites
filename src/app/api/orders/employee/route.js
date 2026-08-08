@@ -28,7 +28,8 @@ export const POST = withAuth(async (request) => {
       qty: item.qty,
       price: item.price,
       tax: item.tax || 0,
-      options: item.options || []
+      options: item.options || [],
+      cartId: item.cartId || String(Date.now() + Math.random())
     }));
 
     // If no sessionId is provided, fallback to legacy behavior
@@ -37,7 +38,7 @@ export const POST = withAuth(async (request) => {
       const newOrder = await Order.create({
         restaurantId: request.restaurant,
         orderNumber,
-        items: formattedItems,
+        items: formattedItems.map(item => ({ ...item, sentQty: item.qty })),
         subTotal: Number(subTotal) || 0,
         taxTotal: Number(taxTotal) || 0,
         discountTotal: Number(discountTotal) || 0,
@@ -51,8 +52,10 @@ export const POST = withAuth(async (request) => {
         processedBy: employeeId
       });
 
+      const kotPayload = formattedItems;
+
       logger.info(`Legacy POS Order created: ${orderNumber} by Employee ${employeeId}`);
-      return sendSuccess(newOrder, "Order sent to kitchen successfully", 201);
+      return sendSuccess({ ...newOrder.toObject(), kotPayload }, "Order sent to kitchen successfully", 201);
     }
 
     // Session-based Ordering
@@ -68,8 +71,23 @@ export const POST = withAuth(async (request) => {
     });
 
     if (order) {
+      // Calculate KOT Payload for Continue Order
+      const kotPayload = [];
+      
+      const finalItems = formattedItems.map(incomingItem => {
+        const existingItem = order.items.find(i => i.cartId === incomingItem.cartId || (i.menuItemId === incomingItem.menuItemId && JSON.stringify(i.options) === JSON.stringify(incomingItem.options) && i.size === incomingItem.size));
+        const sentQty = existingItem ? (existingItem.sentQty || 0) : 0;
+        const unprintedQty = incomingItem.qty - sentQty;
+        
+        if (unprintedQty > 0) {
+          kotPayload.push({ ...incomingItem, qty: unprintedQty });
+        }
+        
+        return { ...incomingItem, sentQty: incomingItem.qty };
+      });
+
       // Continue Order: Update the existing draft
-      order.items = formattedItems;
+      order.items = finalItems;
       order.subTotal = Number(subTotal) || 0;
       order.taxTotal = Number(taxTotal) || 0;
       order.discountTotal = Number(discountTotal) || 0;
@@ -94,14 +112,14 @@ export const POST = withAuth(async (request) => {
       });
 
       logger.info(`POS Order updated: ${order.orderNumber} for Session ${sessionId} by Employee ${employeeId}`);
-      return sendSuccess(order, "Order updated successfully", 200);
+      return sendSuccess({ ...order.toObject(), kotPayload }, "Order updated successfully", 200);
     } else {
       // Create New Order
       const orderNumber = generateStaffOrderNumber();
       const newOrder = await Order.create({
         restaurantId: request.restaurant,
         orderNumber,
-        items: formattedItems,
+        items: formattedItems.map(item => ({ ...item, sentQty: item.qty })),
         subTotal: Number(subTotal) || 0,
         taxTotal: Number(taxTotal) || 0,
         discountTotal: Number(discountTotal) || 0,
@@ -140,8 +158,10 @@ export const POST = withAuth(async (request) => {
         orderId: newOrder._id
       });
 
+      const kotPayload = formattedItems;
+
       logger.info(`POS Order created: ${orderNumber} for Session ${sessionId} by Employee ${employeeId}`);
-      return sendSuccess(newOrder, "Order sent to kitchen successfully", 201);
+      return sendSuccess({ ...newOrder.toObject(), kotPayload }, "Order sent to kitchen successfully", 201);
     }
 
   } catch (error) {

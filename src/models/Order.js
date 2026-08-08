@@ -8,6 +8,8 @@ const OrderItemSchema = new mongoose.Schema({
   price: { type: Number, required: true },
   tax: { type: Number, default: 0 },
   options: [{ type: String }],
+  sentQty: { type: Number, default: 0 },
+  cartId: { type: String }, // To match incoming items reliably
 });
 
 const OrderSchema = new mongoose.Schema(

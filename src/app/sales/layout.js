@@ -60,7 +60,7 @@ export default function SalesMainLayout({ children }) {
       />
 
       <div className="flex-1 flex overflow-hidden relative">
-        <main className="flex-1 overflow-y-auto p-2">
+        <main className="flex-1 overflow-y-auto p-1">
           <div className="mx-auto max-w-8xl">
             {children}
           </div>
