@@ -361,6 +361,7 @@ export default function AdminDashboardPage() {
                     <ModuleCard href="/admin/orders/online" icon={Globe} color="emerald" title="Online Orders" stat="Queue" desc="Centralized dashboard to accept, review, and queue web or aggregator orders." />
                     <ModuleCard href="/admin/orders/staff/create" icon={ChefHat} color="orange" title="Staff Orders" stat="Internal" desc="Dedicated channel for recording employee meals or internal consumption." />
                     <ModuleCard href="/admin/orders" icon={ClipboardList} color="blue" title="Order Tracking" stat="Live" desc="Real-time visibility of order lifecycle from preparation to fulfillment." />
+                    <ModuleCard href="/admin/giftcard" icon={Gift} color="rose" title="Issue GiftCard" stat="Offer" desc="Issue or sell gift cards, track balances, and manage redemptions." />
                     <ModuleCard href="/admin/invoices" icon={FileText} color="rose" title="Invoices" stat="Records" desc="Archive of historical bills, digital receipts, and transaction records." />
                   </div>
                 </section>

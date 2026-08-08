@@ -59,6 +59,10 @@ export default function OrderPage() {
   const [paymentMethod, setPaymentMethod] = useState("Card"); // Card, Cash, GiftCard
   const [amountTendered, setAmountTendered] = useState("");
   const [tipAmount, setTipAmount] = useState(0);
+
+  // Split payment / Gift card states
+  const [isGiftCardModalOpen, setIsGiftCardModalOpen] = useState(false);
+  const [giftCardDetails, setGiftCardDetails] = useState(null);
   const [giftCardCode, setGiftCardCode] = useState("");
   const [giftCardBalance, setGiftCardBalance] = useState(null);
   const [giftCardError, setGiftCardError] = useState("");
@@ -430,16 +434,13 @@ export default function OrderPage() {
     setIsVerifyingGiftCard(true);
     setGiftCardError("");
     setGiftCardBalance(null);
+    setGiftCardDetails(null);
     try {
-      const res = await fetch(`/api/giftcards/verify?code=${giftCardCode}`);
+      const res = await fetch(`/api/menu/giftcards?code=${giftCardCode}`);
       const json = await res.json();
       if (json.success) {
-        setGiftCardBalance(json.data.balance);
-        if (json.data.balance < total) {
-           setGiftCardSplitAmount(total - json.data.balance);
-        } else {
-           setGiftCardSplitAmount(0);
-        }
+        setGiftCardDetails(json.data);
+        setIsGiftCardModalOpen(true);
       } else {
         setGiftCardError(json.message || "Invalid Gift Card");
       }
@@ -448,6 +449,18 @@ export default function OrderPage() {
     } finally {
       setIsVerifyingGiftCard(false);
     }
+  };
+
+  const handleApplyGiftCard = () => {
+    const actualBalance = giftCardDetails.balance ?? giftCardDetails.value;
+    setGiftCardBalance(actualBalance);
+    if (actualBalance < total) {
+       setGiftCardSplitAmount(total - actualBalance);
+    } else {
+       setGiftCardSplitAmount(0);
+       setAmountTendered("");
+    }
+    setIsGiftCardModalOpen(false);
   };
 
   const handlePayment = async () => {
@@ -496,7 +509,7 @@ export default function OrderPage() {
         tipAmount: paymentMethod === 'Cash' ? tipAmount : 0,
       };
 
-      if (paymentMethod === 'GiftCard') {
+      if (giftCardBalance !== null) {
         paymentPayload.giftCardCode = giftCardCode;
         paymentPayload.splitAmount = giftCardSplitAmount;
       }
@@ -508,6 +521,20 @@ export default function OrderPage() {
       });
       const json = await res.json();
       if (json.success) {
+        if (giftCardBalance !== null && giftCardCode) {
+           const amountToUse = total - giftCardSplitAmount;
+           await fetch("/api/menu/giftcards/redeem", {
+             method: "POST",
+             headers: { "Content-Type": "application/json" },
+             body: JSON.stringify({
+               code: giftCardCode,
+               amountToUse: amountToUse,
+               orderId: currentOrder.orderNumber || currentOrder._id,
+               note: "POS Payment"
+             })
+           });
+        }
+        
         toast.success("Payment collected successfully!");
         setOrderStatus("PAID");
         setIsPaymentModalOpen(false);
@@ -896,24 +923,59 @@ export default function OrderPage() {
               {paymentMethod === 'Cash' && (
                 <div className="space-y-4 animate-in fade-in duration-200">
                   <div className="space-y-2">
-                    <label className="text-xs font-bold text-zinc-900 uppercase tracking-wider">Amount Tendered</label>
-                    <div className="relative">
-                      <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-400" />
-                      <input
-                        type="number"
-                        value={amountTendered}
-                        onChange={(e) => setAmountTendered(e.target.value)}
-                        placeholder="0.00"
-                        className="w-full pl-10 pr-4 py-3 bg-white border border-zinc-200 rounded-xl font-bold text-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
-                      />
+                    <label className="text-xs font-bold text-zinc-900 uppercase tracking-wider">Apply Gift Card (Optional)</label>
+                    <div className="flex gap-2">
+                      <div className="relative flex-1">
+                        <Tag className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+                        <input
+                          type="text"
+                          value={giftCardCode}
+                          onChange={(e) => setGiftCardCode(e.target.value)}
+                          placeholder="Enter code..."
+                          className="w-full pl-9 pr-4 py-2 bg-white border border-zinc-200 rounded-lg font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 uppercase"
+                        />
+                      </div>
+                      <Button onClick={verifyGiftCard} disabled={!giftCardCode || isVerifyingGiftCard} className="bg-zinc-900 hover:bg-zinc-800 text-white font-bold px-4 rounded-lg shadow-none">
+                        {isVerifyingGiftCard ? <Loader2 className="w-4 h-4 animate-spin" /> : "Verify"}
+                      </Button>
                     </div>
+                    {giftCardError && <p className="text-xs font-bold text-red-500 mt-1">{giftCardError}</p>}
                   </div>
+
+                  {giftCardBalance !== null && (
+                    <div className="p-4 bg-green-50 border border-green-200 rounded-xl space-y-2">
+                      <div className="flex justify-between items-center text-sm">
+                        <span className="font-bold text-green-900">Applied Gift Card Balance</span>
+                        <span className="font-black text-green-700">${giftCardBalance.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between items-center text-sm pt-2 border-t border-green-200/50">
+                        <span className="font-bold text-orange-600">Remaining Balance Due (Cash)</span>
+                        <span className="font-black text-orange-600">${giftCardSplitAmount.toFixed(2)}</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {(giftCardBalance === null || giftCardSplitAmount > 0) && (
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold text-zinc-900 uppercase tracking-wider">Amount Tendered</label>
+                      <div className="relative">
+                        <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-400" />
+                        <input
+                          type="number"
+                          value={amountTendered}
+                          onChange={(e) => setAmountTendered(e.target.value)}
+                          placeholder="0.00"
+                          className="w-full pl-10 pr-4 py-3 bg-white border border-zinc-200 rounded-xl font-bold text-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                        />
+                      </div>
+                    </div>
+                  )}
                   
-                  {parseFloat(amountTendered) > total && (
+                  {parseFloat(amountTendered) > (giftCardBalance !== null ? giftCardSplitAmount : total) && (
                     <div className="p-4 bg-orange-50 border border-orange-200 rounded-xl">
                       <div className="flex justify-between items-center mb-3">
                         <span className="text-sm font-bold text-orange-900">Change Due</span>
-                        <span className="text-xl font-black text-orange-600">${(parseFloat(amountTendered) - total).toFixed(2)}</span>
+                        <span className="text-xl font-black text-orange-600">${(parseFloat(amountTendered) - (giftCardBalance !== null ? giftCardSplitAmount : total)).toFixed(2)}</span>
                       </div>
                       <label className="flex items-center gap-3 cursor-pointer group">
                         <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${tipAmount > 0 ? 'bg-orange-500 border-orange-500' : 'bg-white border-zinc-300 group-hover:border-orange-400'}`}>
@@ -925,7 +987,7 @@ export default function OrderPage() {
                           checked={tipAmount > 0}
                           onChange={(e) => {
                             if (e.target.checked) {
-                              setTipAmount(Math.round((parseFloat(amountTendered) - total) * 100) / 100);
+                              setTipAmount(Math.round((parseFloat(amountTendered) - (giftCardBalance !== null ? giftCardSplitAmount : total)) * 100) / 100);
                             } else {
                               setTipAmount(0);
                             }
@@ -1005,12 +1067,77 @@ export default function OrderPage() {
                 onClick={handlePayment}
                 disabled={
                   isSubmitting || 
-                  (paymentMethod === 'Cash' && (!amountTendered || parseFloat(amountTendered) < total)) ||
+                  (paymentMethod === 'Cash' && giftCardSplitAmount > 0 && (!amountTendered || parseFloat(amountTendered) < giftCardSplitAmount)) ||
+                  (paymentMethod === 'Cash' && giftCardBalance === null && (!amountTendered || parseFloat(amountTendered) < total)) ||
                   (paymentMethod === 'GiftCard' && (giftCardBalance === null))
                 }
                 className="flex-2 h-12 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-bold shadow-none"
               >
                 {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : "Complete Payment"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* GIFTCARD VERIFICATION MODAL */}
+      {isGiftCardModalOpen && giftCardDetails && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-zinc-900/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl flex flex-col max-h-[90vh]">
+            <div className="p-5 border-b border-zinc-100 flex items-center justify-between">
+              <h2 className="text-xl font-bold text-zinc-900">Giftcard History</h2>
+              <button onClick={() => setIsGiftCardModalOpen(false)} className="w-8 h-8 rounded-full flex items-center justify-center text-zinc-500 hover:bg-zinc-100">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            
+            <div className="p-5 space-y-4 overflow-y-auto">
+              <div className="grid grid-cols-2 gap-4 bg-zinc-50 p-4 rounded-xl border border-zinc-200">
+                <div>
+                  <p className="text-xs font-bold text-zinc-500 uppercase">Code</p>
+                  <p className="font-mono text-zinc-900">{giftCardDetails.code}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-zinc-500 uppercase">Balance</p>
+                  <p className="font-bold text-green-600">${(giftCardDetails.balance ?? giftCardDetails.value)?.toFixed(2)}</p>
+                </div>
+              </div>
+
+              <div>
+                <h3 className="text-sm font-bold text-zinc-900 mb-2">Usage History</h3>
+                {giftCardDetails.history && giftCardDetails.history.length > 0 ? (
+                  <div className="border border-zinc-200 rounded-lg overflow-hidden">
+                    <table className="w-full text-sm text-left">
+                      <thead className="bg-zinc-50 text-xs text-zinc-500 font-bold uppercase">
+                        <tr>
+                          <th className="px-4 py-2">Date</th>
+                          <th className="px-4 py-2">Used</th>
+                          <th className="px-4 py-2">Balance</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-zinc-200">
+                        {giftCardDetails.history.map((h, i) => (
+                          <tr key={i}>
+                            <td className="px-4 py-2 text-zinc-600">{new Date(h.usedAt).toLocaleDateString()}</td>
+                            <td className="px-4 py-2 text-red-600">-${h.amountUsed?.toFixed(2)}</td>
+                            <td className="px-4 py-2 font-medium">${h.balanceAfter?.toFixed(2)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <p className="text-sm text-zinc-500">No previous usage history.</p>
+                )}
+              </div>
+            </div>
+
+            <div className="p-5 border-t border-zinc-100 flex gap-3 shrink-0">
+              <Button variant="outline" onClick={() => setIsGiftCardModalOpen(false)} className="flex-1 font-bold border-zinc-200 text-zinc-700 shadow-none">
+                No, Cancel
+              </Button>
+              <Button onClick={handleApplyGiftCard} className="flex-2 bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-none">
+                Yes, Apply
               </Button>
             </div>
           </div>

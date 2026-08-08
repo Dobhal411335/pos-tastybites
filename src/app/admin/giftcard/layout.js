@@ -1,0 +1,70 @@
+"use client";
+
+import React, { useState } from "react";
+import { usePathname } from "next/navigation";
+import TopNavbar from "@/components/layout/TopNavbar";
+import ModuleSidebar from "@/components/layout/ModuleSidebar";
+import { FooterBar } from "@/components/layout/FooterBar";
+
+export default function TablesModuleLayout({ children }) {
+  const pathname = usePathname();
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  
+  // Check if we are in the  plan editor
+  const isEditor = pathname?.includes("/admin/floor-plan/floor/") && pathname !== "/admin/floor-plan/floor";
+
+  const sidebarGroups = [
+    {
+      title: "Gift Card",
+      color: "bg-[#1e40af]",
+      items: [
+        { label: "Issue Gift Card", href: "/admin/giftcard/issue" },
+        { label: "Gift Card Details", href: "/admin/giftcard/details" },
+      ],
+    },
+  ];
+
+  return (
+    <div className={`${isEditor ? "h-screen overflow-hidden" : "min-h-screen"} bg-[#FAF9F6] flex flex-col antialiased text-[#1F2937] font-sans`}>
+
+      {!isEditor && (
+        <TopNavbar
+          onMenuToggle={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+        />
+      )}
+
+      <div className="flex-1 flex overflow-hidden relative">
+        {!isEditor && (
+          <div className="hidden md:block">
+            <ModuleSidebar groups={sidebarGroups} />
+          </div>
+        )}
+
+        {isMobileMenuOpen && (
+          <div className="fixed inset-0 z-50 flex md:hidden">
+            <div className="fixed inset-0 bg-black/50" onClick={() => setIsMobileMenuOpen(false)}></div>
+            <div className="relative flex w-64 max-w-xs flex-col bg-zinc-900">
+              <ModuleSidebar groups={sidebarGroups} />
+            </div>
+          </div>
+        )}
+
+        {isEditor ? (
+          <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
+            {children}
+          </main>
+        ) : (
+          <main className="flex-1 overflow-y-auto p-6">
+            <div className="mx-auto max-w-5xl bg-white border border-zinc-200 p-6 sm:p-10 rounded-xl shadow-xs">
+              {children}
+            </div>
+          </main>
+        )}
+      </div>
+      {!isEditor && (
+        <FooterBar />
+      )}
+      
+    </div>
+  );
+}
