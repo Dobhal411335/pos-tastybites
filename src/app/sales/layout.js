@@ -2,7 +2,6 @@
 
 import React, { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import EmployeeSidebar from "@/components/employee/EmployeeSidebar";
 import EmployeeTopNav from "@/components/employee/EmployeeTopNav";
 import { Loader2 } from "lucide-react";
 import { EmployeeFooter } from "@/components/employee/EmployeeFooter";
@@ -49,7 +48,7 @@ export default function SalesMainLayout({ children }) {
       restaurantId={(employeeUser?.employee || employeeUser)?.restaurant}
     >
       <AuthProvider user={employeeUser?.employee || employeeUser}>
-        <div className="min-h-screen bg-[#FAFAFA] flex flex-col antialiased text-zinc-900 font-sans">
+        <div className="min-h-[100dvh] bg-[#FAFAFA] flex flex-col antialiased text-zinc-900 font-sans">
           <EmployeeTopNav
             employeeName={
               (employeeUser?.employee || employeeUser)?.firstName && (employeeUser?.employee || employeeUser)?.lastName
@@ -59,9 +58,9 @@ export default function SalesMainLayout({ children }) {
             employeeRole={(employeeUser?.employee || employeeUser)?.role || "Server"}
             onMenuToggle={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
           />
-          <div className="flex-1 flex overflow-hidden relative">
-            <main className="flex-1 overflow-y-auto p-1">
-              <div className="mx-auto max-w-8xl">
+          <div className="flex-1 flex overflow-hidden relative min-h-0">
+            <main className="flex-1 overflow-y-auto">
+              <div className="mx-auto max-w-8xl h-full">
                 {children}
               </div>
             </main>

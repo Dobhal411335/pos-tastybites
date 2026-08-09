@@ -2,17 +2,40 @@
 
 import React from "react";
 import Link from "next/link";
-import { LayoutDashboard, LogOut, Menu } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
+import { LogOut, Menu, Grid2X2, ShoppingBag, Printer, BellRing } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { useRouter } from "next/navigation";
 import DateTimeDisplay from "@/components/common/DateTimeDisplay";
 import Image from "next/image";
 import { Badge } from "@/components/ui/badge";
 import NotificationBell from "@/components/common/NotificationBell";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+
+const NAV_ITEMS = [
+  { label: "Floor", href: "/sales/floor", icon: Grid2X2 },
+  { label: "Orders", href: "/sales/today", icon: ShoppingBag },
+  { label: "Print Jobs", href: "/sales/print-jobs", icon: Printer },
+  { label: "Notifications", href: "/sales/notifications", icon: BellRing },
+];
+
+function navActive(pathname, href) {
+  if (href === "/sales/floor") {
+    return pathname === "/sales/floor" || pathname?.startsWith("/sales/orders");
+  }
+  return pathname === href || pathname?.startsWith(href + "/");
+}
 
 export default function EmployeeTopNav({ onMenuToggle, employeeName = "Employee", employeeRole = "Server" }) {
   const router = useRouter();
+  const pathname = usePathname();
 
   const handleLogout = async () => {
     try {
@@ -29,96 +52,138 @@ export default function EmployeeTopNav({ onMenuToggle, employeeName = "Employee"
   };
 
   return (
-    <header className="sticky top-0 z-40 h-16 border-b border-stone-200 bg-[#F7F7F7] shadow-sm">
-      <div className="grid h-full grid-cols-[minmax(0,300px)_1fr_auto] items-center px-4 lg:px-6">
-        <div className="flex items-center gap-3 min-w-0">
+    <header className="sticky top-0 z-40 border-b border-stone-200 bg-[#F7F7F7]/95 backdrop-blur supports-backdrop-filter:bg-[#F7F7F7]/90">
+      <div className="flex h-14 md:h-16 items-center gap-3 px-3 sm:px-5">
+        {/* LEFT — brand */}
+        <div className="flex items-center gap-2.5 min-w-0 shrink-0">
           <Button
             variant="ghost"
             size="icon"
-            className="md:hidden"
+            className="md:hidden h-10 w-10"
             onClick={onMenuToggle}
           >
             <Menu className="h-5 w-5" />
           </Button>
 
-          <Link href="/sales/floor" className="flex items-center gap-3 min-w-0">
+          <Link href="/sales/floor" className="flex items-center gap-2.5 min-w-0">
             <Image
               src="/BannerImage.png"
-              alt="Logo"
-              width={140}
-              height={50}
-              className="object-contain"
+              alt="Tasty Bites"
+              width={130}
+              height={44}
+              className="object-contain h-9 md:h-10 w-auto"
               priority
             />
             <Badge
               variant="secondary"
-              className="bg-orange-100 text-orange-700 hover:bg-orange-100 uppercase tracking-wider hidden sm:inline-flex"
+              className="bg-orange-100 text-orange-700 hover:bg-orange-100 uppercase tracking-wider text-[10px] md:text-[11px] px-2 py-0.5 h-6 hidden sm:inline-flex"
             >
-              Staff POS
+              Sales POS
             </Badge>
           </Link>
         </div>
 
-        <div className="hidden lg:flex justify-center">
-          <DateTimeDisplay />
-        </div>
+        {/* CENTER — primary nav */}
+        <nav className="hidden md:flex flex-1 items-center justify-center gap-1.5 min-w-0">
+          {NAV_ITEMS.map((item) => {
+            const active = navActive(pathname, item.href);
+            const Icon = item.icon;
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`inline-flex items-center gap-2 rounded-xl px-3.5 py-2 text-sm font-semibold transition-colors ${
+                  active
+                    ? "bg-orange-500 text-white shadow-sm"
+                    : "text-stone-600 hover:bg-stone-200/80 hover:text-stone-900"
+                }`}
+              >
+                <Icon className="h-4 w-4 shrink-0" />
+                <span>{item.label}</span>
+              </Link>
+            );
+          })}
+        </nav>
 
-        <div className="flex items-center justify-end gap-2 sm:gap-3">
+        {/* RIGHT — time, bell, profile */}
+        <div className="flex items-center justify-end gap-2 sm:gap-2.5 ml-auto shrink-0">
+          <div className="hidden lg:block">
+            <DateTimeDisplay compact />
+          </div>
+
           <NotificationBell viewAllHref="/sales/notifications" />
 
-          <Link
-            href="/sales/floor"
-            className="group hidden xl:flex items-center gap-3 rounded-xl border border-stone-200 bg-white px-4 py-2 shadow-sm transition-all duration-200 hover:border-orange-300 hover:bg-orange-50 hover:shadow-md"
-          >
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-orange-100 transition-colors group-hover:bg-orange-500">
-              <LayoutDashboard className="h-5 w-5 text-orange-600 group-hover:text-white" />
-            </div>
-            <div className="leading-tight">
-              <p className="text-[11px] uppercase tracking-wide text-stone-500">
-                Navigation
-              </p>
-              <p className="text-sm font-semibold text-stone-900">
-                Back to Dashboard
-              </p>
-            </div>
-          </Link>
-
-          <div className="hidden lg:flex items-center gap-3 rounded-xl border border-stone-200 bg-white px-4 py-2 shadow-sm">
-            <div className="relative">
-              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-linear-to-br from-orange-500 to-orange-600 text-white text-base font-bold">
-                {employeeName?.charAt(0)?.toUpperCase() || "E"}
-              </div>
-              <span className="absolute bottom-0 right-0 h-2 w-2 rounded-full border-2 border-white bg-emerald-500" />
-            </div>
-            <div className="leading-tight">
-              <p className="text-sm font-semibold text-stone-900">
-                {employeeName || "Employee"}
-              </p>
-              <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wider">
-                {employeeRole}
-              </span>
-            </div>
-          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="flex items-center gap-2.5 rounded-xl border border-stone-200 bg-white px-2.5 py-1.5 hover:bg-stone-50 transition-colors max-w-[200px]"
+              >
+                <div className="relative shrink-0">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-linear-to-br from-orange-500 to-orange-600 text-white text-sm font-bold">
+                    {employeeName?.charAt(0)?.toUpperCase() || "E"}
+                  </div>
+                  <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-white bg-emerald-500" />
+                </div>
+                <div className="hidden sm:block leading-tight text-left min-w-0">
+                  <p className="text-sm font-semibold text-stone-900 truncate">
+                    {employeeName || "Employee"}
+                  </p>
+                  <p className="text-[11px] font-medium text-stone-500 uppercase tracking-wide truncate">
+                    {employeeRole}
+                  </p>
+                </div>
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-52">
+              <DropdownMenuLabel className="font-normal">
+                <div className="flex flex-col space-y-0.5">
+                  <p className="text-sm font-semibold">{employeeName}</p>
+                  <p className="text-xs text-muted-foreground">{employeeRole}</p>
+                </div>
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                className="text-red-600 focus:text-red-600 cursor-pointer"
+                onClick={handleLogout}
+              >
+                <LogOut className="mr-2 h-4 w-4" />
+                Logout
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
 
           <Button
             variant="ghost"
             size="icon"
             onClick={handleLogout}
-            className="lg:hidden text-red-600 hover:bg-red-50"
+            className="h-10 w-10 text-red-600 hover:bg-red-50 hover:text-red-700"
+            title="Logout"
           >
             <LogOut className="h-5 w-5" />
           </Button>
-
-          <Button
-            variant="default"
-            onClick={handleLogout}
-            className="hidden lg:flex bg-red-500 hover:bg-red-600 text-white items-center gap-2 rounded-xl px-5 h-11"
-          >
-            <LogOut className="h-4 w-4" />
-            Logout
-          </Button>
         </div>
       </div>
+
+      {/* Mobile / small tablet primary nav */}
+      <nav className="md:hidden flex items-center gap-1.5 overflow-x-auto px-3 pb-2.5 no-scrollbar">
+        {NAV_ITEMS.map((item) => {
+          const active = navActive(pathname, item.href);
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={`shrink-0 rounded-full px-3.5 py-1.5 text-xs font-semibold ${
+                active
+                  ? "bg-orange-500 text-white"
+                  : "bg-stone-200/70 text-stone-600"
+              }`}
+            >
+              {item.label}
+            </Link>
+          );
+        })}
+      </nav>
     </header>
   );
 }

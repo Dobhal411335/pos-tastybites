@@ -260,12 +260,12 @@ export default function NotificationBell({ viewAllHref = "/sales/notifications" 
         <Button
           variant="ghost"
           size="icon"
-          className="relative h-11 w-11 rounded-xl border border-stone-200 bg-white hover:bg-stone-100"
+          className="relative h-10 w-10 rounded-xl border border-stone-200 bg-white hover:bg-stone-100"
           aria-label="Notifications"
         >
           <Bell className="h-5 w-5 text-zinc-700" />
           {unreadCount > 0 && (
-            <Badge className="absolute -top-1 -right-1 flex h-5 min-w-[20px] items-center justify-center rounded-full border-2 border-white bg-red-500 px-1 text-[10px] font-bold text-white shadow-sm">
+            <Badge className="absolute -top-1 -right-1 flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-white bg-red-500 px-1 text-[10px] font-bold text-white shadow-sm">
               {badgeLabel}
             </Badge>
           )}

@@ -24,6 +24,7 @@ export default function SalesFloorPage() {
   const [floorData, setFloorData] = useState({ floors: [], tables: [], sessions: [], activeFloorId: null });
   const [activeEmployees, setActiveEmployees] = useState([]);
   const [scale, setScale] = useState(1);
+  const floorViewportRef = React.useRef(null);
 
   // Modals
   const [selectedTable, setSelectedTable] = useState(null);
@@ -223,6 +224,37 @@ export default function SalesFloorPage() {
     }
   };
 
+  const floorWidth = floorData.floors.find(f => f.id === floorData.activeFloorId)?.width || 1200;
+  const floorHeight = floorData.floors.find(f => f.id === floorData.activeFloorId)?.height || 800;
+  const tableCount = floorData.tables.length;
+  const activeSessionCount = floorData.sessions.length;
+  const activeOrderCount = floorData.sessions.filter((s) => s.hasActiveOrder).length;
+
+  // Fit floor canvas to laptop/tablet viewport so tables aren't tiny in empty space
+  // Must run before any early return (Rules of Hooks).
+  useEffect(() => {
+    const el = floorViewportRef.current;
+    if (!el || !floorWidth || !floorHeight) return;
+
+    const fit = () => {
+      const pad = 24;
+      const availW = Math.max(el.clientWidth - pad, 320);
+      const availH = Math.max(el.clientHeight - pad, 240);
+      const next = Math.min(availW / floorWidth, availH / floorHeight);
+      // Allow mild upscale on large laptops; keep a sensible min for tablets
+      setScale(Math.min(Math.max(next, 0.75), 1.65));
+    };
+
+    fit();
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(fit) : null;
+    if (ro) ro.observe(el);
+    window.addEventListener("resize", fit);
+    return () => {
+      if (ro) ro.disconnect();
+      window.removeEventListener("resize", fit);
+    };
+  }, [floorWidth, floorHeight, floorData.tables.length]);
+
   if (loading && floorData.tables.length === 0) {
     return (
       <div className="flex h-full items-center justify-center">
@@ -231,50 +263,78 @@ export default function SalesFloorPage() {
     );
   }
 
-  const floorWidth = floorData.floors.find(f => f.id === floorData.activeFloorId)?.width || 1200;
-  const floorHeight = floorData.floors.find(f => f.id === floorData.activeFloorId)?.height || 800;
-
   return (
-    <div className="flex h-full flex-col overflow-hidden">
-      <header className="flex shrink-0 items-center justify-between border-b border-zinc-200 bg-white px-6 py-4 shadow-sm">
-        <div>
-          <h1 className="text-xl font-bold text-zinc-900 tracking-tight">Floor Operations</h1>
-          <p className="text-sm font-medium text-zinc-500">Tap a table to manage</p>
+    <div className="flex h-full min-h-0 flex-col overflow-hidden">
+      <header className="shrink-0 border-b border-zinc-200 bg-white px-4 sm:px-5 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="text-base md:text-lg font-bold text-zinc-900 tracking-tight">Floor Operations</h1>
+            <p className="text-xs md:text-sm font-medium text-zinc-500 mt-0.5">
+              {tableCount} Tables • {activeSessionCount} Active
+              {activeOrderCount > 0 ? ` • ${activeOrderCount} with orders` : ""}
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Button
+              onClick={() => router.push("/sales/print-jobs")}
+              variant="outline"
+              size="sm"
+              className="h-9 md:h-10 text-xs md:text-sm font-semibold border-zinc-200 px-3"
+            >
+              <Printer className="w-4 h-4 mr-1.5" />
+              Print Jobs
+            </Button>
+            <Button
+              onClick={() => router.push("/sales/today")}
+              variant="outline"
+              size="sm"
+              className="h-9 md:h-10 text-xs md:text-sm font-semibold border-zinc-200 px-3"
+            >
+              Today&apos;s Orders
+            </Button>
+          </div>
         </div>
-        <div className="flex items-center gap-6">
-          <Button onClick={() => router.push("/sales/print-jobs")} variant="outline" className="font-bold border-zinc-200 bg-white shadow-sm hover:bg-zinc-50 text-zinc-700 hidden md:flex">
-            <Printer className="w-4 h-4 mr-2" />
-            Print Jobs
-          </Button>
-          <Button onClick={() => router.push("/sales/today")} variant="outline" className="font-bold border-zinc-200 bg-white shadow-sm hover:bg-zinc-50 text-zinc-700 hidden md:flex">
-            Today's Orders
-          </Button>
-        </div>
-          <div className="flex gap-4">
-          <div className="flex items-center gap-2">
-            <span className="h-3 w-3 rounded-full bg-white border-2 border-zinc-300"></span>
-            <span className="text-xs font-bold text-zinc-600 uppercase">Available</span>
+
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-1.5">
+            <span className="rounded-lg bg-zinc-900 text-white text-xs font-semibold px-3 py-1.5">
+              All Tables
+            </span>
+            <span className="rounded-lg bg-zinc-100 text-zinc-600 text-xs font-semibold px-3 py-1.5">
+              My Tables
+            </span>
+            <span className="rounded-lg bg-zinc-100 text-zinc-600 text-xs font-semibold px-3 py-1.5">
+              Available
+            </span>
           </div>
-          <div className="flex items-center gap-2">
-            <Star className="h-3 w-3 text-orange-500 fill-orange-500" />
-            <span className="text-xs font-bold text-zinc-600 uppercase">My Section</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="h-3 w-3 rounded-full bg-orange-400 border border-orange-500 shadow-sm"></span>
-            <span className="text-xs font-bold text-zinc-600 uppercase">Serving</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="h-3 w-3 rounded-full bg-emerald-500 border border-emerald-600 shadow-sm"></span>
-            <span className="text-xs font-bold text-zinc-600 uppercase">Payment</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="h-3 w-3 rounded-full bg-zinc-600 border border-zinc-700 shadow-sm"></span>
-            <span className="text-xs font-bold text-zinc-600 uppercase">Others</span>
+
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
+            <div className="flex items-center gap-1.5">
+              <span className="h-2.5 w-2.5 rounded-full bg-white border border-zinc-300" />
+              <span className="text-xs font-medium text-zinc-500">Available</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <Star className="h-3 w-3 text-orange-500 fill-orange-500" />
+              <span className="text-xs font-medium text-zinc-500">My Section</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="h-2.5 w-2.5 rounded-full bg-orange-400 border border-orange-500" />
+              <span className="text-xs font-medium text-zinc-500">Serving</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 border border-emerald-600" />
+              <span className="text-xs font-medium text-zinc-500">Payment</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="h-2.5 w-2.5 rounded-full bg-zinc-500 border border-zinc-600" />
+              <span className="text-xs font-medium text-zinc-500">Others</span>
+            </div>
           </div>
         </div>
       </header>
 
-      <div className="relative flex-1 overflow-auto bg-zinc-50 p-4 custom-scrollbar">
+      <div ref={floorViewportRef} className="relative flex-1 overflow-auto bg-zinc-50/80 p-3 sm:p-4 custom-scrollbar">
         <div 
           className="relative mx-auto rounded-xl border border-zinc-200 bg-white shadow-sm overflow-hidden"
           style={{ width: floorWidth, height: floorHeight, transform: `scale(${scale})`, transformOrigin: 'top center' }}
@@ -289,30 +349,43 @@ export default function SalesFloorPage() {
             const isMyDefault = !session && table.defaultEmployeeId && table.defaultEmployeeId === currentUserId;
             const isOthersDefault = !session && table.defaultEmployeeId && table.defaultEmployeeId !== currentUserId;
             
-            let bgClass = "bg-white border-zinc-200 hover:border-zinc-300 hover:shadow-md";
-            let textClass = "text-zinc-800";
+            let bgClass = "bg-white border-zinc-200 hover:border-zinc-300 hover:shadow-sm";
+            let textClass = "text-zinc-900";
+            let statusLabel = "AVAILABLE";
+            let statusClass = "text-zinc-500";
 
             if (session?.status === "PAYMENT_PENDING") {
-              bgClass = "bg-emerald-50 border-emerald-300 shadow-sm";
-              textClass = "text-emerald-900";
+              bgClass = "bg-emerald-50/80 border-emerald-300 hover:border-emerald-400";
+              textClass = "text-emerald-950";
+              statusLabel = "PAYMENT";
+              statusClass = "text-emerald-700";
             } else if (isMine) {
-              bgClass = "bg-orange-50 border-orange-300 shadow-sm";
-              textClass = "text-orange-900";
+              bgClass = "bg-orange-50/80 border-orange-300 hover:border-orange-400";
+              textClass = "text-orange-950";
+              statusLabel = "SERVING";
+              statusClass = "text-orange-700";
             } else if (isOther) {
-              bgClass = "bg-slate-100 border-slate-300 shadow-sm opacity-90";
-              textClass = "text-slate-500";
+              bgClass = "bg-slate-50 border-slate-300 opacity-95";
+              textClass = "text-slate-700";
+              statusLabel = "OCCUPIED";
+              statusClass = "text-slate-500";
             } else if (isMyDefault) {
-              // Available and this is my default section
-              bgClass = "bg-orange-50/60 border-orange-200 hover:border-orange-300 hover:shadow-md";
-              textClass = "text-orange-800";
+              bgClass = "bg-orange-50/40 border-orange-200 hover:border-orange-300 hover:shadow-sm";
+              textClass = "text-orange-900";
+              statusLabel = "MY SECTION";
+              statusClass = "text-orange-600";
             }
-            // isOthersDefault: keep default white, just show label
+
+            const employeeFirst =
+              session?.assignedEmployeeName?.split(" ")[0] ||
+              table.defaultEmployeeName?.split(" ")[0] ||
+              null;
 
             return (
               <div
                 key={tableId}
                 onClick={() => handleTableClick(table)}
-                className={`absolute flex cursor-pointer flex-col items-center justify-center border-2 transition-all duration-200 ${bgClass} ${table.shape === "round" ? "rounded-full" : "rounded-xl"}`}
+                className={`absolute flex cursor-pointer flex-col items-center justify-center border-2 transition-all duration-150 px-1.5 ${bgClass} ${table.shape === "round" ? "rounded-full" : "rounded-xl"}`}
                 style={{
                   left: table.x,
                   top: table.y,
@@ -321,52 +394,55 @@ export default function SalesFloorPage() {
                   transform: `rotate(${table.rotation}deg)`
                 }}
               >
-                <span className={`text-lg font-black tracking-tight ${textClass}`}>
+                <span className={`text-base md:text-lg font-bold tracking-tight leading-none ${textClass}`}>
                   {table.tableNumber}
                 </span>
 
+                <span className={`mt-1 text-[10px] font-bold uppercase tracking-wide leading-none ${statusClass}`}>
+                  {statusLabel}
+                </span>
+
                 {session ? (
-                  // OCCUPIED: show guest count badge
-                  <div className={`mt-1 flex items-center justify-center gap-1 px-2 py-0.5 rounded-full border ${
-                    isMine
-                      ? 'bg-orange-100 border-orange-200'
-                      : session?.status === "PAYMENT_PENDING"
-                        ? 'bg-emerald-100 border-emerald-200'
-                        : 'bg-slate-200 border-slate-300'
-                  }`}>
-                    <Users className={`h-3 w-3 ${isMine ? 'text-orange-600' : session?.status === "PAYMENT_PENDING" ? 'text-emerald-700' : 'text-slate-500'}`} />
-                    <span className={`text-xs font-bold ${isMine ? 'text-orange-700' : session?.status === "PAYMENT_PENDING" ? 'text-emerald-800' : 'text-slate-600'}`}>
-                      {session.guestCount}
-                    </span>
+                  <div className="mt-1.5 flex flex-col items-center gap-0.5 min-w-0 px-0.5">
+                    {employeeFirst && (
+                      <span className={`text-[11px] font-semibold truncate max-w-full ${textClass} opacity-80`}>
+                        {employeeFirst}
+                      </span>
+                    )}
+                    <div className="flex items-center gap-1">
+                      <Users className={`h-3 w-3 ${statusClass}`} />
+                      <span className={`text-[11px] font-bold ${statusClass}`}>
+                        {session.guestCount}
+                      </span>
+                    </div>
                   </div>
                 ) : isMyDefault ? (
-                  // AVAILABLE + My default section
-                  <div className="mt-1 flex items-center gap-1">
+                  <div className="mt-1.5 flex items-center gap-1">
                     <Star className="h-2.5 w-2.5 text-orange-400 fill-orange-400" />
-                    <span className="text-[9px] font-bold tracking-tight text-orange-500 uppercase">My Section</span>
+                    <span className="text-[10px] font-semibold text-orange-500">
+                      {table.seats} seats
+                    </span>
                   </div>
                 ) : isOthersDefault ? (
-                  // AVAILABLE + Another employee's default section
-                  <span className="mt-1 text-[9px] font-semibold tracking-tight text-zinc-400 truncate max-w-[90%] text-center">
-                    {table.defaultEmployeeName?.split(' ')[0]}
+                  <span className="mt-1.5 text-[10px] font-medium text-zinc-400 truncate max-w-[90%] text-center">
+                    {employeeFirst || `${table.seats} seats`}
                   </span>
                 ) : (
-                  // AVAILABLE + No default assigned
-                  <span className="mt-1 text-[10px] font-bold tracking-tight text-zinc-500">
-                    {table.seats} Seats
+                  <span className="mt-1.5 text-[10px] font-semibold text-zinc-500">
+                    {table.seats} seats
                   </span>
                 )}
 
                 {/* Lock icon for occupied tables owned by other employees */}
                 {isOther && (
-                  <div className="absolute -top-2 -right-2 bg-zinc-800 border-2 border-white rounded-full p-1 shadow-sm">
+                  <div className="absolute -top-1.5 -right-1.5 bg-zinc-700 border-2 border-white rounded-full p-0.5 shadow-sm">
                     <Lock className="h-3 w-3 text-white" />
                   </div>
                 )}
 
-                {/* Subtle "Serving" dot for my own active table */}
+                {/* Subtle serving indicator for my own active table */}
                 {isMine && (
-                  <div className="absolute -top-1.5 -right-1.5 h-3 w-3 rounded-full bg-orange-500 border-2 border-white shadow-sm" />
+                  <div className="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-orange-500 border-2 border-white shadow-sm" />
                 )}
               </div>
             );
