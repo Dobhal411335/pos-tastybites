@@ -7,6 +7,7 @@ import { sendSuccess } from "@/utils/apiResponse";
 import { sendError } from "@/utils/errorHandler";
 import { logger } from "@/utils/logger";
 import { v4 as uuidv4 } from "uuid";
+import { createNotification } from "@/lib/notifications/notificationService";
 
 // GET - List active sessions for a floor, or get a specific session
 export const GET = withAuth(async (request) => {
@@ -120,6 +121,22 @@ export const POST = withAuth(async (request) => {
       global.io.to(`floor:${table.floor}`).emit('table:assigned', { sessionId: session._id, tableId: table._id });
     }
 
+    await createNotification({
+      restaurantId: request.restaurant,
+      type: "TABLE_ASSIGNED",
+      title: "Table Assigned",
+      message: `Table ${table.tableNumber} opened${guestCount ? ` • ${guestCount} guests` : ""}`,
+      tableId: table._id,
+      tableSessionId: session._id,
+      employeeId: request.user.id,
+      floorId: table.floor,
+      priority: "normal",
+      metadata: {
+        tableNo: table.tableNumber,
+        guestCount: guestCount || 1,
+      },
+    });
+
     return sendSuccess(populatedSession, "Table session opened successfully", 201);
   } catch (error) {
     logger.error("Failed to open table session", error);
@@ -227,6 +244,20 @@ export const PUT = withAuth(async (request) => {
       
       if (global.io) global.io.to(`floor:${session.floor}`).emit('table:released', { sessionId: session._id, tableId: session.primaryTable });
 
+      const releasedTable = await Table.findById(session.primaryTable).select("tableNumber").lean();
+      await createNotification({
+        restaurantId: request.restaurant,
+        type: "TABLE_RELEASED",
+        title: "Table Released",
+        message: `Table ${releasedTable?.tableNumber || ""} was released`,
+        tableId: session.primaryTable,
+        tableSessionId: session._id,
+        employeeId: request.user.id,
+        floorId: session.floor,
+        priority: "low",
+        metadata: { tableNo: releasedTable?.tableNumber || null },
+      });
+
       return sendSuccess(session, "Session released successfully");
     }
 
@@ -266,6 +297,23 @@ export const PUT = withAuth(async (request) => {
       });
 
       if (global.io) global.io.to(`floor:${session.floor}`).emit('table:transferred', { sessionId: session._id, newEmployeeId });
+
+      const transferredTable = await Table.findById(session.primaryTable).select("tableNumber").lean();
+      await createNotification({
+        restaurantId: request.restaurant,
+        type: "TABLE_TRANSFERRED",
+        title: "Table Transferred",
+        message: `Table ${transferredTable?.tableNumber || ""} was reassigned`,
+        tableId: session.primaryTable,
+        tableSessionId: session._id,
+        employeeId: request.user.id,
+        floorId: session.floor,
+        priority: "normal",
+        metadata: {
+          tableNo: transferredTable?.tableNumber || null,
+          newEmployeeId,
+        },
+      });
 
       return sendSuccess(session, "Session transferred successfully");
     }

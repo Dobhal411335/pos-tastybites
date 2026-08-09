@@ -49,6 +49,7 @@ export default function OrderPage() {
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [selectedSize, setSelectedSize] = useState("Standard");
   const [selectedAddons, setSelectedAddons] = useState([]);
+  const [selectedPreparationStyle, setSelectedPreparationStyle] = useState("");
 
   // New states
   const [isKitchenModalOpen, setIsKitchenModalOpen] = useState(false);
@@ -165,17 +166,29 @@ export default function OrderPage() {
             setOrderNote(existingOrder.specialNote || "");
             
             // Reconstruct cart
-            const restoredCart = existingOrder.items.map(item => ({
-              id: item.menuItemId,
-              name: item.name,
-              category: item.category || "ITEMS",
-              price: item.price,
-              tax: item.tax,
-              qty: item.qty,
-              size: item.size,
-              modifier: item.options.length > 0 ? `Extras: ${item.options.join(", ")}` : undefined,
-              cartId: Date.now() + Math.random()
-            }));
+            const restoredCart = existingOrder.items.map(item => {
+              const style = item.preparationStyle || null;
+              const extras = (item.options || []).filter(
+                (o) => !String(o).toLowerCase().startsWith("style:")
+              );
+              const parts = [];
+              if (item.size && item.size !== "Standard") parts.push(`Size: ${item.size}`);
+              if (style) parts.push(`Style: ${style}`);
+              if (extras.length > 0) parts.push(`Extras: ${extras.join(", ")}`);
+              return {
+                id: item.menuItemId,
+                name: item.name,
+                category: item.category || "ITEMS",
+                price: item.price,
+                tax: item.tax,
+                qty: item.qty,
+                size: item.size,
+                preparationStyle: style,
+                options: item.options || [],
+                modifier: parts.length > 0 ? parts.join(" | ") : undefined,
+                cartId: item.cartId || Date.now() + Math.random(),
+              };
+            });
             setCart(restoredCart);
 
             if (existingOrder.discountCode) {
@@ -199,7 +212,10 @@ export default function OrderPage() {
 
   useEffect(() => {
     if (currentUser) {
-      setServerName(currentUser.name || currentUser.firstName || "Server");
+      const fName = currentUser.firstName || "";
+      const lName = currentUser.lastName || "";
+      const fullName = currentUser.name || `${fName} ${lName}`.trim() || "Server";
+      setServerName(fullName);
     }
   }, [currentUser]);
 
@@ -275,30 +291,28 @@ export default function OrderPage() {
   };
 
   const generateTaxBreakdown = () => {
-    const breakdown = {};
+    // Receipt shows a single HST line with the combined tax total (not per-component %)
+    let hstTotal = 0;
     cart.forEach(item => {
       const taxesToUse = (item.taxes && Array.isArray(item.taxes) && item.taxes.length > 0) ? item.taxes : globalTaxes;
-      if (taxesToUse) {
-        taxesToUse.forEach(t => {
-          let name = t.name || (t.type && t.type.toLowerCase().includes('percent') ? `Tax (${t.value}%)` : `Tax Fixed`);
-          if (name.includes("Component")) {
-             name = `HST ${t.value}%`;
-          }
-          const amount = t.type && t.type.toLowerCase().includes('percent') 
-            ? (item.price * item.qty) * (t.value / 100) 
-            : (t.value * item.qty);
-          if (!breakdown[name]) breakdown[name] = 0;
-          breakdown[name] += amount;
-        });
-      }
+      if (!taxesToUse) return;
+      taxesToUse.forEach(t => {
+        const amount = t.type && t.type.toLowerCase().includes('percent')
+          ? (item.price * item.qty) * (t.value / 100)
+          : (t.value * item.qty);
+        hstTotal += amount;
+      });
     });
-    return Object.keys(breakdown).map(k => ({ name: k, amount: breakdown[k] }));
+    if (hstTotal <= 0) return [];
+    return [{ name: "HST", amount: hstTotal }];
   };
 
   const handleOpenOptions = (item) => {
     setSelectedProduct(item);
     setSelectedSize(item.variants && item.variants.length > 0 ? item.variants[0].size : "Standard");
     setSelectedAddons([]);
+    const styles = (item.preparationStyles || []).filter(Boolean);
+    setSelectedPreparationStyle(styles.length === 1 ? styles[0] : "");
     setIsOptionsModalOpen(true);
   };
 
@@ -310,9 +324,15 @@ export default function OrderPage() {
     });
   };
 
+  const productNeedsOptions = (product) => {
+    const hasVariants = product.variants && product.variants.length > 0;
+    const hasAddons = product.addons && product.addons.length > 0;
+    const hasStyles = product.preparationStyles && product.preparationStyles.filter(Boolean).length > 0;
+    return hasVariants || hasAddons || hasStyles;
+  };
+
   const addToCart = (product) => {
-    const hasOptions = product.variants && product.variants.length > 0;
-    if (hasOptions) {
+    if (productNeedsOptions(product)) {
       handleOpenOptions(product);
       return;
     }
@@ -321,7 +341,7 @@ export default function OrderPage() {
     const itemTax = calculateItemTax(product, price);
 
     setCart(prev => {
-      const existing = prev.find(item => item.id === product._id && !item.modifier);
+      const existing = prev.find(item => item.id === product._id && !item.modifier && !item.preparationStyle);
       if (existing) {
         return prev.map(item => item.id === product._id ? { ...item, qty: item.qty + 1 } : item);
       }
@@ -333,6 +353,8 @@ export default function OrderPage() {
         tax: itemTax,
         qty: 1,
         size: "Standard",
+        preparationStyle: null,
+        options: [],
         cartId: Date.now()
       }];
     });
@@ -352,9 +374,17 @@ export default function OrderPage() {
 
     const finalTax = calculateItemTax(selectedProduct, finalPrice);
 
-    let modifierStr = selectedSize && selectedSize !== "Standard" ? `Size: ${selectedSize}` : "";
+    const options = [];
+    if (selectedPreparationStyle) {
+      options.push(`Style: ${selectedPreparationStyle}`);
+    }
+    selectedAddons.forEach((a) => options.push(a.name));
+
+    const parts = [];
+    if (selectedSize && selectedSize !== "Standard") parts.push(`Size: ${selectedSize}`);
+    if (selectedPreparationStyle) parts.push(`Style: ${selectedPreparationStyle}`);
     if (selectedAddons.length > 0) {
-      modifierStr += (modifierStr ? " | " : "") + `Extras: ${selectedAddons.map(a => a.name).join(", ")}`;
+      parts.push(`Extras: ${selectedAddons.map(a => a.name).join(", ")}`);
     }
 
     setCart(prev => [...prev, {
@@ -366,9 +396,12 @@ export default function OrderPage() {
       tax: finalTax,
       qty: 1,
       size: selectedSize,
-      modifier: modifierStr || undefined
+      preparationStyle: selectedPreparationStyle || null,
+      options,
+      modifier: parts.length > 0 ? parts.join(" | ") : undefined,
     }]);
     setIsOptionsModalOpen(false);
+    setSelectedPreparationStyle("");
   };
 
   const updateQty = (id, delta) => {
@@ -560,7 +593,7 @@ export default function OrderPage() {
         amount: total,
         method: paymentMethod,
         sessionId: sessionId !== "new" ? sessionId : undefined,
-        tipAmount: paymentMethod === 'Cash' ? tipAmount : 0,
+        tipAmount: tipAmount,
       };
 
       if (paymentMethod === 'Card') {
@@ -598,8 +631,15 @@ export default function OrderPage() {
         setOrderStatus("PAID");
         setIsPaymentModalOpen(false);
         
+        // Update current order with payment details so the receipt prints correctly
+        const updatedOrder = {
+          ...currentOrder,
+          paymentStatus: "PAID",
+          tipAmount: tipAmount
+        };
+        
         // Open Customer Receipt Print Preview
-        setPrintOrderData(currentOrder);
+        setPrintOrderData(updatedOrder);
         setPrintTaxBreakdown(generateTaxBreakdown());
         setPrintType('customer');
         setRedirectAfterPrint(true);
@@ -719,9 +759,9 @@ export default function OrderPage() {
           <div className="flex-1 bg-zinc-50/50 overflow-y-auto custom-scrollbar">
             <div className="flex flex-col p-4 gap-3">
               {filteredProducts.map((product) => {
-                const hasOptions = product.variants && product.variants.length > 0;
+                const hasOptions = productNeedsOptions(product);
                 const isAvailable = product.inStock !== false;
-                const basePrice = hasOptions ? product.variants[0].price : (product.price || 0);
+                const basePrice = (product.variants && product.variants.length > 0) ? product.variants[0].price : (product.price || 0);
                 const taxAmount = calculateItemTax(product, basePrice);
 
                 return (
@@ -1345,6 +1385,45 @@ export default function OrderPage() {
                           </label>
                         );
                       })}
+                    </div>
+                  </div>
+                )}
+
+                {selectedProduct.preparationStyles &&
+                  selectedProduct.preparationStyles.filter(Boolean).length > 0 && (
+                  <div className="space-y-2">
+                    <span className="text-[13px] font-bold text-zinc-900 mb-2 block">
+                      Preparation Style
+                    </span>
+                    <div className="grid gap-2">
+                      {selectedProduct.preparationStyles.filter(Boolean).map((style) => (
+                        <label
+                          key={style}
+                          className={`flex items-center border p-3 rounded-lg cursor-pointer transition-colors ${
+                            selectedPreparationStyle === style
+                              ? "border-orange-500 bg-orange-50/30"
+                              : "border-zinc-200 hover:border-orange-300"
+                          }`}
+                        >
+                          <div className="flex-1 flex items-center gap-3 text-[14px] font-bold text-zinc-800">
+                            <input
+                              type="radio"
+                              name="preparationStyle"
+                              checked={selectedPreparationStyle === style}
+                              onChange={() => setSelectedPreparationStyle(style)}
+                              className="w-4 h-4 accent-orange-500"
+                            />
+                            <span>{style}</span>
+                          </div>
+                        </label>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={() => setSelectedPreparationStyle("")}
+                        className="text-left text-xs font-semibold text-zinc-500 hover:text-zinc-800 px-1"
+                      >
+                        Clear style
+                      </button>
                     </div>
                   </div>
                 )}

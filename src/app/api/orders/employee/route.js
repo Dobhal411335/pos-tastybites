@@ -2,11 +2,84 @@ import { withAuth } from "@/utils/auth";
 import Order from "@/models/Order";
 import Employee from "@/models/employee/Employee";
 import TableSession from "@/models/floor/TableSession";
+import Restaurant from "@/models/Restaurant";
 import { sendSuccess } from "@/utils/apiResponse";
 import { sendError } from "@/utils/errorHandler";
 import { logger } from "@/utils/logger";
 import { getNextOrderNumber } from "@/utils/generateOrderNumber"; 
 import OperationalAuditLog from "@/models/OperationalAuditLog";
+import { createKotPrintJob } from "@/lib/printing/printJobService";
+import { createNotification } from "@/lib/notifications/notificationService";
+import Table from "@/models/floor/Table";
+async function resolveServerName(employeeId) {
+  if (!employeeId) return null;
+  const emp = await Employee.findById(employeeId).select("firstName lastName name").lean();
+  if (!emp) return null;
+  return emp.name || [emp.firstName, emp.lastName].filter(Boolean).join(" ") || null;
+}
+
+async function notifyOrderEvent({
+  type,
+  order,
+  employeeId,
+  floorId,
+  tableId,
+  tableSessionId,
+  tableNo,
+  serverName,
+}) {
+  const label = tableNo ? `Table ${tableNo}` : "no table";
+  const titles = {
+    NEW_ORDER: "New Order",
+    ORDER_UPDATED: "Order Updated",
+    KOT_CREATED: "KOT Created",
+  };
+  const messages = {
+    NEW_ORDER: `Order #${order.orderNumber} has been created for ${label}`,
+    ORDER_UPDATED: `Order #${order.orderNumber} was updated for ${label}`,
+    KOT_CREATED: `Kitchen ticket created for Order #${order.orderNumber}`,
+  };
+
+  await createNotification({
+    restaurantId: order.restaurantId,
+    type,
+    title: titles[type] || type,
+    message: messages[type] || `Order #${order.orderNumber}`,
+    orderId: order._id,
+    tableId: tableId || order.table || null,
+    tableSessionId: tableSessionId || order.tableSession || null,
+    employeeId,
+    floorId,
+    metadata: {
+      orderNumber: order.orderNumber,
+      tableNo: tableNo || order.tableNo || null,
+      actorName: serverName || null,
+    },
+  });
+}
+
+async function enqueueKotPrintJob({ order, kotItems, employeeId, guestCount }) {
+  if (!kotItems?.length) return null;
+  try {
+    const [serverName, restaurant] = await Promise.all([
+      resolveServerName(employeeId),
+      Restaurant.findById(order.restaurantId).select("name").lean(),
+    ]);
+    const { job } = await createKotPrintJob({
+      order,
+      kotItems,
+      requestedBy: employeeId,
+      guestCount,
+      serverName,
+      restaurantName: restaurant?.name || null,
+      specialNote: order.specialNote,
+    });
+    return job;
+  } catch (err) {
+    logger.error("Failed to create KOT PrintJob (order still saved)", err);
+    return null;
+  }
+}
 
 // POST - Create or Update a POS/Employee order
 export const POST = withAuth(async (request) => {
@@ -30,6 +103,7 @@ export const POST = withAuth(async (request) => {
       price: item.price,
       tax: item.tax || 0,
       options: item.options || [],
+      preparationStyle: item.preparationStyle || null,
       cartId: item.cartId || String(Date.now() + Math.random())
     }));
 
@@ -54,9 +128,37 @@ export const POST = withAuth(async (request) => {
       });
 
       const kotPayload = formattedItems;
+      const printJob = await enqueueKotPrintJob({
+        order: newOrder,
+        kotItems: kotPayload,
+        employeeId,
+        guestCount: null,
+      });
+
+      const serverName = await resolveServerName(employeeId);
+      await notifyOrderEvent({
+        type: "NEW_ORDER",
+        order: newOrder,
+        employeeId,
+        tableNo: data.tableNo,
+        serverName,
+      });
+      if (printJob && kotPayload.length > 0) {
+        await notifyOrderEvent({
+          type: "KOT_CREATED",
+          order: newOrder,
+          employeeId,
+          tableNo: data.tableNo,
+          serverName,
+        });
+      }
 
       logger.info(`Legacy POS Order created: ${orderNumber} by Employee ${employeeId}`);
-      return sendSuccess({ ...newOrder.toObject(), kotPayload }, "Order sent to kitchen successfully", 201);
+      return sendSuccess(
+        { ...newOrder.toObject(), kotPayload, printJobId: printJob?._id || null },
+        "Order sent to kitchen successfully",
+        201
+      );
     }
 
     // Session-based Ordering
@@ -112,8 +214,46 @@ export const POST = withAuth(async (request) => {
         orderId: order._id
       });
 
+      const printJob = await enqueueKotPrintJob({
+        order,
+        kotItems: kotPayload,
+        employeeId,
+        guestCount: session.guestCount,
+      });
+
+      const serverName = await resolveServerName(employeeId);
+      const tableNo = session.primaryTable?.tableNumber;
+      if (kotPayload.length > 0) {
+        await notifyOrderEvent({
+          type: "ORDER_UPDATED",
+          order,
+          employeeId,
+          floorId: session.floor,
+          tableId: session.primaryTable._id,
+          tableSessionId: sessionId,
+          tableNo,
+          serverName,
+        });
+        if (printJob) {
+          await notifyOrderEvent({
+            type: "KOT_CREATED",
+            order,
+            employeeId,
+            floorId: session.floor,
+            tableId: session.primaryTable._id,
+            tableSessionId: sessionId,
+            tableNo,
+            serverName,
+          });
+        }
+      }
+
       logger.info(`POS Order updated: ${order.orderNumber} for Session ${sessionId} by Employee ${employeeId}`);
-      return sendSuccess({ ...order.toObject(), kotPayload }, "Order updated successfully", 200);
+      return sendSuccess(
+        { ...order.toObject(), kotPayload, printJobId: printJob?._id || null },
+        "Order updated successfully",
+        200
+      );
     } else {
       // Create New Order
       const orderNumber = await getNextOrderNumber(request.restaurant);
@@ -160,9 +300,44 @@ export const POST = withAuth(async (request) => {
       });
 
       const kotPayload = formattedItems;
+      const printJob = await enqueueKotPrintJob({
+        order: newOrder,
+        kotItems: kotPayload,
+        employeeId,
+        guestCount: session.guestCount,
+      });
+
+      const serverName = await resolveServerName(employeeId);
+      const tableNo = session.primaryTable?.tableNumber;
+      await notifyOrderEvent({
+        type: "NEW_ORDER",
+        order: newOrder,
+        employeeId,
+        floorId: session.floor,
+        tableId: session.primaryTable._id,
+        tableSessionId: sessionId,
+        tableNo,
+        serverName,
+      });
+      if (printJob && kotPayload.length > 0) {
+        await notifyOrderEvent({
+          type: "KOT_CREATED",
+          order: newOrder,
+          employeeId,
+          floorId: session.floor,
+          tableId: session.primaryTable._id,
+          tableSessionId: sessionId,
+          tableNo,
+          serverName,
+        });
+      }
 
       logger.info(`POS Order created: ${orderNumber} for Session ${sessionId} by Employee ${employeeId}`);
-      return sendSuccess({ ...newOrder.toObject(), kotPayload }, "Order sent to kitchen successfully", 201);
+      return sendSuccess(
+        { ...newOrder.toObject(), kotPayload, printJobId: printJob?._id || null },
+        "Order sent to kitchen successfully",
+        201
+      );
     }
 
   } catch (error) {

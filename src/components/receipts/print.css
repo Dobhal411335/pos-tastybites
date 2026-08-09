@@ -1,16 +1,18 @@
 @media print {
   @page {
+    size: 80mm auto;
     margin: 0;
   }
-  
+
   body * {
     visibility: hidden;
   }
-  
-  #receipt-print-container, #receipt-print-container * {
+
+  #receipt-print-container,
+  #receipt-print-container * {
     visibility: visible;
   }
-  
+
   #receipt-print-container {
     position: absolute;
     left: 0;
@@ -20,16 +22,28 @@
     padding: 0;
   }
 
-  /* Hide scrollbars during print */
   ::-webkit-scrollbar {
     display: none;
   }
 }
 
+/* Primary: 80mm thermal. Override --print-width: 58mm for narrower rolls later. */
+:root {
+  --print-width: 80mm;
+  --print-width-narrow: 58mm;
+}
+
+.thermal-receipt {
+  width: var(--print-width, 80mm);
+  max-width: 100%;
+  margin: 0 auto;
+  box-sizing: border-box;
+}
+
 .receipt-font {
-  font-family: 'Courier New', Courier, monospace;
+  font-family: "Courier New", Courier, monospace;
   color: #000;
-  line-height: 1.2;
+  line-height: 1.25;
 }
 
 .receipt-divider {

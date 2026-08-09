@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useSocket } from "@/components/providers/SocketProvider";
-import { Loader2, Users, AlertCircle, CheckCircle2, Lock, ChevronLeft, Settings2, UserPlus, FileEdit, Star } from "lucide-react";
+import { Loader2, Users, AlertCircle, CheckCircle2, Lock, ChevronLeft, Settings2, UserPlus, FileEdit, Star, Printer } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -59,6 +59,9 @@ export default function SalesFloorPage() {
       socket.on('order:created', loadData);
       socket.on('order:updated', loadData);
       socket.on('payment:completed', loadData);
+      socket.on('NEW_PRINT_JOB', () => {
+        toast.message("New print job queued", { description: "Open Print Jobs to preview / test." });
+      });
     }
     
     return () => {
@@ -71,6 +74,7 @@ export default function SalesFloorPage() {
         socket.off('order:created', loadData);
         socket.off('order:updated', loadData);
         socket.off('payment:completed', loadData);
+        socket.off('NEW_PRINT_JOB');
       }
     };
   }, [socket]);
@@ -238,8 +242,13 @@ export default function SalesFloorPage() {
           <p className="text-sm font-medium text-zinc-500">Tap a table to manage</p>
         </div>
         <div className="flex items-center gap-6">
+          <Button onClick={() => router.push("/sales/print-jobs")} variant="outline" className="font-bold border-zinc-200 bg-white shadow-sm hover:bg-zinc-50 text-zinc-700 hidden md:flex">
+            <Printer className="w-4 h-4 mr-2" />
+            Print Jobs
+          </Button>
           <Button onClick={() => router.push("/sales/today")} variant="outline" className="font-bold border-zinc-200 bg-white shadow-sm hover:bg-zinc-50 text-zinc-700 hidden md:flex">
-            Today's Orders          </Button>
+            Today's Orders
+          </Button>
         </div>
           <div className="flex gap-4">
           <div className="flex items-center gap-2">

@@ -13,7 +13,9 @@ const PrintPreviewModal = ({
   kotItems = [], 
   taxBreakdown = [],
   restaurantDetails = null,
-  serverName
+  serverName,
+  guestCount,
+  specialNote,
 }) => {
   const handlePrint = () => {
     window.print();
@@ -41,12 +43,17 @@ const PrintPreviewModal = ({
                   taxBreakdown={taxBreakdown} 
                   restaurantDetails={restaurantDetails} 
                   serverName={serverName}
+                  guestCount={guestCount}
                 />
               )}
               {printType === 'kot' && (
                 <KitchenOrderTicket 
                   order={order} 
-                  kotItems={kotItems} 
+                  kotItems={kotItems}
+                  restaurantName={restaurantDetails?.name}
+                  serverName={serverName}
+                  guestCount={guestCount}
+                  specialNote={specialNote}
                 />
               )}
             </div>
@@ -58,13 +65,13 @@ const PrintPreviewModal = ({
             </Button>
             <Button onClick={handlePrint} className="flex-1 bg-orange-500 hover:bg-orange-600 text-white shadow-none font-bold gap-2">
               <Printer className="w-4 h-4" />
-              Print Now
+              Browser Print Preview
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Invisible container for actual printing that is shown only during window.print() */}
+      {/* Optional browser print fallback — core architecture uses PrintJob + adapter */}
       <div id="receipt-print-container" className="hidden-except-print absolute -left-[9999px] top-0 pointer-events-none">
         {printType === 'customer' && (
           <CustomerReceipt 
@@ -72,12 +79,17 @@ const PrintPreviewModal = ({
             taxBreakdown={taxBreakdown} 
             restaurantDetails={restaurantDetails} 
             serverName={serverName}
+            guestCount={guestCount}
           />
         )}
         {printType === 'kot' && (
           <KitchenOrderTicket 
             order={order} 
-            kotItems={kotItems} 
+            kotItems={kotItems}
+            restaurantName={restaurantDetails?.name}
+            serverName={serverName}
+            guestCount={guestCount}
+            specialNote={specialNote}
           />
         )}
       </div>
