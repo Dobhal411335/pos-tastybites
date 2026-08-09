@@ -22,9 +22,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import PrintPreviewModal from "@/components/receipts/PrintPreviewModal";
+import { useAuth } from "@/components/providers/AuthProvider";
 
 export default function OrderPage() {
   const params = useParams();
+  const { user: currentUser } = useAuth();
   const router = useRouter();
   const { socket } = useSocket();
   const sessionId = params.sessionId;
@@ -80,6 +82,7 @@ export default function OrderPage() {
   const [printKotItems, setPrintKotItems] = useState([]);
   const [printTaxBreakdown, setPrintTaxBreakdown] = useState([]);
   const [redirectAfterPrint, setRedirectAfterPrint] = useState(false);
+  const [serverName, setServerName] = useState("Server");
 
   // View States
   const [viewMode, setViewMode] = useState("grid"); // 'grid' | 'list'
@@ -193,6 +196,12 @@ export default function OrderPage() {
     fetchData();
   }, [sessionId]);
 
+  useEffect(() => {
+    if (currentUser) {
+      setServerName(currentUser.name || currentUser.firstName || "Server");
+    }
+  }, [currentUser]);
+
   const fetchOrderOnly = useCallback(async () => {
     if (sessionId === "new") return;
     try {
@@ -270,7 +279,10 @@ export default function OrderPage() {
       const taxesToUse = (item.taxes && Array.isArray(item.taxes) && item.taxes.length > 0) ? item.taxes : globalTaxes;
       if (taxesToUse) {
         taxesToUse.forEach(t => {
-          const name = t.name || (t.type && t.type.toLowerCase().includes('percent') ? `Tax (${t.value}%)` : `Tax Fixed`);
+          let name = t.name || (t.type && t.type.toLowerCase().includes('percent') ? `Tax (${t.value}%)` : `Tax Fixed`);
+          if (name.includes("Component")) {
+             name = `HST ${t.value}%`;
+          }
           const amount = t.type && t.type.toLowerCase().includes('percent') 
             ? (item.price * item.qty) * (t.value / 100) 
             : (t.value * item.qty);
@@ -1438,6 +1450,7 @@ export default function OrderPage() {
         order={printOrderData}
         kotItems={printKotItems}
         taxBreakdown={printTaxBreakdown}
+        serverName={serverName}
       />
     </div>
   );

@@ -29,7 +29,7 @@ export default function NewOrderPage() {
         </div>
 
         <Button 
-          onClick={() => router.push("/employee/dashboard")}
+          onClick={() => router.push("/employee/floor")}
           className="w-full h-12 bg-zinc-900 hover:bg-zinc-800 text-white rounded-xl"
         >
           <ChevronLeft className="w-4 h-4 mr-2" />

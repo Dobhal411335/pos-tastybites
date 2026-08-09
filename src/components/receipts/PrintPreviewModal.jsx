@@ -12,7 +12,8 @@ const PrintPreviewModal = ({
   order, 
   kotItems = [], 
   taxBreakdown = [],
-  restaurantDetails = null
+  restaurantDetails = null,
+  serverName
 }) => {
   const handlePrint = () => {
     window.print();
@@ -39,6 +40,7 @@ const PrintPreviewModal = ({
                   order={order} 
                   taxBreakdown={taxBreakdown} 
                   restaurantDetails={restaurantDetails} 
+                  serverName={serverName}
                 />
               )}
               {printType === 'kot' && (
@@ -69,6 +71,7 @@ const PrintPreviewModal = ({
             order={order} 
             taxBreakdown={taxBreakdown} 
             restaurantDetails={restaurantDetails} 
+            serverName={serverName}
           />
         )}
         {printType === 'kot' && (

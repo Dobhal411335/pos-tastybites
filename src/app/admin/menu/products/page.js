@@ -10,10 +10,10 @@ import {
   ArrowUpDown,
   ChevronLeft,
   ChevronRight,
-  LogOut,
-  LayoutGrid,
   Edit,
-  Trash
+  Trash,
+  Loader2,
+  Settings2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,7 +26,6 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { PALETTE } from "@/utils/paletteeColor";
 import DeleteDialog from "@/components/common/DeleteDialog";
-import { Loader2 } from "lucide-react";
 
 export default function ProductsPage() {
   const router = useRouter();
@@ -38,7 +37,15 @@ export default function ProductsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [newProductName, setNewProductName] = useState("");
+  const [newProductCodes, setNewProductCodes] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
+  
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [editingProduct, setEditingProduct] = useState(null);
+  const [editProductName, setEditProductName] = useState("");
+  const [editProductCode, setEditProductCode] = useState("");
+  const [editCategory, setEditCategory] = useState("");
+  
   const [filterCategory, setFilterCategory] = useState("all");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -79,13 +86,20 @@ export default function ProductsPage() {
     try {
       setIsSubmitting(true);
       const names = newProductName.split("\n").map(n => n.trim()).filter(n => n.length > 0);
+      const codesRaw = newProductCodes.split("\n").map(c => c.trim());
+      const codes = newProductCodes.trim() === "" ? [] : codesRaw.filter((c, i) => i < names.length || c !== "");
+
       if (names.length === 0) return toast.error("Please enter at least one valid product name.");
+      if (codes.length > 0 && codes.length !== names.length) {
+         return toast.error("Number of product codes must match the number of product names, or leave it empty.");
+      }
 
       const res = await fetch("/api/menu/products", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           names: names,
+          codes: codes.length > 0 ? codes : null,
           categoryId: selectedCategory
         })
       });
@@ -98,6 +112,7 @@ export default function ProductsPage() {
           toast.success(`${json.data.length} product drafts created!`);
           setIsAddDialogOpen(false);
           setNewProductName("");
+          setNewProductCodes("");
           fetchInitialData();
         }
       } else {
@@ -105,6 +120,45 @@ export default function ProductsPage() {
       }
     } catch (e) {
       toast.error("An error occurred");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleOpenEdit = (product) => {
+    setEditingProduct(product);
+    setEditProductName(product.name);
+    setEditProductCode(product.productCode || "");
+    setEditCategory(product.category?._id || product.category || "");
+    setIsEditDialogOpen(true);
+  };
+
+  const handleEditSubmit = async (e) => {
+    e.preventDefault();
+    if (!editProductName.trim()) return toast.error("Product name is required");
+    if (!editCategory) return toast.error("Category is required");
+
+    try {
+      setIsSubmitting(true);
+      const res = await fetch(`/api/menu/products/${editingProduct._id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: editProductName.trim(),
+          productCode: editProductCode.trim(),
+          category: editCategory
+        })
+      });
+      const json = await res.json();
+      if (json.success) {
+        toast.success("Product updated successfully!");
+        setIsEditDialogOpen(false);
+        fetchInitialData();
+      } else {
+        toast.error(json.message);
+      }
+    } catch (error) {
+      toast.error("Failed to update product");
     } finally {
       setIsSubmitting(false);
     }
@@ -228,6 +282,19 @@ export default function ProductsPage() {
                           onChange={(e) => setNewProductName(e.target.value)}
                         />
                       </div>
+
+                      <div className="space-y-2">
+                        <label className="text-[14px] font-semibold" style={{ color: PALETTE.ink }}>
+                          Product Code(s) <span className="text-zinc-400 font-normal">(Optional)</span>
+                        </label>
+                        <p className="text-[12px] text-zinc-500 mb-1">Enter one product code per line, matching the order of names above.</p>
+                        <textarea
+                          placeholder="Enter one product code per line (optional)"
+                          className="w-full bg-white border border-zinc-200 rounded-md min-h-30 p-3 text-[16px] focus:outline-none focus:ring-2 focus:ring-[#F97316]"
+                          value={newProductCodes}
+                          onChange={(e) => setNewProductCodes(e.target.value)}
+                        />
+                      </div>
                     </div>
                     <DialogFooter>
                       <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)} disabled={isSubmitting} className="h-11 px-6 font-semibold cursor-pointer">
@@ -236,6 +303,70 @@ export default function ProductsPage() {
                       <Button type="submit" disabled={isSubmitting} className="h-11 px-6 font-semibold cursor-pointer" style={{ backgroundColor: PALETTE.accent, color: "white" }}>
                         {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : null}
                         {isSubmitting ? "Creating..." : "Create Draft"}
+                      </Button>
+                    </DialogFooter>
+                  </form>
+                </DialogContent>
+              </Dialog>
+
+              <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+                <DialogContent className="sm:max-w-106.25">
+                  <form onSubmit={handleEditSubmit}>
+                    <DialogHeader>  
+                      <DialogTitle className="text-[22px] font-bold">Edit Product</DialogTitle>
+                      <DialogDescription className="text-[15px]">
+                        Update the basic details of this product.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="py-6 space-y-5">
+                      <div className="space-y-2">
+                        <label className="text-[14px] font-semibold" style={{ color: PALETTE.ink }}>
+                          Category <span className="text-red-500">*</span>
+                        </label>
+                        <Select value={editCategory} onValueChange={setEditCategory}>
+                          <SelectTrigger className="h-11 text-[16px]">
+                            <SelectValue placeholder="Select Category" />
+                          </SelectTrigger>
+                          <SelectContent className="bg-white max-h-60 overflow-y-auto">
+                            {categories.map(c => (
+                              <SelectItem key={c._id} value={c._id}>{c.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-[14px] font-semibold" style={{ color: PALETTE.ink }}>
+                          Product Name <span className="text-red-500">*</span>
+                        </label>
+                        <Input
+                          autoFocus
+                          placeholder="Product Name"
+                          className="w-full bg-white border border-zinc-200 rounded-md h-11 px-3 text-[16px] focus:outline-none focus:ring-2 focus:ring-[#F97316]"
+                          value={editProductName}
+                          onChange={(e) => setEditProductName(e.target.value)}
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-[14px] font-semibold" style={{ color: PALETTE.ink }}>
+                          Product Code <span className="text-zinc-400 font-normal">(Optional)</span>
+                        </label>
+                        <Input
+                          placeholder="Product Code"
+                          className="w-full bg-white border border-zinc-200 rounded-md h-11 px-3 text-[16px] focus:outline-none focus:ring-2 focus:ring-[#F97316]"
+                          value={editProductCode}
+                          onChange={(e) => setEditProductCode(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                    <DialogFooter>
+                      <Button type="button" variant="outline" onClick={() => setIsEditDialogOpen(false)} disabled={isSubmitting} className="h-11 px-6 font-semibold cursor-pointer">
+                        Cancel
+                      </Button>
+                      <Button type="submit" disabled={isSubmitting} className="h-11 px-6 font-semibold cursor-pointer" style={{ backgroundColor: PALETTE.accent, color: "white" }}>
+                        {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : null}
+                        {isSubmitting ? "Saving..." : "Save Changes"}
                       </Button>
                     </DialogFooter>
                   </form>
@@ -322,7 +453,8 @@ export default function ProductsPage() {
                                 {p.name}
                               </span>
                               <span className="text-[13px] text-zinc-500 mt-1">
-                                {p.category?.name || "Uncategorized"}
+                                {p.category?.name || "Uncategorized"} 
+                                {p.productCode ? ` • ${p.productCode}` : ""}
                               </span>
                             </div>
                           </TableCell>
@@ -351,10 +483,8 @@ export default function ProductsPage() {
                                   </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end" className="w-40 bg-white">
-                                  <DropdownMenuItem asChild className="text-[14px] font-medium cursor-pointer">
-                                    <Link href={`/admin/menu/products/${p._id}`}>
-                                      <Edit className="mr-2 h-4 w-4" /> Edit Details
-                                    </Link>
+                                  <DropdownMenuItem className="text-[14px] font-medium cursor-pointer" onClick={() => { setTimeout(() => handleOpenEdit(p), 150) }}>
+                                    <Edit className="mr-2 h-4 w-4" /> Edit Details
                                   </DropdownMenuItem>
                                   <DropdownMenuItem
                                     className="text-[14px] font-medium text-red-600 focus:bg-red-500 focus:text-white cursor-pointer"

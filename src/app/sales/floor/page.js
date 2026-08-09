@@ -237,7 +237,11 @@ export default function SalesFloorPage() {
           <h1 className="text-xl font-bold text-zinc-900 tracking-tight">Floor Operations</h1>
           <p className="text-sm font-medium text-zinc-500">Tap a table to manage</p>
         </div>
-        <div className="flex gap-4">
+        <div className="flex items-center gap-6">
+          <Button onClick={() => router.push("/sales/today")} variant="outline" className="font-bold border-zinc-200 bg-white shadow-sm hover:bg-zinc-50 text-zinc-700 hidden md:flex">
+            Today's Orders          </Button>
+        </div>
+          <div className="flex gap-4">
           <div className="flex items-center gap-2">
             <span className="h-3 w-3 rounded-full bg-white border-2 border-zinc-300"></span>
             <span className="text-xs font-bold text-zinc-600 uppercase">Available</span>

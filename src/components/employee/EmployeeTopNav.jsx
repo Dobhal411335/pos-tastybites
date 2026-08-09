@@ -45,7 +45,7 @@ export default function EmployeeTopNav({ onMenuToggle, employeeName = "Employee"
           </Button>
 
           <Link
-            href="/employee/dashboard"
+            href="/sales/floor"
             className="flex items-center gap-3"
           >
             <Image
@@ -76,7 +76,7 @@ export default function EmployeeTopNav({ onMenuToggle, employeeName = "Employee"
 
           {/* Back */}
           <Link
-            href="/employee/dashboard"
+            href="/sales/floor"
             className="group hidden xl:flex items-center gap-3 rounded-xl border border-stone-200 bg-white px-4 py-2 shadow-sm transition-all duration-200 hover:border-orange-300 hover:bg-orange-50 hover:shadow-md"
           >
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-orange-100 transition-colors group-hover:bg-orange-500">

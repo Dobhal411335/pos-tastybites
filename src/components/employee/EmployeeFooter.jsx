@@ -41,7 +41,7 @@ export const EmployeeFooter = () => {
             variant="outline"
             className="rounded hover:bg-orange-500 hover:text-white"
           >
-            <Link href="/employee/dashboard">
+            <Link href="/sales/dashboard">
               <LayoutDashboard className="mr-2 h-4 w-4" />
               Back to Dashboard
             </Link>

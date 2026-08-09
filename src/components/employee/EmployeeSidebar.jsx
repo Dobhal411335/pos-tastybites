@@ -13,7 +13,7 @@ export default function EmployeeSidebar() {
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(true);
 
   const navItems = [
-    { icon: LayoutDashboard, label: "Dashboard", href: "/employee/dashboard" },
+    { icon: LayoutDashboard, label: "Dashboard", href: "/sales/dashboard" },
     { icon: ShoppingBag, label: "Orders", href: "/employee/orders/history" },
     { icon: BarChart3, label: "Sales Report", href: "/employee/sales" },
     { icon: UserCircle, label: "Profile", href: "/employee/profile" },

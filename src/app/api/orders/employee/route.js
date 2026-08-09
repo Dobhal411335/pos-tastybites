@@ -175,6 +175,7 @@ export const GET = withAuth(async (request) => {
   try {
     const { searchParams } = new URL(request.url);
     const sessionId = searchParams.get("sessionId");
+    const today = searchParams.get("today");
     
     if (sessionId) {
       // Fetch the active order for this session to load the cart
@@ -189,8 +190,18 @@ export const GET = withAuth(async (request) => {
     // Default: Get recent employee orders
     const employeeId = request.user.id;
     const restaurantId = request.restaurant;
+    
+    let query = { restaurantId, processedBy: employeeId };
+    
+    if (today === "true") {
+      const start = new Date();
+      start.setHours(0, 0, 0, 0);
+      const end = new Date();
+      end.setHours(23, 59, 59, 999);
+      query.createdAt = { $gte: start, $lte: end };
+    }
 
-    const orders = await Order.find({ restaurantId, processedBy: employeeId })
+    const orders = await Order.find(query)
       .sort({ createdAt: -1 })
       .lean();
 

@@ -18,7 +18,7 @@ export async function proxy(request) {
   const hostname = request.headers.get('host') || '';
 
   // Determine subdomains
-  const isPos = hostname.includes('pos.tastybitesrestaurant.com') || hostname.includes('pos.localhost') || hostname === 'localhost:3000';
+  const isPos = hostname.includes('pos.tastybitesrestaurant.com') || hostname.includes('pos.localhost');
   const isSales = hostname.includes('sales.tastybitesrestaurant.com') || hostname.includes('sales.localhost');
 
   // We are renaming employee to sales

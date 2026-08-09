@@ -12,7 +12,7 @@ export default function NotificationsPage() {
     <div className="min-h-screen bg-zinc-50 p-6 font-sans">
       <div className="max-w-2xl mx-auto">
         <div className="flex items-center gap-4 mb-8">
-          <Button variant="ghost" size="icon" onClick={() => router.push("/employee/dashboard")}>
+          <Button variant="ghost" size="icon" onClick={() => router.push("/sales/floor")}>
             <ArrowLeft className="w-5 h-5" />
           </Button>
           <h1 className="text-2xl font-bold text-zinc-900 flex items-center gap-2">

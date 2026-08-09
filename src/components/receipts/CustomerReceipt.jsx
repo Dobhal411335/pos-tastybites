@@ -2,7 +2,7 @@ import React from 'react';
 import './print.css';
 import moment from 'moment';
 
-const CustomerReceipt = ({ order, restaurantDetails, taxBreakdown = [] }) => {
+const CustomerReceipt = ({ order, restaurantDetails, taxBreakdown = [], serverName }) => {
   if (!order) return null;
 
   const {
@@ -42,36 +42,44 @@ const CustomerReceipt = ({ order, restaurantDetails, taxBreakdown = [] }) => {
       <div className="receipt-divider" />
 
       {/* Order Info */}
-      <div className="mb-4">
-        <div className="flex justify-between">
-          <span>Order #:</span>
+      <div className="mb-4 grid grid-cols-2 gap-y-2 text-[10px]">
+        {/* Row 1 */}
+        <div className="flex gap-1">
+          <span className="text-zinc-500">Order #:</span>
           <span className="receipt-bold">{orderNumber}</span>
         </div>
-        <div className="flex justify-between">
-          <span>Date:</span>
-          <span>{moment(createdAt).format('MMM DD, YYYY hh:mm A')}</span>
+        <div className="flex justify-end gap-1">
+          <span className="text-zinc-500">Server:</span>
+          <span className="receipt-bold">{serverName || (typeof processedBy === 'object' ? (processedBy.name || processedBy.firstName) : 'Server')}</span>
         </div>
-        {processedBy && (
-          <div className="flex justify-between">
-            <span>Server:</span>
-            <span>{typeof processedBy === 'object' ? (processedBy.name || processedBy.firstName) : 'Server'}</span>
-          </div>
-        )}
-        {tableNo && (
-          <div className="flex justify-between">
-            <span>Table:</span>
-            <span className="receipt-bold">{tableNo}</span>
-          </div>
-        )}
-        {guestName && (
-          <div className="flex justify-between">
-            <span>Party Name:</span>
-            <span>{guestName}</span>
-          </div>
-        )}
-        <div className="mt-2">
-          <div>HST #: {hstNumber}</div>
+
+        {/* Row 2 */}
+        <div className="flex gap-1">
+          <span className="text-zinc-500">Date:</span>
+          <span className="receipt-bold">{moment(createdAt).format('MMM DD, YYYY [at] hh:mm A')}</span>
         </div>
+        <div className="flex justify-end gap-1">
+          <span className="text-zinc-500">Table:</span>
+          <span className="receipt-bold">{tableNo || 'N/A'}</span>
+        </div>
+
+        {/* Row 3 */}
+        <div className="flex gap-1">
+          <span className="text-zinc-500">HST #:</span>
+          <span className="receipt-bold">{hstNumber}</span>
+        </div>
+        <div className="flex justify-end gap-1">
+          <span className="text-zinc-500">Party Name:</span>
+          <span className="receipt-bold">{guestName || 'N/A'}</span>
+        </div>
+
+        {/* Row 4 (Dynamic Taxes in Header) */}
+        {taxBreakdown.map((tax, idx) => (
+          <div key={idx} className="flex gap-1 col-span-2">
+            <span className="text-zinc-500">{tax.name} #:</span>
+            <span className="receipt-bold">{hstNumber}</span>
+          </div>
+        ))}
       </div>
 
       <div className="receipt-divider" />
@@ -106,17 +114,21 @@ const CustomerReceipt = ({ order, restaurantDetails, taxBreakdown = [] }) => {
       <div className="receipt-divider" />
 
       {/* Totals */}
-      <div className="mb-4 space-y-1">
-        <div className="flex justify-between">
-          <span>Sub Total:</span>
-          <span>${subTotal.toFixed(2)}</span>
+      <div className="mb-4 flex flex-col items-end space-y-1 text-[11px]">
+        <div className="w-[140px] flex justify-between">
+          <span className="text-zinc-500">Food Total:</span>
+          <span className="receipt-bold">${subTotal.toFixed(2)}</span>
+        </div>
+        <div className="w-[140px] flex justify-between">
+          <span className="text-zinc-500">Sub Total:</span>
+          <span className="receipt-bold">${subTotal.toFixed(2)}</span>
         </div>
         
         {/* Dynamic Tax Breakdown */}
         {taxBreakdown.map((tax, idx) => (
-          <div key={idx} className="flex justify-between">
-            <span>{tax.name}:</span>
-            <span>${tax.amount.toFixed(2)}</span>
+          <div key={idx} className="w-[140px] flex justify-between">
+            <span className="text-zinc-500">{tax.name}:</span>
+            <span className="receipt-bold">${tax.amount.toFixed(2)}</span>
           </div>
         ))}
       </div>

@@ -27,7 +27,7 @@ export const GET = withAuth(async (request) => {
 export const POST = withAuth(async (request) => {
   try {
     const data = await request.json();
-    const { names, categoryId } = data;
+    const { names, codes, categoryId } = data;
 
     if (!names || !Array.isArray(names) || names.length === 0 || !categoryId) {
       return sendError(new Error("Missing fields"), "Product names and category are required", 400);
@@ -49,10 +49,11 @@ export const POST = withAuth(async (request) => {
       else totalFixed += t.value;
     });
 
-    const productsToCreate = names.map(name => ({
+    const productsToCreate = names.map((name, index) => ({
       restaurant: request.restaurant,
       category: categoryId,
       name: name.trim(),
+      productCode: codes && codes[index] ? codes[index].trim() : "",
       status: "Active",
       taxes: taxIds,
       taxData: {

@@ -41,11 +41,14 @@ export const PUT = withAuth(async (request, { params }) => {
     }
 
     const data = await request.json();
-    // Allow updating description, taxes, status, variants, addons, image, discount
-    const { description, taxes, status, variants, addons, image, preparationStyles } = data;
+    // Allow updating basic info, description, taxes, status, variants, addons, image, discount
+    const { name, category, productCode, description, taxes, status, variants, addons, image, preparationStyles } = data;
 
     const updateData = { updatedBy: request.user.id };
     
+    if (name !== undefined) updateData.name = name;
+    if (category !== undefined) updateData.category = category;
+    if (productCode !== undefined) updateData.productCode = productCode;
     if (description !== undefined) updateData.description = description;
     if (taxes !== undefined) {
       updateData.taxes = taxes;

@@ -18,6 +18,7 @@ const ProductSchema = new mongoose.Schema(
     restaurant: { type: mongoose.Schema.Types.ObjectId, ref: 'Restaurant', required: true },
     category: { type: mongoose.Schema.Types.ObjectId, ref: 'Category', required: true },
     name: { type: String, required: true, trim: true },
+    productCode: { type: String, trim: true, default: '' },
     description: { type: String, trim: true, default: '' },
     taxes: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Tax' }],
     taxData: {

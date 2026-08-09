@@ -7,6 +7,7 @@ import EmployeeTopNav from "@/components/employee/EmployeeTopNav";
 import { Loader2 } from "lucide-react";
 import { EmployeeFooter } from "@/components/employee/EmployeeFooter";
 import { SocketProvider } from "@/components/providers/SocketProvider";
+import { AuthProvider } from "@/components/providers/AuthProvider";
 
 export default function SalesMainLayout({ children }) {
   const router = useRouter();
@@ -47,27 +48,27 @@ export default function SalesMainLayout({ children }) {
       employeeId={(employeeUser?.employee || employeeUser)?._id || (employeeUser?.employee || employeeUser)?.id}
       restaurantId={(employeeUser?.employee || employeeUser)?.restaurant}
     >
-      <div className="min-h-screen bg-[#FAFAFA] flex flex-col antialiased text-zinc-900 font-sans">
-
-      <EmployeeTopNav
-        employeeName={
-          (employeeUser?.employee || employeeUser)?.firstName && (employeeUser?.employee || employeeUser)?.lastName
-            ? `${(employeeUser?.employee || employeeUser).firstName} ${(employeeUser?.employee || employeeUser).lastName}`
-            : (employeeUser?.employee || employeeUser)?.name || (employeeUser?.employee || employeeUser)?.firstName || ""
-        }
-        employeeRole={(employeeUser?.employee || employeeUser)?.role || "Server"}
-        onMenuToggle={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-      />
-
-      <div className="flex-1 flex overflow-hidden relative">
-        <main className="flex-1 overflow-y-auto p-1">
-          <div className="mx-auto max-w-8xl">
-            {children}
+      <AuthProvider user={employeeUser?.employee || employeeUser}>
+        <div className="min-h-screen bg-[#FAFAFA] flex flex-col antialiased text-zinc-900 font-sans">
+          <EmployeeTopNav
+            employeeName={
+              (employeeUser?.employee || employeeUser)?.firstName && (employeeUser?.employee || employeeUser)?.lastName
+                ? `${(employeeUser?.employee || employeeUser).firstName} ${(employeeUser?.employee || employeeUser).lastName}`
+                : (employeeUser?.employee || employeeUser)?.name || (employeeUser?.employee || employeeUser)?.firstName || ""
+            }
+            employeeRole={(employeeUser?.employee || employeeUser)?.role || "Server"}
+            onMenuToggle={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+          />
+          <div className="flex-1 flex overflow-hidden relative">
+            <main className="flex-1 overflow-y-auto p-1">
+              <div className="mx-auto max-w-8xl">
+                {children}
+              </div>
+            </main>
           </div>
-        </main>
-      </div>
-      <EmployeeFooter />
-    </div>
+          <EmployeeFooter />
+        </div>
+      </AuthProvider>
     </SocketProvider>
   );
 }
