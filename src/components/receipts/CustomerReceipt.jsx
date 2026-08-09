@@ -20,7 +20,7 @@ const CustomerReceipt = ({ order, restaurantDetails, taxBreakdown = [], serverNa
   const restName = restaurantDetails?.name || 'TASTY BITES';
   const restAddress = restaurantDetails?.address || '345 Main Street South\nExeter, ON, Canada, N0M 1S6';
   const restPhone = restaurantDetails?.phone || 'Tel: +1 519 235 0050';
-  const hstNumber = restaurantDetails?.hstNumber || '123456789 RT0001';
+  const hstNumber = restaurantDetails?.hstNumber || '740811146';
 
   // Calculate tip guide dynamically
   const tip15 = (subTotal * 0.15).toFixed(2);
@@ -31,9 +31,9 @@ const CustomerReceipt = ({ order, restaurantDetails, taxBreakdown = [], serverNa
     <div className="receipt-font text-xs p-4 bg-white" style={{ width: 'var(--print-width, 80mm)', margin: '0 auto' }}>
       {/* Header */}
       <div className="text-center mb-4">
-        <h1 className="text-lg receipt-bold mb-1">{restName}</h1>
-        <div className="whitespace-pre-line">{restAddress}</div>
-        <div>{restPhone}</div>
+        <h1 className="text-xl receipt-bold mb-1">{restName}</h1>
+        <div className="text-nowrap text-[9px]">{restAddress}</div>
+        <div className="text-[9px]">{restPhone}</div>
         <div className="mt-2 text-[10px]">
           Printed {moment().format('MMM DD, YYYY')} at {moment().format('hh:mm A')}
         </div>
@@ -56,7 +56,7 @@ const CustomerReceipt = ({ order, restaurantDetails, taxBreakdown = [], serverNa
         {/* Row 2 */}
         <div className="flex gap-1">
           <span className="text-zinc-500">Date:</span>
-          <span className="receipt-bold">{moment(createdAt).format('MMM DD, YYYY [at] hh:mm A')}</span>
+          <span className="receipt-bold text-[10px]">{moment(createdAt).format('MMM DD, YYYY [at] hh:mm A')}</span>
         </div>
         <div className="flex justify-end gap-1">
           <span className="text-zinc-500">Table:</span>

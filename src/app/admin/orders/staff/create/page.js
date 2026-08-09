@@ -11,7 +11,6 @@ import { Badge } from "@/components/ui/badge";
 import { toast, Toaster } from "sonner";
 import { PALETTE } from "@/utils/paletteeColor";
 import { Loader2 } from "lucide-react";
-import { generateStaffOrderNumber } from "@/utils/generateOrderNumber";
 import Image from "next/image";
 
 export default function StaffCreateOrderPage() {
@@ -34,7 +33,6 @@ export default function StaffCreateOrderPage() {
   const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
   const [isClearOrderModalOpen, setIsClearOrderModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [generatedOrderId, setGeneratedOrderId] = useState("");
 
   // New POS specific state
   const [searchQuery, setSearchQuery] = useState("");
@@ -79,7 +77,6 @@ export default function StaffCreateOrderPage() {
 
   React.useEffect(() => {
     fetchInitialData();
-    setGeneratedOrderId(generateStaffOrderNumber());
   }, []);
 
   const handleOpenOptions = (item) => {
@@ -241,7 +238,6 @@ export default function StaffCreateOrderPage() {
     try {
       setIsSubmitting(true);
       const payload = {
-        orderNumber: generatedOrderId,
         items: cart,
         subTotal: grossSubtotal,
         taxTotal: totalTax,
@@ -267,7 +263,6 @@ export default function StaffCreateOrderPage() {
         setAppliedDiscount(null);
         setCouponCode("");
         setSelectedStaff("");
-        setGeneratedOrderId(generateStaffOrderNumber());
       } else {
         toast.error(json.message);
       }

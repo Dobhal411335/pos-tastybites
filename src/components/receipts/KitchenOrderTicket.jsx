@@ -51,15 +51,15 @@ const KitchenOrderTicket = ({ order, kotItems = [] }) => {
               {items.map((item, itemIdx) => (
                 <div key={itemIdx}>
                   <div className="flex items-start">
-                    <span className="receipt-bold mr-2 text-lg">{item.qty} ×</span>
-                    <span className="receipt-bold text-lg leading-tight">{item.name}</span>
+                    <span className="receipt-bold mr-2 text-xs whitespace-nowrap">{item.qty} ×</span>
+                    <span className="receipt-bold text-xs leading-tight">{item.name}</span>
                   </div>
                   
                   {/* Modifiers visually indented */}
                   {item.options && item.options.length > 0 && (
                     <div className="pl-8 mt-1 space-y-1">
                       {item.options.map((opt, oIdx) => (
-                        <div key={oIdx} className="text-sm font-semibold italic text-gray-800">
+                        <div key={oIdx} className="text-xs font-semibold italic text-gray-800">
                           + {opt}
                         </div>
                       ))}

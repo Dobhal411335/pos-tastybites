@@ -168,6 +168,7 @@ export default function OrderPage() {
             const restoredCart = existingOrder.items.map(item => ({
               id: item.menuItemId,
               name: item.name,
+              category: item.category || "ITEMS",
               price: item.price,
               tax: item.tax,
               qty: item.qty,
@@ -327,6 +328,7 @@ export default function OrderPage() {
       return [...prev, {
         id: product._id,
         name: product.name,
+        category: product.category?.name || "ITEMS",
         price,
         tax: itemTax,
         qty: 1,
@@ -359,6 +361,7 @@ export default function OrderPage() {
       id: selectedProduct._id,
       cartId: Date.now(),
       name: selectedProduct.name,
+      category: selectedProduct.category?.name || "ITEMS",
       price: finalPrice,
       tax: finalTax,
       qty: 1,

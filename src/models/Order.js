@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 const OrderItemSchema = new mongoose.Schema({
   menuItemId: { type: String }, // Can be reference to MenuItem later
   name: { type: String, required: true },
+  category: { type: String },
   size: { type: String, default: "Standard" },
   qty: { type: Number, required: true, default: 1 },
   price: { type: Number, required: true },

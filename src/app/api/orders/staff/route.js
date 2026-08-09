@@ -5,12 +5,13 @@ import Employee from "@/models/employee/Employee";
 import { sendSuccess } from "@/utils/apiResponse";
 import { sendError } from "@/utils/errorHandler";
 import { logger } from "@/utils/logger";
+import { getNextOrderNumber } from "@/utils/generateOrderNumber";
 
 // POST - Create a new staff order
 export const POST = withAuth(async (request) => {
   try {
     const data = await request.json();
-    const { items, subTotal, taxTotal, discountTotal, discountCode, totalAmount, specialNote, staffId, orderNumber } = data;
+    const { items, subTotal, taxTotal, discountTotal, discountCode, totalAmount, specialNote, staffId } = data;
 
     if (!items || items.length === 0) {
       return sendError(new Error("Empty cart"), "Cart cannot be empty", 400);
@@ -24,6 +25,8 @@ export const POST = withAuth(async (request) => {
     if (!staffMember) {
       return sendError(new Error("Invalid Staff"), "Selected staff member not found", 404);
     }
+
+    const orderNumber = await getNextOrderNumber(request.restaurant);
 
     const newOrder = await Order.create({
       restaurantId: request.restaurant,

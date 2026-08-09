@@ -5,7 +5,7 @@ import TableSession from "@/models/floor/TableSession";
 import { sendSuccess } from "@/utils/apiResponse";
 import { sendError } from "@/utils/errorHandler";
 import { logger } from "@/utils/logger";
-import { generateStaffOrderNumber } from "@/utils/generateOrderNumber"; 
+import { getNextOrderNumber } from "@/utils/generateOrderNumber"; 
 import OperationalAuditLog from "@/models/OperationalAuditLog";
 
 // POST - Create or Update a POS/Employee order
@@ -24,6 +24,7 @@ export const POST = withAuth(async (request) => {
     const formattedItems = items.map(item => ({
       menuItemId: item.id,
       name: item.name,
+      category: item.category || "ITEMS",
       size: item.size || "Standard",
       qty: item.qty,
       price: item.price,
@@ -34,7 +35,7 @@ export const POST = withAuth(async (request) => {
 
     // If no sessionId is provided, fallback to legacy behavior
     if (!sessionId) {
-      const orderNumber = generateStaffOrderNumber();
+      const orderNumber = await getNextOrderNumber(request.restaurant);
       const newOrder = await Order.create({
         restaurantId: request.restaurant,
         orderNumber,
@@ -115,7 +116,7 @@ export const POST = withAuth(async (request) => {
       return sendSuccess({ ...order.toObject(), kotPayload }, "Order updated successfully", 200);
     } else {
       // Create New Order
-      const orderNumber = generateStaffOrderNumber();
+      const orderNumber = await getNextOrderNumber(request.restaurant);
       const newOrder = await Order.create({
         restaurantId: request.restaurant,
         orderNumber,
