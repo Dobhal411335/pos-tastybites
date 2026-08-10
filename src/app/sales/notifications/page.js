@@ -26,6 +26,8 @@ import {
   setNotificationSoundEnabled,
   unlockNotificationAudio,
   isNotificationAudioUnlocked,
+  getNotificationSoundUnlockError,
+  installNotificationAudioUnlockOnGesture,
 } from "@/lib/notifications/notificationSound";
 import { employeeFetch } from "@/lib/employeeFetch";
 import {
@@ -88,6 +90,7 @@ export default function NotificationsPage() {
 
   useEffect(() => {
     setSoundOn(getNotificationSoundEnabled());
+    return installNotificationAudioUnlockOnGesture();
   }, []);
 
   const fetchPage = useCallback(
@@ -230,9 +233,12 @@ export default function NotificationsPage() {
     if (next) {
       const ok = await unlockNotificationAudio({ playPreview: true });
       if (ok) {
-        toast.success("Notification sound enabled");
+        toast.success("Sound on — you should hear a beep");
       } else {
-        toast.message("Sound enabled — tap Sound again if you do not hear the bell");
+        toast.error(
+          getNotificationSoundUnlockError() ||
+            "Sound blocked. Address bar → lock icon → Sound → Allow, then tap Sound again."
+        );
       }
     } else {
       toast.message("Notification sound off");

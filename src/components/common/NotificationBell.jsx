@@ -40,6 +40,8 @@ import {
   isNotificationAudioUnlocked,
   playNotificationSound,
   subscribeNotificationSoundUnlock,
+  getNotificationSoundUnlockError,
+  installNotificationAudioUnlockOnGesture,
 } from "@/lib/notifications/notificationSound";
 import { showSystemNotification } from "@/lib/notifications/systemNotifications";
 
@@ -87,7 +89,12 @@ export default function NotificationBell({ viewAllHref = "/sales/notifications",
   const seenIdsRef = useRef(new Set());
 
   useEffect(() => {
-    return subscribeNotificationSoundUnlock(setAudioUnlocked);
+    const unsub = subscribeNotificationSoundUnlock(setAudioUnlocked);
+    const cleanupGesture = installNotificationAudioUnlockOnGesture();
+    return () => {
+      unsub();
+      cleanupGesture();
+    };
   }, []);
 
   const mergeIncoming = useCallback((incoming, { playSound = true } = {}) => {
@@ -241,14 +248,16 @@ export default function NotificationBell({ viewAllHref = "/sales/notifications",
     setSoundOn(next);
     setNotificationSoundEnabled(next);
     if (next) {
-      // Unlock + play confirmation in the same click (browser autoplay policy)
+      // Must play inside this click — Web Audio unlock for Brave/production
       const ok = await unlockNotificationAudio({ playPreview: true });
       setAudioUnlocked(ok);
       if (ok) {
-        toast.success("Notification sound enabled");
+        toast.success("Sound on — you should hear a beep");
       } else {
-        // Preference is still ON; browser blocked audio until next gesture
-        toast.message("Sound enabled — tap Sound again if you do not hear the bell");
+        toast.error(
+          getNotificationSoundUnlockError() ||
+            "Sound blocked. Address bar → lock icon → Sound → Allow, then tap Sound again."
+        );
       }
     } else {
       toast.message("Notification sound off");

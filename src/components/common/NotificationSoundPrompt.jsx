@@ -8,6 +8,9 @@ import {
   unlockNotificationAudio,
   setNotificationSoundEnabled,
   installNotificationAudioUnlockOnGesture,
+  getNotificationSoundUnlockError,
+  needsNotificationSoundUnlock,
+  isNotificationAudioUnlocked,
 } from "@/lib/notifications/notificationSound";
 import {
   needsSystemNotificationPermission,
@@ -19,9 +22,12 @@ import {
   isSystemNotificationDenied,
 } from "@/lib/notifications/systemNotifications";
 
+const SOUND_HELP =
+  "Address bar → lock/tune icon → Sound → Allow (and Autoplay if you see it). Then tap Enable sound again.";
+
 /**
- * Ask once for browser Notifications permission (new orders only).
- * Sound unlocks silently on the next click anywhere — no nag banner every refresh.
+ * Ask for in-page alert sound (Web Audio unlock) + browser Notifications.
+ * Browsers have no Sound.requestPermission() — Sound is a site setting only.
  */
 export default function NotificationSoundPrompt() {
   const [visible, setVisible] = useState(false);
@@ -29,6 +35,7 @@ export default function NotificationSoundPrompt() {
   const [permission, setPermission] = useState(() =>
     typeof window !== "undefined" ? getSystemNotificationPermission() : "default"
   );
+  const [soundBlocked, setSoundBlocked] = useState(false);
 
   useEffect(() => {
     const cleanupGesture = installNotificationAudioUnlockOnGesture();
@@ -37,14 +44,12 @@ export default function NotificationSoundPrompt() {
       const perm = getSystemNotificationPermission();
       setPermission(perm);
 
-      // Only show when we still need the browser permission dialog,
-      // or once when previously denied (so staff can unblock).
-      // Do NOT show just because audio needs unlock — gesture handler covers that.
+      // After Allow / Not now, don't nag every refresh — gesture unlock handles sound
       if (wasSystemNotificationPromptDismissed()) {
         setVisible(false);
         return;
       }
-      if (perm === "default" || perm === "denied") {
+      if (perm === "default" || perm === "denied" || needsNotificationSoundUnlock()) {
         setVisible(true);
       }
     }, 700);
@@ -57,11 +62,17 @@ export default function NotificationSoundPrompt() {
 
   const handleEnable = async () => {
     setEnabling(true);
+    setSoundBlocked(false);
     try {
       setNotificationSoundEnabled(true);
 
-      // Unlock audio FIRST while the click gesture is still valid
+      // Sound FIRST while the click gesture is fresh (critical on Brave/prod)
       const soundOk = await unlockNotificationAudio({ playPreview: true });
+      if (!soundOk) {
+        setSoundBlocked(true);
+        toast.error(getNotificationSoundUnlockError() || SOUND_HELP);
+        // Still try notifications so they don't have to click twice later
+      }
 
       let systemResult = {
         ok: getSystemNotificationPermission() === "granted",
@@ -74,26 +85,22 @@ export default function NotificationSoundPrompt() {
 
       setPermission(systemResult.permission);
 
-      if (systemResult.permission === "granted" || systemResult.permission === "unsupported") {
+      if (soundOk && (systemResult.permission === "granted" || systemResult.permission === "unsupported")) {
         markAlertsSetupDone();
         setVisible(false);
-        toast.success(
-          soundOk
-            ? "Alerts enabled — sound + system notifications for new orders"
-            : "System notifications allowed for new orders"
-        );
-      } else if (systemResult.permission === "denied") {
-        // Remember they responded so we don't re-open every refresh;
-        // they can still use Check again this session if they unblock.
+        toast.success("Sound + system notifications enabled for new orders");
+      } else if (soundOk && systemResult.permission === "denied") {
+        markAlertsSetupDone();
         toast.message(
-          "Notifications blocked. Address bar → lock icon → Notifications → Allow, then tap Check again."
+          "Sound works. Notifications blocked — lock icon → Notifications → Allow."
         );
+        setVisible(false);
       } else if (soundOk) {
         markAlertsSetupDone();
         setVisible(false);
-        toast.success("Notification sound enabled");
-      } else {
-        toast.error("Could not enable alerts. Try again or check browser site settings.");
+        toast.success("Alert sound enabled — you should have heard a beep");
+      } else if (systemResult.permission === "granted") {
+        toast.message(`Notifications allowed, but sound is blocked. ${SOUND_HELP}`);
       }
     } finally {
       setEnabling(false);
@@ -101,20 +108,31 @@ export default function NotificationSoundPrompt() {
   };
 
   const handleRecheckPermission = async () => {
-    const next = getSystemNotificationPermission();
-    setPermission(next);
-    if (next === "granted") {
+    setEnabling(true);
+    try {
       setNotificationSoundEnabled(true);
-      await unlockNotificationAudio({ playPreview: true });
-      markAlertsSetupDone();
-      setVisible(false);
-      toast.success("System notifications allowed — new orders will alert you");
-    } else if (next === "denied") {
-      toast.message(
-        "Still blocked. Address bar → lock/tune icon → Site settings → Notifications → Allow."
-      );
-    } else {
-      void handleEnable();
+      const soundOk = await unlockNotificationAudio({ playPreview: true });
+      const next = getSystemNotificationPermission();
+      setPermission(next);
+      setSoundBlocked(!soundOk);
+
+      if (soundOk && (next === "granted" || next === "unsupported" || next === "default")) {
+        if (next === "default") {
+          const systemResult = await requestSystemNotificationPermission();
+          setPermission(systemResult.permission);
+        }
+        markAlertsSetupDone();
+        setVisible(false);
+        toast.success("Alerts ready");
+      } else if (!soundOk) {
+        toast.error(getNotificationSoundUnlockError() || SOUND_HELP);
+      } else if (next === "denied") {
+        toast.message(
+          "Still blocked. Lock/tune icon → Site settings → Notifications → Allow."
+        );
+      }
+    } finally {
+      setEnabling(false);
     }
   };
 
@@ -127,27 +145,31 @@ export default function NotificationSoundPrompt() {
 
   const denied = permission === "denied" || isSystemNotificationDenied();
   const needSystem = needsSystemNotificationPermission();
+  const needSound = !isNotificationAudioUnlocked();
 
   return (
-    // Narrow fixed chip only — never a full-width overlay that freezes the nav/logout
     <div className="pointer-events-none fixed bottom-20 left-1/2 z-40 w-[min(calc(100%-1.5rem),28rem)] -translate-x-1/2">
       <div className="pointer-events-auto rounded-2xl border border-orange-200 bg-white shadow-lg p-4 flex gap-3 items-start">
         <div className="h-10 w-10 rounded-full bg-orange-100 flex items-center justify-center shrink-0">
-          <BellRing className="h-5 w-5 text-orange-600" />
+          <Volume2 className="h-5 w-5 text-orange-600" />
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold text-zinc-900">
-            {denied ? "Notifications are blocked" : "Allow alerts for new orders?"}
+            {soundBlocked || (denied && needSound)
+              ? "Allow sound for order alerts"
+              : denied
+                ? "Notifications are blocked"
+                : "Enable order alert sound?"}
           </p>
           <p className="text-xs text-zinc-500 mt-0.5 leading-snug">
-            {denied
-              ? "Click the lock icon next to the URL → Notifications → Allow. Logout and other buttons stay usable while this is open."
-              : needSystem
-                ? "Your browser will ask for Notifications. We only use system alerts for new orders, plus an in-page bell sound."
-                : "Tap once to unlock notification sound."}
+            {soundBlocked
+              ? SOUND_HELP
+              : denied
+                ? "Lock icon → Notifications → Allow. Also set Sound → Allow so the bell can play."
+                : "Tap Enable — you should hear a short beep. Your browser may also ask for Notifications (new orders only). There is no separate Sound popup; if silent, allow Sound in site settings."}
           </p>
           <div className="flex gap-2 mt-3 flex-wrap">
-            {denied ? (
+            {denied || soundBlocked ? (
               <Button
                 size="sm"
                 onClick={handleRecheckPermission}
@@ -155,7 +177,7 @@ export default function NotificationSoundPrompt() {
                 className="h-9 bg-orange-500 hover:bg-orange-600 text-white font-semibold"
               >
                 <Settings className="h-3.5 w-3.5 mr-1.5" />
-                Check again
+                {enabling ? "Checking…" : "Enable sound"}
               </Button>
             ) : (
               <Button
@@ -169,7 +191,11 @@ export default function NotificationSoundPrompt() {
                 ) : (
                   <Volume2 className="h-3.5 w-3.5 mr-1.5" />
                 )}
-                {enabling ? "Enabling…" : needSystem ? "Allow notifications" : "Enable sound"}
+                {enabling
+                  ? "Enabling…"
+                  : needSystem
+                    ? "Enable sound & notifications"
+                    : "Enable sound"}
               </Button>
             )}
             <Button
