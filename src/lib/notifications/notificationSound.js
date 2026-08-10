@@ -1,11 +1,10 @@
 const SOUND_PREF_KEY = "tastybites_notification_sound";
-/** Only this file — no generated beeps. */
+/** Only this file — no generated beeps / WebAudio decode (MP3 decode fails in some browsers). */
 const BELL_SRC = "/notification_bell.mp3";
 
 const playedIds = new Set();
+let sharedAudio = null;
 let audioCtx = null;
-let bellBuffer = null;
-let bellLoadPromise = null;
 let lastPlayedAt = 0;
 let unlockedThisSession = false;
 let gestureUnlockInstalled = false;
@@ -24,55 +23,48 @@ function notifyUnlockListeners() {
   );
 }
 
-function getAudioContext() {
+function getAudio() {
   if (typeof window === "undefined") return null;
+  if (!sharedAudio) {
+    sharedAudio = new Audio(BELL_SRC);
+    sharedAudio.preload = "auto";
+    try {
+      sharedAudio.load();
+    } catch {
+      /* ignore */
+    }
+  }
+  return sharedAudio;
+}
+
+/** Resume AudioContext so the origin is treated as user-activated for media. */
+async function resumeAudioContext() {
   const Ctx = window.AudioContext || window.webkitAudioContext;
   if (!Ctx) return null;
   if (!audioCtx || audioCtx.state === "closed") {
     audioCtx = new Ctx();
   }
+  if (audioCtx.state === "suspended") {
+    await audioCtx.resume();
+  }
   return audioCtx;
 }
 
-async function resumeContext() {
-  const ctx = getAudioContext();
-  if (!ctx) throw new Error("Web Audio is not supported in this browser");
-  if (ctx.state === "suspended") {
-    await ctx.resume();
+function playHtmlBell() {
+  const audio = getAudio();
+  if (!audio) throw new Error("Audio not available");
+
+  audio.pause();
+  try {
+    audio.currentTime = 0;
+  } catch {
+    /* ignore seek while loading */
   }
-  if (ctx.state !== "running") {
-    throw new Error("Audio context still suspended — allow Sound in site settings");
-  }
-  return ctx;
-}
+  audio.volume = 1;
 
-function loadBellBuffer(ctx) {
-  if (bellBuffer) return Promise.resolve(bellBuffer);
-  if (bellLoadPromise) return bellLoadPromise;
-
-  bellLoadPromise = (async () => {
-    const res = await fetch(BELL_SRC, { cache: "force-cache" });
-    if (!res.ok) throw new Error(`Bell sound missing (${res.status})`);
-    const data = await res.arrayBuffer();
-    // slice() avoids detach issues on some browsers
-    bellBuffer = await ctx.decodeAudioData(data.slice(0));
-    return bellBuffer;
-  })().catch((err) => {
-    bellLoadPromise = null;
-    throw err;
-  });
-
-  return bellLoadPromise;
-}
-
-function playBuffer(ctx, buffer, volume = 1) {
-  const src = ctx.createBufferSource();
-  const gain = ctx.createGain();
-  gain.gain.value = volume;
-  src.buffer = buffer;
-  src.connect(gain);
-  gain.connect(ctx.destination);
-  src.start(0);
+  const playPromise = audio.play();
+  if (playPromise?.then) return playPromise;
+  return Promise.resolve();
 }
 
 export function getNotificationSoundEnabled() {
@@ -86,7 +78,7 @@ export function setNotificationSoundEnabled(enabled) {
 }
 
 export function isNotificationAudioUnlocked() {
-  return unlockedThisSession && audioCtx?.state === "running";
+  return unlockedThisSession;
 }
 
 export function getNotificationSoundUnlockError() {
@@ -95,7 +87,7 @@ export function getNotificationSoundUnlockError() {
 
 export function needsNotificationSoundUnlock() {
   if (typeof window === "undefined") return false;
-  return getNotificationSoundEnabled() && !isNotificationAudioUnlocked();
+  return getNotificationSoundEnabled() && !unlockedThisSession;
 }
 
 export function subscribeNotificationSoundUnlock(callback) {
@@ -106,18 +98,37 @@ export function subscribeNotificationSoundUnlock(callback) {
 }
 
 /**
- * Must run inside a real click/tap. Plays only /notification_bell.mp3.
+ * Must run inside a real click/tap. Plays /notification_bell.mp3 via HTMLAudio.
  */
 export async function unlockNotificationAudio({ playPreview = true } = {}) {
   if (typeof window === "undefined") return false;
   lastUnlockError = null;
 
   try {
-    const ctx = await resumeContext();
-    const buffer = await loadBellBuffer(ctx);
+    // Warm autoplay policy (helps Brave/Chrome keep later plays working)
+    try {
+      await resumeAudioContext();
+    } catch {
+      /* HTMLAudio may still work from this gesture */
+    }
+
+    const audio = getAudio();
+    if (!audio) throw new Error("Audio not available");
 
     if (playPreview) {
-      playBuffer(ctx, buffer, 1);
+      // Play immediately in the gesture — browser buffers as needed
+      await playHtmlBell();
+    } else {
+      // Silent unlock: brief near-silent play then pause
+      audio.volume = 0.001;
+      await audio.play();
+      audio.pause();
+      try {
+        audio.currentTime = 0;
+      } catch {
+        /* ignore */
+      }
+      audio.volume = 1;
     }
 
     unlockedThisSession = true;
@@ -126,15 +137,17 @@ export async function unlockNotificationAudio({ playPreview = true } = {}) {
   } catch (err) {
     unlockedThisSession = false;
     lastUnlockError =
-      err?.message ||
-      "Sound blocked — open the lock icon → Sound → Allow, then tap Enable sound again";
+      err?.name === "NotSupportedError" || /decode|format/i.test(err?.message || "")
+        ? "Could not play notification_bell.mp3 — re-export as a standard MP3 and replace the file in /public"
+        : err?.message ||
+          "Sound blocked — open the lock icon → Sound → Allow, then tap Enable sound again";
     notifyUnlockListeners();
     return false;
   }
 }
 
 /**
- * Resume AudioContext on first gesture so later order alerts can play.
+ * Resume / unlock on first gesture so later order alerts can play.
  * Safe to call from multiple components — ref-counted.
  */
 export function installNotificationAudioUnlockOnGesture() {
@@ -146,7 +159,7 @@ export function installNotificationAudioUnlockOnGesture() {
     gestureUnlockInstalled = true;
 
     const onGesture = () => {
-      if (!getNotificationSoundEnabled() || isNotificationAudioUnlocked()) return;
+      if (!getNotificationSoundEnabled() || unlockedThisSession) return;
       void unlockNotificationAudio({ playPreview: false });
     };
 
@@ -169,58 +182,21 @@ export function installNotificationAudioUnlockOnGesture() {
   };
 }
 
-function playBellThroughContext() {
-  const ctx = audioCtx;
-  if (!ctx || ctx.state !== "running") return false;
-
-  if (bellBuffer) {
-    playBuffer(ctx, bellBuffer, 1);
-    return true;
-  }
-
-  // Load MP3 then play — no custom tone fallback
-  void loadBellBuffer(ctx)
-    .then((buffer) => {
-      if (audioCtx?.state === "running" && buffer) {
-        playBuffer(audioCtx, buffer, 1);
-      }
-    })
-    .catch(() => {});
-  return true;
-}
-
 function playBell() {
   try {
     const now = Date.now();
     if (now - lastPlayedAt < PLAY_COOLDOWN_MS) return;
     lastPlayedAt = now;
 
-    if (playBellThroughContext()) return;
-
-    const ctx = getAudioContext();
-    if (!ctx) {
-      unlockedThisSession = false;
-      notifyUnlockListeners();
-      return;
-    }
-    ctx
-      .resume()
-      .then(() => {
-        if (ctx.state === "running") {
-          unlockedThisSession = true;
-          playBellThroughContext();
-          notifyUnlockListeners();
-        } else {
-          unlockedThisSession = false;
-          lastUnlockError = "Sound blocked in site settings";
-          notifyUnlockListeners();
-        }
-      })
-      .catch(() => {
+    const playPromise = playHtmlBell();
+    if (playPromise?.catch) {
+      playPromise.catch(() => {
         unlockedThisSession = false;
-        lastUnlockError = "Sound blocked in site settings";
+        lastUnlockError =
+          "Sound blocked — tap Sound ON again, or allow Sound in site settings";
         notifyUnlockListeners();
       });
+    }
   } catch {
     unlockedThisSession = false;
     notifyUnlockListeners();
