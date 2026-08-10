@@ -26,7 +26,6 @@ import {
   setNotificationSoundEnabled,
   unlockNotificationAudio,
   isNotificationAudioUnlocked,
-  playNotificationSound,
 } from "@/lib/notifications/notificationSound";
 import { employeeFetch } from "@/lib/employeeFetch";
 import {
@@ -229,15 +228,14 @@ export default function NotificationsPage() {
     setSoundOn(next);
     setNotificationSoundEnabled(next);
     if (next) {
-      const ok = await unlockNotificationAudio();
+      const ok = await unlockNotificationAudio({ playPreview: true });
       if (ok) {
-        playNotificationSound({
-          id: `unlock-${Date.now()}`,
-          playSound: true,
-          priority: "high",
-        });
         toast.success("Notification sound enabled");
+      } else {
+        toast.message("Sound enabled — tap Sound again if you do not hear the bell");
       }
+    } else {
+      toast.message("Notification sound off");
     }
   };
 

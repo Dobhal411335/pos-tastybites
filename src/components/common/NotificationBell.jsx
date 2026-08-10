@@ -234,18 +234,17 @@ export default function NotificationBell({ viewAllHref = "/sales/notifications",
     setSoundOn(next);
     setNotificationSoundEnabled(next);
     if (next) {
-      const ok = await unlockNotificationAudio();
+      // Unlock + play confirmation in the same click (browser autoplay policy)
+      const ok = await unlockNotificationAudio({ playPreview: true });
       setAudioUnlocked(ok);
       if (ok) {
-        playNotificationSound({
-          id: `unlock-${Date.now()}`,
-          playSound: true,
-          priority: "high",
-        });
         toast.success("Notification sound enabled");
       } else {
-        toast.message("Tap again after interacting with the page to unlock sound");
+        // Preference is still ON; browser blocked audio until next gesture
+        toast.message("Sound enabled — tap Sound again if you do not hear the bell");
       }
+    } else {
+      toast.message("Notification sound off");
     }
   };
 
