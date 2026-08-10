@@ -1,9 +1,10 @@
 const SOUND_PREF_KEY = "tastybites_notification_sound";
-/** Only this file — no generated beeps / WebAudio decode (MP3 decode fails in some browsers). */
-const BELL_SRC = "/notification_bell.mp3";
+/** Prefer re-encoded MP3; WAV is the universal browser fallback. */
+const BELL_SOURCES = ["/notification_bell.mp3", "/notification_bell.wav"];
 
 const playedIds = new Set();
 let sharedAudio = null;
+let activeSrc = BELL_SOURCES[0];
 let audioCtx = null;
 let lastPlayedAt = 0;
 let unlockedThisSession = false;
@@ -23,21 +24,38 @@ function notifyUnlockListeners() {
   );
 }
 
+function createAudio(src) {
+  const audio = new Audio(src);
+  audio.preload = "auto";
+  try {
+    audio.load();
+  } catch {
+    /* ignore */
+  }
+  return audio;
+}
+
 function getAudio() {
   if (typeof window === "undefined") return null;
   if (!sharedAudio) {
-    sharedAudio = new Audio(BELL_SRC);
-    sharedAudio.preload = "auto";
-    try {
-      sharedAudio.load();
-    } catch {
-      /* ignore */
-    }
+    sharedAudio = createAudio(activeSrc);
   }
   return sharedAudio;
 }
 
-/** Resume AudioContext so the origin is treated as user-activated for media. */
+function switchAudioSource(src) {
+  activeSrc = src;
+  if (sharedAudio) {
+    try {
+      sharedAudio.pause();
+    } catch {
+      /* ignore */
+    }
+  }
+  sharedAudio = createAudio(src);
+  return sharedAudio;
+}
+
 async function resumeAudioContext() {
   const Ctx = window.AudioContext || window.webkitAudioContext;
   if (!Ctx) return null;
@@ -50,10 +68,7 @@ async function resumeAudioContext() {
   return audioCtx;
 }
 
-function playHtmlBell() {
-  const audio = getAudio();
-  if (!audio) throw new Error("Audio not available");
-
+async function playWithElement(audio) {
   audio.pause();
   try {
     audio.currentTime = 0;
@@ -61,10 +76,32 @@ function playHtmlBell() {
     /* ignore seek while loading */
   }
   audio.volume = 1;
+  await audio.play();
+}
 
-  const playPromise = audio.play();
-  if (playPromise?.then) return playPromise;
-  return Promise.resolve();
+/** Try each audio source until one plays successfully. */
+async function playHtmlBell({ allowFallback = true } = {}) {
+  let audio = getAudio();
+  if (!audio) throw new Error("Audio not available");
+
+  try {
+    await playWithElement(audio);
+    return;
+  } catch (firstErr) {
+    if (!allowFallback) throw firstErr;
+
+    for (const src of BELL_SOURCES) {
+      if (src === activeSrc) continue;
+      try {
+        audio = switchAudioSource(src);
+        await playWithElement(audio);
+        return;
+      } catch {
+        /* try next */
+      }
+    }
+    throw firstErr;
+  }
 }
 
 export function getNotificationSoundEnabled() {
@@ -98,14 +135,13 @@ export function subscribeNotificationSoundUnlock(callback) {
 }
 
 /**
- * Must run inside a real click/tap. Plays /notification_bell.mp3 via HTMLAudio.
+ * Must run inside a real click/tap. Plays notification_bell via HTMLAudio.
  */
 export async function unlockNotificationAudio({ playPreview = true } = {}) {
   if (typeof window === "undefined") return false;
   lastUnlockError = null;
 
   try {
-    // Warm autoplay policy (helps Brave/Chrome keep later plays working)
     try {
       await resumeAudioContext();
     } catch {
@@ -116,12 +152,16 @@ export async function unlockNotificationAudio({ playPreview = true } = {}) {
     if (!audio) throw new Error("Audio not available");
 
     if (playPreview) {
-      // Play immediately in the gesture — browser buffers as needed
-      await playHtmlBell();
+      await playHtmlBell({ allowFallback: true });
     } else {
-      // Silent unlock: brief near-silent play then pause
       audio.volume = 0.001;
-      await audio.play();
+      try {
+        await audio.play();
+      } catch {
+        // Try fallback sources for silent unlock too
+        await playHtmlBell({ allowFallback: true });
+        audio.pause();
+      }
       audio.pause();
       try {
         audio.currentTime = 0;
@@ -137,10 +177,8 @@ export async function unlockNotificationAudio({ playPreview = true } = {}) {
   } catch (err) {
     unlockedThisSession = false;
     lastUnlockError =
-      err?.name === "NotSupportedError" || /decode|format/i.test(err?.message || "")
-        ? "Could not play notification_bell.mp3 — re-export as a standard MP3 and replace the file in /public"
-        : err?.message ||
-          "Sound blocked — open the lock icon → Sound → Allow, then tap Enable sound again";
+      err?.message ||
+      "Sound blocked — open the lock icon → Sound → Allow, then tap Enable sound again";
     notifyUnlockListeners();
     return false;
   }
@@ -188,7 +226,7 @@ function playBell() {
     if (now - lastPlayedAt < PLAY_COOLDOWN_MS) return;
     lastPlayedAt = now;
 
-    const playPromise = playHtmlBell();
+    const playPromise = playHtmlBell({ allowFallback: true });
     if (playPromise?.catch) {
       playPromise.catch(() => {
         unlockedThisSession = false;
