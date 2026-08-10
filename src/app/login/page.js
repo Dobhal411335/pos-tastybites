@@ -21,7 +21,6 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-
 function LoginNotificationBell() {
   const [restaurantId, setRestaurantId] = React.useState(null);
 
