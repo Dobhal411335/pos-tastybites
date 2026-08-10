@@ -233,7 +233,7 @@ export default function NotificationsPage() {
     if (next) {
       const ok = await unlockNotificationAudio({ playPreview: true });
       if (ok) {
-        toast.success("Sound on — you should hear a beep");
+        toast.success("Sound on — you should hear the notification bell");
       } else {
         toast.error(
           getNotificationSoundUnlockError() ||

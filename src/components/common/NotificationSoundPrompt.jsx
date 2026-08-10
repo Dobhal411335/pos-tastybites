@@ -98,7 +98,7 @@ export default function NotificationSoundPrompt() {
       } else if (soundOk) {
         markAlertsSetupDone();
         setVisible(false);
-        toast.success("Alert sound enabled — you should have heard a beep");
+        toast.success("Alert sound enabled — notification bell playing");
       } else if (systemResult.permission === "granted") {
         toast.message(`Notifications allowed, but sound is blocked. ${SOUND_HELP}`);
       }
@@ -166,7 +166,7 @@ export default function NotificationSoundPrompt() {
               ? SOUND_HELP
               : denied
                 ? "Lock icon → Notifications → Allow. Also set Sound → Allow so the bell can play."
-                : "Tap Enable — you should hear a short beep. Your browser may also ask for Notifications (new orders only). There is no separate Sound popup; if silent, allow Sound in site settings."}
+                : "Tap Enable — you should hear your notification bell. Your browser may also ask for Notifications (new orders only). If silent, allow Sound in site settings."}
           </p>
           <div className="flex gap-2 mt-3 flex-wrap">
             {denied || soundBlocked ? (

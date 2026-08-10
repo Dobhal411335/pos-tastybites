@@ -1,6 +1,6 @@
 const SOUND_PREF_KEY = "tastybites_notification_sound";
-/** Prefer correctly spelled asset; keep typo filename as fallback for older deploys. */
-const BELL_SOURCES = ["/notification_bell.mp3"];
+/** Only this file — no generated beeps. */
+const BELL_SRC = "/notification_bell.mp3";
 
 const playedIds = new Set();
 let audioCtx = null;
@@ -51,17 +51,9 @@ function loadBellBuffer(ctx) {
   if (bellLoadPromise) return bellLoadPromise;
 
   bellLoadPromise = (async () => {
-    let data = null;
-    let lastStatus = 0;
-    for (const src of BELL_SOURCES) {
-      const res = await fetch(src, { cache: "force-cache" });
-      lastStatus = res.status;
-      if (res.ok) {
-        data = await res.arrayBuffer();
-        break;
-      }
-    }
-    if (!data) throw new Error(`Bell sound missing (${lastStatus})`);
+    const res = await fetch(BELL_SRC, { cache: "force-cache" });
+    if (!res.ok) throw new Error(`Bell sound missing (${res.status})`);
+    const data = await res.arrayBuffer();
     // slice() avoids detach issues on some browsers
     bellBuffer = await ctx.decodeAudioData(data.slice(0));
     return bellBuffer;
@@ -71,26 +63,6 @@ function loadBellBuffer(ctx) {
   });
 
   return bellLoadPromise;
-}
-
-/** Guaranteed audible cue via oscillators (no network). */
-function playTone(ctx, { volume = 0.18, duration = 0.22 } = {}) {
-  const now = ctx.currentTime;
-  const master = ctx.createGain();
-  master.gain.setValueAtTime(0.0001, now);
-  master.gain.exponentialRampToValueAtTime(volume, now + 0.02);
-  master.gain.exponentialRampToValueAtTime(0.0001, now + duration);
-  master.connect(ctx.destination);
-
-  const freqs = [880, 1174];
-  for (const freq of freqs) {
-    const osc = ctx.createOscillator();
-    osc.type = "sine";
-    osc.frequency.setValueAtTime(freq, now);
-    osc.connect(master);
-    osc.start(now);
-    osc.stop(now + duration);
-  }
 }
 
 function playBuffer(ctx, buffer, volume = 1) {
@@ -134,9 +106,7 @@ export function subscribeNotificationSoundUnlock(callback) {
 }
 
 /**
- * Must run inside a real click/tap. Uses Web Audio (works better than HTMLAudio
- * on Brave/production). There is no browser Sound permission dialog — if the
- * site Sound setting is Block, play fails and we surface that to the UI.
+ * Must run inside a real click/tap. Plays only /notification_bell.mp3.
  */
 export async function unlockNotificationAudio({ playPreview = true } = {}) {
   if (typeof window === "undefined") return false;
@@ -144,29 +114,10 @@ export async function unlockNotificationAudio({ playPreview = true } = {}) {
 
   try {
     const ctx = await resumeContext();
-
-    // Kick off MP3 decode, but never block the gesture on network
-    const bufferPromise = loadBellBuffer(ctx).catch((err) => {
-      lastUnlockError = err?.message || "Bell file failed to load";
-      return null;
-    });
+    const buffer = await loadBellBuffer(ctx);
 
     if (playPreview) {
-      // Immediate tone so the user always hears confirmation on Enable
-      playTone(ctx, { volume: 0.16, duration: 0.18 });
-      const buffer = await bufferPromise;
-      if (buffer) {
-        // Slight delay so tone + bell don't fully collide
-        window.setTimeout(() => {
-          try {
-            if (audioCtx?.state === "running") playBuffer(audioCtx, buffer, 1);
-          } catch {
-            /* ignore */
-          }
-        }, 160);
-      }
-    } else {
-      await bufferPromise;
+      playBuffer(ctx, buffer, 1);
     }
 
     unlockedThisSession = true;
@@ -227,9 +178,14 @@ function playBellThroughContext() {
     return true;
   }
 
-  // Buffer still loading — audible fallback so the order isn't silent
-  playTone(ctx, { volume: 0.2, duration: 0.28 });
-  void loadBellBuffer(ctx).catch(() => {});
+  // Load MP3 then play — no custom tone fallback
+  void loadBellBuffer(ctx)
+    .then((buffer) => {
+      if (audioCtx?.state === "running" && buffer) {
+        playBuffer(audioCtx, buffer, 1);
+      }
+    })
+    .catch(() => {});
   return true;
 }
 
@@ -241,7 +197,6 @@ function playBell() {
 
     if (playBellThroughContext()) return;
 
-    // Context not running — try resume (may fail without gesture)
     const ctx = getAudioContext();
     if (!ctx) {
       unlockedThisSession = false;

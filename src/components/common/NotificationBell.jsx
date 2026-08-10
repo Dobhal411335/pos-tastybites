@@ -252,7 +252,7 @@ export default function NotificationBell({ viewAllHref = "/sales/notifications",
       const ok = await unlockNotificationAudio({ playPreview: true });
       setAudioUnlocked(ok);
       if (ok) {
-        toast.success("Sound on — you should hear a beep");
+        toast.success("Sound on — you should hear the notification bell");
       } else {
         toast.error(
           getNotificationSoundUnlockError() ||
