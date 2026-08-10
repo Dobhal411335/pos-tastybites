@@ -4,16 +4,19 @@ import Order from "@/models/Order";
 import { sendSuccess } from "@/utils/apiResponse";
 import { sendError } from "@/utils/errorHandler";
 import { logger } from "@/utils/logger";
+import { getNextOrderNumber } from "@/utils/generateOrderNumber";
 
 // POST - Create a new admin order
 export const POST = withAuth(async (request) => {
   try {
     const data = await request.json();
-    const { items, subTotal, taxTotal, discountTotal, discountCode, totalAmount, specialNote, orderNumber, guestName, callNumber, tableNo } = data;
+    const { items, subTotal, taxTotal, discountTotal, discountCode, totalAmount, specialNote, guestName, callNumber, tableNo } = data;
 
     if (!items || items.length === 0) {
       return sendError(new Error("Empty cart"), "Cart cannot be empty", 400);
     }
+
+    const orderNumber = await getNextOrderNumber(request.restaurant);
     
     const newOrder = await Order.create({
       restaurantId: request.restaurant,

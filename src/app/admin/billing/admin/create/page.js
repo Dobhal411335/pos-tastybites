@@ -11,9 +11,15 @@ import { Badge } from "@/components/ui/badge";
 import { toast, Toaster } from "sonner";
 import { PALETTE } from "@/utils/paletteeColor";
 import { Loader2 } from "lucide-react";
-import { generateAdminOrderNumber } from "@/utils/generateOrderNumber";
 import { countryCodes } from "@/utils/countryCodes";
 import Image from "next/image";
+
+/** Client-safe draft ID for the UI only — final number is still sent with the order payload. */
+function generateAdminOrderNumber() {
+  const stamp = Date.now().toString().slice(-6);
+  const rand = Math.floor(Math.random() * 90 + 10);
+  return `A-${stamp}${rand}`;
+}
 
 export default function AdminCreateOrderPage() {
   const [loading, setLoading] = useState(true);

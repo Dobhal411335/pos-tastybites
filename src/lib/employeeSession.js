@@ -16,7 +16,7 @@ export async function markEmployeeSessionExpired(sessionId) {
   return EmployeeSession.findOneAndUpdate(
     { _id: sessionId, status: 'Active' },
     { $set: { status: 'Expired' } },
-    { new: true }
+    { returnDocument: 'after' }
   );
 }
 
