@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { Lock, Mail, Loader2, ArrowRight, Eye, EyeOff, UserCircle } from "lucide-react";
 import NotificationBell from "@/components/common/NotificationBell";
+import NotificationSoundPrompt from "@/components/common/NotificationSoundPrompt";
 import { SocketProvider } from "@/components/providers/SocketProvider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -227,6 +228,8 @@ export default function UnifiedLoginPage() {
             <LoginNotificationBell />
           </div>
         </div>
+
+        <NotificationSoundPrompt />
 
         <div className="flex-1 flex flex-col items-center justify-center">
           <div className="w-full max-w-105 space-y-4 bg-white border border-[#ECECEC] p-6 sm:p-8 md:p-10 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)]">

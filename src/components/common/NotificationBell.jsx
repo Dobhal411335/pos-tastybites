@@ -39,7 +39,9 @@ import {
   unlockNotificationAudio,
   isNotificationAudioUnlocked,
   playNotificationSound,
+  subscribeNotificationSoundUnlock,
 } from "@/lib/notifications/notificationSound";
+import { showSystemNotification } from "@/lib/notifications/systemNotifications";
 
 const TYPE_ICONS = {
   Orders: ShoppingCart,
@@ -84,6 +86,10 @@ export default function NotificationBell({ viewAllHref = "/sales/notifications",
   const [audioUnlocked, setAudioUnlocked] = useState(() => isNotificationAudioUnlocked());
   const seenIdsRef = useRef(new Set());
 
+  useEffect(() => {
+    return subscribeNotificationSoundUnlock(setAudioUnlocked);
+  }, []);
+
   const mergeIncoming = useCallback((incoming, { playSound = true } = {}) => {
     const id = String(incoming.id || incoming._id);
     if (!id || seenIdsRef.current.has(id)) return;
@@ -109,6 +115,7 @@ export default function NotificationBell({ viewAllHref = "/sales/notifications",
 
     if (playSound) {
       playNotificationSound(incoming);
+      showSystemNotification(incoming);
       if (incoming.priority === "high" || incoming.playSound) {
         toast.message(incoming.title, { description: incoming.message });
       }

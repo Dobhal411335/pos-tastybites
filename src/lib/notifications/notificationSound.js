@@ -1,12 +1,14 @@
 const SOUND_PREF_KEY = "tastybites_notification_sound";
-const SOUND_UNLOCKED_KEY = "tastybites_notification_sound_unlocked";
 /** Filename matches the asset in /public (including spelling). */
 const BELL_SRC = "/notifiication_bell.mp3";
 
 const playedIds = new Set();
 let sharedAudio = null;
 let lastPlayedAt = 0;
+/** Browser autoplay unlock only lasts for the current document/session. */
+let unlockedThisSession = false;
 const PLAY_COOLDOWN_MS = 600;
+const UNLOCK_EVENT = "tastybites:notification-sound-unlock";
 
 function getAudio() {
   if (typeof window === "undefined") return null;
@@ -17,8 +19,9 @@ function getAudio() {
   return sharedAudio;
 }
 
-function markUnlocked() {
-  localStorage.setItem(SOUND_UNLOCKED_KEY, "1");
+function notifyUnlockListeners() {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent(UNLOCK_EVENT, { detail: { unlocked: unlockedThisSession } }));
 }
 
 export function getNotificationSoundEnabled() {
@@ -32,13 +35,25 @@ export function setNotificationSoundEnabled(enabled) {
   localStorage.setItem(SOUND_PREF_KEY, enabled ? "on" : "off");
 }
 
+/** True only after a successful unlock gesture in this page session. */
 export function isNotificationAudioUnlocked() {
+  return unlockedThisSession;
+}
+
+export function needsNotificationSoundUnlock() {
   if (typeof window === "undefined") return false;
-  return localStorage.getItem(SOUND_UNLOCKED_KEY) === "1";
+  return getNotificationSoundEnabled() && !unlockedThisSession;
+}
+
+export function subscribeNotificationSoundUnlock(callback) {
+  if (typeof window === "undefined") return () => {};
+  const handler = (e) => callback(Boolean(e.detail?.unlocked));
+  window.addEventListener(UNLOCK_EVENT, handler);
+  return () => window.removeEventListener(UNLOCK_EVENT, handler);
 }
 
 /**
- * Unlock browser autoplay from a real user gesture (sound toggle).
+ * Unlock browser autoplay from a real user gesture (sound toggle / enable banner).
  * Plays an audible confirmation so unlock is reliable.
  */
 export async function unlockNotificationAudio({ playPreview = true } = {}) {
@@ -48,21 +63,26 @@ export async function unlockNotificationAudio({ playPreview = true } = {}) {
   if (!audio) return false;
 
   try {
-    // Ensure the file is ready before play() — avoids false unlock failures
     if (audio.readyState < 2) {
       await new Promise((resolve, reject) => {
-        const onReady = () => {
+        let settled = false;
+        const finish = (fn, value) => {
+          if (settled) return;
+          settled = true;
           cleanup();
-          resolve();
+          fn(value);
         };
-        const onError = () => {
-          cleanup();
-          reject(new Error("Audio failed to load"));
-        };
+        const onReady = () => finish(resolve);
+        const onError = () => finish(reject, new Error("Audio failed to load"));
         const cleanup = () => {
           audio.removeEventListener("canplaythrough", onReady);
           audio.removeEventListener("error", onError);
+          clearTimeout(timer);
         };
+        const timer = setTimeout(() => {
+          if (audio.readyState >= 2) finish(resolve);
+          else finish(reject, new Error("Audio load timeout"));
+        }, 4000);
         audio.addEventListener("canplaythrough", onReady, { once: true });
         audio.addEventListener("error", onError, { once: true });
         audio.load();
@@ -74,25 +94,25 @@ export async function unlockNotificationAudio({ playPreview = true } = {}) {
     if (playPreview) {
       await audio.play();
     } else {
-      const prev = audio.volume;
       audio.volume = 0.001;
       await audio.play();
       audio.pause();
       audio.currentTime = 0;
-      audio.volume = prev || 1;
+      audio.volume = 1;
     }
 
-    markUnlocked();
+    unlockedThisSession = true;
+    notifyUnlockListeners();
     return true;
   } catch {
-    // Fallback: AudioContext resume also counts as unlock in many browsers
     try {
       const Ctx = window.AudioContext || window.webkitAudioContext;
       if (Ctx) {
         const ctx = new Ctx();
         if (ctx.state === "suspended") await ctx.resume();
         await ctx.close();
-        markUnlocked();
+        unlockedThisSession = true;
+        notifyUnlockListeners();
         if (playPreview) {
           try {
             audio.volume = 1;
@@ -126,11 +146,14 @@ function playBell() {
     const playPromise = audio.play();
     if (playPromise?.catch) {
       playPromise.catch(() => {
-        // Autoplay blocked — fail silently
+        // Autoplay blocked again — require a fresh unlock gesture
+        unlockedThisSession = false;
+        notifyUnlockListeners();
       });
     }
   } catch {
-    // Never break notifications for audio failures
+    unlockedThisSession = false;
+    notifyUnlockListeners();
   }
 }
 

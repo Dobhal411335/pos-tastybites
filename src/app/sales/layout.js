@@ -9,6 +9,7 @@ import { SocketProvider } from "@/components/providers/SocketProvider";
 import { AuthProvider } from "@/components/providers/AuthProvider";
 import { employeeFetch } from "@/lib/employeeFetch";
 import { useEmployeeSessionRefresh } from "@/hooks/useEmployeeSessionRefresh";
+import NotificationSoundPrompt from "@/components/common/NotificationSoundPrompt";
 
 export default function SalesMainLayout({ children }) {
   const router = useRouter();
@@ -71,6 +72,7 @@ export default function SalesMainLayout({ children }) {
             </main>
           </div>
           <EmployeeFooter />
+          <NotificationSoundPrompt />
         </div>
       </AuthProvider>
     </SocketProvider>
