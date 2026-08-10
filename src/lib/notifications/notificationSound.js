@@ -7,6 +7,7 @@ let sharedAudio = null;
 let lastPlayedAt = 0;
 /** Browser autoplay unlock only lasts for the current document/session. */
 let unlockedThisSession = false;
+let gestureUnlockInstalled = false;
 const PLAY_COOLDOWN_MS = 600;
 const UNLOCK_EVENT = "tastybites:notification-sound-unlock";
 
@@ -15,6 +16,12 @@ function getAudio() {
   if (!sharedAudio) {
     sharedAudio = new Audio(BELL_SRC);
     sharedAudio.preload = "auto";
+    // Kick off load early so unlock play() is more likely to succeed
+    try {
+      sharedAudio.load();
+    } catch {
+      /* ignore */
+    }
   }
   return sharedAudio;
 }
@@ -53,8 +60,8 @@ export function subscribeNotificationSoundUnlock(callback) {
 }
 
 /**
- * Unlock browser autoplay from a real user gesture (sound toggle / enable banner).
- * Plays an audible confirmation so unlock is reliable.
+ * Unlock from the current user gesture without awaiting network/load.
+ * Awaiting MP3 load before play() loses the gesture (common in production).
  */
 export async function unlockNotificationAudio({ playPreview = true } = {}) {
   if (typeof window === "undefined") return false;
@@ -63,41 +70,23 @@ export async function unlockNotificationAudio({ playPreview = true } = {}) {
   if (!audio) return false;
 
   try {
-    if (audio.readyState < 2) {
-      await new Promise((resolve, reject) => {
-        let settled = false;
-        const finish = (fn, value) => {
-          if (settled) return;
-          settled = true;
-          cleanup();
-          fn(value);
-        };
-        const onReady = () => finish(resolve);
-        const onError = () => finish(reject, new Error("Audio failed to load"));
-        const cleanup = () => {
-          audio.removeEventListener("canplaythrough", onReady);
-          audio.removeEventListener("error", onError);
-          clearTimeout(timer);
-        };
-        const timer = setTimeout(() => {
-          if (audio.readyState >= 2) finish(resolve);
-          else finish(reject, new Error("Audio load timeout"));
-        }, 4000);
-        audio.addEventListener("canplaythrough", onReady, { once: true });
-        audio.addEventListener("error", onError, { once: true });
-        audio.load();
-      });
+    audio.volume = playPreview ? 1 : 0.001;
+    try {
+      audio.currentTime = 0;
+    } catch {
+      /* ignore seek errors while loading */
     }
 
-    audio.volume = 1;
-    audio.currentTime = 0;
-    if (playPreview) {
-      await audio.play();
-    } else {
-      audio.volume = 0.001;
-      await audio.play();
+    const playPromise = audio.play();
+    if (playPromise?.then) await playPromise;
+
+    if (!playPreview) {
       audio.pause();
-      audio.currentTime = 0;
+      try {
+        audio.currentTime = 0;
+      } catch {
+        /* ignore */
+      }
       audio.volume = 1;
     }
 
@@ -110,9 +99,19 @@ export async function unlockNotificationAudio({ playPreview = true } = {}) {
       if (Ctx) {
         const ctx = new Ctx();
         if (ctx.state === "suspended") await ctx.resume();
-        await ctx.close();
+
+        // Short click so the context is truly unlocked even if MP3 is blocked
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        gain.gain.value = playPreview ? 0.05 : 0.0001;
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.05);
+
         unlockedThisSession = true;
         notifyUnlockListeners();
+
         if (playPreview) {
           try {
             audio.volume = 1;
@@ -131,24 +130,65 @@ export async function unlockNotificationAudio({ playPreview = true } = {}) {
   }
 }
 
+/**
+ * After sound is preferred ON, unlock on the first real user gesture
+ * so refresh does not require the banner every time.
+ */
+export function installNotificationAudioUnlockOnGesture() {
+  if (typeof window === "undefined" || gestureUnlockInstalled) return () => {};
+  gestureUnlockInstalled = true;
+
+  const tryUnlock = async () => {
+    if (!getNotificationSoundEnabled() || unlockedThisSession) return;
+    await unlockNotificationAudio({ playPreview: false });
+  };
+
+  const onGesture = () => {
+    void tryUnlock();
+  };
+
+  window.addEventListener("pointerdown", onGesture, { capture: true, passive: true });
+  window.addEventListener("keydown", onGesture, { capture: true, passive: true });
+
+  return () => {
+    window.removeEventListener("pointerdown", onGesture, { capture: true });
+    window.removeEventListener("keydown", onGesture, { capture: true });
+    gestureUnlockInstalled = false;
+  };
+}
+
 function playBell() {
   try {
     const now = Date.now();
     if (now - lastPlayedAt < PLAY_COOLDOWN_MS) return;
     lastPlayedAt = now;
 
-    const audio = getAudio();
-    if (!audio) return;
-    if (!audio.paused && !audio.ended && audio.currentTime > 0.05) return;
-
+    // Fresh element avoids stuck shared Audio state after unlock/preview
+    const audio = new Audio(BELL_SRC);
     audio.volume = 1;
-    audio.currentTime = 0;
     const playPromise = audio.play();
     if (playPromise?.catch) {
       playPromise.catch(() => {
-        // Autoplay blocked again — require a fresh unlock gesture
-        unlockedThisSession = false;
-        notifyUnlockListeners();
+        // Fall back to shared element; only mark locked if that also fails
+        const shared = getAudio();
+        if (!shared) {
+          unlockedThisSession = false;
+          notifyUnlockListeners();
+          return;
+        }
+        shared.volume = 1;
+        try {
+          shared.currentTime = 0;
+        } catch {
+          /* ignore */
+        }
+        const retry = shared.play();
+        if (retry?.catch) {
+          retry.catch(() => {
+            unlockedThisSession = false;
+            notifyUnlockListeners();
+          });
+        }
       });
     }
   } catch {

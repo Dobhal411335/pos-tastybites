@@ -40,8 +40,16 @@ const logoutHandler = async (request) => {
     });
 
     const response = NextResponse.json({ success: true, message: 'Logged out successfully' });
-    response.cookies.delete('employee_access_token');
-    response.cookies.delete('employee_refresh_token');
+    // Must match set() attributes or production browsers won't clear the cookies
+    const clearOpts = {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      path: '/',
+      maxAge: 0,
+    };
+    response.cookies.set('employee_access_token', '', clearOpts);
+    response.cookies.set('employee_refresh_token', '', clearOpts);
     return response;
   } catch (error) {
     console.error('Logout Error:', error);

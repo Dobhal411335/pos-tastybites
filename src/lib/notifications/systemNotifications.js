@@ -1,4 +1,9 @@
 const DISMISS_KEY = "tastybites_system_notif_prompt_dismissed";
+/** Persist across refreshes so we don't nag after Allow / Not now. */
+const SETUP_DONE_KEY = "tastybites_alerts_setup_done";
+
+/** Browser/OS system notifications are reserved for new orders only. */
+export const SYSTEM_NOTIFICATION_TYPES = new Set(["NEW_ORDER"]);
 
 export function isSystemNotificationSupported() {
   return typeof window !== "undefined" && "Notification" in window;
@@ -14,14 +19,41 @@ export function needsSystemNotificationPermission() {
   return Notification.permission === "default";
 }
 
+export function isSystemNotificationDenied() {
+  return getSystemNotificationPermission() === "denied";
+}
+
 export function wasSystemNotificationPromptDismissed() {
   if (typeof window === "undefined") return false;
-  return sessionStorage.getItem(DISMISS_KEY) === "1";
+  return (
+    localStorage.getItem(SETUP_DONE_KEY) === "1" ||
+    sessionStorage.getItem(DISMISS_KEY) === "1"
+  );
 }
 
 export function dismissSystemNotificationPrompt() {
   if (typeof window === "undefined") return;
   sessionStorage.setItem(DISMISS_KEY, "1");
+  localStorage.setItem(SETUP_DONE_KEY, "1");
+}
+
+export function markAlertsSetupDone() {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(SETUP_DONE_KEY, "1");
+  sessionStorage.setItem(DISMISS_KEY, "1");
+}
+
+export function shouldShowAsSystemNotification(notification) {
+  return SYSTEM_NOTIFICATION_TYPES.has(notification?.type);
+}
+
+function absoluteAssetUrl(path) {
+  if (typeof window === "undefined") return path;
+  try {
+    return new URL(path, window.location.origin).href;
+  } catch {
+    return path;
+  }
 }
 
 /**
@@ -50,30 +82,34 @@ export async function requestSystemNotificationPermission() {
 }
 
 /**
- * Show an OS/browser system notification (when permission is granted).
+ * Show an OS/browser system notification for new orders only (when permission is granted).
  */
 export function showSystemNotification(notification) {
   if (!isSystemNotificationSupported()) return;
   if (Notification.permission !== "granted") return;
-  if (typeof document !== "undefined" && document.visibilityState === "visible") {
-    // Still show for high-priority so staff notice even with tab focused
-    if (notification?.priority !== "high" && !notification?.playSound) return;
-  }
+  if (!shouldShowAsSystemNotification(notification)) return;
 
   try {
-    const title = notification?.title || "Tasty Bites";
+    const title = notification?.title || "New Order";
     const body = notification?.message || "";
     const n = new Notification(title, {
       body,
-      icon: "/BannerImage.png",
-      badge: "/favicon/favicon-32x32.png",
-      tag: String(notification?.id || notification?._id || `tb-${Date.now()}`),
+      icon: absoluteAssetUrl("/favicon/android-chrome-192x192.png"),
+      badge: absoluteAssetUrl("/favicon/favicon-32x32.png"),
+      tag: String(notification?.id || notification?._id || `tb-order-${Date.now()}`),
       renotify: true,
+      requireInteraction: true,
     });
 
     n.onclick = () => {
       try {
         window.focus();
+        const sessionId = notification?.tableSessionId;
+        if (sessionId) {
+          window.location.href = `/sales/orders/${sessionId}`;
+        } else {
+          window.location.href = "/sales/notifications";
+        }
       } catch {
         /* ignore */
       }

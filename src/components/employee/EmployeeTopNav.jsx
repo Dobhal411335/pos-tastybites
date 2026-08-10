@@ -2,7 +2,7 @@
 
 import React from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { LogOut, Menu, Grid2X2, ShoppingBag, Printer, BellRing } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -11,14 +11,6 @@ import Image from "next/image";
 import { Badge } from "@/components/ui/badge";
 import NotificationBell from "@/components/common/NotificationBell";
 import { employeeFetch } from "@/lib/employeeFetch";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 
 const NAV_ITEMS = [
   { label: "Floor", href: "/sales/floor", icon: Grid2X2 },
@@ -35,25 +27,33 @@ function navActive(pathname, href) {
 }
 
 export default function EmployeeTopNav({ onMenuToggle, employeeName = "Employee", employeeRole = "Server" }) {
-  const router = useRouter();
   const pathname = usePathname();
+  const [loggingOut, setLoggingOut] = React.useState(false);
 
   const handleLogout = async () => {
+    if (loggingOut) return;
+    setLoggingOut(true);
     try {
-      const res = await employeeFetch("/api/employee/auth/logout", { method: "POST" });
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 8000);
+      const res = await employeeFetch("/api/employee/auth/logout", {
+        method: "POST",
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
       if (res.ok) {
         toast.success("Logged out successfully.");
-        router.replace("/login");
-      } else {
-        router.replace("/login");
       }
-    } catch (err) {
-      toast.error("Logout failed.");
+    } catch {
+      toast.message("Signing out…");
+    } finally {
+      // Hard navigate so production always clears client state even if cookies/API glitch
+      window.location.assign("/login");
     }
   };
 
   return (
-    <header className="sticky top-0 z-40 border-b border-stone-200 bg-[#F7F7F7]/95 backdrop-blur supports-backdrop-filter:bg-[#F7F7F7]/90">
+    <header className="sticky top-0 z-50 border-b border-stone-200 bg-[#F7F7F7]/95 backdrop-blur supports-backdrop-filter:bg-[#F7F7F7]/90">
       <div className="flex lg:h-14 xl:h-15 items-center gap-3 px-3 sm:px-5">
         {/* LEFT — brand */}
         <div className="flex items-center gap-2.5 min-w-0 shrink-0">
@@ -137,7 +137,8 @@ export default function EmployeeTopNav({ onMenuToggle, employeeName = "Employee"
             variant="ghost"
             size="icon"
             onClick={handleLogout}
-            className="h-10 w-10 bg-red-600 text-white hover:bg-red-700 hover:text-white border border-red-800 shadow-none"
+            disabled={loggingOut}
+            className="relative z-50 h-10 w-10 bg-red-600 text-white hover:bg-red-700 hover:text-white border border-red-800 shadow-none disabled:opacity-70"
             title="Logout"
           >
             <LogOut className="h-5 w-5" />

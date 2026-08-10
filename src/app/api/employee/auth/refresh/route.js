@@ -18,8 +18,15 @@ export async function POST() {
       );
 
       if (result.expireSession) {
-        response.cookies.delete('employee_access_token');
-        response.cookies.delete('employee_refresh_token');
+        const clearOpts = {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'strict',
+          path: '/',
+          maxAge: 0,
+        };
+        response.cookies.set('employee_access_token', '', clearOpts);
+        response.cookies.set('employee_refresh_token', '', clearOpts);
       }
 
       return response;
@@ -31,6 +38,7 @@ export async function POST() {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'strict',
+      path: '/',
       maxAge: 3600,
     });
 
