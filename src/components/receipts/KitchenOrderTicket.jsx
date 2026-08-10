@@ -89,6 +89,7 @@ const KitchenOrderTicket = ({
                       {item.qty} ×
                     </span>
                     <span className="receipt-bold text-xs leading-tight">
+                      {item.productCode ? `${item.productCode} ` : ""}
                       {item.name}
                       {item.size && item.size !== "Standard"
                         ? ` (${item.size})`

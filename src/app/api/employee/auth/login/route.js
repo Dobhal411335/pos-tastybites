@@ -9,6 +9,7 @@ import DutyChange from '@/models/employee/DutyChange';
 import { comparePassword } from '@/utils/password';
 import { signToken, verifyToken } from '@/utils/jwt';
 import { upsertAttendanceOnClockIn } from '@/lib/attendance';
+import { createNotification } from '@/lib/notifications/notificationService';
 
 export async function POST(request) {
   try {
@@ -219,6 +220,24 @@ export async function POST(request) {
       shiftId: currentValidShift._id,
       device,
       loginTime: now,
+    });
+
+    const employeeName = `${employee.firstName} ${employee.lastName || ''}`.trim();
+    await createNotification({
+      restaurantId: employee.restaurant,
+      type: 'EMPLOYEE_LOGIN',
+      title: 'Employee Clocked In',
+      message: `${employeeName} logged in`,
+      employeeId: employee._id,
+      priority: 'low',
+      metadata: {
+        sessionId: session._id.toString(),
+        employeeName,
+        employeeRole: employee.role,
+        employeeCode: employee.employeeId || '',
+        loginTime: now.toISOString(),
+        platform: platform || 'unknown',
+      },
     });
 
     const accessToken = await signToken({

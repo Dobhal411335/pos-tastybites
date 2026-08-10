@@ -107,6 +107,7 @@ const CustomerReceipt = ({
             <div className="flex justify-between items-start gap-2">
               <div className="flex-1 pr-1">
                 {item.qty > 1 ? `${item.qty} × ` : ""}
+                {item.productCode ? `${item.productCode} ` : ""}
                 {item.name}
                 {item.size && item.size !== "Standard" ? (
                   <span className="text-[9px]"> ({item.size})</span>

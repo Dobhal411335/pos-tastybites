@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { Lock, Mail, Loader2, ArrowRight, Eye, EyeOff, UserCircle } from "lucide-react";
 import NotificationBell from "@/components/common/NotificationBell";
+import { SocketProvider } from "@/components/providers/SocketProvider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -20,6 +21,27 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+
+function LoginNotificationBell() {
+  const [restaurantId, setRestaurantId] = React.useState(null);
+
+  React.useEffect(() => {
+    fetch("/api/device/context", { credentials: "include" })
+      .then((res) => res.json())
+      .then((json) => {
+        if (json.success && json.data?.restaurantId) {
+          setRestaurantId(json.data.restaurantId);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const bell = <NotificationBell showViewAll={false} />;
+
+  if (!restaurantId) return bell;
+
+  return <SocketProvider restaurantId={restaurantId}>{bell}</SocketProvider>;
+}
 
 export default function UnifiedLoginPage() {
   const router = useRouter();
@@ -203,7 +225,7 @@ export default function UnifiedLoginPage() {
                 {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
               </span>
             </div>
-            <NotificationBell />
+            <LoginNotificationBell />
           </div>
         </div>
 

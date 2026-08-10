@@ -15,6 +15,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
+import { employeeFetch } from "@/lib/employeeFetch";
 
 export default function SalesFloorPage() {
   const router = useRouter();
@@ -25,6 +26,8 @@ export default function SalesFloorPage() {
   const [activeEmployees, setActiveEmployees] = useState([]);
   const [scale, setScale] = useState(1);
   const floorViewportRef = React.useRef(null);
+  /** Client-side table view filter: all | mine | available */
+  const [tableFilter, setTableFilter] = useState("all");
 
   // Modals
   const [selectedTable, setSelectedTable] = useState(null);
@@ -94,7 +97,7 @@ export default function SalesFloorPage() {
       setLoading(true);
       // Fetch user — /api/auth/me returns the full Employee document.
       // We store it as-is; the MongoDB _id is available as currentUser._id.
-      const userRes = await fetch("/api/auth/me");
+      const userRes = await employeeFetch("/api/auth/me");
       const userData = await userRes.json();
       if (userData.success) {
         const u = userData.data.employee || userData.data;
@@ -102,14 +105,14 @@ export default function SalesFloorPage() {
       }
 
       // Fetch floor data
-      const floorRes = await fetch("/api/sales/floor");
+      const floorRes = await employeeFetch("/api/sales/floor");
       const floorData = await floorRes.json();
       if (floorData.success) {
         setFloorData(floorData.data);
       }
 
       // Fetch eligible employees for transfer
-      const empRes = await fetch("/api/sales/employees");
+      const empRes = await employeeFetch("/api/sales/employees");
       const empData = await empRes.json();
       if (empData.success) {
         setActiveEmployees(empData.data);
@@ -160,7 +163,7 @@ export default function SalesFloorPage() {
   const handleStartSession = async () => {
     try {
       setActionLoading(true);
-      const res = await fetch("/api/sales/sessions", {
+      const res = await employeeFetch("/api/sales/sessions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ tableId: selectedTable.id, guestCount: parseInt(guestCount, 10) })
@@ -169,7 +172,13 @@ export default function SalesFloorPage() {
       if (res.ok && json.success) {
         toast.success("Table assigned");
         setShowStartSession(false);
-        loadData(); // refresh
+        setSelectedTable(null);
+        const sessionId = json.data?._id?.toString() || json.data?.id?.toString();
+        if (sessionId) {
+          router.push(`/sales/orders/${sessionId}`);
+        } else {
+          loadData();
+        }
       } else {
         toast.error(json.message || "Failed to assign table");
       }
@@ -183,7 +192,7 @@ export default function SalesFloorPage() {
   const executeAction = async (action, payload = {}) => {
     try {
       setActionLoading(true);
-      const res = await fetch("/api/sales/sessions", {
+      const res = await employeeFetch("/api/sales/sessions", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -298,37 +307,46 @@ export default function SalesFloorPage() {
 
         <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-1.5">
-            <span className="rounded-lg bg-zinc-900 text-white text-xs font-semibold px-3 py-1.5">
-              All Tables
-            </span>
-            <span className="rounded-lg bg-zinc-100 text-zinc-600 text-xs font-semibold px-3 py-1.5">
-              My Tables
-            </span>
-            <span className="rounded-lg bg-zinc-100 text-zinc-600 text-xs font-semibold px-3 py-1.5">
-              Available
-            </span>
+            {[
+              { id: "all", label: "All Tables" },
+              { id: "mine", label: "My Tables" },
+              { id: "available", label: "Available" },
+            ].map((f) => (
+              <button
+                key={f.id}
+                type="button"
+                onClick={() => setTableFilter(f.id)}
+                className={`rounded-lg text-xs border-2 font-semibold px-3 py-1.5 transition-colors ${
+                  tableFilter === f.id
+                    ? "bg-zinc-900 text-white"
+                    : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"
+                }`}
+              >
+                {f.label}
+              </button>
+            ))}
           </div>
 
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
             <div className="flex items-center gap-1.5">
               <span className="h-2.5 w-2.5 rounded-full bg-white border border-zinc-300" />
-              <span className="text-xs font-medium text-zinc-500">Available</span>
+              <span className="text-sm font-medium text-zinc-500">Available</span>
             </div>
             <div className="flex items-center gap-1.5">
               <Star className="h-3 w-3 text-orange-500 fill-orange-500" />
-              <span className="text-xs font-medium text-zinc-500">My Section</span>
+              <span className="text-sm font-medium text-zinc-500">My Section</span>
             </div>
             <div className="flex items-center gap-1.5">
               <span className="h-2.5 w-2.5 rounded-full bg-orange-400 border border-orange-500" />
-              <span className="text-xs font-medium text-zinc-500">Serving</span>
+              <span className="text-sm font-medium text-zinc-500">Serving</span>
             </div>
             <div className="flex items-center gap-1.5">
               <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 border border-emerald-600" />
-              <span className="text-xs font-medium text-zinc-500">Payment</span>
+              <span className="text-sm font-medium text-zinc-500">Payment</span>
             </div>
             <div className="flex items-center gap-1.5">
               <span className="h-2.5 w-2.5 rounded-full bg-zinc-500 border border-zinc-600" />
-              <span className="text-xs font-medium text-zinc-500">Others</span>
+              <span className="text-sm font-medium text-zinc-500">Others</span>
             </div>
           </div>
         </div>
@@ -348,6 +366,12 @@ export default function SalesFloorPage() {
             // Default section ownership — admin configuration, not live state
             const isMyDefault = !session && table.defaultEmployeeId && table.defaultEmployeeId === currentUserId;
             const isOthersDefault = !session && table.defaultEmployeeId && table.defaultEmployeeId !== currentUserId;
+
+            // Client-side filter (UI only — does not change assign/lock logic)
+            const matchesFilter =
+              tableFilter === "all" ||
+              (tableFilter === "available" && !session) ||
+              (tableFilter === "mine" && (isMine || isMyDefault));
             
             let bgClass = "bg-white border-zinc-200 hover:border-zinc-300 hover:shadow-sm";
             let textClass = "text-zinc-900";
@@ -384,51 +408,56 @@ export default function SalesFloorPage() {
             return (
               <div
                 key={tableId}
-                onClick={() => handleTableClick(table)}
-                className={`absolute flex cursor-pointer flex-col items-center justify-center border-2 transition-all duration-150 px-1.5 ${bgClass} ${table.shape === "round" ? "rounded-full" : "rounded-xl"}`}
+                onClick={() => matchesFilter && handleTableClick(table)}
+                className={`absolute flex flex-col items-center justify-center border-2 transition-all duration-150 px-2.5 py-2 ${bgClass} ${table.shape === "round" ? "rounded-full" : "rounded-xl"} ${
+                  matchesFilter
+                    ? "cursor-pointer"
+                    : "opacity-20 pointer-events-none grayscale"
+                }`}
                 style={{
                   left: table.x,
                   top: table.y,
                   width: table.width,
                   height: table.height,
-                  transform: `rotate(${table.rotation}deg)`
+                  transform: `rotate(${table.rotation}deg)`,
+                  boxSizing: "border-box",
                 }}
               >
-                <span className={`text-base md:text-lg font-bold tracking-tight leading-none ${textClass}`}>
+                <span className={`text-base md:text-lg font-bold tracking-tight leading-tight ${textClass}`}>
                   {table.tableNumber}
                 </span>
 
-                <span className={`mt-1 text-[10px] font-bold uppercase tracking-wide leading-none ${statusClass}`}>
+                <span className={`mt-1.5 text-[10px] font-bold uppercase tracking-wide leading-none ${statusClass}`}>
                   {statusLabel}
                 </span>
 
                 {session ? (
-                  <div className="mt-1.5 flex flex-col items-center gap-0.5 min-w-0 px-0.5">
+                  <div className="mt-2 flex items-center gap-1 min-w-0 px-0.5">
                     {employeeFirst && (
-                      <span className={`text-[11px] font-semibold truncate max-w-full ${textClass} opacity-80`}>
+                      <span className={`text-[11px] font-bold truncate max-w-full ${textClass}`}>
                         {employeeFirst}
                       </span>
                     )}
                     <div className="flex items-center gap-1">
-                      <Users className={`h-3 w-3 ${statusClass}`} />
-                      <span className={`text-[11px] font-bold ${statusClass}`}>
+                      <Users className={`h-4 w-4 ${statusClass}`} />
+                      <span className={`text-[12px] font-semibold ${statusClass}`}>
                         {session.guestCount}
                       </span>
                     </div>
                   </div>
                 ) : isMyDefault ? (
-                  <div className="mt-1.5 flex items-center gap-1">
+                  <div className="mt-2 flex items-center gap-1">
                     <Star className="h-2.5 w-2.5 text-orange-400 fill-orange-400" />
                     <span className="text-[10px] font-semibold text-orange-500">
                       {table.seats} seats
                     </span>
                   </div>
                 ) : isOthersDefault ? (
-                  <span className="mt-1.5 text-[10px] font-medium text-zinc-400 truncate max-w-[90%] text-center">
+                  <span className="mt-2 text-[10px] font-medium text-zinc-400 truncate max-w-[90%] text-center">
                     {employeeFirst || `${table.seats} seats`}
                   </span>
                 ) : (
-                  <span className="mt-1.5 text-[10px] font-semibold text-zinc-500">
+                  <span className="mt-2 text-[10px] font-semibold text-zinc-500">
                     {table.seats} seats
                   </span>
                 )}

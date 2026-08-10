@@ -1,4 +1,5 @@
 import Notification from "@/models/Notification";
+import EmployeeSession from "@/models/employee/EmployeeSession";
 import { logger } from "@/utils/logger";
 
 const HIGH_PRIORITY_TYPES = new Set([
@@ -86,6 +87,15 @@ function audienceQuery(restaurantId, userId) {
   };
 }
 
+/** Same calendar-day window as today's sales orders (local midnight → end of day). */
+function todayCreatedAtFilter() {
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
+  const end = new Date();
+  end.setHours(23, 59, 59, 999);
+  return { $gte: start, $lte: end };
+}
+
 function emitNotification(event, restaurantId, floorId, recipientId, payload) {
   if (!global.io) return;
 
@@ -119,6 +129,7 @@ export async function createNotification({
   recipientScope = "RESTAURANT",
   recipientId = null,
   floorId = null,
+  silent = false,
 }) {
   try {
     const resolvedPriority =
@@ -164,18 +175,107 @@ export async function createNotification({
       playSound: isHighPriorityType(doc.type),
     };
 
-    emitNotification(
-      "notification.created",
-      restaurantId,
-      floorId,
-      recipientScope === "USER" ? recipientId : null,
-      payload
-    );
+    if (!silent) {
+      emitNotification(
+        "notification.created",
+        restaurantId,
+        floorId,
+        recipientScope === "USER" ? recipientId : null,
+        payload
+      );
+    }
 
     return doc;
   } catch (err) {
     logger.error("Failed to create notification", err);
     return null;
+  }
+}
+
+/** Backfill today's clock-in/out events so the Employees tab shows existing sessions. */
+export async function ensureTodayEmployeeActivityNotifications(restaurantId) {
+  const createdAt = todayCreatedAtFilter();
+
+  const sessions = await EmployeeSession.find({
+    restaurant: restaurantId,
+    loginTime: createdAt,
+  })
+    .populate("employee", "firstName lastName role employeeId")
+    .lean();
+
+  for (const session of sessions) {
+    const employee = session.employee;
+    if (!employee) continue;
+
+    const employeeName = `${employee.firstName} ${employee.lastName || ""}`.trim();
+    const sessionId = String(session._id);
+
+    const loginExists = await Notification.exists({
+      restaurantId,
+      type: "EMPLOYEE_LOGIN",
+      "metadata.sessionId": sessionId,
+    });
+
+    if (!loginExists) {
+      await Notification.create({
+        restaurantId,
+        type: "EMPLOYEE_LOGIN",
+        title: "Employee Clocked In",
+        message: `${employeeName} logged in`,
+        employeeId: employee._id,
+        priority: "low",
+        recipientScope: "RESTAURANT",
+        recipientType: "SALES",
+        metadata: {
+          sessionId,
+          employeeName,
+          employeeRole: employee.role,
+          employeeCode: employee.employeeId || "",
+          loginTime: session.loginTime,
+        },
+        readBy: [],
+        createdAt: session.loginTime,
+        updatedAt: session.loginTime,
+      });
+    }
+
+    if (!session.logoutTime) continue;
+
+    const logoutExists = await Notification.exists({
+      restaurantId,
+      type: "EMPLOYEE_LOGOUT",
+      "metadata.sessionId": sessionId,
+    });
+
+    if (!logoutExists) {
+      const duration = session.duration || 0;
+      const hours = Math.floor(duration / 3600);
+      const minutes = Math.floor((duration % 3600) / 60);
+      const durationLabel = hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
+
+      await Notification.create({
+        restaurantId,
+        type: "EMPLOYEE_LOGOUT",
+        title: "Employee Clocked Out",
+        message: `${employeeName} logged out · ${durationLabel} on shift`,
+        employeeId: employee._id,
+        priority: "low",
+        recipientScope: "RESTAURANT",
+        recipientType: "SALES",
+        metadata: {
+          sessionId,
+          employeeName,
+          employeeRole: employee.role,
+          employeeCode: employee.employeeId || "",
+          logoutTime: session.logoutTime,
+          durationSeconds: duration,
+          durationLabel,
+        },
+        readBy: [],
+        createdAt: session.logoutTime,
+        updatedAt: session.logoutTime,
+      });
+    }
   }
 }
 
@@ -186,7 +286,10 @@ export async function listNotifications({
   page = 1,
   limit = 30,
 }) {
-  const query = audienceQuery(restaurantId, userId);
+  const query = {
+    ...audienceQuery(restaurantId, userId),
+    createdAt: todayCreatedAtFilter(),
+  };
 
   if (filter === "UNREAD") {
     query.readBy = { $not: { $elemMatch: { userId } } };
@@ -240,6 +343,7 @@ export async function listNotifications({
 export async function countUnread({ restaurantId, userId }) {
   const query = {
     ...audienceQuery(restaurantId, userId),
+    createdAt: todayCreatedAtFilter(),
     readBy: { $not: { $elemMatch: { userId } } },
   };
   return Notification.countDocuments(query);
@@ -283,6 +387,7 @@ export async function markNotificationRead({
 export async function markAllNotificationsRead({ restaurantId, userId }) {
   const query = {
     ...audienceQuery(restaurantId, userId),
+    createdAt: todayCreatedAtFilter(),
     readBy: { $not: { $elemMatch: { userId } } },
   };
 

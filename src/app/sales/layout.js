@@ -7,6 +7,8 @@ import { Loader2 } from "lucide-react";
 import { EmployeeFooter } from "@/components/employee/EmployeeFooter";
 import { SocketProvider } from "@/components/providers/SocketProvider";
 import { AuthProvider } from "@/components/providers/AuthProvider";
+import { employeeFetch } from "@/lib/employeeFetch";
+import { useEmployeeSessionRefresh } from "@/hooks/useEmployeeSessionRefresh";
 
 export default function SalesMainLayout({ children }) {
   const router = useRouter();
@@ -14,10 +16,13 @@ export default function SalesMainLayout({ children }) {
   const [employeeUser, setEmployeeUser] = useState(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+
+  useEmployeeSessionRefresh({ enabled: !loading && Boolean(employeeUser) });
+
   useEffect(() => {
     const verifyAuth = async () => {
       try {
-        const res = await fetch("/api/auth/me");
+        const res = await employeeFetch("/api/auth/me");
         if (!res.ok) throw new Error("Unauthorized");
         const data = await res.json();
         if (data.success && data.data) {

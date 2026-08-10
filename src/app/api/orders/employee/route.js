@@ -11,11 +11,54 @@ import OperationalAuditLog from "@/models/OperationalAuditLog";
 import { createKotPrintJob } from "@/lib/printing/printJobService";
 import { createNotification } from "@/lib/notifications/notificationService";
 import Table from "@/models/floor/Table";
+
+function formatPersonName(person) {
+  if (!person) return null;
+  return person.name || [person.firstName, person.lastName].filter(Boolean).join(" ") || null;
+}
+
 async function resolveServerName(employeeId) {
   if (!employeeId) return null;
   const emp = await Employee.findById(employeeId).select("firstName lastName name").lean();
   if (!emp) return null;
-  return emp.name || [emp.firstName, emp.lastName].filter(Boolean).join(" ") || null;
+  return formatPersonName(emp);
+}
+
+async function enrichOrdersWithProcessedBy(orders) {
+  if (!orders?.length) return orders;
+
+  const ids = [
+    ...new Set(
+      orders
+        .map((o) => o.processedBy)
+        .filter(Boolean)
+        .map((id) => String(id?._id || id))
+    ),
+  ];
+
+  if (ids.length === 0) {
+    return orders.map((order) => ({
+      ...order,
+      processedByName: null,
+      processedByRole: null,
+    }));
+  }
+
+  const employees = await Employee.find({ _id: { $in: ids } })
+    .select("firstName lastName name role")
+    .lean();
+  const empMap = new Map(employees.map((e) => [String(e._id), e]));
+
+  return orders.map((order) => {
+    const rawId = order.processedBy ? String(order.processedBy._id || order.processedBy) : null;
+    const emp = rawId ? empMap.get(rawId) : null;
+
+    return {
+      ...order,
+      processedByName: formatPersonName(emp),
+      processedByRole: emp?.role || null,
+    };
+  });
 }
 
 async function notifyOrderEvent({
@@ -97,6 +140,7 @@ export const POST = withAuth(async (request) => {
     const formattedItems = items.map(item => ({
       menuItemId: item.id,
       name: item.name,
+      productCode: item.productCode || "",
       category: item.category || "ITEMS",
       size: item.size || "Standard",
       qty: item.qty,
@@ -363,11 +407,11 @@ export const GET = withAuth(async (request) => {
       return sendSuccess(order, "Session order retrieved");
     }
 
-    // Default: Get recent employee orders
+    // Default: Get recent employee orders; today=true returns all restaurant orders for the day
     const employeeId = request.user.id;
     const restaurantId = request.restaurant;
     
-    let query = { restaurantId, processedBy: employeeId };
+    let query = { restaurantId };
     
     if (today === "true") {
       const start = new Date();
@@ -375,13 +419,17 @@ export const GET = withAuth(async (request) => {
       const end = new Date();
       end.setHours(23, 59, 59, 999);
       query.createdAt = { $gte: start, $lte: end };
+    } else {
+      query.processedBy = employeeId;
     }
 
     const orders = await Order.find(query)
       .sort({ createdAt: -1 })
       .lean();
 
-    return sendSuccess(orders, "Employee orders retrieved successfully");
+    const enriched = await enrichOrdersWithProcessedBy(orders);
+
+    return sendSuccess(enriched, "Employee orders retrieved successfully");
   } catch (error) {
     logger.error("Failed to fetch employee orders", error);
     return sendError(error, "Failed to fetch orders", 500);

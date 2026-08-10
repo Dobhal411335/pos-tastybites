@@ -178,6 +178,7 @@ export default function OrderPage() {
               return {
                 id: item.menuItemId,
                 name: item.name,
+                productCode: item.productCode || "",
                 category: item.category || "ITEMS",
                 price: item.price,
                 tax: item.tax,
@@ -348,6 +349,7 @@ export default function OrderPage() {
       return [...prev, {
         id: product._id,
         name: product.name,
+        productCode: product.productCode || "",
         category: product.category?.name || "ITEMS",
         price,
         tax: itemTax,
@@ -391,6 +393,7 @@ export default function OrderPage() {
       id: selectedProduct._id,
       cartId: Date.now(),
       name: selectedProduct.name,
+      productCode: selectedProduct.productCode || "",
       category: selectedProduct.category?.name || "ITEMS",
       price: finalPrice,
       tax: finalTax,
@@ -772,6 +775,11 @@ export default function OrderPage() {
                     {/* Food Item Info */}
                     <div className="flex-1 flex flex-col justify-center px-4 py-3 border-b sm:border-b-0 sm:border-r border-zinc-200">
                       <div className="flex items-center gap-2 mb-1">
+                        {product.productCode ? (
+                          <span className="text-[10px] font-bold text-orange-600 bg-orange-50 border border-orange-100 rounded px-1.5 py-0.5 shrink-0">
+                            {product.productCode}
+                          </span>
+                        ) : null}
                         <span className="font-bold text-zinc-900 text-xs md:text-sm">{product.name}</span>
                         {!isAvailable && (
                           <Badge className="bg-red-50 text-red-600 border border-red-200 text-[10px] font-bold uppercase rounded-md px-1.5 py-0.5 shrink-0">Out of Stock</Badge>
@@ -843,7 +851,12 @@ export default function OrderPage() {
                     <div key={item.cartId || idx} className="bg-white rounded-lg p-3 border border-zinc-200 shadow-sm">
                       <div className="flex justify-between items-start">
                         <div className="pr-2">
-                          <h4 className="font-bold text-zinc-900 text-sm leading-tight">{item.name}</h4>
+                          <h4 className="font-bold text-zinc-900 text-sm leading-tight">
+                            {item.productCode ? (
+                              <span className="text-orange-600 mr-1.5">{item.productCode}</span>
+                            ) : null}
+                            {item.name}
+                          </h4>
                           {item.modifier && <p className="text-[11px] font-semibold text-zinc-500 mt-0.5">{item.modifier}</p>}
                         </div>
                         <span className="font-bold text-sm text-zinc-900 shrink-0">${(item.price * item.qty).toFixed(2)}</span>
@@ -1322,7 +1335,12 @@ export default function OrderPage() {
           <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl flex flex-col max-h-[85vh] animate-in zoom-in-95 duration-200">
             <div className="p-5 bg-zinc-50 border-b border-zinc-100 flex items-center justify-between shrink-0 rounded-t-2xl">
               <div>
-                <h2 className="text-xl font-bold text-zinc-900">{selectedProduct.name}</h2>
+                <h2 className="text-xl font-bold text-zinc-900">
+                  {selectedProduct.productCode ? (
+                    <span className="text-orange-600 mr-2">{selectedProduct.productCode}</span>
+                  ) : null}
+                  {selectedProduct.name}
+                </h2>
                 <p className="text-sm font-medium text-zinc-500 mt-0.5">Select variations and extras</p>
               </div>
               <button

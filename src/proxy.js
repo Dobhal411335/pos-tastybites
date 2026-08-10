@@ -42,6 +42,15 @@ export async function proxy(request) {
     } catch (err) {}
   }
 
+  let employeeRefreshValid = false;
+  const employeeRefreshToken = request.cookies.get('employee_refresh_token')?.value;
+  if (!employeePayload && employeeRefreshToken) {
+    try {
+      const verified = await jwtVerify(employeeRefreshToken, JWT_SECRET);
+      employeeRefreshValid = verified.payload?.type === 'refresh';
+    } catch (err) {}
+  }
+
   let response;
 
   // Subdomain Routing (Rewrite logic)
@@ -72,7 +81,7 @@ export async function proxy(request) {
         : NextResponse.next({ request: { headers: requestHeaders } });
     }
   } else if (isTargetSales) {
-    if (!employeePayload && !adminPayload) {
+    if (!employeePayload && !adminPayload && !employeeRefreshValid) {
       response = NextResponse.redirect(new URL('/login', request.url));
     } else {
       response = targetPath !== pathname 
@@ -86,7 +95,7 @@ export async function proxy(request) {
       response = NextResponse.redirect(new URL('/admin/dashboard', request.url));
     } else if (adminPayload) {
       response = NextResponse.redirect(new URL('/admin/dashboard', request.url));
-    } else if (employeePayload) {
+    } else if (employeePayload || employeeRefreshValid) {
       response = NextResponse.redirect(new URL('/sales/floor', request.url));
     } else {
       response = NextResponse.next({ request: { headers: requestHeaders } });

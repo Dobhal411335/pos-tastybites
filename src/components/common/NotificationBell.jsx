@@ -29,6 +29,11 @@ import { toast } from "sonner";
 import { useSocket } from "@/components/providers/SocketProvider";
 import { useAuth } from "@/components/providers/AuthProvider";
 import {
+  notificationMetaLine,
+  notificationMessageLine,
+  notificationTimeLabel,
+} from "@/lib/notifications/displayHelpers";
+import {
   getNotificationSoundEnabled,
   setNotificationSoundEnabled,
   unlockNotificationAudio,
@@ -57,13 +62,14 @@ function relativeTime(date) {
 }
 
 function notificationHref(n) {
+  if (n.type === "EMPLOYEE_LOGIN" || n.type === "EMPLOYEE_LOGOUT") return null;
   if (n.tableSessionId) return `/sales/orders/${n.tableSessionId}`;
   if (n.printJobId) return `/sales/print-jobs/${n.printJobId}`;
   if (n.type?.startsWith("TABLE")) return "/sales/floor";
   return "/sales/notifications";
 }
 
-export default function NotificationBell({ viewAllHref = "/sales/notifications" }) {
+export default function NotificationBell({ viewAllHref = "/sales/notifications", showViewAll = true }) {
   const router = useRouter();
   const { socket } = useSocket();
   const { user } = useAuth();
@@ -77,7 +83,6 @@ export default function NotificationBell({ viewAllHref = "/sales/notifications" 
   const [soundOn, setSoundOn] = useState(() => getNotificationSoundEnabled());
   const [audioUnlocked, setAudioUnlocked] = useState(() => isNotificationAudioUnlocked());
   const seenIdsRef = useRef(new Set());
-  const didFetchRef = useRef(false);
 
   const mergeIncoming = useCallback((incoming, { playSound = true } = {}) => {
     const id = String(incoming.id || incoming._id);
@@ -113,7 +118,9 @@ export default function NotificationBell({ viewAllHref = "/sales/notifications" 
   const fetchNotifications = useCallback(async ({ silent = false } = {}) => {
     if (!silent) setLoading(true);
     try {
-      const res = await fetch("/api/sales/notifications?limit=40&filter=ALL");
+      const res = await fetch("/api/sales/notifications?limit=40&filter=ALL", {
+        credentials: "include",
+      });
       const json = await res.json();
       if (!json.success) return;
 
@@ -123,7 +130,7 @@ export default function NotificationBell({ viewAllHref = "/sales/notifications" 
       }));
       setNotifications(items);
       setUnreadCount(json.data.unreadCount || 0);
-      items.forEach((n) => seenIdsRef.current.add(String(n.id)));
+      seenIdsRef.current = new Set(items.map((n) => String(n.id)));
     } catch {
       // keep existing state
     } finally {
@@ -132,10 +139,13 @@ export default function NotificationBell({ viewAllHref = "/sales/notifications" 
   }, []);
 
   useEffect(() => {
-    if (didFetchRef.current) return;
-    didFetchRef.current = true;
     void fetchNotifications();
   }, [fetchNotifications]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    void fetchNotifications({ silent: notifications.length > 0 });
+  }, [isOpen, fetchNotifications, notifications.length]);
 
   useEffect(() => {
     const onReconnect = () => fetchNotifications({ silent: true });
@@ -186,6 +196,7 @@ export default function NotificationBell({ viewAllHref = "/sales/notifications" 
       const res = await fetch("/api/sales/notifications", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ action: "read_all" }),
       });
       const json = await res.json();
@@ -201,7 +212,10 @@ export default function NotificationBell({ viewAllHref = "/sales/notifications" 
   const handleOpenNotification = async (n) => {
     if (!n.isRead) {
       try {
-        await fetch(`/api/sales/notifications/${n.id}`, { method: "PATCH" });
+        await fetch(`/api/sales/notifications/${n.id}`, {
+          method: "PATCH",
+          credentials: "include",
+        });
         setNotifications((prev) =>
           prev.map((x) => (x.id === n.id ? { ...x, isRead: true } : x))
         );
@@ -211,7 +225,8 @@ export default function NotificationBell({ viewAllHref = "/sales/notifications" 
       }
     }
     setIsOpen(false);
-    router.push(notificationHref(n));
+    const href = notificationHref(n);
+    if (href) router.push(href);
   };
 
   const toggleSound = async () => {
@@ -241,7 +256,8 @@ export default function NotificationBell({ viewAllHref = "/sales/notifications" 
         activeTab === "All" ||
         (activeTab === "Unread" && !n.isRead) ||
         cat === activeTab ||
-        (activeTab === "Orders" && cat === "Orders");
+        (activeTab === "Orders" && cat === "Orders") ||
+        (activeTab === "Employees" && cat === "Employees");
       const q = searchQuery.toLowerCase();
       const matchesSearch =
         !q ||
@@ -260,7 +276,7 @@ export default function NotificationBell({ viewAllHref = "/sales/notifications" 
         <Button
           variant="ghost"
           size="icon"
-          className="relative h-10 w-10 rounded-xl border border-stone-200 bg-white hover:bg-stone-100"
+          className="relative h-10 w-10 rounded-xl border border-stone-700 bg-white hover:bg-stone-100"
           aria-label="Notifications"
         >
           <Bell className="h-5 w-5 text-zinc-700" />
@@ -339,7 +355,7 @@ export default function NotificationBell({ viewAllHref = "/sales/notifications" 
           <Tabs value={activeTab} onValueChange={setActiveTab}>
             <ScrollArea className="w-full whitespace-nowrap" type="scroll">
               <TabsList className="bg-transparent h-8 p-0 gap-1 flex">
-                {["All", "Unread", "Orders", "Payments", "Tables", "System"].map((tab) => (
+                {["All", "Unread", "Orders", "Payments", "Tables", "Employees", "System"].map((tab) => (
                   <TabsTrigger
                     key={tab}
                     value={tab}
@@ -378,10 +394,7 @@ export default function NotificationBell({ viewAllHref = "/sales/notifications" 
             <div className="flex flex-col">
               {filteredNotifications.map((n) => {
                 const Icon = TYPE_ICONS[n.category] || Bell;
-                const metaBits = [
-                  n.metadata?.orderNumber ? `Order #${n.metadata.orderNumber}` : null,
-                  n.metadata?.tableNo ? `Table ${n.metadata.tableNo}` : null,
-                ].filter(Boolean);
+                const metaLine = notificationMetaLine(n);
                 return (
                   <button
                     type="button"
@@ -408,17 +421,17 @@ export default function NotificationBell({ viewAllHref = "/sales/notifications" 
                           {n.title}
                         </span>
                         <span className="text-[10px] text-zinc-500 shrink-0">
-                          {relativeTime(n.createdAt)}
+                          {notificationTimeLabel(n) || relativeTime(n.createdAt)}
                         </span>
                       </div>
-                      {metaBits.length > 0 && (
+                      {metaLine && (
                         <p className="text-[11px] font-medium text-zinc-600 truncate">
-                          {metaBits.join(" • ")}
+                          {metaLine}
                         </p>
                       )}
                       <p className="text-[11px] text-zinc-500 leading-snug line-clamp-2">
-                        {n.message}
-                        {n.metadata?.actorName
+                        {notificationMessageLine(n)}
+                        {n.metadata?.actorName && !n.metadata?.employeeName
                           ? ` · ${n.metadata.actorName}`
                           : ""}
                       </p>
@@ -433,6 +446,7 @@ export default function NotificationBell({ viewAllHref = "/sales/notifications" 
           )}
         </ScrollArea>
 
+        {showViewAll && (
         <div className="border-t border-stone-200 p-2 bg-stone-50">
           <Button
             asChild
@@ -445,6 +459,7 @@ export default function NotificationBell({ viewAllHref = "/sales/notifications" 
             </Link>
           </Button>
         </div>
+        )}
       </PopoverContent>
     </Popover>
   );

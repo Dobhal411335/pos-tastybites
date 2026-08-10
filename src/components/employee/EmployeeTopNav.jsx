@@ -10,6 +10,7 @@ import DateTimeDisplay from "@/components/common/DateTimeDisplay";
 import Image from "next/image";
 import { Badge } from "@/components/ui/badge";
 import NotificationBell from "@/components/common/NotificationBell";
+import { employeeFetch } from "@/lib/employeeFetch";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -39,7 +40,7 @@ export default function EmployeeTopNav({ onMenuToggle, employeeName = "Employee"
 
   const handleLogout = async () => {
     try {
-      const res = await fetch("/api/employee/auth/logout", { method: "POST" });
+      const res = await employeeFetch("/api/employee/auth/logout", { method: "POST" });
       if (res.ok) {
         toast.success("Logged out successfully.");
         router.replace("/login");
@@ -53,7 +54,7 @@ export default function EmployeeTopNav({ onMenuToggle, employeeName = "Employee"
 
   return (
     <header className="sticky top-0 z-40 border-b border-stone-200 bg-[#F7F7F7]/95 backdrop-blur supports-backdrop-filter:bg-[#F7F7F7]/90">
-      <div className="flex h-14 md:h-16 items-center gap-3 px-3 sm:px-5">
+      <div className="flex lg:h-14 xl:h-15 items-center gap-3 px-3 sm:px-5">
         {/* LEFT — brand */}
         <div className="flex items-center gap-2.5 min-w-0 shrink-0">
           <Button
@@ -71,12 +72,12 @@ export default function EmployeeTopNav({ onMenuToggle, employeeName = "Employee"
               alt="Tasty Bites"
               width={130}
               height={44}
-              className="object-contain h-9 md:h-10 w-auto"
+              className="object-contain xl:h-10 w-auto"
               priority
             />
             <Badge
               variant="secondary"
-              className="bg-orange-100 text-orange-700 hover:bg-orange-100 uppercase tracking-wider text-[10px] md:text-[11px] px-2 py-0.5 h-6 hidden sm:inline-flex"
+              className="bg-orange-100 text-orange-700 hover:bg-orange-100 uppercase tracking-wider lg:text-[12px] xl:text-[10px] px-2 py-0.5 h-6 hidden sm:inline-flex"
             >
               Sales POS
             </Badge>
@@ -98,7 +99,7 @@ export default function EmployeeTopNav({ onMenuToggle, employeeName = "Employee"
                     : "text-stone-600 hover:bg-stone-200/80 hover:text-stone-900"
                 }`}
               >
-                <Icon className="h-4 w-4 shrink-0" />
+                <Icon className="xl:h-5 lg:h-4 md:h-3 shrink-0" />
                 <span>{item.label}</span>
               </Link>
             );
@@ -113,11 +114,9 @@ export default function EmployeeTopNav({ onMenuToggle, employeeName = "Employee"
 
           <NotificationBell viewAllHref="/sales/notifications" />
 
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
               <button
                 type="button"
-                className="flex items-center gap-2.5 rounded-xl border border-stone-200 bg-white px-2.5 py-1.5 hover:bg-stone-50 transition-colors max-w-[200px]"
+                className="flex items-center gap-2.5 rounded-xl border border-stone-500 bg-white px-2.5 py-1.5 hover:bg-stone-50 transition-colors max-w-[200px]"
               >
                 <div className="relative shrink-0">
                   <div className="flex h-9 w-9 items-center justify-center rounded-full bg-linear-to-br from-orange-500 to-orange-600 text-white text-sm font-bold">
@@ -134,30 +133,11 @@ export default function EmployeeTopNav({ onMenuToggle, employeeName = "Employee"
                   </p>
                 </div>
               </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-52">
-              <DropdownMenuLabel className="font-normal">
-                <div className="flex flex-col space-y-0.5">
-                  <p className="text-sm font-semibold">{employeeName}</p>
-                  <p className="text-xs text-muted-foreground">{employeeRole}</p>
-                </div>
-              </DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                className="text-red-600 focus:text-red-600 cursor-pointer"
-                onClick={handleLogout}
-              >
-                <LogOut className="mr-2 h-4 w-4" />
-                Logout
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-
           <Button
             variant="ghost"
             size="icon"
             onClick={handleLogout}
-            className="h-10 w-10 text-red-600 hover:bg-red-50 hover:text-red-700"
+            className="h-10 w-10 bg-red-600 text-white hover:bg-red-700 hover:text-white border border-red-800 shadow-none"
             title="Logout"
           >
             <LogOut className="h-5 w-5" />

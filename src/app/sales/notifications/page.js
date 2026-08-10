@@ -28,6 +28,12 @@ import {
   isNotificationAudioUnlocked,
   playNotificationSound,
 } from "@/lib/notifications/notificationSound";
+import { employeeFetch } from "@/lib/employeeFetch";
+import {
+  notificationMetaLine,
+  notificationMessageLine,
+  notificationTimeLabel,
+} from "@/lib/notifications/displayHelpers";
 
 const FILTERS = [
   "All",
@@ -62,6 +68,7 @@ function hrefFor(n) {
   if (n.tableSessionId) return `/sales/orders/${n.tableSessionId}`;
   if (n.printJobId) return `/sales/print-jobs/${n.printJobId}`;
   if (n.type?.startsWith("TABLE")) return "/sales/floor";
+  if (n.type === "EMPLOYEE_LOGIN" || n.type === "EMPLOYEE_LOGOUT") return null;
   return null;
 }
 
@@ -90,7 +97,7 @@ export default function NotificationsPage() {
       else setLoadingMore(true);
       try {
         const apiFilter = filter === "Unread" ? "UNREAD" : filter === "All" ? "ALL" : filter;
-        const res = await fetch(
+        const res = await employeeFetch(
           `/api/sales/notifications?filter=${encodeURIComponent(apiFilter)}&page=${pageNum}&limit=30`
         );
         const json = await res.json();
@@ -187,7 +194,7 @@ export default function NotificationsPage() {
       return;
     }
     try {
-      await fetch(`/api/sales/notifications/${n.id}`, { method: "PATCH" });
+      await employeeFetch(`/api/sales/notifications/${n.id}`, { method: "PATCH" });
       setItems((prev) =>
         prev.map((x) => (x.id === n.id ? { ...x, isRead: true } : x))
       );
@@ -201,7 +208,7 @@ export default function NotificationsPage() {
 
   const markAll = async () => {
     try {
-      const res = await fetch("/api/sales/notifications", {
+      const res = await employeeFetch("/api/sales/notifications", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "read_all" }),
@@ -256,6 +263,7 @@ export default function NotificationsPage() {
                   </Badge>
                 )}
               </h1>
+              <p className="text-xs text-zinc-500 mt-0.5">Today only · resets at midnight</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -311,7 +319,8 @@ export default function NotificationsPage() {
             </div>
           ) : items.length === 0 ? (
             <div className="p-10 text-center text-zinc-500 text-sm">
-              No notifications in this filter.
+              No notifications today
+              {filter !== "All" ? ` in ${filter}` : ""}.
             </div>
           ) : (
             <ul className="divide-y divide-zinc-100">
@@ -343,23 +352,14 @@ export default function NotificationsPage() {
                             {n.title}
                           </p>
                           <span className="text-[10px] text-zinc-500 shrink-0">
-                            {relativeTime(n.createdAt)}
+                            {notificationTimeLabel(n) || relativeTime(n.createdAt)}
                           </span>
                         </div>
                         <p className="text-xs text-zinc-600 mt-0.5">
-                          {[
-                            n.metadata?.orderNumber
-                              ? `Order #${n.metadata.orderNumber}`
-                              : null,
-                            n.metadata?.tableNo
-                              ? `Table ${n.metadata.tableNo}`
-                              : null,
-                          ]
-                            .filter(Boolean)
-                            .join(" • ")}
+                          {notificationMetaLine(n)}
                         </p>
                         <p className="text-xs text-zinc-500 mt-0.5 line-clamp-2">
-                          {n.message}
+                          {notificationMessageLine(n)}
                         </p>
                       </div>
                       {!n.isRead ? (
