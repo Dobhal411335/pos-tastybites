@@ -12,6 +12,9 @@ export function buildPayEstimateFields() {
     },
     {
       $addFields: {
+        overtimeRate: {
+          $ifNull: ["$employee.hourlyPaid.overtimeAmountPerHour", "$hourlyRate"],
+        },
         regularHours: { $divide: ["$regularMinutes", MINUTES_PER_HOUR] },
         overtimeHours: { $divide: ["$totalOvertimeMinutes", MINUTES_PER_HOUR] },
         totalWorkedHours: { $divide: ["$totalWorkedMinutes", MINUTES_PER_HOUR] },
@@ -23,7 +26,7 @@ export function buildPayEstimateFields() {
           $round: [{ $multiply: ["$regularHours", "$hourlyRate"] }, 2],
         },
         overtimePay: {
-          $round: [{ $multiply: ["$overtimeHours", "$hourlyRate"] }, 2],
+          $round: [{ $multiply: ["$overtimeHours", "$overtimeRate"] }, 2],
         },
       },
     },

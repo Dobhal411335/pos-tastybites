@@ -25,8 +25,11 @@ const EmployeeSchema = new mongoose.Schema(
     employeeColor: { type: String, default: '#4ade80' },
     hourlyPaid: {
       totalWorkingHours: { type: String },
-      amountPerHour: { type: Number }
+      amountPerHour: { type: Number },
+      totalAmountPerDay: { type: Number },
+      overtimeAmountPerHour: { type: Number },
     },
+    tipPercent: { type: Number, min: 0, max: 100 },
     staffDiscount: { type: Number },
     assignedFloor: { type: mongoose.Schema.Types.ObjectId, ref: 'Floor' },
     assignedTables: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Table' }],

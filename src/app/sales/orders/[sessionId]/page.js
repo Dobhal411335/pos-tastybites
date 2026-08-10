@@ -5,9 +5,37 @@ import Image from "next/image";
 import { useParams, useRouter } from "next/navigation";
 import { useSocket } from "@/components/providers/SocketProvider";
 import {
-  ArrowLeft, Search, Plus, Minus, Mic, NotebookPen,
-  CheckCircle2, X, Tag, DollarSign, Percent, User, Phone, MapPin, Trash2,
-  Loader2, LayoutGrid, List, Coffee, Utensils, UtensilsCrossed, Wine, Beer, Cake, IceCream, Pizza, Sandwich, ShoppingCart
+  ArrowLeft,
+  Search,
+  Plus,
+  Minus,
+  Mic,
+  NotebookPen,
+  CheckCircle2,
+  X,
+  Tag,
+  DollarSign,
+  Percent,
+  User,
+  Phone,
+  MapPin,
+  Trash2,
+  Loader2,
+  LayoutGrid,
+  List,
+  Coffee,
+  Utensils,
+  UtensilsCrossed,
+  Wine,
+  Beer,
+  Cake,
+  IceCream,
+  Pizza,
+  Sandwich,
+  ShoppingCart,
+  CreditCard,
+  Banknote,
+  Gift,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -78,7 +106,7 @@ export default function OrderPage() {
 
   // Print State
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
-  const [printType, setPrintType] = useState('customer'); // 'customer' | 'kot'
+  const [printType, setPrintType] = useState("customer"); // 'customer' | 'kot'
   const [printOrderData, setPrintOrderData] = useState(null);
   const [printKotItems, setPrintKotItems] = useState([]);
   const [printTaxBreakdown, setPrintTaxBreakdown] = useState([]);
@@ -93,19 +121,20 @@ export default function OrderPage() {
   const [isClearOrderModalOpen, setIsClearOrderModalOpen] = useState(false);
 
   const headIconMap = {
-    'Breakfast': Coffee,
-    'Brunch': Sandwich,
-    'Lunch': Pizza,
-    'Dinner': UtensilsCrossed,
-    'Kids Menu': User,
-    'Beverages': Coffee,
-    'Desserts': Cake,
-    'Bar & Cocktails': Wine,
-    'Offer': Tag,
+    Breakfast: Coffee,
+    Brunch: Sandwich,
+    Lunch: Pizza,
+    Dinner: UtensilsCrossed,
+    "Kids Menu": User,
+    Beverages: Coffee,
+    Desserts: Cake,
+    "Bar & Cocktails": Wine,
+    Offer: Tag,
   };
 
   const getHeadIcon = (headName) => {
-    if (headName === 'All') return <LayoutGrid className="w-6 h-6 mb-1" strokeWidth={1.5} />;
+    if (headName === "All")
+      return <LayoutGrid className="w-6 h-6 mb-1" strokeWidth={1.5} />;
     const Icon = headIconMap[headName] || Utensils;
     return <Icon className="w-6 h-6 mb-1" strokeWidth={1.5} />;
   };
@@ -118,7 +147,7 @@ export default function OrderPage() {
           fetch("/api/menu/products"),
           fetch("/api/tax"),
           fetch("/api/menu/heads"),
-          fetch("/api/menu/product-heads")
+          fetch("/api/menu/product-heads"),
         ]);
         const catJson = await catRes.json();
         const prodJson = await prodRes.json();
@@ -127,14 +156,14 @@ export default function OrderPage() {
         const phJson = await phRes.json();
 
         if (catJson.success) {
-          const cats = catJson.data.map(c => c.name);
+          const cats = catJson.data.map((c) => c.name);
           setCategories(["All", ...cats]);
         }
         if (prodJson.success) {
           setMenuItems(prodJson.data);
         }
         if (taxJson.success) {
-          setGlobalTaxes(taxJson.data.filter(t => t.status === "Active"));
+          setGlobalTaxes(taxJson.data.filter((t) => t.status === "Active"));
         }
         if (headJson.success) {
           setHeads([{ _id: "all", name: "All" }, ...headJson.data]);
@@ -149,7 +178,9 @@ export default function OrderPage() {
           const floorRes = await fetch("/api/sales/floor");
           const floorJson = await floorRes.json();
           if (floorJson.success) {
-            const currentSession = floorJson.data.sessions.find(s => s.id === sessionId);
+            const currentSession = floorJson.data.sessions.find(
+              (s) => s.id === sessionId,
+            );
             if (currentSession) {
               setSessionData(currentSession);
               setGuestTable(currentSession.tableId);
@@ -157,22 +188,25 @@ export default function OrderPage() {
           }
 
           // Fetch existing order for this session
-          const orderRes = await fetch(`/api/orders/employee?sessionId=${sessionId}`);
+          const orderRes = await fetch(
+            `/api/orders/employee?sessionId=${sessionId}`,
+          );
           const orderJson = await orderRes.json();
           if (orderJson.success && orderJson.data) {
             const existingOrder = orderJson.data;
             setActiveOrder(existingOrder);
             setOrderStatus(existingOrder.status);
             setOrderNote(existingOrder.specialNote || "");
-            
+
             // Reconstruct cart
-            const restoredCart = existingOrder.items.map(item => {
+            const restoredCart = existingOrder.items.map((item) => {
               const style = item.preparationStyle || null;
               const extras = (item.options || []).filter(
-                (o) => !String(o).toLowerCase().startsWith("style:")
+                (o) => !String(o).toLowerCase().startsWith("style:"),
               );
               const parts = [];
-              if (item.size && item.size !== "Standard") parts.push(`Size: ${item.size}`);
+              if (item.size && item.size !== "Standard")
+                parts.push(`Size: ${item.size}`);
               if (style) parts.push(`Style: ${style}`);
               if (extras.length > 0) parts.push(`Extras: ${extras.join(", ")}`);
               return {
@@ -194,10 +228,10 @@ export default function OrderPage() {
 
             if (existingOrder.discountCode) {
               // Note: We don't have the full discount object, but we have the code and amount
-              setAppliedDiscount({ 
-                code: existingOrder.discountCode, 
-                value: existingOrder.discountTotal, 
-                type: "$" 
+              setAppliedDiscount({
+                code: existingOrder.discountCode,
+                value: existingOrder.discountTotal,
+                type: "$",
               });
             }
           }
@@ -215,7 +249,8 @@ export default function OrderPage() {
     if (currentUser) {
       const fName = currentUser.firstName || "";
       const lName = currentUser.lastName || "";
-      const fullName = currentUser.name || `${fName} ${lName}`.trim() || "Server";
+      const fullName =
+        currentUser.name || `${fName} ${lName}`.trim() || "Server";
       setServerName(fullName);
     }
   }, [currentUser]);
@@ -223,7 +258,9 @@ export default function OrderPage() {
   const fetchOrderOnly = useCallback(async () => {
     if (sessionId === "new") return;
     try {
-      const orderRes = await fetch(`/api/orders/employee?sessionId=${sessionId}`);
+      const orderRes = await fetch(
+        `/api/orders/employee?sessionId=${sessionId}`,
+      );
       const orderJson = await orderRes.json();
       if (orderJson.success && orderJson.data) {
         const existingOrder = orderJson.data;
@@ -240,49 +277,66 @@ export default function OrderPage() {
       fetchOrderOnly();
     };
 
-    window.addEventListener('socket:reconnect', handleReconnect);
-    
+    window.addEventListener("socket:reconnect", handleReconnect);
+
     if (socket) {
-      socket.on('order:updated', fetchOrderOnly);
-      socket.on('payment:completed', fetchOrderOnly);
+      socket.on("order:updated", fetchOrderOnly);
+      socket.on("payment:completed", fetchOrderOnly);
     }
-    
+
     return () => {
-      window.removeEventListener('socket:reconnect', handleReconnect);
+      window.removeEventListener("socket:reconnect", handleReconnect);
       if (socket) {
-        socket.off('order:updated', fetchOrderOnly);
-        socket.off('payment:completed', fetchOrderOnly);
+        socket.off("order:updated", fetchOrderOnly);
+        socket.off("payment:completed", fetchOrderOnly);
       }
     };
   }, [socket, fetchOrderOnly]);
 
-  const filteredProducts = menuItems.filter(p => {
+  const filteredProducts = menuItems.filter((p) => {
     let matchesHead = true;
     if (viewMode === "grid" && activeHead !== "All") {
-      const ph = productHeads.find(h => h.head?.name === activeHead);
+      const ph = productHeads.find((h) => h.head?.name === activeHead);
       if (ph) {
-        matchesHead = ph.categories.some(c => c.products.includes(p._id));
+        matchesHead = ph.categories.some((c) => c.products.includes(p._id));
       } else {
         matchesHead = false;
       }
     }
-    const matchesCat = viewMode === "list" ? (activeCategory === "All" || (p.category && p.category.name === activeCategory)) : true;
-    const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesCat =
+      viewMode === "list"
+        ? activeCategory === "All" ||
+          (p.category && p.category.name === activeCategory)
+        : true;
+    const matchesSearch = p.name
+      .toLowerCase()
+      .includes(searchQuery.toLowerCase());
     return matchesHead && matchesCat && matchesSearch;
   });
 
   const calculateItemTax = (item, basePrice) => {
-    let taxesToUse = (item.taxes && Array.isArray(item.taxes) && item.taxes.length > 0) ? item.taxes : globalTaxes;
+    let taxesToUse =
+      item.taxes && Array.isArray(item.taxes) && item.taxes.length > 0
+        ? item.taxes
+        : globalTaxes;
     if (!taxesToUse || taxesToUse.length === 0) return 0;
 
-    const pctTaxes = taxesToUse.filter(t => t?.type?.toLowerCase().includes('percent')).reduce((sum, t) => sum + (t.value || 0), 0);
-    const fixedTaxes = taxesToUse.filter(t => t?.type && !t.type.toLowerCase().includes('percent')).reduce((sum, t) => sum + (t.value || 0), 0);
-    return (basePrice * pctTaxes / 100) + fixedTaxes;
+    const pctTaxes = taxesToUse
+      .filter((t) => t?.type?.toLowerCase().includes("percent"))
+      .reduce((sum, t) => sum + (t.value || 0), 0);
+    const fixedTaxes = taxesToUse
+      .filter((t) => t?.type && !t.type.toLowerCase().includes("percent"))
+      .reduce((sum, t) => sum + (t.value || 0), 0);
+    return (basePrice * pctTaxes) / 100 + fixedTaxes;
   };
 
   const calculateItemDiscount = (item, basePrice) => {
-    if (item.discount && item.discount.status === 'Active' && item.discountActive !== false) {
-      if (item.discount.discountType === 'percent') {
+    if (
+      item.discount &&
+      item.discount.status === "Active" &&
+      item.discountActive !== false
+    ) {
+      if (item.discount.discountType === "percent") {
         return basePrice * (item.discount.value / 100);
       } else {
         return item.discount.value;
@@ -294,13 +348,17 @@ export default function OrderPage() {
   const generateTaxBreakdown = () => {
     // Receipt shows a single HST line with the combined tax total (not per-component %)
     let hstTotal = 0;
-    cart.forEach(item => {
-      const taxesToUse = (item.taxes && Array.isArray(item.taxes) && item.taxes.length > 0) ? item.taxes : globalTaxes;
+    cart.forEach((item) => {
+      const taxesToUse =
+        item.taxes && Array.isArray(item.taxes) && item.taxes.length > 0
+          ? item.taxes
+          : globalTaxes;
       if (!taxesToUse) return;
-      taxesToUse.forEach(t => {
-        const amount = t.type && t.type.toLowerCase().includes('percent')
-          ? (item.price * item.qty) * (t.value / 100)
-          : (t.value * item.qty);
+      taxesToUse.forEach((t) => {
+        const amount =
+          t.type && t.type.toLowerCase().includes("percent")
+            ? item.price * item.qty * (t.value / 100)
+            : t.value * item.qty;
         hstTotal += amount;
       });
     });
@@ -310,7 +368,11 @@ export default function OrderPage() {
 
   const handleOpenOptions = (item) => {
     setSelectedProduct(item);
-    setSelectedSize(item.variants && item.variants.length > 0 ? item.variants[0].size : "Standard");
+    setSelectedSize(
+      item.variants && item.variants.length > 0
+        ? item.variants[0].size
+        : "Standard",
+    );
     setSelectedAddons([]);
     const styles = (item.preparationStyles || []).filter(Boolean);
     setSelectedPreparationStyle(styles.length === 1 ? styles[0] : "");
@@ -318,9 +380,9 @@ export default function OrderPage() {
   };
 
   const toggleAddon = (addon) => {
-    setSelectedAddons(prev => {
-      const exists = prev.some(a => a._id === addon._id);
-      if (exists) return prev.filter(a => a._id !== addon._id);
+    setSelectedAddons((prev) => {
+      const exists = prev.some((a) => a._id === addon._id);
+      if (exists) return prev.filter((a) => a._id !== addon._id);
       return [...prev, addon];
     });
   };
@@ -328,7 +390,9 @@ export default function OrderPage() {
   const productNeedsOptions = (product) => {
     const hasVariants = product.variants && product.variants.length > 0;
     const hasAddons = product.addons && product.addons.length > 0;
-    const hasStyles = product.preparationStyles && product.preparationStyles.filter(Boolean).length > 0;
+    const hasStyles =
+      product.preparationStyles &&
+      product.preparationStyles.filter(Boolean).length > 0;
     return hasVariants || hasAddons || hasStyles;
   };
 
@@ -341,24 +405,32 @@ export default function OrderPage() {
     const price = product.price || 0;
     const itemTax = calculateItemTax(product, price);
 
-    setCart(prev => {
-      const existing = prev.find(item => item.id === product._id && !item.modifier && !item.preparationStyle);
+    setCart((prev) => {
+      const existing = prev.find(
+        (item) =>
+          item.id === product._id && !item.modifier && !item.preparationStyle,
+      );
       if (existing) {
-        return prev.map(item => item.id === product._id ? { ...item, qty: item.qty + 1 } : item);
+        return prev.map((item) =>
+          item.id === product._id ? { ...item, qty: item.qty + 1 } : item,
+        );
       }
-      return [...prev, {
-        id: product._id,
-        name: product.name,
-        productCode: product.productCode || "",
-        category: product.category?.name || "ITEMS",
-        price,
-        tax: itemTax,
-        qty: 1,
-        size: "Standard",
-        preparationStyle: null,
-        options: [],
-        cartId: Date.now()
-      }];
+      return [
+        ...prev,
+        {
+          id: product._id,
+          name: product.name,
+          productCode: product.productCode || "",
+          category: product.category?.name || "ITEMS",
+          price,
+          tax: itemTax,
+          qty: 1,
+          size: "Standard",
+          preparationStyle: null,
+          options: [],
+          cartId: Date.now(),
+        },
+      ];
     });
   };
 
@@ -366,12 +438,21 @@ export default function OrderPage() {
     if (!selectedProduct) return;
     let basePrice = selectedProduct.price || 0;
 
-    if (selectedSize && selectedProduct.variants && selectedProduct.variants.length > 0) {
-      const variant = selectedProduct.variants.find(v => v.size === selectedSize);
+    if (
+      selectedSize &&
+      selectedProduct.variants &&
+      selectedProduct.variants.length > 0
+    ) {
+      const variant = selectedProduct.variants.find(
+        (v) => v.size === selectedSize,
+      );
       if (variant) basePrice = variant.price;
     }
 
-    const addonsPrice = selectedAddons.reduce((sum, a) => sum + (a.price || 0), 0);
+    const addonsPrice = selectedAddons.reduce(
+      (sum, a) => sum + (a.price || 0),
+      0,
+    );
     const finalPrice = basePrice + addonsPrice;
 
     const finalTax = calculateItemTax(selectedProduct, finalPrice);
@@ -383,49 +464,56 @@ export default function OrderPage() {
     selectedAddons.forEach((a) => options.push(a.name));
 
     const parts = [];
-    if (selectedSize && selectedSize !== "Standard") parts.push(`Size: ${selectedSize}`);
-    if (selectedPreparationStyle) parts.push(`Style: ${selectedPreparationStyle}`);
+    if (selectedSize && selectedSize !== "Standard")
+      parts.push(`Size: ${selectedSize}`);
+    if (selectedPreparationStyle)
+      parts.push(`Style: ${selectedPreparationStyle}`);
     if (selectedAddons.length > 0) {
-      parts.push(`Extras: ${selectedAddons.map(a => a.name).join(", ")}`);
+      parts.push(`Extras: ${selectedAddons.map((a) => a.name).join(", ")}`);
     }
 
-    setCart(prev => [...prev, {
-      id: selectedProduct._id,
-      cartId: Date.now(),
-      name: selectedProduct.name,
-      productCode: selectedProduct.productCode || "",
-      category: selectedProduct.category?.name || "ITEMS",
-      price: finalPrice,
-      tax: finalTax,
-      qty: 1,
-      size: selectedSize,
-      preparationStyle: selectedPreparationStyle || null,
-      options,
-      modifier: parts.length > 0 ? parts.join(" | ") : undefined,
-    }]);
+    setCart((prev) => [
+      ...prev,
+      {
+        id: selectedProduct._id,
+        cartId: Date.now(),
+        name: selectedProduct.name,
+        productCode: selectedProduct.productCode || "",
+        category: selectedProduct.category?.name || "ITEMS",
+        price: finalPrice,
+        tax: finalTax,
+        qty: 1,
+        size: selectedSize,
+        preparationStyle: selectedPreparationStyle || null,
+        options,
+        modifier: parts.length > 0 ? parts.join(" | ") : undefined,
+      },
+    ]);
     setIsOptionsModalOpen(false);
     setSelectedPreparationStyle("");
   };
 
   const updateQty = (id, delta) => {
-    setCart(prev =>
-      prev.map(item => {
-        if (item.id === id || item.cartId === id) {
-          const newQty = item.qty + delta;
-          return newQty > 0 ? { ...item, qty: newQty } : item;
-        }
-        return item;
-      }).filter(item => item.qty > 0)
+    setCart((prev) =>
+      prev
+        .map((item) => {
+          if (item.id === id || item.cartId === id) {
+            const newQty = item.qty + delta;
+            return newQty > 0 ? { ...item, qty: newQty } : item;
+          }
+          return item;
+        })
+        .filter((item) => item.qty > 0),
     );
   };
 
   const removeFromCart = (id) => {
-    setCart(prev => prev.filter(item => (item.cartId || item.id) !== id));
+    setCart((prev) => prev.filter((item) => (item.cartId || item.id) !== id));
   };
 
   const handleSendToKitchen = () => {
     if (cart.length === 0) return;
-    
+
     // If it's an existing session, we can skip the kitchen modal and just send it
     if (sessionId !== "new") {
       handleConfirmKitchen();
@@ -452,13 +540,13 @@ export default function OrderPage() {
         sessionId: sessionId !== "new" ? sessionId : null,
         tableNo: sessionId === "new" ? guestTable : undefined,
         guestName: guestName,
-        orderType: orderType
+        orderType: orderType,
       };
 
       const res = await fetch("/api/orders/employee", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payload),
       });
       const json = await res.json();
 
@@ -467,12 +555,12 @@ export default function OrderPage() {
         setIsKitchenModalOpen(false);
         setActiveOrder(json.data);
         setOrderStatus("PENDING");
-        
+
         // Check if there are items to print for KOT
         if (json.data.kotPayload && json.data.kotPayload.length > 0) {
           setPrintOrderData(json.data);
           setPrintKotItems(json.data.kotPayload);
-          setPrintType('kot');
+          setPrintType("kot");
           setRedirectAfterPrint(true);
           setIsPrintModalOpen(true);
         } else {
@@ -499,11 +587,15 @@ export default function OrderPage() {
       const res = await fetch("/api/orders/discount", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code: discountCode })
+        body: JSON.stringify({ code: discountCode }),
       });
       const json = await res.json();
       if (json.success) {
-        setAppliedDiscount({ code: json.data.code, value: json.data.value, type: json.data.discountType === 'percent' ? '%' : '$' });
+        setAppliedDiscount({
+          code: json.data.code,
+          value: json.data.value,
+          type: json.data.discountType === "percent" ? "%" : "$",
+        });
         toast.success("Discount applied!");
       } else {
         toast.error(json.message || "Invalid discount code");
@@ -521,18 +613,24 @@ export default function OrderPage() {
 
   const verifyGiftCard = async () => {
     if (!giftCardCode.trim()) return;
+    const normalizedCode = giftCardCode.trim().toUpperCase();
+    setGiftCardCode(normalizedCode);
     setIsVerifyingGiftCard(true);
     setGiftCardError("");
     setGiftCardBalance(null);
     setGiftCardDetails(null);
     try {
-      const res = await fetch(`/api/menu/giftcards?code=${giftCardCode}`);
+      const res = await fetch(
+        `/api/menu/giftcards?code=${encodeURIComponent(normalizedCode)}`,
+      );
       const json = await res.json();
       if (json.success) {
         setGiftCardDetails(json.data);
         setIsGiftCardModalOpen(true);
       } else {
-        setGiftCardError(json.message || "Invalid Gift Card");
+        setGiftCardError(
+          json.message || "Only issued active gift cards can be used",
+        );
       }
     } catch (err) {
       setGiftCardError("Failed to verify Gift Card");
@@ -545,20 +643,41 @@ export default function OrderPage() {
     const actualBalance = giftCardDetails.balance ?? giftCardDetails.value;
     setGiftCardBalance(actualBalance);
     if (actualBalance < total) {
-       setGiftCardSplitAmount(total - actualBalance);
+      setGiftCardSplitAmount(Math.round((total - actualBalance) * 100) / 100);
     } else {
-       setGiftCardSplitAmount(0);
-       setAmountTendered("");
+      setGiftCardSplitAmount(0);
+      setAmountTendered("");
+      setCardAmountTendered("");
     }
     setIsGiftCardModalOpen(false);
   };
+  const subtotal = cart.reduce((sum, item) => sum + item.price * item.qty, 0);
+  const totalTax = cart.reduce(
+    (sum, item) => sum + (item.tax || 0) * item.qty,
+    0,
+  );
+  const discountAmount = appliedDiscount
+    ? appliedDiscount.type === "%"
+      ? (subtotal * appliedDiscount.value) / 100
+      : Math.min(appliedDiscount.value, subtotal)
+    : 0;
+  const total = subtotal - discountAmount + totalTax;
+  // Keep gift-card split in sync when discount changes the total due
+  useEffect(() => {
+    if (giftCardBalance === null) return;
+    if (giftCardBalance < total) {
+      setGiftCardSplitAmount(Math.round((total - giftCardBalance) * 100) / 100);
+    } else {
+      setGiftCardSplitAmount(0);
+    }
+  }, [total, giftCardBalance]);
 
   const handlePayment = async () => {
     if (cart.length === 0) return;
     try {
       setIsSubmitting(true);
       let currentOrder = activeOrder;
-      
+
       if (!currentOrder) {
         // Create order first
         const payload = {
@@ -572,12 +691,12 @@ export default function OrderPage() {
           sessionId: sessionId !== "new" ? sessionId : null,
           tableNo: sessionId === "new" ? guestTable : undefined,
           guestName: guestName,
-          orderType: orderType
+          orderType: orderType,
         };
         const res = await fetch("/api/orders/employee", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
+          body: JSON.stringify(payload),
         });
         const json = await res.json();
         if (json.success) {
@@ -591,60 +710,84 @@ export default function OrderPage() {
       }
 
       // Proceed with Payment
+      const giftCardUsedAmount =
+        giftCardBalance !== null
+          ? Math.round((total - giftCardSplitAmount) * 100) / 100
+          : 0;
+
       const paymentPayload = {
         orderId: currentOrder._id,
         amount: total,
         method: paymentMethod,
         sessionId: sessionId !== "new" ? sessionId : undefined,
         tipAmount: tipAmount,
+        discountTotal: discountAmount,
+        discountCode: appliedDiscount ? appliedDiscount.code : null,
       };
 
-      if (paymentMethod === 'Card') {
+      if (paymentMethod === "Card") {
         paymentPayload.cardType = selectedCardType;
-        paymentPayload.cardAmount = cardAmountTendered ? parseFloat(cardAmountTendered) : (giftCardBalance !== null ? giftCardSplitAmount : total);
+        paymentPayload.cardAmount = cardAmountTendered
+          ? parseFloat(cardAmountTendered)
+          : giftCardBalance !== null
+            ? giftCardSplitAmount
+            : total;
       }
 
       if (giftCardBalance !== null) {
-        paymentPayload.giftCardCode = giftCardCode;
+        paymentPayload.giftCardCode = giftCardCode.trim().toUpperCase();
         paymentPayload.splitAmount = giftCardSplitAmount;
       }
 
       const res = await fetch("/api/sales/payments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(paymentPayload)
+        body: JSON.stringify(paymentPayload),
       });
       const json = await res.json();
       if (json.success) {
         if (giftCardBalance !== null && giftCardCode) {
-           const amountToUse = total - giftCardSplitAmount;
-           await fetch("/api/menu/giftcards/redeem", {
-             method: "POST",
-             headers: { "Content-Type": "application/json" },
-             body: JSON.stringify({
-               code: giftCardCode,
-               amountToUse: amountToUse,
-               orderId: currentOrder.orderNumber || currentOrder._id,
-               note: "POS Payment"
-             })
-           });
+          const amountToUse = giftCardUsedAmount;
+          await fetch("/api/menu/giftcards/redeem", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              code: giftCardCode.trim().toUpperCase(),
+              amountToUse: amountToUse,
+              orderId: currentOrder.orderNumber || currentOrder._id,
+              note: "POS Payment",
+            }),
+          });
         }
-        
+
         toast.success("Payment collected successfully!");
         setOrderStatus("PAID");
         setIsPaymentModalOpen(false);
-        
+
         // Update current order with payment details so the receipt prints correctly
         const updatedOrder = {
           ...currentOrder,
+          ...(json.data || {}),
           paymentStatus: "PAID",
-          tipAmount: tipAmount
+          paymentMethod:
+            paymentMethod === "Card" && selectedCardType
+              ? `Card - ${selectedCardType}`
+              : paymentMethod,
+          tipAmount: tipAmount,
+          discountTotal: discountAmount,
+          discountCode: appliedDiscount ? appliedDiscount.code : null,
+          totalAmount: total,
+          subTotal: subtotal,
+          taxTotal: totalTax,
+          giftcardCode:
+            giftCardBalance !== null ? giftCardCode.trim().toUpperCase() : null,
+          giftcardUsedAmount: giftCardUsedAmount,
         };
-        
+
         // Open Customer Receipt Print Preview
         setPrintOrderData(updatedOrder);
         setPrintTaxBreakdown(generateTaxBreakdown());
-        setPrintType('customer');
+        setPrintType("customer");
         setRedirectAfterPrint(true);
         setIsPrintModalOpen(true);
       } else {
@@ -664,15 +807,6 @@ export default function OrderPage() {
     setIsClearOrderModalOpen(false);
   };
 
-  const subtotal = cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
-  const totalTax = cart.reduce((sum, item) => sum + ((item.tax || 0) * item.qty), 0);
-  const discountAmount = appliedDiscount
-    ? appliedDiscount.type === "%"
-      ? (subtotal * appliedDiscount.value) / 100
-      : Math.min(appliedDiscount.value, subtotal)
-    : 0;
-  const total = subtotal - discountAmount + totalTax;
-
   if (isLoading) {
     return (
       <div className="flex flex-col h-screen w-full items-center justify-center bg-zinc-50">
@@ -684,14 +818,15 @@ export default function OrderPage() {
 
   return (
     <div className="flex flex-col h-[calc(100vh-140px)] w-full bg-zinc-50 font-sans overflow-hidden border border-zinc-200 rounded-xl shadow-sm">
-
       {/* SPLIT PANELS */}
       <div className="flex-1 flex min-h-0 overflow-hidden">
         {/* LEFT PANEL (MENU) */}
         <div className="w-[65%] flex flex-col border-r border-zinc-200 bg-zinc-50">
           {/* LEFT PANEL HEADER */}
           <div className="flex items-center justify-between px-4 py-3 bg-white border-b border-zinc-200 shrink-0">
-            <h2 className="text-[17px] font-black text-zinc-900">Create Order</h2>
+            <h2 className="text-[17px] font-black text-zinc-900">
+              Create Order
+            </h2>
             <div className="flex items-center gap-1 bg-zinc-100 p-1 rounded-lg">
               <button
                 onClick={() => setViewMode("grid")}
@@ -713,18 +848,20 @@ export default function OrderPage() {
           {/* Heads Grid (GRID VIEW) */}
           {viewMode === "grid" && (
             <div className="flex items-center gap-2 px-3 py-2.5 bg-white border-b border-zinc-200 shrink-0 overflow-x-auto custom-scrollbar">
-              {heads.map(head => (
+              {heads.map((head) => (
                 <button
                   key={head._id}
                   onClick={() => setActiveHead(head.name)}
                   className={`flex flex-col items-center justify-center min-w-[76px] h-[64px] rounded-lg transition-all border ${
-                    activeHead === head.name 
-                      ? "bg-orange-500 text-white border-orange-500 shadow-sm" 
+                    activeHead === head.name
+                      ? "bg-orange-500 text-white border-orange-500 shadow-sm"
                       : "bg-zinc-100 text-zinc-700 border-zinc-200 hover:bg-zinc-200"
                   }`}
                 >
                   {getHeadIcon(head.name)}
-                  <span className="text-[10px] mt-1 font-black uppercase tracking-wider">{head.name}</span>
+                  <span className="text-[10px] mt-1 font-black uppercase tracking-wider">
+                    {head.name}
+                  </span>
                 </button>
               ))}
             </div>
@@ -733,30 +870,37 @@ export default function OrderPage() {
           {/* Search & Category Tabs (LIST VIEW) */}
           {viewMode === "list" && (
             <div className="flex items-center gap-2 px-4 py-4 bg-white border-b border-zinc-200 shrink-0">
-            <div className="relative w-full">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
-              <Input
-                placeholder="Search menu items..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9 pr-10 h-11 bg-zinc-50 border-zinc-200 rounded-lg text-sm font-semibold focus-visible:ring-blue-500"
-              />
+              <div className="relative w-full">
+                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
+                <Input
+                  placeholder="Search menu items..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-9 pr-10 h-11 bg-zinc-50 border-zinc-200 rounded-lg text-sm font-semibold focus-visible:ring-blue-500"
+                />
+              </div>
+              <div className="w-80">
+                <Select
+                  value={activeCategory}
+                  onValueChange={setActiveCategory}
+                >
+                  <SelectTrigger className="w-full h-11 bg-white border-zinc-200 rounded-lg font-bold text-zinc-900 focus:ring-blue-500">
+                    <SelectValue placeholder="Select a category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {categories.map((cat) => (
+                      <SelectItem
+                        key={cat}
+                        value={cat}
+                        className="font-semibold text-zinc-900"
+                      >
+                        {cat}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
-            <div className="w-80">
-              <Select value={activeCategory} onValueChange={setActiveCategory}>
-                <SelectTrigger className="w-full h-11 bg-white border-zinc-200 rounded-lg font-bold text-zinc-900 focus:ring-blue-500">
-                  <SelectValue placeholder="Select a category" />
-                </SelectTrigger>
-                <SelectContent>
-                  {categories.map(cat => (
-                    <SelectItem key={cat} value={cat} className="font-semibold text-zinc-900">
-                      {cat}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
           )}
 
           <div className="flex-1 bg-zinc-50/50 overflow-y-auto custom-scrollbar">
@@ -764,7 +908,10 @@ export default function OrderPage() {
               {filteredProducts.map((product) => {
                 const hasOptions = productNeedsOptions(product);
                 const isAvailable = product.inStock !== false;
-                const basePrice = (product.variants && product.variants.length > 0) ? product.variants[0].price : (product.price || 0);
+                const basePrice =
+                  product.variants && product.variants.length > 0
+                    ? product.variants[0].price
+                    : product.price || 0;
                 const taxAmount = calculateItemTax(product, basePrice);
 
                 return (
@@ -780,20 +927,30 @@ export default function OrderPage() {
                             {product.productCode}
                           </span>
                         ) : null}
-                        <span className="font-bold text-zinc-900 text-xs md:text-sm">{product.name}</span>
+                        <span className="font-bold text-zinc-900 text-xs md:text-sm">
+                          {product.name}
+                        </span>
                         {!isAvailable && (
-                          <Badge className="bg-red-50 text-red-600 border border-red-200 text-[10px] font-bold uppercase rounded-md px-1.5 py-0.5 shrink-0">Out of Stock</Badge>
+                          <Badge className="bg-red-50 text-red-600 border border-red-200 text-[10px] font-bold uppercase rounded-md px-1.5 py-0.5 shrink-0">
+                            Out of Stock
+                          </Badge>
                         )}
                       </div>
                       <div className="flex items-center gap-3">
-                        <span className="text-xs font-semibold text-zinc-500">{product.category?.name || "Uncategorized"}</span>
+                        <span className="text-xs font-semibold text-zinc-500">
+                          {product.category?.name || "Uncategorized"}
+                        </span>
                       </div>
                     </div>
 
                     <div className="flex items-center">
                       <div className="w-20 flex flex-col items-center justify-center px-3 py-2 border-r border-zinc-200 h-full">
-                        <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Price</span>
-                        <span className="text-sm font-black text-zinc-900">${basePrice.toFixed(2)}</span>
+                        <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+                          Price
+                        </span>
+                        <span className="text-sm font-black text-zinc-900">
+                          ${basePrice.toFixed(2)}
+                        </span>
                       </div>
                     </div>
 
@@ -802,7 +959,11 @@ export default function OrderPage() {
                       <Button
                         className="w-full h-full min-h-[44px] bg-orange-500 hover:bg-orange-600 text-white font-bold text-sm rounded-lg shadow-sm transition-colors disabled:bg-zinc-200 disabled:text-zinc-400"
                         disabled={!isAvailable}
-                        onClick={() => hasOptions ? handleOpenOptions(product) : addToCart(product)}
+                        onClick={() =>
+                          hasOptions
+                            ? handleOpenOptions(product)
+                            : addToCart(product)
+                        }
                       >
                         {hasOptions ? "Options" : "Add"}
                       </Button>
@@ -827,7 +988,8 @@ export default function OrderPage() {
                 )}
               </div>
               <h2 className="text-[17px] font-black text-zinc-900">
-                Order {activeOrder?.orderNumber ? `#${activeOrder.orderNumber}` : ""}
+                Order{" "}
+                {activeOrder?.orderNumber ? `#${activeOrder.orderNumber}` : ""}
               </h2>
             </div>
             <button
@@ -842,40 +1004,67 @@ export default function OrderPage() {
             <div className="p-4 space-y-4">
               {cart.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-16 text-zinc-400">
-                  <p className="font-bold text-sm text-zinc-900">No items added</p>
-                  <p className="text-xs font-semibold mt-1">Tap a menu item to begin order.</p>
+                  <p className="font-bold text-sm text-zinc-900">
+                    No items added
+                  </p>
+                  <p className="text-xs font-semibold mt-1">
+                    Tap a menu item to begin order.
+                  </p>
                 </div>
               ) : (
                 <div className="space-y-2">
                   {cart.map((item, idx) => (
-                    <div key={item.cartId || idx} className="bg-white rounded-lg p-3 border border-zinc-200 shadow-sm">
+                    <div
+                      key={item.cartId || idx}
+                      className="bg-white rounded-lg p-3 border border-zinc-200 shadow-sm"
+                    >
                       <div className="flex justify-between items-start">
                         <div className="pr-2">
                           <h4 className="font-bold text-zinc-900 text-sm leading-tight">
                             {item.productCode ? (
-                              <span className="text-orange-600 mr-1.5">{item.productCode}</span>
+                              <span className="text-orange-600 mr-1.5">
+                                {item.productCode}
+                              </span>
                             ) : null}
                             {item.name}
                           </h4>
-                          {item.modifier && <p className="text-[11px] font-semibold text-zinc-500 mt-0.5">{item.modifier}</p>}
+                          {item.modifier && (
+                            <p className="text-[11px] font-semibold text-zinc-500 mt-0.5">
+                              {item.modifier}
+                            </p>
+                          )}
                         </div>
-                        <span className="font-bold text-sm text-zinc-900 shrink-0">${(item.price * item.qty).toFixed(2)}</span>
+                        <span className="font-bold text-sm text-zinc-900 shrink-0">
+                          ${(item.price * item.qty).toFixed(2)}
+                        </span>
                       </div>
                       <div className="flex items-center justify-between mt-2">
                         <div className="flex items-center gap-1">
                           <button
-                            onClick={() => removeFromCart(item.cartId || item.id)}
+                            onClick={() =>
+                              removeFromCart(item.cartId || item.id)
+                            }
                             className="p-1.5 text-zinc-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors"
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
                         </div>
                         <div className="flex items-center gap-2 bg-zinc-100 rounded-md p-0.5">
-                          <button onClick={() => updateQty(item.cartId || item.id, -1)} className="w-8 h-8 rounded bg-white shadow-sm flex items-center justify-center text-zinc-700 hover:bg-zinc-50">
+                          <button
+                            onClick={() =>
+                              updateQty(item.cartId || item.id, -1)
+                            }
+                            className="w-8 h-8 rounded bg-white shadow-sm flex items-center justify-center text-zinc-700 hover:bg-zinc-50"
+                          >
                             <Minus className="w-3.5 h-3.5" />
                           </button>
-                          <span className="font-bold text-sm w-4 text-center text-zinc-900">{item.qty}</span>
-                          <button onClick={() => updateQty(item.cartId || item.id, 1)} className="w-8 h-8 rounded bg-white shadow-sm flex items-center justify-center text-zinc-700 hover:bg-zinc-50">
+                          <span className="font-bold text-sm w-4 text-center text-zinc-900">
+                            {item.qty}
+                          </span>
+                          <button
+                            onClick={() => updateQty(item.cartId || item.id, 1)}
+                            className="w-8 h-8 rounded bg-white shadow-sm flex items-center justify-center text-zinc-700 hover:bg-zinc-50"
+                          >
                             <Plus className="w-3.5 h-3.5" />
                           </button>
                         </div>
@@ -889,7 +1078,9 @@ export default function OrderPage() {
                 <div className="space-y-3 pt-1">
                   <div className="h-px bg-zinc-200" />
                   <div className="space-y-1.5">
-                    <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider">Order Notes</label>
+                    <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider">
+                      Order Notes
+                    </label>
                     <textarea
                       value={orderNote}
                       onChange={(e) => setOrderNote(e.target.value)}
@@ -909,13 +1100,24 @@ export default function OrderPage() {
                 <span>Subtotal</span>
                 <span className="text-zinc-900">${subtotal.toFixed(2)}</span>
               </div>
+              {discountAmount > 0 && (
+                <div className="flex justify-between text-sm font-semibold text-green-600">
+                  <span>
+                    Discount
+                    {appliedDiscount?.code ? ` (${appliedDiscount.code})` : ""}
+                  </span>
+                  <span>-${discountAmount.toFixed(2)}</span>
+                </div>
+              )}
               <div className="flex justify-between text-sm font-semibold text-zinc-500">
                 <span>Tax</span>
                 <span className="text-zinc-900">${totalTax.toFixed(2)}</span>
               </div>
               <div className="flex justify-between items-center pt-1.5 border-t border-zinc-100">
                 <span className="text-base font-bold text-zinc-900">Total</span>
-                <span className="text-2xl font-black text-zinc-900 leading-none">${total.toFixed(2)}</span>
+                <span className="text-2xl font-black text-zinc-900 leading-none">
+                  ${total.toFixed(2)}
+                </span>
               </div>
             </div>
 
@@ -925,7 +1127,11 @@ export default function OrderPage() {
                 disabled={cart.length === 0 || isSubmitting}
                 className="flex-1 h-14 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm rounded-xl shadow-none"
               >
-                {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : "Kitchen / KOT"}
+                {isSubmitting ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  "Kitchen / KOT"
+                )}
               </Button>
               <Button
                 onClick={() => setIsPaymentModalOpen(true)}
@@ -938,17 +1144,24 @@ export default function OrderPage() {
           </div>
         </div>
       </div>
-      
+
       {/* KITCHEN MODAL ONLY FOR WALK-INS (sessionId === "new") */}
       {isKitchenModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-900/50 backdrop-blur-sm">
           <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl flex flex-col">
             <div className="p-5 border-b border-zinc-100 flex items-center justify-between">
               <div>
-                <h2 className="text-lg font-bold text-zinc-900">Confirm Order</h2>
-                <p className="text-sm font-semibold text-zinc-500 mt-0.5">Guest info or table number required.</p>
+                <h2 className="text-lg font-bold text-zinc-900">
+                  Confirm Order
+                </h2>
+                <p className="text-sm font-semibold text-zinc-500 mt-0.5">
+                  Guest info or table number required.
+                </p>
               </div>
-              <button onClick={() => setIsKitchenModalOpen(false)} className="w-8 h-8 bg-zinc-100 rounded-full flex items-center justify-center text-zinc-500 hover:bg-zinc-200">
+              <button
+                onClick={() => setIsKitchenModalOpen(false)}
+                className="w-8 h-8 bg-zinc-100 rounded-full flex items-center justify-center text-zinc-500 hover:bg-zinc-200"
+              >
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -968,7 +1181,9 @@ export default function OrderPage() {
 
               <div className="flex items-center gap-3 my-1">
                 <div className="flex-1 h-px bg-zinc-100" />
-                <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">or</span>
+                <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">
+                  or
+                </span>
                 <div className="flex-1 h-px bg-zinc-100" />
               </div>
 
@@ -998,7 +1213,11 @@ export default function OrderPage() {
                 disabled={isSubmitting}
                 className="flex-2 h-12 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-none flex items-center justify-center"
               >
-                {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : "Confirm & Send"}
+                {isSubmitting ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  "Confirm & Send"
+                )}
               </Button>
             </div>
           </div>
@@ -1007,258 +1226,744 @@ export default function OrderPage() {
 
       {/* PAYMENT MODAL */}
       {isPaymentModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-900/50 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl flex flex-col max-h-[90vh]">
-            <div className="p-5 border-b border-zinc-100 flex items-center justify-between">
-              <h2 className="text-xl font-black text-zinc-900">Payment</h2>
-              <button onClick={() => setIsPaymentModalOpen(false)} className="w-8 h-8 bg-zinc-100 rounded-full flex items-center justify-center text-zinc-500 hover:bg-zinc-200 transition-colors">
-                <X className="w-4 h-4" />
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-zinc-900/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl w-full max-w-5xl shadow-2xl flex flex-col max-h-[94vh] overflow-hidden">
+            {/* Header */}
+            <div className="px-5 py-4 border-b border-zinc-100 flex items-center justify-between shrink-0">
+              <h2 className="text-xl font-black text-zinc-900 tracking-tight">PAYMENT</h2>
+              <button
+                onClick={() => setIsPaymentModalOpen(false)}
+                className="w-10 h-10 bg-zinc-100 rounded-full flex items-center justify-center text-zinc-500 hover:bg-zinc-200 transition-colors"
+                aria-label="Close payment"
+              >
+                <X className="w-5 h-5" />
               </button>
             </div>
-            
-            <div className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-6">
-              <div className="flex flex-col items-center justify-center py-5 bg-zinc-50 rounded-xl border border-zinc-200">
-                <span className="text-sm font-bold text-zinc-500 uppercase tracking-wider mb-1">Total Due</span>
-                <span className="text-4xl font-black text-zinc-900 leading-none">${total.toFixed(2)}</span>
-              </div>
 
-              <div className="flex gap-2 p-1 bg-zinc-100 rounded-lg">
-                {['Card', 'Cash', 'GiftCard'].map(method => (
-                  <button
-                    key={method}
-                    onClick={() => setPaymentMethod(method)}
-                    className={`flex-1 py-2.5 text-sm font-bold rounded-md transition-all ${
-                      paymentMethod === method 
-                        ? 'bg-white text-zinc-900 shadow-sm' 
-                        : 'text-zinc-500 hover:text-zinc-700'
-                    }`}
-                  >
-                    {method === 'GiftCard' ? 'Gift Card' : method}
-                  </button>
-                ))}
-              </div>
-
-              {paymentMethod === 'Cash' && (
-                <div className="space-y-4 animate-in fade-in duration-200">
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold text-zinc-900 uppercase tracking-wider">Apply Gift Card (Optional)</label>
-                    <div className="flex gap-2">
-                      <div className="relative flex-1">
-                        <Tag className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
-                        <input
-                          type="text"
-                          value={giftCardCode}
-                          onChange={(e) => setGiftCardCode(e.target.value)}
-                          placeholder="Enter code..."
-                          className="w-full pl-9 pr-4 py-2 bg-white border border-zinc-200 rounded-lg font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 uppercase"
-                        />
-                      </div>
-                      <Button onClick={verifyGiftCard} disabled={!giftCardCode || isVerifyingGiftCard} className="bg-zinc-900 hover:bg-zinc-800 text-white font-bold px-4 rounded-lg shadow-none">
-                        {isVerifyingGiftCard ? <Loader2 className="w-4 h-4 animate-spin" /> : "Verify"}
-                      </Button>
+            {/* Body: two columns on tablet+ */}
+            <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar">
+              <div className="grid grid-cols-1 md:grid-cols-2 min-h-full">
+                {/* LEFT — Order Summary + Discount */}
+                <div className="p-5 md:p-6 border-b md:border-b-0 md:border-r border-zinc-100 bg-zinc-50/60 space-y-5">
+                  <div>
+                    <p className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider mb-3">
+                      Order Summary
+                    </p>
+                    <div className="flex flex-wrap gap-2 mb-4">
+                      {activeOrder?.orderNumber && (
+                        <span className="inline-flex items-center px-2.5 py-1 rounded-lg bg-white border border-zinc-200 text-xs font-bold text-zinc-800">
+                          Order #{activeOrder.orderNumber}
+                        </span>
+                      )}
+                      {(activeOrder?.tableNo ||
+                        (sessionId === "new" && guestTable)) && (
+                        <span className="inline-flex items-center px-2.5 py-1 rounded-lg bg-white border border-zinc-200 text-xs font-bold text-zinc-800">
+                          Table {activeOrder?.tableNo || guestTable}
+                        </span>
+                      )}
+                      {guestName && (
+                        <span className="inline-flex items-center px-2.5 py-1 rounded-lg bg-white border border-zinc-200 text-xs font-bold text-zinc-800">
+                          {guestName}
+                        </span>
+                      )}
                     </div>
-                    {giftCardError && <p className="text-xs font-bold text-red-500 mt-1">{giftCardError}</p>}
+
+                    <div className="bg-white rounded-xl border border-zinc-200 p-4 space-y-2.5 shadow-sm">
+                      <div className="flex justify-between text-sm font-semibold text-zinc-500">
+                        <span>Subtotal</span>
+                        <span className="text-zinc-900">${subtotal.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between text-sm font-semibold text-zinc-500">
+                        <span>Tax</span>
+                        <span className="text-zinc-900">${totalTax.toFixed(2)}</span>
+                      </div>
+                      {discountAmount > 0 && (
+                        <div className="flex justify-between text-sm font-semibold text-green-600">
+                          <span>
+                            Discount
+                            {appliedDiscount?.code ? ` (${appliedDiscount.code})` : ""}
+                          </span>
+                          <span>-${discountAmount.toFixed(2)}</span>
+                        </div>
+                      )}
+                      <div className="h-px bg-zinc-200 my-1" />
+                      <div className="flex justify-between items-end pt-1">
+                        <span className="text-sm font-black text-zinc-900 uppercase tracking-wide">
+                          Total Due
+                        </span>
+                        <span className="text-3xl font-black text-zinc-900 leading-none">
+                          ${total.toFixed(2)}
+                        </span>
+                      </div>
+                    </div>
                   </div>
 
-                  {giftCardBalance !== null && (
-                    <div className="p-4 bg-green-50 border border-green-200 rounded-xl space-y-2">
-                      <div className="flex justify-between items-center text-sm">
-                        <span className="font-bold text-green-900">Applied Gift Card Balance</span>
-                        <span className="font-black text-green-700">${giftCardBalance.toFixed(2)}</span>
-                      </div>
-                      <div className="flex justify-between items-center text-sm pt-2 border-t border-green-200/50">
-                        <span className="font-bold text-orange-600">Remaining Balance Due (Cash)</span>
-                        <span className="font-black text-orange-600">${giftCardSplitAmount.toFixed(2)}</span>
-                      </div>
-                    </div>
-                  )}
-
-                  {(giftCardBalance === null || giftCardSplitAmount > 0) && (
-                    <div className="space-y-2">
-                      <label className="text-xs font-bold text-zinc-900 uppercase tracking-wider">Amount Tendered</label>
-                      <div className="relative">
-                        <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-400" />
-                        <input
-                          type="number"
-                          min="0"
-                          value={amountTendered}
-                          onChange={(e) => setAmountTendered(e.target.value)}
-                          placeholder="0.00"
-                          className="w-full pl-10 pr-4 py-3 bg-white border border-zinc-200 rounded-xl font-bold text-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
-                        />
-                      </div>
-                    </div>
-                  )}
-                  
-                  {parseFloat(amountTendered) > (giftCardBalance !== null ? giftCardSplitAmount : total) && (
-                    <div className="p-4 bg-orange-50 border border-orange-200 rounded-xl">
-                      <div className="flex justify-between items-center mb-3">
-                        <span className="text-sm font-bold text-orange-900">Change Due</span>
-                        <span className="text-xl font-black text-orange-600">${(parseFloat(amountTendered) - (giftCardBalance !== null ? giftCardSplitAmount : total)).toFixed(2)}</span>
-                      </div>
-                      <label className="flex items-center gap-3 cursor-pointer group">
-                        <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${tipAmount > 0 ? 'bg-orange-500 border-orange-500' : 'bg-white border-zinc-300 group-hover:border-orange-400'}`}>
-                          {tipAmount > 0 && <CheckCircle2 className="w-3.5 h-3.5 text-white" />}
+                  {/* Discount */}
+                  <div className="space-y-2">
+                    <p className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider">
+                      Apply Discount
+                    </p>
+                    {appliedDiscount ? (
+                      <div className="bg-green-50 border border-green-200 rounded-xl p-4 space-y-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <CheckCircle2 className="w-5 h-5 text-green-600 shrink-0" />
+                            <div className="min-w-0">
+                              <p className="text-sm font-black text-green-900 truncate">
+                                {appliedDiscount.code}
+                              </p>
+                              <p className="text-sm font-bold text-green-700">
+                                -${discountAmount.toFixed(2)}
+                              </p>
+                            </div>
+                          </div>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={handleRemoveDiscount}
+                            className="h-10 px-4 rounded-lg border-green-200 text-green-800 hover:bg-green-100 font-bold text-sm shadow-none shrink-0"
+                          >
+                            Remove
+                          </Button>
                         </div>
-                        <input
-                          type="checkbox"
-                          className="hidden"
-                          checked={tipAmount > 0}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setTipAmount(Math.round((parseFloat(amountTendered) - (giftCardBalance !== null ? giftCardSplitAmount : total)) * 100) / 100);
-                            } else {
-                              setTipAmount(0);
+                      </div>
+                    ) : (
+                      <div className="flex gap-2">
+                        <div className="relative flex-1">
+                          <Percent className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+                          <input
+                            type="text"
+                            value={discountCode}
+                            onChange={(e) =>
+                              setDiscountCode(e.target.value.toUpperCase())
                             }
-                          }}
-                        />
-                        <span className="text-sm font-bold text-orange-900">Keep as Tip</span>
-                      </label>
+                            placeholder="Enter discount code..."
+                            className="w-full h-12 pl-9 pr-4 bg-white border border-zinc-200 rounded-xl font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 uppercase"
+                          />
+                        </div>
+                        <Button
+                          type="button"
+                          onClick={handleApplyDiscount}
+                          disabled={!discountCode.trim()}
+                          className="h-12 px-5 bg-zinc-900 hover:bg-zinc-800 text-white font-bold rounded-xl shadow-none"
+                        >
+                          Apply
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Split payment breakdown */}
+                  {giftCardBalance !== null && (
+                    <div className="bg-white rounded-xl border border-zinc-200 p-4 space-y-2 shadow-sm">
+                      <p className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider mb-1">
+                        Payment Breakdown
+                      </p>
+                      <div className="flex justify-between text-sm font-semibold text-zinc-600">
+                        <span>Gift Card</span>
+                        <span className="text-zinc-900">
+                          $
+                          {Math.max(
+                            0,
+                            Math.round((total - giftCardSplitAmount) * 100) / 100,
+                          ).toFixed(2)}
+                        </span>
+                      </div>
+                      {giftCardSplitAmount > 0 && (
+                        <div className="flex justify-between text-sm font-semibold text-zinc-600">
+                          <span>
+                            {paymentMethod === "Card"
+                              ? "Card"
+                              : paymentMethod === "Cash"
+                                ? "Cash"
+                                : "Remaining"}
+                          </span>
+                          <span className="text-zinc-900">
+                            ${giftCardSplitAmount.toFixed(2)}
+                          </span>
+                        </div>
+                      )}
+                      <div className="h-px bg-zinc-200" />
+                      <div className="flex justify-between text-sm font-black text-zinc-900">
+                        <span>Total</span>
+                        <span>${total.toFixed(2)}</span>
+                      </div>
                     </div>
                   )}
                 </div>
-              )}
 
-              {paymentMethod === 'Card' && (
-                <div className="space-y-4 animate-in fade-in duration-200">
-                  <label className="text-xs font-bold text-zinc-900 uppercase tracking-wider">Select Card Type</label>
-                  <div className="grid grid-cols-5 gap-2">
-                    {[
-                      { name: 'Visa', image: '/card/visa.png' },
-                      { name: 'Mastercard', image: '/card/mastercard.webp' },
-                      { name: 'RuPay', image: '/card/rupay.webp' },
-                      { name: 'Amex', image: '/card/american-express.webp' },
-                      { name: 'Discover', image: '/card/discover.png' },
-                    ].map(card => (
-                      <button
-                        key={card.name}
-                        onClick={() => setSelectedCardType(card.name)}
-                        className={`flex flex-col items-center justify-center p-2 rounded-xl border transition-all ${
-                          selectedCardType === card.name 
-                            ? 'border-orange-500 bg-orange-50 ring-1 ring-orange-500' 
-                            : 'border-zinc-200 bg-white hover:border-orange-300'
-                        }`}
-                      >
-                        <div className="relative w-10 h-6 mb-1.5">
-                          <Image src={card.image} alt={card.name} fill className="object-contain" />
-                        </div>
-                        <span className="text-[9px] font-bold text-zinc-600 text-center leading-tight">{card.name}</span>
-                      </button>
-                    ))}
+                {/* RIGHT — Payment Method */}
+                <div className="p-5 md:p-6 space-y-5">
+                  <div>
+                    <p className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider mb-3">
+                      Payment Method
+                    </p>
+                    <div className="grid grid-cols-3 gap-2.5">
+                      {[
+                        { key: "Card", label: "Card", Icon: CreditCard },
+                        { key: "Cash", label: "Cash", Icon: Banknote },
+                        { key: "GiftCard", label: "Gift Card", Icon: Gift },
+                      ].map(({ key, label, Icon }) => (
+                        <button
+                          key={key}
+                          type="button"
+                          onClick={() => setPaymentMethod(key)}
+                          className={`flex flex-col items-center justify-center gap-1.5 min-h-[72px] rounded-xl border-2 transition-all ${
+                            paymentMethod === key
+                              ? "border-orange-500 bg-orange-50 text-orange-700 shadow-sm"
+                              : "border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300"
+                          }`}
+                        >
+                          <Icon className="w-6 h-6" strokeWidth={2} />
+                          <span className="text-xs font-black uppercase tracking-wide">
+                            {label}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
                   </div>
 
-                  {selectedCardType && (
-                    <div className="space-y-2 animate-in fade-in duration-200">
-                      <label className="text-xs font-bold text-zinc-900 uppercase tracking-wider">Amount to Charge</label>
-                      <div className="relative">
-                        <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-400" />
-                        <input
-                          type="number"
-                          min="0"
-                          value={cardAmountTendered}
-                          onChange={(e) => setCardAmountTendered(e.target.value)}
-                          placeholder={(giftCardBalance !== null ? giftCardSplitAmount : total).toFixed(2)}
-                          className="w-full pl-10 pr-4 py-3 bg-white border border-zinc-200 rounded-xl font-bold text-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
-                        />
+                  {/* CARD */}
+                  {paymentMethod === "Card" && (
+                    <div className="space-y-4">
+                      <h3 className="text-sm font-black text-zinc-900 uppercase tracking-wide">
+                        Card Payment
+                      </h3>
+
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
+                          Apply Gift Card (Optional)
+                        </label>
+                        <div className="flex gap-2">
+                          <div className="relative flex-1">
+                            <Tag className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+                            <input
+                              type="text"
+                              value={giftCardCode}
+                              onChange={(e) => setGiftCardCode(e.target.value)}
+                              placeholder="Enter code..."
+                              className="w-full h-12 pl-9 pr-4 bg-white border border-zinc-200 rounded-xl font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 uppercase"
+                            />
+                          </div>
+                          <Button
+                            onClick={verifyGiftCard}
+                            disabled={!giftCardCode || isVerifyingGiftCard}
+                            className="h-12 px-4 bg-zinc-900 hover:bg-zinc-800 text-white font-bold rounded-xl shadow-none"
+                          >
+                            {isVerifyingGiftCard ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              "Verify"
+                            )}
+                          </Button>
+                        </div>
+                        {giftCardError && (
+                          <p className="text-xs font-bold text-red-500">
+                            {giftCardError}
+                          </p>
+                        )}
                       </div>
+
+                      {giftCardBalance !== null && (
+                        <div className="p-4 bg-green-50 border border-green-200 rounded-xl space-y-2">
+                          <div className="flex justify-between items-center text-sm">
+                            <span className="font-bold text-green-900">
+                              Gift Card Applied
+                            </span>
+                            <span className="font-black text-green-700">
+                              $
+                              {Math.max(
+                                0,
+                                Math.round((total - giftCardSplitAmount) * 100) /
+                                  100,
+                              ).toFixed(2)}
+                            </span>
+                          </div>
+                          <div className="flex justify-between items-center text-sm pt-2 border-t border-green-200/50">
+                            <span className="font-bold text-orange-600">
+                              Remaining Due (Card)
+                            </span>
+                            <span className="font-black text-orange-600">
+                              ${giftCardSplitAmount.toFixed(2)}
+                            </span>
+                          </div>
+                        </div>
+                      )}
+
+                      
+{selectedCardType &&
+                            cardAmountTendered &&
+                            parseFloat(cardAmountTendered) >
+                              (giftCardBalance !== null
+                                ? giftCardSplitAmount
+                                : total) && (
+                              <div className="p-4 bg-orange-50 border border-orange-200 rounded-xl">
+                                <div className="flex justify-between items-center mb-3">
+                                  <span className="text-sm font-bold text-orange-900">
+                                    Overpayment / Tip
+                                  </span>
+                                  <span className="text-xl font-black text-orange-600">
+                                    $
+                                    {(
+                                      parseFloat(cardAmountTendered) -
+                                      (giftCardBalance !== null
+                                        ? giftCardSplitAmount
+                                        : total)
+                                    ).toFixed(2)}
+                                  </span>
+                                </div>
+                                <label className="flex items-center gap-3 cursor-pointer group min-h-[44px]">
+                                  <div
+                                    className={`w-6 h-6 rounded border flex items-center justify-center transition-colors ${tipAmount > 0 ? "bg-orange-500 border-orange-500" : "bg-white border-zinc-300 group-hover:border-orange-400"}`}
+                                  >
+                                    {tipAmount > 0 && (
+                                      <CheckCircle2 className="w-4 h-4 text-white" />
+                                    )}
+                                  </div>
+                                  <input
+                                    type="checkbox"
+                                    className="hidden"
+                                    checked={tipAmount > 0}
+                                    onChange={(e) => {
+                                      if (e.target.checked) {
+                                        setTipAmount(
+                                          Math.round(
+                                            (parseFloat(cardAmountTendered) -
+                                              (giftCardBalance !== null
+                                                ? giftCardSplitAmount
+                                                : total)) *
+                                              100,
+                                          ) / 100,
+                                        );
+                                      } else {
+                                        setTipAmount(0);
+                                      }
+                                    }}
+                                  />
+                                  <span className="text-sm font-bold text-orange-900">
+                                    Keep as Tip
+                                  </span>
+                                </label>
+                              </div>
+                            )}
+
+                      {(giftCardBalance === null || giftCardSplitAmount > 0) && (
+                        <>
+                          <div className="space-y-2">
+                            <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
+                              Select Card Type
+                            </label>
+                            <div className="grid grid-cols-5 gap-2">
+                              {[
+                                { name: "Visa", image: "/card/visa.png" },
+                                {
+                                  name: "Mastercard",
+                                  image: "/card/mastercard.webp",
+                                },
+                                { name: "RuPay", image: "/card/rupay.webp" },
+                                {
+                                  name: "Amex",
+                                  image: "/card/american-express.webp",
+                                },
+                                {
+                                  name: "Discover",
+                                  image: "/card/discover.png",
+                                },
+                              ].map((card) => (
+                                <button
+                                  key={card.name}
+                                  type="button"
+                                  onClick={() => setSelectedCardType(card.name)}
+                                  className={`flex flex-col items-center justify-center min-h-[64px] p-2 rounded-xl border-2 transition-all ${
+                                    selectedCardType === card.name
+                                      ? "border-orange-500 bg-orange-50 ring-1 ring-orange-500"
+                                      : "border-zinc-200 bg-white hover:border-orange-300"
+                                  }`}
+                                >
+                                  <div className="relative w-10 h-6 mb-1">
+                                    <Image
+                                      src={card.image}
+                                      alt={card.name}
+                                      fill
+                                      className="object-contain"
+                                    />
+                                  </div>
+                                  <span className="text-[10px] font-bold text-zinc-600 text-center leading-tight">
+                                    {card.name}
+                                  </span>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          {selectedCardType && (
+                            <div className="space-y-2">
+                              <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
+                                Amount to Charge
+                              </label>
+                              <div className="relative">
+                                <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-400" />
+                                <input
+                                  type="number"
+                                  min="0"
+                                  value={cardAmountTendered}
+                                  onChange={(e) =>
+                                    setCardAmountTendered(e.target.value)
+                                  }
+                                  placeholder={(giftCardBalance !== null
+                                    ? giftCardSplitAmount
+                                    : total
+                                  ).toFixed(2)}
+                                  className="w-full h-14 pl-10 pr-4 bg-white border border-zinc-200 rounded-xl font-bold text-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                                />
+                              </div>
+                            </div>
+                          )}
+
+                        </>
+                      )}
                     </div>
                   )}
 
-                  {selectedCardType && cardAmountTendered && parseFloat(cardAmountTendered) > (giftCardBalance !== null ? giftCardSplitAmount : total) && (
-                    <div className="p-4 bg-orange-50 border border-orange-200 rounded-xl">
-                      <div className="flex justify-between items-center mb-3">
-                        <span className="text-sm font-bold text-orange-900">Overpayment / Tip</span>
-                        <span className="text-xl font-black text-orange-600">${(parseFloat(cardAmountTendered) - (giftCardBalance !== null ? giftCardSplitAmount : total)).toFixed(2)}</span>
-                      </div>
-                      <label className="flex items-center gap-3 cursor-pointer group">
-                        <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${tipAmount > 0 ? 'bg-orange-500 border-orange-500' : 'bg-white border-zinc-300 group-hover:border-orange-400'}`}>
-                          {tipAmount > 0 && <CheckCircle2 className="w-3.5 h-3.5 text-white" />}
+                  {/* CASH */}
+                  {paymentMethod === "Cash" && (
+                    <div className="space-y-4">
+                      <h3 className="text-sm font-black text-zinc-900 uppercase tracking-wide">
+                        Cash Payment
+                      </h3>
+
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
+                          Apply Gift Card (Optional)
+                        </label>
+                        <div className="flex gap-2">
+                          <div className="relative flex-1">
+                            <Tag className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+                            <input
+                              type="text"
+                              value={giftCardCode}
+                              onChange={(e) => setGiftCardCode(e.target.value)}
+                              placeholder="Enter code..."
+                              className="w-full h-12 pl-9 pr-4 bg-white border border-zinc-200 rounded-xl font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 uppercase"
+                            />
+                          </div>
+                          <Button
+                            onClick={verifyGiftCard}
+                            disabled={!giftCardCode || isVerifyingGiftCard}
+                            className="h-12 px-4 bg-zinc-900 hover:bg-zinc-800 text-white font-bold rounded-xl shadow-none"
+                          >
+                            {isVerifyingGiftCard ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              "Verify"
+                            )}
+                          </Button>
                         </div>
-                        <input
-                          type="checkbox"
-                          className="hidden"
-                          checked={tipAmount > 0}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setTipAmount(Math.round((parseFloat(cardAmountTendered) - (giftCardBalance !== null ? giftCardSplitAmount : total)) * 100) / 100);
-                            } else {
-                              setTipAmount(0);
-                            }
-                          }}
-                        />
-                        <span className="text-sm font-bold text-orange-900">Keep as Tip</span>
-                      </label>
+                        {giftCardError && (
+                          <p className="text-xs font-bold text-red-500">
+                            {giftCardError}
+                          </p>
+                        )}
+                      </div>
+
+                      {giftCardBalance !== null && (
+                        <div className="p-4 bg-green-50 border border-green-200 rounded-xl space-y-2">
+                          <div className="flex justify-between items-center text-sm">
+                            <span className="font-bold text-green-900">
+                              Gift Card Applied
+                            </span>
+                            <span className="font-black text-green-700">
+                              $
+                              {Math.max(
+                                0,
+                                Math.round((total - giftCardSplitAmount) * 100) /
+                                  100,
+                              ).toFixed(2)}
+                            </span>
+                          </div>
+                          <div className="flex justify-between items-center text-sm pt-2 border-t border-green-200/50">
+                            <span className="font-bold text-orange-600">
+                              Remaining Due (Cash)
+                            </span>
+                            <span className="font-black text-orange-600">
+                              ${giftCardSplitAmount.toFixed(2)}
+                            </span>
+                          </div>
+                        </div>
+                      )}
+
+                      {(giftCardBalance === null || giftCardSplitAmount > 0) && (
+                        <>
+                          <div className="bg-zinc-50 border border-zinc-200 rounded-xl p-4 flex justify-between items-center">
+                            <span className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
+                              Amount Due
+                            </span>
+                            <span className="text-2xl font-black text-zinc-900">
+                              $
+                              {(giftCardBalance !== null
+                                ? giftCardSplitAmount
+                                : total
+                              ).toFixed(2)}
+                            </span>
+                          </div>
+
+                          <div className="space-y-2">
+                            <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
+                              Amount Tendered
+                            </label>
+                            <div className="relative">
+                              <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-400" />
+                              <input
+                                type="number"
+                                min="0"
+                                value={amountTendered}
+                                onChange={(e) =>
+                                  setAmountTendered(e.target.value)
+                                }
+                                placeholder="0.00"
+                                className="w-full h-14 pl-10 pr-4 bg-white border border-zinc-200 rounded-xl font-bold text-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-5 gap-2">
+                            {[
+                              {
+                                label: "Exact",
+                                value: (
+                                  giftCardBalance !== null
+                                    ? giftCardSplitAmount
+                                    : total
+                                ).toFixed(2),
+                              },
+                              { label: "$35", value: "35" },
+                              { label: "$40", value: "40" },
+                              { label: "$50", value: "50" },
+                              { label: "$100", value: "100" },
+                            ].map((btn) => (
+                              <button
+                                key={btn.label}
+                                type="button"
+                                onClick={() => setAmountTendered(btn.value)}
+                                className="min-h-[48px] rounded-xl border border-zinc-200 bg-white text-sm font-bold text-zinc-800 hover:border-orange-400 hover:bg-orange-50 transition-colors"
+                              >
+                                {btn.label}
+                              </button>
+                            ))}
+                          </div>
+
+                          {parseFloat(amountTendered) >
+                            (giftCardBalance !== null
+                              ? giftCardSplitAmount
+                              : total) && (
+                            <div className="p-4 bg-orange-50 border border-orange-200 rounded-xl">
+                              <div className="flex justify-between items-center mb-3">
+                                <span className="text-sm font-bold text-orange-900">
+                                  Change Due
+                                </span>
+                                <span className="text-xl font-black text-orange-600">
+                                  $
+                                  {(
+                                    parseFloat(amountTendered) -
+                                    (giftCardBalance !== null
+                                      ? giftCardSplitAmount
+                                      : total)
+                                  ).toFixed(2)}
+                                </span>
+                              </div>
+                              <label className="flex items-center gap-3 cursor-pointer group min-h-[44px]">
+                                <div
+                                  className={`w-6 h-6 rounded border flex items-center justify-center transition-colors ${tipAmount > 0 ? "bg-orange-500 border-orange-500" : "bg-white border-zinc-300 group-hover:border-orange-400"}`}
+                                >
+                                  {tipAmount > 0 && (
+                                    <CheckCircle2 className="w-4 h-4 text-white" />
+                                  )}
+                                </div>
+                                <input
+                                  type="checkbox"
+                                  className="hidden"
+                                  checked={tipAmount > 0}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      setTipAmount(
+                                        Math.round(
+                                          (parseFloat(amountTendered) -
+                                            (giftCardBalance !== null
+                                              ? giftCardSplitAmount
+                                              : total)) *
+                                            100,
+                                        ) / 100,
+                                      );
+                                    } else {
+                                      setTipAmount(0);
+                                    }
+                                  }}
+                                />
+                                <span className="text-sm font-bold text-orange-900">
+                                  Keep as Tip
+                                </span>
+                              </label>
+                            </div>
+                          )}
+                        </>
+                      )}
                     </div>
                   )}
-                </div>
-              )}
 
-              {paymentMethod === 'GiftCard' && (
-                <div className="space-y-4 animate-in fade-in duration-200">
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold text-zinc-900 uppercase tracking-wider">Gift Card Code</label>
-                    <div className="flex gap-2">
-                      <div className="relative flex-1">
-                        <Tag className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
-                        <input
-                          type="text"
-                          value={giftCardCode}
-                          onChange={(e) => setGiftCardCode(e.target.value)}
-                          placeholder="Enter code..."
-                          className="w-full pl-9 pr-4 py-2.5 bg-white border border-zinc-200 rounded-lg font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 uppercase"
-                        />
-                      </div>
-                      <Button onClick={verifyGiftCard} disabled={!giftCardCode || isVerifyingGiftCard} className="bg-zinc-900 hover:bg-zinc-800 text-white font-bold px-4 rounded-lg shadow-none">
-                        {isVerifyingGiftCard ? <Loader2 className="w-4 h-4 animate-spin" /> : "Verify"}
-                      </Button>
-                    </div>
-                    {giftCardError && <p className="text-xs font-bold text-red-500 mt-1">{giftCardError}</p>}
-                  </div>
+                  {/* GIFT CARD */}
+                  {paymentMethod === "GiftCard" && (
+                    <div className="space-y-4">
+                      <h3 className="text-sm font-black text-zinc-900 uppercase tracking-wide">
+                        Gift Card Payment
+                      </h3>
 
-                  {giftCardBalance !== null && (
-                    <div className="p-4 bg-green-50 border border-green-200 rounded-xl space-y-2">
-                      <div className="flex justify-between items-center text-sm">
-                        <span className="font-bold text-green-900">Available Balance</span>
-                        <span className="font-black text-green-700">${giftCardBalance.toFixed(2)}</span>
-                      </div>
-                      {giftCardSplitAmount > 0 ? (
-                        <div className="flex justify-between items-center text-sm pt-2 border-t border-green-200/50">
-                          <span className="font-bold text-orange-600">Remaining Balance Due</span>
-                          <span className="font-black text-orange-600">${giftCardSplitAmount.toFixed(2)}</span>
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
+                          Gift Card Code
+                        </label>
+                        <div className="flex gap-2">
+                          <div className="relative flex-1">
+                            <Tag className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+                            <input
+                              type="text"
+                              value={giftCardCode}
+                              onChange={(e) => setGiftCardCode(e.target.value)}
+                              placeholder="Enter code..."
+                              className="w-full h-12 pl-9 pr-4 bg-white border border-zinc-200 rounded-xl font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 uppercase"
+                            />
+                          </div>
+                          <Button
+                            onClick={verifyGiftCard}
+                            disabled={!giftCardCode || isVerifyingGiftCard}
+                            className="h-12 px-4 bg-zinc-900 hover:bg-zinc-800 text-white font-bold rounded-xl shadow-none"
+                          >
+                            {isVerifyingGiftCard ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              "Verify"
+                            )}
+                          </Button>
                         </div>
-                      ) : (
-                        <div className="flex justify-between items-center text-sm pt-2 border-t border-green-200/50">
-                          <span className="font-bold text-green-900">Remaining Balance After</span>
-                          <span className="font-bold text-green-700">${(giftCardBalance - total).toFixed(2)}</span>
+                        {giftCardError && (
+                          <p className="text-xs font-bold text-red-500">
+                            {giftCardError}
+                          </p>
+                        )}
+                      </div>
+
+                      {giftCardBalance !== null && (
+                        <div className="p-4 bg-green-50 border border-green-200 rounded-xl space-y-2.5">
+                          <div className="flex justify-between items-center text-sm">
+                            <span className="font-bold text-green-900">
+                              Available Balance
+                            </span>
+                            <span className="font-black text-green-700">
+                              ${giftCardBalance.toFixed(2)}
+                            </span>
+                          </div>
+                          <div className="flex justify-between items-center text-sm">
+                            <span className="font-bold text-green-900">
+                              Amount Applied
+                            </span>
+                            <span className="font-black text-green-700">
+                              $
+                              {Math.max(
+                                0,
+                                Math.round((total - giftCardSplitAmount) * 100) /
+                                  100,
+                              ).toFixed(2)}
+                            </span>
+                          </div>
+                          {giftCardSplitAmount > 0 ? (
+                            <>
+                              <div className="h-px bg-green-200/80" />
+                              <div className="flex justify-between items-center text-sm">
+                                <span className="font-bold text-zinc-700">
+                                  Order Total
+                                </span>
+                                <span className="font-black text-zinc-900">
+                                  ${total.toFixed(2)}
+                                </span>
+                              </div>
+                              <div className="flex justify-between items-center text-sm">
+                                <span className="font-bold text-orange-600">
+                                  Remaining Due
+                                </span>
+                                <span className="font-black text-orange-600">
+                                  ${giftCardSplitAmount.toFixed(2)}
+                                </span>
+                              </div>
+                              <div className="grid grid-cols-2 gap-2 pt-2">
+                                <button
+                                  type="button"
+                                  onClick={() => setPaymentMethod("Cash")}
+                                  className="min-h-[48px] rounded-xl border-2 border-zinc-200 bg-white font-bold text-sm text-zinc-800 hover:border-orange-400 hover:bg-orange-50"
+                                >
+                                  Pay Remaining Cash
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setPaymentMethod("Card")}
+                                  className="min-h-[48px] rounded-xl border-2 border-zinc-200 bg-white font-bold text-sm text-zinc-800 hover:border-orange-400 hover:bg-orange-50"
+                                >
+                                  Pay Remaining Card
+                                </button>
+                              </div>
+                            </>
+                          ) : (
+                            <div className="flex justify-between items-center text-sm pt-2 border-t border-green-200/50">
+                              <span className="font-bold text-green-900">
+                                Remaining Balance After
+                              </span>
+                              <span className="font-bold text-green-700">
+                                ${(giftCardBalance - total).toFixed(2)}
+                              </span>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
                   )}
                 </div>
-              )}
+              </div>
             </div>
 
-            <div className="p-5 border-t border-zinc-100 flex gap-3 shrink-0">
+            {/* Footer */}
+            <div className="p-4 sm:p-5 border-t border-zinc-100 flex gap-3 shrink-0 bg-white">
               <Button
                 variant="outline"
                 onClick={() => setIsPaymentModalOpen(false)}
-                className="flex-1 h-12 rounded-xl font-bold border-zinc-200 text-zinc-700 shadow-none hover:bg-zinc-50"
+                className="flex-1 h-14 rounded-xl font-bold border-zinc-200 text-zinc-700 shadow-none hover:bg-zinc-50 text-base"
               >
                 Cancel
               </Button>
               <Button
                 onClick={handlePayment}
                 disabled={
-                  isSubmitting || 
-                  (paymentMethod === 'Cash' && giftCardSplitAmount > 0 && (!amountTendered || parseFloat(amountTendered) < giftCardSplitAmount)) ||
-                  (paymentMethod === 'Cash' && giftCardBalance === null && (!amountTendered || parseFloat(amountTendered) < total)) ||
-                  (paymentMethod === 'GiftCard' && (giftCardBalance === null)) ||
-                  (paymentMethod === 'Card' && !selectedCardType) ||
-                  (paymentMethod === 'Card' && cardAmountTendered && parseFloat(cardAmountTendered) < (giftCardBalance !== null ? giftCardSplitAmount : total))
+                  isSubmitting ||
+                  (paymentMethod === "Cash" &&
+                    giftCardSplitAmount > 0 &&
+                    (!amountTendered ||
+                      parseFloat(amountTendered) < giftCardSplitAmount)) ||
+                  (paymentMethod === "Cash" &&
+                    giftCardBalance === null &&
+                    (!amountTendered || parseFloat(amountTendered) < total)) ||
+                  (paymentMethod === "GiftCard" && giftCardBalance === null) ||
+                  (paymentMethod === "Card" &&
+                    (giftCardBalance === null || giftCardSplitAmount > 0) &&
+                    !selectedCardType) ||
+                  (paymentMethod === "Card" &&
+                    cardAmountTendered &&
+                    parseFloat(cardAmountTendered) <
+                      (giftCardBalance !== null ? giftCardSplitAmount : total))
                 }
-                className="flex-2 h-12 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-bold shadow-none"
+                className="flex-[1.4] h-14 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-bold shadow-none text-base"
               >
-                {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : "Complete Payment"}
+                {isSubmitting ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  "Complete Payment"
+                )}
               </Button>
             </div>
           </div>
@@ -1270,27 +1975,46 @@ export default function OrderPage() {
         <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-zinc-900/50 backdrop-blur-sm">
           <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl flex flex-col max-h-[90vh]">
             <div className="p-5 border-b border-zinc-100 flex items-center justify-between">
-              <h2 className="text-xl font-bold text-zinc-900">Giftcard History</h2>
-              <button onClick={() => setIsGiftCardModalOpen(false)} className="w-8 h-8 rounded-full flex items-center justify-center text-zinc-500 hover:bg-zinc-100">
+              <h2 className="text-xl font-bold text-zinc-900">
+                Giftcard History
+              </h2>
+              <button
+                onClick={() => setIsGiftCardModalOpen(false)}
+                className="w-8 h-8 rounded-full flex items-center justify-center text-zinc-500 hover:bg-zinc-100"
+              >
                 <X className="w-4 h-4" />
               </button>
             </div>
-            
+
             <div className="p-5 space-y-4 overflow-y-auto">
               <div className="grid grid-cols-2 gap-4 bg-zinc-50 p-4 rounded-xl border border-zinc-200">
                 <div>
-                  <p className="text-xs font-bold text-zinc-500 uppercase">Code</p>
-                  <p className="font-mono text-zinc-900">{giftCardDetails.code}</p>
+                  <p className="text-xs font-bold text-zinc-500 uppercase">
+                    Code
+                  </p>
+                  <p className="font-mono text-zinc-900">
+                    {giftCardDetails.code}
+                  </p>
                 </div>
                 <div>
-                  <p className="text-xs font-bold text-zinc-500 uppercase">Balance</p>
-                  <p className="font-bold text-green-600">${(giftCardDetails.balance ?? giftCardDetails.value)?.toFixed(2)}</p>
+                  <p className="text-xs font-bold text-zinc-500 uppercase">
+                    Balance
+                  </p>
+                  <p className="font-bold text-green-600">
+                    $
+                    {(
+                      giftCardDetails.balance ?? giftCardDetails.value
+                    )?.toFixed(2)}
+                  </p>
                 </div>
               </div>
 
               <div>
-                <h3 className="text-sm font-bold text-zinc-900 mb-2">Usage History</h3>
-                {giftCardDetails.history && giftCardDetails.history.length > 0 ? (
+                <h3 className="text-sm font-bold text-zinc-900 mb-2">
+                  Usage History
+                </h3>
+                {giftCardDetails.history &&
+                giftCardDetails.history.length > 0 ? (
                   <div className="border border-zinc-200 rounded-lg overflow-hidden">
                     <table className="w-full text-sm text-left">
                       <thead className="bg-zinc-50 text-xs text-zinc-500 font-bold uppercase">
@@ -1303,25 +2027,40 @@ export default function OrderPage() {
                       <tbody className="divide-y divide-zinc-200">
                         {giftCardDetails.history.map((h, i) => (
                           <tr key={i}>
-                            <td className="px-4 py-2 text-zinc-600">{new Date(h.usedAt).toLocaleDateString()}</td>
-                            <td className="px-4 py-2 text-red-600">-${h.amountUsed?.toFixed(2)}</td>
-                            <td className="px-4 py-2 font-medium">${h.balanceAfter?.toFixed(2)}</td>
+                            <td className="px-4 py-2 text-zinc-600">
+                              {new Date(h.usedAt).toLocaleDateString()}
+                            </td>
+                            <td className="px-4 py-2 text-red-600">
+                              -${h.amountUsed?.toFixed(2)}
+                            </td>
+                            <td className="px-4 py-2 font-medium">
+                              ${h.balanceAfter?.toFixed(2)}
+                            </td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
                   </div>
                 ) : (
-                  <p className="text-sm text-zinc-500">No previous usage history.</p>
+                  <p className="text-sm text-zinc-500">
+                    No previous usage history.
+                  </p>
                 )}
               </div>
             </div>
 
             <div className="p-5 border-t border-zinc-100 flex gap-3 shrink-0">
-              <Button variant="outline" onClick={() => setIsGiftCardModalOpen(false)} className="flex-1 font-bold border-zinc-200 text-zinc-700 shadow-none">
+              <Button
+                variant="outline"
+                onClick={() => setIsGiftCardModalOpen(false)}
+                className="flex-1 font-bold border-zinc-200 text-zinc-700 shadow-none"
+              >
                 No, Cancel
               </Button>
-              <Button onClick={handleApplyGiftCard} className="flex-2 bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-none">
+              <Button
+                onClick={handleApplyGiftCard}
+                className="flex-2 bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-none"
+              >
                 Yes, Apply
               </Button>
             </div>
@@ -1337,11 +2076,15 @@ export default function OrderPage() {
               <div>
                 <h2 className="text-xl font-bold text-zinc-900">
                   {selectedProduct.productCode ? (
-                    <span className="text-orange-600 mr-2">{selectedProduct.productCode}</span>
+                    <span className="text-orange-600 mr-2">
+                      {selectedProduct.productCode}
+                    </span>
                   ) : null}
                   {selectedProduct.name}
                 </h2>
-                <p className="text-sm font-medium text-zinc-500 mt-0.5">Select variations and extras</p>
+                <p className="text-sm font-medium text-zinc-500 mt-0.5">
+                  Select variations and extras
+                </p>
               </div>
               <button
                 onClick={() => setIsOptionsModalOpen(false)}
@@ -1361,139 +2104,182 @@ export default function OrderPage() {
                   <div className="w-24 text-right">Final Price</div>
                 </div>
 
-                {selectedProduct.variants && selectedProduct.variants.length > 0 && (
-                  <div className="space-y-2">
-                    <span className="text-[13px] font-bold text-zinc-900 mb-2 block">Variants</span>
-                    <div className="grid gap-2">
-                      {selectedProduct.variants.map((v, idx) => {
-                        const discountAmount = calculateItemDiscount(selectedProduct, v.price);
-                        const discountedPrice = Math.max(0, v.price - discountAmount);
-                        const taxAmount = calculateItemTax(selectedProduct, discountedPrice);
-                        const finalPrice = discountedPrice + taxAmount;
+                {selectedProduct.variants &&
+                  selectedProduct.variants.length > 0 && (
+                    <div className="space-y-2">
+                      <span className="text-[13px] font-bold text-zinc-900 mb-2 block">
+                        Variants
+                      </span>
+                      <div className="grid gap-2">
+                        {selectedProduct.variants.map((v, idx) => {
+                          const discountAmount = calculateItemDiscount(
+                            selectedProduct,
+                            v.price,
+                          );
+                          const discountedPrice = Math.max(
+                            0,
+                            v.price - discountAmount,
+                          );
+                          const taxAmount = calculateItemTax(
+                            selectedProduct,
+                            discountedPrice,
+                          );
+                          const finalPrice = discountedPrice + taxAmount;
 
-                        return (
-                          <label
-                            key={idx}
-                            className={`flex items-center border p-3 rounded-lg cursor-pointer transition-colors group ${
-                              selectedSize === v.size ? "border-orange-500 bg-orange-50/30" : "border-zinc-200 hover:border-orange-300"
-                            }`}
-                          >
-                            <div className={`flex-1 flex items-center gap-3 text-[14px] font-bold ${selectedSize === v.size ? "text-zinc-900" : "text-zinc-700 group-hover:text-zinc-900"}`}>
-                              <input
-                                type="radio"
-                                name="size"
-                                checked={selectedSize === v.size}
-                                onChange={() => setSelectedSize(v.size)}
-                                className="w-4 h-4 accent-orange-500"
-                              />
-                              <span>{v.size}</span>
-                            </div>
-                            <div className="w-16 text-center font-bold text-[13px] text-zinc-900">
-                              ${v.price.toFixed(2)}
-                            </div>
-                            <div className="w-20 text-center text-red-500 font-medium text-[13px]">
-                              {discountAmount > 0 ? `-$${discountAmount.toFixed(2)}` : "-"}
-                            </div>
-                            <div className="w-20 text-center text-zinc-500 font-medium text-[13px]">
-                              +${taxAmount.toFixed(2)}
-                            </div>
-                            <div className="w-24 text-right font-bold text-[14px] text-zinc-900">
-                              ${finalPrice.toFixed(2)}
-                            </div>
-                          </label>
-                        );
-                      })}
+                          return (
+                            <label
+                              key={idx}
+                              className={`flex items-center border p-3 rounded-lg cursor-pointer transition-colors group ${
+                                selectedSize === v.size
+                                  ? "border-orange-500 bg-orange-50/30"
+                                  : "border-zinc-200 hover:border-orange-300"
+                              }`}
+                            >
+                              <div
+                                className={`flex-1 flex items-center gap-3 text-[14px] font-bold ${selectedSize === v.size ? "text-zinc-900" : "text-zinc-700 group-hover:text-zinc-900"}`}
+                              >
+                                <input
+                                  type="radio"
+                                  name="size"
+                                  checked={selectedSize === v.size}
+                                  onChange={() => setSelectedSize(v.size)}
+                                  className="w-4 h-4 accent-orange-500"
+                                />
+                                <span>{v.size}</span>
+                              </div>
+                              <div className="w-16 text-center font-bold text-[13px] text-zinc-900">
+                                ${v.price.toFixed(2)}
+                              </div>
+                              <div className="w-20 text-center text-red-500 font-medium text-[13px]">
+                                {discountAmount > 0
+                                  ? `-$${discountAmount.toFixed(2)}`
+                                  : "-"}
+                              </div>
+                              <div className="w-20 text-center text-zinc-500 font-medium text-[13px]">
+                                +${taxAmount.toFixed(2)}
+                              </div>
+                              <div className="w-24 text-right font-bold text-[14px] text-zinc-900">
+                                ${finalPrice.toFixed(2)}
+                              </div>
+                            </label>
+                          );
+                        })}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
 
                 {selectedProduct.preparationStyles &&
-                  selectedProduct.preparationStyles.filter(Boolean).length > 0 && (
-                  <div className="space-y-2">
-                    <span className="text-[13px] font-bold text-zinc-900 mb-2 block">
-                      Preparation Style
-                    </span>
-                    <div className="grid gap-2">
-                      {selectedProduct.preparationStyles.filter(Boolean).map((style) => (
-                        <label
-                          key={style}
-                          className={`flex items-center border p-3 rounded-lg cursor-pointer transition-colors ${
-                            selectedPreparationStyle === style
-                              ? "border-orange-500 bg-orange-50/30"
-                              : "border-zinc-200 hover:border-orange-300"
-                          }`}
+                  selectedProduct.preparationStyles.filter(Boolean).length >
+                    0 && (
+                    <div className="space-y-2">
+                      <span className="text-[13px] font-bold text-zinc-900 mb-2 block">
+                        Preparation Style
+                      </span>
+                      <div className="grid gap-2">
+                        {selectedProduct.preparationStyles
+                          .filter(Boolean)
+                          .map((style) => (
+                            <label
+                              key={style}
+                              className={`flex items-center border p-3 rounded-lg cursor-pointer transition-colors ${
+                                selectedPreparationStyle === style
+                                  ? "border-orange-500 bg-orange-50/30"
+                                  : "border-zinc-200 hover:border-orange-300"
+                              }`}
+                            >
+                              <div className="flex-1 flex items-center gap-3 text-[14px] font-bold text-zinc-800">
+                                <input
+                                  type="radio"
+                                  name="preparationStyle"
+                                  checked={selectedPreparationStyle === style}
+                                  onChange={() =>
+                                    setSelectedPreparationStyle(style)
+                                  }
+                                  className="w-4 h-4 accent-orange-500"
+                                />
+                                <span>{style}</span>
+                              </div>
+                            </label>
+                          ))}
+                        <button
+                          type="button"
+                          onClick={() => setSelectedPreparationStyle("")}
+                          className="text-left text-xs font-semibold text-zinc-500 hover:text-zinc-800 px-1"
                         >
-                          <div className="flex-1 flex items-center gap-3 text-[14px] font-bold text-zinc-800">
-                            <input
-                              type="radio"
-                              name="preparationStyle"
-                              checked={selectedPreparationStyle === style}
-                              onChange={() => setSelectedPreparationStyle(style)}
-                              className="w-4 h-4 accent-orange-500"
-                            />
-                            <span>{style}</span>
-                          </div>
-                        </label>
-                      ))}
-                      <button
-                        type="button"
-                        onClick={() => setSelectedPreparationStyle("")}
-                        className="text-left text-xs font-semibold text-zinc-500 hover:text-zinc-800 px-1"
-                      >
-                        Clear style
-                      </button>
+                          Clear style
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
 
-                {selectedProduct.addons && selectedProduct.addons.length > 0 && (
-                  <div className="pt-4 mt-4 border-t border-zinc-100 space-y-2">
-                    <span className="text-[13px] font-bold text-zinc-900 mb-2 block">Extras</span>
-                    <div className="grid gap-2">
-                      {selectedProduct.addons.map((addon) => {
-                        const isChecked = selectedAddons.some(a => a._id === addon._id);
-                        const discountAmount = calculateItemDiscount(selectedProduct, addon.price);
-                        const discountedPrice = Math.max(0, addon.price - discountAmount);
-                        const taxAmount = calculateItemTax(selectedProduct, discountedPrice);
-                        const finalPrice = discountedPrice + taxAmount;
+                {selectedProduct.addons &&
+                  selectedProduct.addons.length > 0 && (
+                    <div className="pt-4 mt-4 border-t border-zinc-100 space-y-2">
+                      <span className="text-[13px] font-bold text-zinc-900 mb-2 block">
+                        Extras
+                      </span>
+                      <div className="grid gap-2">
+                        {selectedProduct.addons.map((addon) => {
+                          const isChecked = selectedAddons.some(
+                            (a) => a._id === addon._id,
+                          );
+                          const discountAmount = calculateItemDiscount(
+                            selectedProduct,
+                            addon.price,
+                          );
+                          const discountedPrice = Math.max(
+                            0,
+                            addon.price - discountAmount,
+                          );
+                          const taxAmount = calculateItemTax(
+                            selectedProduct,
+                            discountedPrice,
+                          );
+                          const finalPrice = discountedPrice + taxAmount;
 
-                        return (
-                          <label
-                            key={addon._id}
-                            className="flex items-center border border-zinc-200 p-3 rounded-lg cursor-pointer hover:border-orange-300 transition-colors group"
-                          >
-                            <div className="flex-1 flex items-center gap-3 text-[14px] font-bold text-zinc-700 group-hover:text-zinc-900">
-                              <input
-                                type="checkbox"
-                                checked={isChecked}
-                                onChange={() => toggleAddon(addon)}
-                                className="w-4 h-4 accent-orange-500 rounded"
-                              />
-                              <span>{addon.name}</span>
-                            </div>
-                            <div className="w-16 text-center font-bold text-[13px] text-zinc-900">
-                              +${addon.price.toFixed(2)}
-                            </div>
-                            <div className="w-20 text-center text-red-500 font-medium text-[13px]">
-                              {discountAmount > 0 ? `-$${discountAmount.toFixed(2)}` : "-"}
-                            </div>
-                            <div className="w-20 text-center text-zinc-500 font-medium text-[13px]">
-                              +${taxAmount.toFixed(2)}
-                            </div>
-                            <div className="w-24 text-right font-bold text-[14px] text-zinc-900">
-                              +${finalPrice.toFixed(2)}
-                            </div>
-                          </label>
-                        );
-                      })}
+                          return (
+                            <label
+                              key={addon._id}
+                              className="flex items-center border border-zinc-200 p-3 rounded-lg cursor-pointer hover:border-orange-300 transition-colors group"
+                            >
+                              <div className="flex-1 flex items-center gap-3 text-[14px] font-bold text-zinc-700 group-hover:text-zinc-900">
+                                <input
+                                  type="checkbox"
+                                  checked={isChecked}
+                                  onChange={() => toggleAddon(addon)}
+                                  className="w-4 h-4 accent-orange-500 rounded"
+                                />
+                                <span>{addon.name}</span>
+                              </div>
+                              <div className="w-16 text-center font-bold text-[13px] text-zinc-900">
+                                +${addon.price.toFixed(2)}
+                              </div>
+                              <div className="w-20 text-center text-red-500 font-medium text-[13px]">
+                                {discountAmount > 0
+                                  ? `-$${discountAmount.toFixed(2)}`
+                                  : "-"}
+                              </div>
+                              <div className="w-20 text-center text-zinc-500 font-medium text-[13px]">
+                                +${taxAmount.toFixed(2)}
+                              </div>
+                              <div className="w-24 text-right font-bold text-[14px] text-zinc-900">
+                                +${finalPrice.toFixed(2)}
+                              </div>
+                            </label>
+                          );
+                        })}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
               </div>
             </div>
 
             <div className="p-4 bg-zinc-50/50 border-t border-zinc-100 flex gap-3 shrink-0 rounded-b-2xl">
-              <Button onClick={() => setIsOptionsModalOpen(false)} variant="outline" className="flex-1 h-12 border-zinc-300 font-bold text-zinc-700 shadow-none hover:bg-white">
+              <Button
+                onClick={() => setIsOptionsModalOpen(false)}
+                variant="outline"
+                className="flex-1 h-12 border-zinc-300 font-bold text-zinc-700 shadow-none hover:bg-white"
+              >
                 Cancel
               </Button>
               <Button
@@ -1514,9 +2300,12 @@ export default function OrderPage() {
             <div className="w-12 h-12 rounded-full bg-red-100 mx-auto flex items-center justify-center mb-4">
               <Trash2 className="w-6 h-6 text-red-600" />
             </div>
-            <h3 className="text-xl font-black text-zinc-900 mb-2">Clear Order?</h3>
+            <h3 className="text-xl font-black text-zinc-900 mb-2">
+              Clear Order?
+            </h3>
             <p className="text-zinc-500 font-medium mb-6">
-              Are you sure you want to remove all items from the current order? This action cannot be undone.
+              Are you sure you want to remove all items from the current order?
+              This action cannot be undone.
             </p>
             <div className="flex gap-3">
               <Button
@@ -1538,7 +2327,7 @@ export default function OrderPage() {
       )}
 
       {/* Print Preview Modal */}
-      <PrintPreviewModal 
+      <PrintPreviewModal
         isOpen={isPrintModalOpen}
         onClose={() => {
           setIsPrintModalOpen(false);

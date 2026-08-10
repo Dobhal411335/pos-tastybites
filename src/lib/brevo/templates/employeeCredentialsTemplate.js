@@ -289,13 +289,13 @@ export const employeeCredentialsTemplate = ({
               
               <p class="cred-label">Login Portal URL</p>
               <p style="font-size: 15px; font-weight: 700; margin: 8px 0 0 0;">
-                <a href="https://pos.tastybitesrestaurant.com/login" style="color: #EA580C; text-decoration: underline;">https://pos.tastybitesrestaurant.com/login</a>
+                <a href="https://sales.tastybitesrestaurant.com/login" style="color: #EA580C; text-decoration: underline;">https://sales.tastybitesrestaurant.com/login</a>
               </p>
             </div>
 
             <!-- CTA -->
             <div class="btn-container">
-              <a href="https://pos.tastybitesrestaurant.com/login" class="btn" style="color: #ffffff; text-decoration: none;">Log In To Employee Portal</a>
+              <a href="https://sales.tastybitesrestaurant.com/login" class="btn" style="color: #ffffff; text-decoration: none;">Log In To Employee Portal</a>
             </div>
 
             <!-- Notice -->

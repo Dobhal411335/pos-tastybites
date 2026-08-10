@@ -21,7 +21,7 @@ export const POST = withAuth(async (request) => {
 
     const giftcard = await Giftcard.findOne({
       restaurant: request.restaurant,
-      code: code
+      code: String(code).trim().toUpperCase(),
     });
 
     if (!giftcard) {

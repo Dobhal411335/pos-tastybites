@@ -14,7 +14,18 @@ import { createNotification } from "@/lib/notifications/notificationService";
 export const POST = withAuth(async (request) => {
   try {
     const data = await request.json();
-    const { orderId, amount, method, sessionId, tipAmount, cardType } = data;
+    const {
+      orderId,
+      amount,
+      method,
+      sessionId,
+      tipAmount,
+      cardType,
+      giftCardCode,
+      splitAmount,
+      discountTotal,
+      discountCode,
+    } = data;
 
     if (!orderId) {
       return sendError(new Error("Missing ID"), "orderId is required", 400);
@@ -30,8 +41,31 @@ export const POST = withAuth(async (request) => {
 
     order.paymentStatus = "PAID";
     order.paymentMethod = method === 'Card' && cardType ? `Card - ${cardType}` : (method || "Cash");
-    order.status = "PAID"; 
-    
+    order.status = "PAID";
+
+    // Persist checkout discount if applied at payment time
+    if (discountTotal !== undefined && discountTotal !== null) {
+      order.discountTotal = Math.round(Number(discountTotal) * 100) / 100;
+    }
+    if (discountCode !== undefined) {
+      order.discountCode = discountCode || null;
+    }
+    if (amount !== undefined && amount !== null) {
+      order.totalAmount = Math.round(Number(amount) * 100) / 100;
+    }
+
+    // Persist gift card usage on the order for receipts
+    if (giftCardCode) {
+      const due = Number(amount ?? order.totalAmount) || 0;
+      const remaining = Number(splitAmount);
+      const used =
+        Number.isFinite(remaining) && remaining >= 0
+          ? Math.max(0, Math.round((due - remaining) * 100) / 100)
+          : due;
+      order.giftcardCode = String(giftCardCode).trim().toUpperCase();
+      order.giftcardUsedAmount = used;
+    }
+
     // Save tip if provided
     if (tipAmount && tipAmount > 0) {
       order.tipAmount = Math.round(Number(tipAmount) * 100) / 100;

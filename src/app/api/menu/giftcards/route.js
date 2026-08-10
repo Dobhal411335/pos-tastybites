@@ -25,15 +25,38 @@ export const GET = withAuth(async (request) => {
     const code = searchParams.get("code");
 
     if (code) {
+      const normalizedCode = code.trim().toUpperCase();
       const giftcard = await Giftcard.findOne({
         restaurant: request.restaurant,
-        code: code,
-        isIssued: true
+        code: normalizedCode,
+        isIssued: true,
+        status: "Active",
       });
       if (!giftcard) {
-        return sendError(new Error("Not Found"), "Gift card with this code was not found or not issued", 404);
+        return sendError(
+          new Error("Not Found"),
+          "Gift card with this code was not found, not issued, or inactive",
+          404
+        );
       }
-      return sendSuccess(giftcard, "Giftcard retrieved successfully");
+
+      const now = new Date();
+      if (giftcard.validFrom && now < giftcard.validFrom) {
+        return sendError(new Error("Not Yet Valid"), "This gift card is not valid yet", 400);
+      }
+      if (giftcard.validUntil && now > giftcard.validUntil) {
+        return sendError(new Error("Expired"), "This gift card has expired", 400);
+      }
+
+      const currentBalance = giftcard.balance != null ? giftcard.balance : giftcard.value;
+      if (currentBalance <= 0) {
+        return sendError(new Error("Empty Balance"), "This gift card has no remaining balance", 400);
+      }
+
+      return sendSuccess(
+        { ...giftcard.toObject(), balance: currentBalance },
+        "Giftcard retrieved successfully"
+      );
     }
 
     if (view === "flat") {

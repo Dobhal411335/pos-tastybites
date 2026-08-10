@@ -1,6 +1,16 @@
+import { BELL_MP3_DATA_URL } from "@/lib/notifications/bellSoundData";
+
 const SOUND_PREF_KEY = "tastybites_notification_sound";
-/** Prefer re-encoded MP3; WAV is the universal browser fallback. */
-const BELL_SOURCES = ["/notification_bell.mp3", "/notification_bell.wav"];
+
+/**
+ * Prefer embedded MP3 (always available). Public paths are secondary for cache/CDN.
+ * "The element has no supported sources" usually means the URL 404'd or MIME failed.
+ */
+const BELL_SOURCES = [
+  BELL_MP3_DATA_URL,
+  "/notification_bell.mp3",
+  "/notification_bell.wav",
+];
 
 const playedIds = new Set();
 let sharedAudio = null;
@@ -24,14 +34,19 @@ function notifyUnlockListeners() {
   );
 }
 
-function createAudio(src) {
-  const audio = new Audio(src);
-  audio.preload = "auto";
+function resolveSrc(src) {
+  if (!src || src.startsWith("data:")) return src;
   try {
-    audio.load();
+    return new URL(src, window.location.origin).href;
   } catch {
-    /* ignore */
+    return src;
   }
+}
+
+function createAudio(src) {
+  const audio = new Audio();
+  audio.preload = "auto";
+  audio.src = resolveSrc(src);
   return audio;
 }
 
@@ -48,6 +63,8 @@ function switchAudioSource(src) {
   if (sharedAudio) {
     try {
       sharedAudio.pause();
+      sharedAudio.removeAttribute("src");
+      sharedAudio.load();
     } catch {
       /* ignore */
     }
@@ -68,40 +85,85 @@ async function resumeAudioContext() {
   return audioCtx;
 }
 
+function waitForCanPlay(audio, timeoutMs = 4000) {
+  if (audio.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+    return Promise.resolve();
+  }
+
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const finish = (fn, value) => {
+      if (settled) return;
+      settled = true;
+      audio.removeEventListener("canplay", onReady);
+      audio.removeEventListener("loadeddata", onReady);
+      audio.removeEventListener("error", onError);
+      clearTimeout(timer);
+      fn(value);
+    };
+    const onReady = () => finish(resolve);
+    const onError = () => {
+      const mediaMsg = audio.error?.message || "The element has no supported sources.";
+      finish(reject, new Error(mediaMsg));
+    };
+    const timer = setTimeout(() => {
+      if (audio.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) finish(resolve);
+      else finish(reject, new Error("Timed out loading notification sound"));
+    }, timeoutMs);
+
+    audio.addEventListener("canplay", onReady, { once: true });
+    audio.addEventListener("loadeddata", onReady, { once: true });
+    audio.addEventListener("error", onError, { once: true });
+    try {
+      audio.load();
+    } catch {
+      /* ignore */
+    }
+  });
+}
+
 async function playWithElement(audio) {
-  audio.pause();
+  audio.volume = 1;
   try {
     audio.currentTime = 0;
   } catch {
     /* ignore seek while loading */
   }
-  audio.volume = 1;
-  await audio.play();
+
+  try {
+    // Prefer immediate play while the user gesture is still valid
+    await audio.play();
+    return;
+  } catch (err) {
+    // Not loaded yet or transient error — wait, then retry once
+    await waitForCanPlay(audio);
+    try {
+      audio.currentTime = 0;
+    } catch {
+      /* ignore */
+    }
+    await audio.play();
+  }
 }
 
 /** Try each audio source until one plays successfully. */
-async function playHtmlBell({ allowFallback = true } = {}) {
-  let audio = getAudio();
-  if (!audio) throw new Error("Audio not available");
+async function playHtmlBell() {
+  let lastErr = null;
 
-  try {
-    await playWithElement(audio);
-    return;
-  } catch (firstErr) {
-    if (!allowFallback) throw firstErr;
+  // Always try active source first, then the rest
+  const ordered = [activeSrc, ...BELL_SOURCES.filter((s) => s !== activeSrc)];
 
-    for (const src of BELL_SOURCES) {
-      if (src === activeSrc) continue;
-      try {
-        audio = switchAudioSource(src);
-        await playWithElement(audio);
-        return;
-      } catch {
-        /* try next */
-      }
+  for (const src of ordered) {
+    try {
+      const audio = src === activeSrc && sharedAudio ? sharedAudio : switchAudioSource(src);
+      await playWithElement(audio);
+      return;
+    } catch (err) {
+      lastErr = err;
     }
-    throw firstErr;
   }
+
+  throw lastErr || new Error("Could not play notification sound");
 }
 
 export function getNotificationSoundEnabled() {
@@ -135,7 +197,7 @@ export function subscribeNotificationSoundUnlock(callback) {
 }
 
 /**
- * Must run inside a real click/tap. Plays notification_bell via HTMLAudio.
+ * Must run inside a real click/tap. Plays the notification bell.
  */
 export async function unlockNotificationAudio({ playPreview = true } = {}) {
   if (typeof window === "undefined") return false;
@@ -148,20 +210,14 @@ export async function unlockNotificationAudio({ playPreview = true } = {}) {
       /* HTMLAudio may still work from this gesture */
     }
 
-    const audio = getAudio();
-    if (!audio) throw new Error("Audio not available");
-
     if (playPreview) {
-      await playHtmlBell({ allowFallback: true });
+      await playHtmlBell();
     } else {
+      // Silent unlock: near-silent play then pause (keeps autoplay unlock)
+      const audio = getAudio();
+      await waitForCanPlay(audio);
       audio.volume = 0.001;
-      try {
-        await audio.play();
-      } catch {
-        // Try fallback sources for silent unlock too
-        await playHtmlBell({ allowFallback: true });
-        audio.pause();
-      }
+      await audio.play();
       audio.pause();
       try {
         audio.currentTime = 0;
@@ -226,7 +282,7 @@ function playBell() {
     if (now - lastPlayedAt < PLAY_COOLDOWN_MS) return;
     lastPlayedAt = now;
 
-    const playPromise = playHtmlBell({ allowFallback: true });
+    const playPromise = playHtmlBell();
     if (playPromise?.catch) {
       playPromise.catch(() => {
         unlockedThisSession = false;

@@ -28,13 +28,15 @@ export const GET = withAuth(async (request) => {
 
   const enriched = rows.map((row) => {
     const hourlyRate = row.employee?.hourlyPaid?.amountPerHour || 0;
+    const overtimeRate = row.employee?.hourlyPaid?.overtimeAmountPerHour ?? hourlyRate;
     const overtimeHours = Number((row.overtimeMinutes / 60).toFixed(2));
-    const estimatedOvertimePay = Number((overtimeHours * hourlyRate).toFixed(2));
+    const estimatedOvertimePay = Number((overtimeHours * overtimeRate).toFixed(2));
 
     return {
       ...row,
       overtimeHours,
       hourlyRate,
+      overtimeRate,
       estimatedOvertimePay,
     };
   });

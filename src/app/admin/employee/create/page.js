@@ -26,6 +26,9 @@ export default function CreateServerAccountPage() {
   const [employeeColor, setEmployeeColor] = useState("#4ade80");
   const [totalWorkingHours, setTotalWorkingHours] = useState("");
   const [amountPerHour, setAmountPerHour] = useState("");
+  const [overtimeAmountPerHour, setOvertimeAmountPerHour] = useState("");
+  const [tipPercent, setTipPercent] = useState("");
+  const [allocatedTipPercent, setAllocatedTipPercent] = useState(0);
   const [staffDiscount, setStaffDiscount] = useState("");
 
   // Default Shift Assignment
@@ -40,6 +43,16 @@ export default function CreateServerAccountPage() {
   const [isEditMode, setIsEditMode] = useState(false);
   const [editId, setEditId] = useState(null);
 
+  const remainingTipPercent = Math.max(0, Number((100 - allocatedTipPercent).toFixed(2)));
+  const totalAmountPerDay = (() => {
+    const hours = Number(totalWorkingHours);
+    const rate = Number(amountPerHour);
+    if (!Number.isFinite(hours) || !Number.isFinite(rate) || totalWorkingHours === "" || amountPerHour === "") {
+      return 0;
+    }
+    return Number((hours * rate).toFixed(2));
+  })();
+
   useEffect(() => {
     // Check if we are in edit mode
     const searchParams = new URLSearchParams(window.location.search);
@@ -52,9 +65,10 @@ export default function CreateServerAccountPage() {
     // Fetch available roles and templates
     const fetchInitialData = async () => {
       try {
-        const [rolesRes, templatesRes] = await Promise.all([
+        const [rolesRes, templatesRes, employeesRes] = await Promise.all([
           fetch("/api/roles"),
-          fetch("/api/employees/shifts?action=templates", { cache: "no-store" })
+          fetch("/api/employees/shifts?action=templates", { cache: "no-store" }),
+          fetch("/api/employees", { cache: "no-store" }),
         ]);
 
         const rolesJson = await rolesRes.json();
@@ -70,6 +84,15 @@ export default function CreateServerAccountPage() {
           setTemplates(templatesJson.data);
         }
 
+        const employeesJson = await employeesRes.json();
+        if (employeesJson.success) {
+          const used = (employeesJson.data || []).reduce((sum, emp) => {
+            if (id && String(emp._id) === String(id)) return sum;
+            return sum + (Number(emp.tipPercent) || 0);
+          }, 0);
+          setAllocatedTipPercent(used);
+        }
+
         if (id) {
           const empRes = await fetch(`/api/employees?id=${id}`);
           const empJson = await empRes.json();
@@ -82,9 +105,19 @@ export default function CreateServerAccountPage() {
             setPhoneNumber(emp.phoneNumber || "");
             if (emp.role) setRole(emp.role);
             if (emp.employeeColor) setEmployeeColor(emp.employeeColor);
-            if (emp.defaultShiftTemplate) setDefaultShiftTemplate(emp.defaultShiftTemplate);
+            if (emp.defaultShiftTemplate) {
+              setDefaultShiftTemplate(
+                typeof emp.defaultShiftTemplate === "object"
+                  ? emp.defaultShiftTemplate._id || String(emp.defaultShiftTemplate)
+                  : String(emp.defaultShiftTemplate)
+              );
+            }
             if (emp.hourlyPaid?.totalWorkingHours) setTotalWorkingHours(emp.hourlyPaid.totalWorkingHours);
-            if (emp.hourlyPaid?.amountPerHour) setAmountPerHour(emp.hourlyPaid.amountPerHour.toString());
+            if (emp.hourlyPaid?.amountPerHour != null) setAmountPerHour(emp.hourlyPaid.amountPerHour.toString());
+            if (emp.hourlyPaid?.overtimeAmountPerHour != null) {
+              setOvertimeAmountPerHour(emp.hourlyPaid.overtimeAmountPerHour.toString());
+            }
+            if (emp.tipPercent != null) setTipPercent(emp.tipPercent.toString());
             if (emp.staffDiscount !== undefined) setStaffDiscount(emp.staffDiscount.toString());
           }
         }
@@ -102,6 +135,18 @@ export default function CreateServerAccountPage() {
       return;
     }
 
+    if (tipPercent !== "") {
+      const tipValue = Number(tipPercent);
+      if (!Number.isFinite(tipValue) || tipValue < 0) {
+        toast.error("Tip percent must be a valid number.");
+        return;
+      }
+      if (tipValue > remainingTipPercent) {
+        toast.error(`Tip percent cannot exceed available ${remainingTipPercent}%.`);
+        return;
+      }
+    }
+
     setLoading(true);
     try {
       const payload = {
@@ -112,10 +157,13 @@ export default function CreateServerAccountPage() {
         role: role,
         employeeColor: employeeColor,
         defaultShiftTemplate: defaultShiftTemplate && defaultShiftTemplate !== "none" ? defaultShiftTemplate : null,
-        hourlyPaid: (totalWorkingHours || amountPerHour) ? {
+        hourlyPaid: (totalWorkingHours || amountPerHour || overtimeAmountPerHour) ? {
           totalWorkingHours: totalWorkingHours.trim(),
-          amountPerHour: amountPerHour ? Number(amountPerHour) : null
+          amountPerHour: amountPerHour !== "" ? Number(amountPerHour) : null,
+          totalAmountPerDay,
+          overtimeAmountPerHour: overtimeAmountPerHour !== "" ? Number(overtimeAmountPerHour) : null,
         } : undefined,
+        tipPercent: tipPercent !== "" ? Number(tipPercent) : undefined,
         staffDiscount: staffDiscount ? Number(staffDiscount) : undefined
       };
 
@@ -146,6 +194,8 @@ export default function CreateServerAccountPage() {
       setEmployeeColor("#4ade80");
       setTotalWorkingHours("");
       setAmountPerHour("");
+      setOvertimeAmountPerHour("");
+      setTipPercent("");
       setStaffDiscount("");
       setDefaultShiftTemplate("");
 
@@ -351,25 +401,88 @@ export default function CreateServerAccountPage() {
 
                 <div className="w-full gap-6">
                   <div className="space-y-2">
-                    <label className="text-[14px] font-semibold text-zinc-900 block">
+                    <label className="text-[13px] font-medium text-zinc-500 block">
                       Hourly Paid
                     </label>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <Input
-                        type="text"
-                        placeholder="Total working hour a day"
-                        value={totalWorkingHours}
-                        onChange={(e) => setTotalWorkingHours(e.target.value)}
-                        className="h-12 text-[15px] bg-white border-zinc-200 focus:ring-[#1e40af]"
-                      />
-                      <Input
-                        type="number"
-                        placeholder="Amount per hour paid"
-                        value={amountPerHour}
-                        onChange={(e) => setAmountPerHour(e.target.value)}
-                        className="h-12 text-[15px] bg-white border-zinc-200 focus:ring-[#1e40af]"
-                      />
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="space-y-2">
+                        <label className="text-[14px] font-semibold text-zinc-900 block">
+                          Working Hours
+                        </label>
+                        <Input
+                          type="number"
+                          min="0"
+                          step="any"
+                          placeholder="e.g. 8"
+                          value={totalWorkingHours}
+                          onChange={(e) => setTotalWorkingHours(e.target.value)}
+                          className="h-12 text-[15px] bg-white border-zinc-200 focus:ring-[#1e40af]"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[14px] font-semibold text-zinc-900 block">
+                          Minimum Hour Paid
+                        </label>
+                        <Input
+                          type="number"
+                          min="0"
+                          step="any"
+                          placeholder="e.g. 10"
+                          value={amountPerHour}
+                          onChange={(e) => setAmountPerHour(e.target.value)}
+                          className="h-12 text-[15px] bg-white border-zinc-200 focus:ring-[#1e40af]"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[14px] font-semibold text-zinc-900 block">
+                          Total Amount Per Day
+                        </label>
+                        <Input
+                          type="number"
+                          readOnly
+                          value={totalAmountPerDay}
+                          className="h-12 text-[15px] bg-zinc-50 border-zinc-200 focus:ring-[#1e40af]"
+                        />
+                      </div>
                     </div>
+                  </div>
+                </div>
+
+                <div className="w-full gap-6">
+                  <div className="space-y-2">
+                    <label className="text-[14px] font-semibold text-zinc-900 block">
+                      Overtime Paid Amount
+                    </label>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="any"
+                      placeholder="Overtime rate per hour"
+                      value={overtimeAmountPerHour}
+                      onChange={(e) => setOvertimeAmountPerHour(e.target.value)}
+                      className="h-12 text-[15px] bg-white border-zinc-200 focus:ring-[#1e40af]"
+                    />
+                  </div>
+                </div>
+
+                <div className="w-full gap-6">
+                  <div className="space-y-2">
+                    <label className="text-[14px] font-semibold text-zinc-900 block">
+                      Tip Amount (%)
+                    </label>
+                    <Input
+                      type="number"
+                      min="0"
+                      max={remainingTipPercent}
+                      step="any"
+                      placeholder={`0 – ${remainingTipPercent}`}
+                      value={tipPercent}
+                      onChange={(e) => setTipPercent(e.target.value)}
+                      className="h-12 text-[15px] bg-white border-zinc-200 focus:ring-[#1e40af]"
+                    />
+                    <p className="text-[13px] text-zinc-500">
+                      Available: {remainingTipPercent}% ({Number(allocatedTipPercent.toFixed(2))}% already allocated)
+                    </p>
                   </div>
                 </div>
 
@@ -380,6 +493,7 @@ export default function CreateServerAccountPage() {
                     </label>
                     <Input
                       type="number"
+                      min="0"
                       placeholder="Enter for percent"
                       value={staffDiscount}
                       onChange={(e) => setStaffDiscount(e.target.value)}
@@ -400,7 +514,7 @@ export default function CreateServerAccountPage() {
                       <SelectContent className="bg-white max-h-60 overflow-y-auto">
                         <SelectItem value="none">None</SelectItem>
                         {templates.map(t => (
-                          <SelectItem key={t._id} value={t._id}>{t.name}</SelectItem>
+                          <SelectItem key={String(t._id)} value={String(t._id)}>{t.name}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>

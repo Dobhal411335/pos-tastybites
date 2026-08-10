@@ -175,7 +175,7 @@ const CustomerReceipt = ({
         {Number(giftcardUsedAmount) > 0 && (
           <div className="w-full max-w-[160px] flex justify-between">
             <span className="text-zinc-500">
-              Gift Card:
+              Gift Card{giftcardCode ? ` (${giftcardCode})` : ""}:
             </span>
             <span className="receipt-bold">
               -${Number(giftcardUsedAmount).toFixed(2)}

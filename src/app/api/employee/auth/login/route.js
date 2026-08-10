@@ -128,13 +128,15 @@ export async function POST(request) {
     const recentShifts = await EmployeeShift.find({ 
       employee: employee._id, 
       startTime: { $gte: windowStart, $lte: windowEnd }
-    });
+    }).sort({ startTime: 1 });
 
     let currentValidShift = null;
     let shiftTooEarly = false;
     let shiftTooLate = false;
     let hasRelevantShifts = false;
     let isOnLeave = false;
+    let nextShiftStart = null;
+    let lastShiftEnd = null;
 
     for (const shift of recentShifts) {
       if (['Leave', 'Sick Leave', 'Vacation', 'Holiday'].includes(shift.shiftType)) {
@@ -146,6 +148,7 @@ export async function POST(request) {
         continue;
       }
 
+      // Clock-in allowed from 15 minutes before start until shift end
       const shiftStart = new Date(shift.startTime.getTime() - 15 * 60000);
       const shiftEnd = shift.endTime ? new Date(shift.endTime.getTime()) : null;
 
@@ -153,11 +156,17 @@ export async function POST(request) {
         if (shiftStart.getTime() - now.getTime() < 12 * 60 * 60 * 1000) {
           shiftTooEarly = true;
           hasRelevantShifts = true;
+          if (!nextShiftStart || shift.startTime < nextShiftStart) {
+            nextShiftStart = shift.startTime;
+          }
         }
       } else if (shiftEnd && now > shiftEnd) {
         if (now.getTime() - shiftEnd.getTime() < 12 * 60 * 60 * 1000) {
           shiftTooLate = true;
           hasRelevantShifts = true;
+          if (!lastShiftEnd || shift.endTime > lastShiftEnd) {
+            lastShiftEnd = shift.endTime;
+          }
         }
       } else {
         currentValidShift = shift;
@@ -173,9 +182,13 @@ export async function POST(request) {
       if (tempStart && now < tempStart) {
         shiftTooEarly = true;
         hasRelevantShifts = true;
+        if (!nextShiftStart || todayDutyChange.newStartTime < nextShiftStart) {
+          nextShiftStart = todayDutyChange.newStartTime;
+        }
       } else if (tempEnd && now > tempEnd) {
         shiftTooLate = true;
         hasRelevantShifts = true;
+        lastShiftEnd = todayDutyChange.newEndTime;
       } else {
         hasRelevantShifts = true;
         currentValidShift = {
@@ -192,15 +205,40 @@ export async function POST(request) {
     }
 
     if (!currentValidShift) {
+      const { formatTimeInRestaurantTz } = await import('@/lib/restaurantTime');
       if (isOnLeave) {
         return NextResponse.json({ success: false, message: 'You cannot login because you are marked as on Leave or Holiday today.' }, { status: 403 });
       }
       if (!hasRelevantShifts) {
-        return NextResponse.json({ success: false, message: 'You have no shift scheduled for today.' }, { status: 403 });
+        return NextResponse.json({
+          success: false,
+          message: 'You have no shift scheduled for today. Ask admin to apply a shift template to your calendar.',
+        }, { status: 403 });
       }
-      if (shiftTooLate && !shiftTooEarly) return NextResponse.json({ success: false, message: 'Your shift for today has already ended.' }, { status: 403 });
-      if (shiftTooEarly) return NextResponse.json({ success: false, message: 'Your next shift has not started yet.' }, { status: 403 });
-      if (shiftTooLate) return NextResponse.json({ success: false, message: 'Your shift has already ended.' }, { status: 403 });
+      if (shiftTooLate && !shiftTooEarly) {
+        const ended = lastShiftEnd ? formatTimeInRestaurantTz(lastShiftEnd) : '';
+        return NextResponse.json({
+          success: false,
+          message: ended
+            ? `Your shift for today already ended at ${ended}.`
+            : 'Your shift for today has already ended.',
+        }, { status: 403 });
+      }
+      if (shiftTooEarly) {
+        const starts = nextShiftStart ? formatTimeInRestaurantTz(nextShiftStart) : '';
+        const clockInFrom = nextShiftStart
+          ? formatTimeInRestaurantTz(new Date(new Date(nextShiftStart).getTime() - 15 * 60000))
+          : '';
+        return NextResponse.json({
+          success: false,
+          message: starts
+            ? `Your next shift starts at ${starts}. You can clock in from ${clockInFrom}.`
+            : 'Your next shift has not started yet.',
+        }, { status: 403 });
+      }
+      if (shiftTooLate) {
+        return NextResponse.json({ success: false, message: 'Your shift has already ended.' }, { status: 403 });
+      }
       return NextResponse.json({ success: false, message: 'You are not scheduled to work at this current time.' }, { status: 403 });
     }
 

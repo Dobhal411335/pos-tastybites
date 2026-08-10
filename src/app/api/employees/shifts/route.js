@@ -216,8 +216,12 @@ export const POST = withAuth(async (request) => {
       const employees = await mongoose.model("Employee").find({ _id: { $in: employeeIds }, restaurant: request.restaurant });
       if (employees.length !== employeeIds.length) return sendError(new Error("Not Found"), "One or more employees not found", 404);
 
-      const shiftStartTemplate = new Date(`1970-01-01T${template.startTime}:00`);
-      const shiftEndTemplate   = new Date(`1970-01-01T${template.endTime}:00`);
+      const { parseTemplateTime, zonedDateTime, weekdayInRestaurantTz } = await import("@/lib/restaurantTime");
+      const startHm = parseTemplateTime(template.startTime);
+      const endHm = parseTemplateTime(template.endTime);
+      if (!startHm || !endHm) {
+        return sendError(new Error("Invalid time"), "Template start/end time must be HH:mm", 400);
+      }
 
       const startD = new Date(startDate); startD.setHours(0, 0, 0, 0);
       const endD   = new Date(endDate);   endD.setHours(23, 59, 59, 999);
@@ -255,7 +259,7 @@ export const POST = withAuth(async (request) => {
       for (const emp of employees) {
         let currentDate = new Date(startD);
         while (currentDate <= endD) {
-          const dayOfWeek = currentDate.toLocaleDateString('en-US', { weekday: 'long' });
+          const dayOfWeek = weekdayInRestaurantTz(currentDate);
           const month     = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
           const dateKey   = `${emp._id}_${currentDate.toISOString().split('T')[0]}`;
 
@@ -267,11 +271,9 @@ export const POST = withAuth(async (request) => {
           if (template.workingDays?.length > 0 && !template.workingDays.includes(dayOfWeek)) shouldSchedule = false;
 
           if (shouldSchedule) {
-            const sTime = new Date(currentDate);
-            sTime.setHours(shiftStartTemplate.getHours(), shiftStartTemplate.getMinutes(), 0, 0);
-            const eTime = new Date(currentDate);
-            eTime.setHours(shiftEndTemplate.getHours(), shiftEndTemplate.getMinutes(), 0, 0);
-            if (eTime <= sTime) eTime.setDate(eTime.getDate() + 1);
+            const sTime = zonedDateTime(currentDate, startHm.hours, startHm.minutes);
+            let eTime = zonedDateTime(currentDate, endHm.hours, endHm.minutes);
+            if (eTime <= sTime) eTime = new Date(eTime.getTime() + 24 * 60 * 60 * 1000);
 
             shiftsToCreate.push({
               employee:       emp._id,

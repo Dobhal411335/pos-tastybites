@@ -16,6 +16,7 @@ export const POST = withAuth(async (request) => {
     const giftcard = await Giftcard.findOne({
       restaurant: request.restaurant,
       $or: [
+        { code: code.trim().toUpperCase() },
         { code: code.trim() },
         { name: code.trim() }
       ]
@@ -23,6 +24,10 @@ export const POST = withAuth(async (request) => {
 
     if (!giftcard) {
       return sendError(new Error("Invalid code"), "Giftcard not found", 404);
+    }
+
+    if (!giftcard.isIssued) {
+      return sendError(new Error("Not Issued"), "This gift card has not been issued to a user yet", 400);
     }
 
     if (giftcard.status !== "Active") {

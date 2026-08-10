@@ -18,6 +18,156 @@ import RegisteredDevice from "@/models/RegisteredDevice";
 import { sendEmployeeCredentials } from "@/lib/brevo/sendEmployeeCredentials";
 import { generateActivationCode } from "@/utils/crypto";
 import Restaurant from "@/models/Restaurant"
+
+function normalizeHourlyPaid(hourlyPaid) {
+  if (!hourlyPaid) return undefined;
+  const hours = Number(hourlyPaid.totalWorkingHours);
+  const amountPerHour = hourlyPaid.amountPerHour != null && hourlyPaid.amountPerHour !== ""
+    ? Number(hourlyPaid.amountPerHour)
+    : null;
+  const overtimeAmountPerHour = hourlyPaid.overtimeAmountPerHour != null && hourlyPaid.overtimeAmountPerHour !== ""
+    ? Number(hourlyPaid.overtimeAmountPerHour)
+    : null;
+  const totalAmountPerDay =
+    Number.isFinite(hours) && Number.isFinite(amountPerHour)
+      ? Number((hours * amountPerHour).toFixed(2))
+      : hourlyPaid.totalAmountPerDay != null
+        ? Number(hourlyPaid.totalAmountPerDay)
+        : null;
+
+  return {
+    totalWorkingHours: hourlyPaid.totalWorkingHours != null ? String(hourlyPaid.totalWorkingHours) : "",
+    amountPerHour: Number.isFinite(amountPerHour) ? amountPerHour : null,
+    totalAmountPerDay: Number.isFinite(totalAmountPerDay) ? totalAmountPerDay : null,
+    overtimeAmountPerHour: Number.isFinite(overtimeAmountPerHour) ? overtimeAmountPerHour : null,
+  };
+}
+
+async function assertTipPercentAvailable(restaurantId, tipPercent, excludeEmployeeId = null) {
+  if (tipPercent === undefined || tipPercent === null || tipPercent === "") return undefined;
+  const value = Number(tipPercent);
+  if (!Number.isFinite(value) || value < 0 || value > 100) {
+    throw Object.assign(new Error("Tip percent must be between 0 and 100"), { status: 400 });
+  }
+
+  const query = { restaurant: restaurantId };
+  if (excludeEmployeeId) query._id = { $ne: excludeEmployeeId };
+
+  const peers = await Employee.find(query).select("tipPercent").lean();
+  const used = peers.reduce((sum, emp) => sum + (Number(emp.tipPercent) || 0), 0);
+  const remaining = Number((100 - used).toFixed(2));
+
+  if (value > remaining) {
+    throw Object.assign(
+      new Error(`Tip percent exceeds remaining allocation. Available: ${remaining}%`),
+      { status: 400 }
+    );
+  }
+
+  return value;
+}
+
+/**
+ * Generate planned shifts from a default shift template (next `days` days).
+ * Skips days that already have an isPlanned shift for this employee.
+ */
+async function allocateDefaultShifts({
+  restaurantId,
+  employee,
+  templateId,
+  weeklyOff = [],
+  availableDays = [],
+  days = 30,
+}) {
+  if (!templateId) return { created: 0, reason: "no_template" };
+
+  const template = await ShiftTemplate.findOne({ _id: templateId, restaurant: restaurantId });
+  if (!template) {
+    logger.warn(`allocateDefaultShifts: template ${templateId} not found for restaurant ${restaurantId}`);
+    return { created: 0, reason: "template_not_found" };
+  }
+
+  const { parseTemplateTime, zonedDateTime, weekdayInRestaurantTz, restaurantCalendarDate } =
+    await import("@/lib/restaurantTime");
+  const startHm = parseTemplateTime(template.startTime);
+  const endHm = parseTemplateTime(template.endTime);
+  if (!startHm || !endHm) {
+    logger.warn(`allocateDefaultShifts: invalid template times for ${templateId}`);
+    return { created: 0, reason: "invalid_times" };
+  }
+
+  const startD = restaurantCalendarDate(new Date());
+  const endD = new Date(startD);
+  endD.setUTCDate(endD.getUTCDate() + days);
+
+  const existingShifts = await EmployeeShift.find({
+    employee: employee._id,
+    restaurant: restaurantId,
+    date: { $gte: startD, $lte: endD },
+    isPlanned: true,
+  })
+    .select("date")
+    .lean();
+
+  const existingSet = new Set(
+    existingShifts.map((s) => new Date(s.date).toISOString().split("T")[0])
+  );
+
+  const shiftsToCreate = [];
+  const now = new Date();
+  const currentDate = new Date(startD);
+
+  while (currentDate <= endD) {
+    const dayOfWeek = weekdayInRestaurantTz(currentDate);
+    const dateKey = currentDate.toISOString().split("T")[0];
+    const month = `${currentDate.getUTCFullYear()}-${String(currentDate.getUTCMonth() + 1).padStart(2, "0")}`;
+
+    let shouldSchedule = true;
+    if (existingSet.has(dateKey)) shouldSchedule = false;
+    if (weeklyOff?.includes(dayOfWeek)) shouldSchedule = false;
+    if (availableDays?.length > 0 && !availableDays.includes(dayOfWeek)) shouldSchedule = false;
+    if (employee.leaveStatus && employee.leaveStatus !== "None") shouldSchedule = false;
+    if (template.workingDays?.length > 0 && !template.workingDays.includes(dayOfWeek)) {
+      shouldSchedule = false;
+    }
+
+    if (shouldSchedule) {
+      const sTime = zonedDateTime(currentDate, startHm.hours, startHm.minutes);
+      let eTime = zonedDateTime(currentDate, endHm.hours, endHm.minutes);
+      if (eTime <= sTime) eTime = new Date(eTime.getTime() + 24 * 60 * 60 * 1000);
+
+      shiftsToCreate.push({
+        employee: employee._id,
+        restaurant: restaurantId,
+        date: new Date(currentDate),
+        startTime: sTime,
+        endTime: eTime,
+        status: "Scheduled",
+        shiftType: "Regular",
+        templateId: template._id,
+        assignedFloor: employee.assignedFloor || employee.defaultFloor || null,
+        assignedTables: employee.assignedTables || [],
+        isPlanned: true,
+        month,
+        generatedAt: now,
+      });
+    }
+
+    currentDate.setUTCDate(currentDate.getUTCDate() + 1);
+  }
+
+  if (shiftsToCreate.length === 0) {
+    logger.warn(
+      `allocateDefaultShifts: 0 shifts for employee ${employee._id} template ${templateId} (workingDays=${JSON.stringify(template.workingDays || [])})`
+    );
+    return { created: 0, reason: "no_schedulable_days" };
+  }
+
+  await EmployeeShift.insertMany(shiftsToCreate);
+  logger.info(`allocateDefaultShifts: created ${shiftsToCreate.length} shifts for employee ${employee._id}`);
+  return { created: shiftsToCreate.length, reason: "ok" };
+}
+
 // GET - List all employees
 export const GET = withAuth(async (request) => {
   try {
@@ -50,7 +200,7 @@ export const GET = withAuth(async (request) => {
 export const POST = withAuth(async (request) => {
   try {
     const data = await request.json();
-    const { firstName, lastName, email, countryCode, phoneNumber, role, password, status, profileImage, defaultFloor, employeeColor, assignedFloor, assignedTables, defaultShiftTemplate, weeklyOff, availableDays, hourlyPaid, staffDiscount } = data;
+    const { firstName, lastName, email, countryCode, phoneNumber, role, password, status, profileImage, defaultFloor, employeeColor, assignedFloor, assignedTables, defaultShiftTemplate, weeklyOff, availableDays, hourlyPaid, staffDiscount, tipPercent } = data;
 
     // Validation
     if (!firstName || !lastName || !email || !phoneNumber) {
@@ -67,6 +217,15 @@ export const POST = withAuth(async (request) => {
     if (existingPhone) {
       return sendError(new Error("Employee with this phone number already exists"), "Conflict", 409);
     }
+
+    let validatedTipPercent;
+    try {
+      validatedTipPercent = await assertTipPercentAvailable(request.restaurant, tipPercent);
+    } catch (tipErr) {
+      return sendError(tipErr, tipErr.message, tipErr.status || 400);
+    }
+
+    const normalizedHourlyPaid = normalizeHourlyPaid(hourlyPaid);
 
     const newEmployee = await Employee.create({
       restaurant: request.restaurant,
@@ -85,7 +244,8 @@ export const POST = withAuth(async (request) => {
       defaultShiftTemplate: defaultShiftTemplate || null,
       weeklyOff: weeklyOff || [],
       availableDays: availableDays || [],
-      hourlyPaid: hourlyPaid || undefined,
+      hourlyPaid: normalizedHourlyPaid,
+      tipPercent: validatedTipPercent,
       staffDiscount: staffDiscount !== undefined ? staffDiscount : undefined,
     });
 
@@ -98,56 +258,15 @@ export const POST = withAuth(async (request) => {
       logger.info(`Employee Assigned to tables: ${assignedTables.join(', ')}`);
     }
 
-    // Auto-generate 30 days of schedule if defaultShiftTemplate is provided
+    // Auto-generate planned schedule if defaultShiftTemplate is provided
     if (defaultShiftTemplate) {
-      const template = await ShiftTemplate.findById(defaultShiftTemplate);
-      if (template) {
-        const shiftsToCreate = [];
-        let currentDate = new Date();
-        currentDate.setHours(0,0,0,0);
-        const endDate = new Date(currentDate);
-        endDate.setDate(endDate.getDate() + 30);
-
-        const shiftStartTemplate = new Date(`1970-01-01T${template.startTime}:00`);
-        const shiftEndTemplate = new Date(`1970-01-01T${template.endTime}:00`);
-
-        while (currentDate <= endDate) {
-          const dayOfWeek = currentDate.toLocaleDateString('en-US', { weekday: 'long' });
-          
-          let shouldSchedule = true;
-          if (weeklyOff && weeklyOff.includes(dayOfWeek)) shouldSchedule = false;
-          if (availableDays && availableDays.length > 0 && !availableDays.includes(dayOfWeek)) shouldSchedule = false;
-          if (template.workingDays && template.workingDays.length > 0 && !template.workingDays.includes(dayOfWeek)) shouldSchedule = false;
-
-          if (shouldSchedule) {
-            const sTime = new Date(currentDate);
-            sTime.setHours(shiftStartTemplate.getHours(), shiftStartTemplate.getMinutes(), 0, 0);
-
-            const eTime = new Date(currentDate);
-            eTime.setHours(shiftEndTemplate.getHours(), shiftEndTemplate.getMinutes(), 0, 0);
-            if (eTime <= sTime) eTime.setDate(eTime.getDate() + 1);
-
-            shiftsToCreate.push({
-              employee: newEmployee._id,
-              restaurant: request.restaurant,
-              date: new Date(currentDate),
-              startTime: sTime,
-              endTime: eTime,
-              status: "Scheduled",
-              shiftType: "Regular",
-              templateId: template._id,
-              assignedFloor: assignedFloor || null,
-              assignedTables: assignedTables || []
-            });
-          }
-          currentDate.setDate(currentDate.getDate() + 1);
-        }
-
-        if (shiftsToCreate.length > 0) {
-          await EmployeeShift.insertMany(shiftsToCreate);
-          logger.info(`Auto-generated ${shiftsToCreate.length} default shifts for new employee ${newEmployee._id}`);
-        }
-      }
+      await allocateDefaultShifts({
+        restaurantId: request.restaurant,
+        employee: newEmployee,
+        templateId: defaultShiftTemplate,
+        weeklyOff: weeklyOff || [],
+        availableDays: availableDays || [],
+      });
     }
 
     const employeeObj = newEmployee.toObject();
@@ -164,7 +283,7 @@ export const POST = withAuth(async (request) => {
 export const PUT = withAuth(async (request) => {
   try {
     const data = await request.json();
-    const { _id, action, firstName, lastName, countryCode, phoneNumber, role, status, profileImage, defaultFloor, employeeColor, assignedFloor, assignedTables, defaultShiftTemplate, weeklyOff, availableDays, hourlyPaid, staffDiscount } = data;
+    const { _id, action, firstName, lastName, countryCode, phoneNumber, role, status, profileImage, defaultFloor, employeeColor, assignedFloor, assignedTables, defaultShiftTemplate, weeklyOff, availableDays, hourlyPaid, staffDiscount, tipPercent } = data;
 
     if (!_id) {
       return sendError(new Error("Missing ID"), "Employee ID is required", 400);
@@ -185,6 +304,10 @@ export const PUT = withAuth(async (request) => {
     };
 
     if (action === "updateEmployee") {
+      const previousTemplateId = existing.defaultShiftTemplate
+        ? String(existing.defaultShiftTemplate)
+        : null;
+
       if (firstName) existing.firstName = firstName;
       if (lastName) existing.lastName = lastName;
       if (countryCode) existing.countryCode = countryCode;
@@ -192,10 +315,45 @@ export const PUT = withAuth(async (request) => {
       if (role) existing.role = role;
       if (employeeColor) existing.employeeColor = employeeColor;
       if (defaultShiftTemplate !== undefined) existing.defaultShiftTemplate = defaultShiftTemplate;
-      if (hourlyPaid !== undefined) existing.hourlyPaid = hourlyPaid;
+      if (hourlyPaid !== undefined) existing.hourlyPaid = normalizeHourlyPaid(hourlyPaid);
       if (staffDiscount !== undefined) existing.staffDiscount = staffDiscount;
-      
+      if (tipPercent !== undefined) {
+        try {
+          existing.tipPercent = await assertTipPercentAvailable(request.restaurant, tipPercent, _id);
+        } catch (tipErr) {
+          return sendError(tipErr, tipErr.message, tipErr.status || 400);
+        }
+      }
+
       await existing.save();
+
+      const nextTemplateId = existing.defaultShiftTemplate
+        ? String(existing.defaultShiftTemplate)
+        : null;
+      if (nextTemplateId) {
+        const templateChanged = nextTemplateId !== previousTemplateId;
+        let needsBackfill = false;
+        if (!templateChanged) {
+          const upcomingCount = await EmployeeShift.countDocuments({
+            employee: existing._id,
+            restaurant: request.restaurant,
+            isPlanned: true,
+            date: { $gte: new Date() },
+          });
+          needsBackfill = upcomingCount === 0;
+        }
+
+        if (templateChanged || needsBackfill) {
+          await allocateDefaultShifts({
+            restaurantId: request.restaurant,
+            employee: existing,
+            templateId: nextTemplateId,
+            weeklyOff: existing.weeklyOff || [],
+            availableDays: existing.availableDays || [],
+          });
+        }
+      }
+
       const employeeData = existing.toObject();
       delete employeeData.password;
       delete employeeData.plainPassword;
@@ -386,9 +544,18 @@ export const PUT = withAuth(async (request) => {
       ...(defaultShiftTemplate !== undefined && { defaultShiftTemplate }),
       ...(weeklyOff !== undefined && { weeklyOff }),
       ...(availableDays !== undefined && { availableDays }),
-      ...(hourlyPaid !== undefined && { hourlyPaid }),
+      ...(hourlyPaid !== undefined && { hourlyPaid: normalizeHourlyPaid(hourlyPaid) }),
       ...(staffDiscount !== undefined && { staffDiscount }),
+      ...(tipPercent !== undefined && { tipPercent }),
     };
+
+    if (tipPercent !== undefined) {
+      try {
+        updateData.tipPercent = await assertTipPercentAvailable(request.restaurant, tipPercent, _id);
+      } catch (tipErr) {
+        return sendError(tipErr, tipErr.message, tipErr.status || 400);
+      }
+    }
 
     const updatedEmployee = await Employee.findByIdAndUpdate(_id, updateData, { new: true }).select("-password -plainPassword");
 
