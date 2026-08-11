@@ -4,6 +4,39 @@ import { sendSuccess } from "@/utils/apiResponse";
 import { sendError } from "@/utils/errorHandler";
 import { logger } from "@/utils/logger";
 
+function isCouponCurrentlyValid(coupon, now = new Date()) {
+  if (coupon.validFrom && new Date(coupon.validFrom) > now) return false;
+  if (coupon.validUntil && new Date(coupon.validUntil) < now) return false;
+  return true;
+}
+
+// GET - List active discounts for POS checkout
+export const GET = withAuth(async (request) => {
+  try {
+    const now = new Date();
+    const coupons = await Coupon.find({
+      restaurant: request.restaurant,
+      status: "Active",
+    })
+      .sort({ code: 1 })
+      .lean();
+
+    const discounts = coupons
+      .filter((coupon) => isCouponCurrentlyValid(coupon, now))
+      .map((coupon) => ({
+        _id: coupon._id,
+        code: coupon.code,
+        discountType: coupon.discountType,
+        value: coupon.value,
+      }));
+
+    return sendSuccess(discounts, "Discounts retrieved successfully");
+  } catch (error) {
+    logger.error("Failed to list discounts", error);
+    return sendError(error, "Failed to retrieve discounts", 500);
+  }
+});
+
 // POST - Check and apply a discount coupon
 export const POST = withAuth(async (request) => {
   try {

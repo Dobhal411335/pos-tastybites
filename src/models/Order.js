@@ -6,6 +6,7 @@ const OrderItemSchema = new mongoose.Schema({
   productCode: { type: String, default: "" },
   category: { type: String },
   size: { type: String, default: "Standard" },
+  sizes: [{ type: String }],
   qty: { type: Number, required: true, default: 1 },
   price: { type: Number, required: true },
   tax: { type: Number, default: 0 },

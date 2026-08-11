@@ -52,6 +52,13 @@ import {
 import PrintPreviewModal from "@/components/receipts/PrintPreviewModal";
 import { useAuth } from "@/components/providers/AuthProvider";
 
+function getCartFingerprint(items) {
+  return (items || [])
+    .map((item) => `${item.cartId || item.id}:${item.qty}:${item.name}:${item.size || ""}`)
+    .sort()
+    .join("|");
+}
+
 export default function OrderPage() {
   const params = useParams();
   const { user: currentUser } = useAuth();
@@ -75,7 +82,7 @@ export default function OrderPage() {
 
   const [isOptionsModalOpen, setIsOptionsModalOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
-  const [selectedSize, setSelectedSize] = useState("Standard");
+  const [selectedSizes, setSelectedSizes] = useState([]);
   const [selectedAddons, setSelectedAddons] = useState([]);
   const [selectedPreparationStyle, setSelectedPreparationStyle] = useState("");
 
@@ -85,6 +92,7 @@ export default function OrderPage() {
   const [guestTable, setGuestTable] = useState("");
   const [orderNote, setOrderNote] = useState("");
   const [discountCode, setDiscountCode] = useState("");
+  const [availableDiscounts, setAvailableDiscounts] = useState([]);
   const [appliedDiscount, setAppliedDiscount] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeOrder, setActiveOrder] = useState(null);
@@ -112,6 +120,9 @@ export default function OrderPage() {
   const [printTaxBreakdown, setPrintTaxBreakdown] = useState([]);
   const [redirectAfterPrint, setRedirectAfterPrint] = useState(false);
   const [serverName, setServerName] = useState("Server");
+  const [kotCartFingerprint, setKotCartFingerprint] = useState(null);
+  const [isReleaseModalOpen, setIsReleaseModalOpen] = useState(false);
+  const [isReleasingTable, setIsReleasingTable] = useState(false);
 
   // View States
   const [viewMode, setViewMode] = useState("grid"); // 'grid' | 'list'
@@ -174,24 +185,24 @@ export default function OrderPage() {
 
         // Fetch session and existing order data if not "new"
         if (sessionId !== "new") {
-          // Fetch floor data to extract session details
-          const floorRes = await fetch("/api/sales/floor");
-          const floorJson = await floorRes.json();
-          if (floorJson.success) {
-            const currentSession = floorJson.data.sessions.find(
-              (s) => s.id === sessionId,
-            );
-            if (currentSession) {
-              const table = (floorJson.data.tables || []).find(
-                (t) => String(t.id) === String(currentSession.tableId),
-              );
-              const tableNumber = table?.tableNumber || null;
-              setSessionData({
-                ...currentSession,
-                tableNumber,
-              });
-              if (tableNumber) setGuestTable(tableNumber);
-            }
+          const sessionRes = await fetch(`/api/sales/sessions?sessionId=${sessionId}`);
+          const sessionJson = await sessionRes.json();
+          if (sessionJson.success && sessionJson.data) {
+            const currentSession = sessionJson.data;
+            const tableNumber =
+              currentSession.primaryTable?.tableNumber ||
+              currentSession.tableNumber ||
+              null;
+            const floorName =
+              currentSession.floor?.name ||
+              currentSession.floorName ||
+              null;
+            setSessionData({
+              ...currentSession,
+              tableNumber,
+              floorName,
+            });
+            if (tableNumber) setGuestTable(tableNumber);
           }
 
           // Fetch existing order for this session
@@ -228,6 +239,11 @@ export default function OrderPage() {
                 tax: item.tax,
                 qty: item.qty,
                 size: item.size,
+                sizes:
+                  item.sizes ||
+                  (item.size && item.size !== "Standard"
+                    ? String(item.size).split(", ").filter(Boolean)
+                    : []),
                 preparationStyle: style,
                 options: item.options || [],
                 modifier: parts.length > 0 ? parts.join(" | ") : undefined,
@@ -235,6 +251,7 @@ export default function OrderPage() {
               };
             });
             setCart(restoredCart);
+            setKotCartFingerprint(getCartFingerprint(restoredCart));
 
             if (existingOrder.discountCode) {
               // Note: We don't have the full discount object, but we have the code and amount
@@ -264,6 +281,20 @@ export default function OrderPage() {
       setServerName(fullName);
     }
   }, [currentUser]);
+
+  useEffect(() => {
+    if (!isPaymentModalOpen) return;
+    const loadDiscounts = async () => {
+      try {
+        const res = await fetch("/api/orders/discount");
+        const json = await res.json();
+        if (json.success) setAvailableDiscounts(json.data || []);
+      } catch (err) {
+        setAvailableDiscounts([]);
+      }
+    };
+    loadDiscounts();
+  }, [isPaymentModalOpen]);
 
   const fetchOrderOnly = useCallback(async () => {
     if (sessionId === "new") return;
@@ -378,10 +409,8 @@ export default function OrderPage() {
 
   const handleOpenOptions = (item) => {
     setSelectedProduct(item);
-    setSelectedSize(
-      item.variants && item.variants.length > 0
-        ? item.variants[0].size
-        : "Standard",
+    setSelectedSizes(
+      item.variants && item.variants.length > 0 ? [item.variants[0].size] : [],
     );
     setSelectedAddons([]);
     const styles = (item.preparationStyles || []).filter(Boolean);
@@ -395,6 +424,19 @@ export default function OrderPage() {
       if (exists) return prev.filter((a) => a._id !== addon._id);
       return [...prev, addon];
     });
+  };
+
+  const toggleVariant = (size) => {
+    setSelectedSizes((prev) => {
+      if (prev.includes(size)) return prev.filter((s) => s !== size);
+      return [...prev, size];
+    });
+  };
+
+  const formatSizeLabel = (sizes) => {
+    if (Array.isArray(sizes) && sizes.length > 0) return sizes.join(", ");
+    if (typeof sizes === "string" && sizes.trim()) return sizes;
+    return "Standard";
   };
 
   const productNeedsOptions = (product) => {
@@ -436,6 +478,7 @@ export default function OrderPage() {
           tax: itemTax,
           qty: 1,
           size: "Standard",
+          sizes: [],
           preparationStyle: null,
           options: [],
           cartId: Date.now(),
@@ -446,17 +489,19 @@ export default function OrderPage() {
 
   const addModifiedItemToCart = () => {
     if (!selectedProduct) return;
-    let basePrice = selectedProduct.price || 0;
 
-    if (
-      selectedSize &&
-      selectedProduct.variants &&
-      selectedProduct.variants.length > 0
-    ) {
-      const variant = selectedProduct.variants.find(
-        (v) => v.size === selectedSize,
-      );
-      if (variant) basePrice = variant.price;
+    const hasVariants =
+      selectedProduct.variants && selectedProduct.variants.length > 0;
+    if (hasVariants && selectedSizes.length === 0) {
+      toast.error("Select at least one variant");
+      return;
+    }
+
+    let basePrice = selectedProduct.price || 0;
+    if (hasVariants) {
+      basePrice = selectedProduct.variants
+        .filter((v) => selectedSizes.includes(v.size))
+        .reduce((sum, v) => sum + (Number(v.price) || 0), 0);
     }
 
     const addonsPrice = selectedAddons.reduce(
@@ -473,9 +518,9 @@ export default function OrderPage() {
     }
     selectedAddons.forEach((a) => options.push(a.name));
 
+    const sizeLabel = formatSizeLabel(selectedSizes);
     const parts = [];
-    if (selectedSize && selectedSize !== "Standard")
-      parts.push(`Size: ${selectedSize}`);
+    if (sizeLabel && sizeLabel !== "Standard") parts.push(`Size: ${sizeLabel}`);
     if (selectedPreparationStyle)
       parts.push(`Style: ${selectedPreparationStyle}`);
     if (selectedAddons.length > 0) {
@@ -493,7 +538,8 @@ export default function OrderPage() {
         price: finalPrice,
         tax: finalTax,
         qty: 1,
-        size: selectedSize,
+        size: sizeLabel,
+        sizes: selectedSizes,
         preparationStyle: selectedPreparationStyle || null,
         options,
         modifier: parts.length > 0 ? parts.join(" | ") : undefined,
@@ -501,6 +547,7 @@ export default function OrderPage() {
     ]);
     setIsOptionsModalOpen(false);
     setSelectedPreparationStyle("");
+    setSelectedSizes([]);
   };
 
   const updateQty = (id, delta) => {
@@ -590,6 +637,7 @@ export default function OrderPage() {
         setGuestName(partyName);
         setActiveOrder(json.data);
         setOrderStatus("PENDING");
+        setKotCartFingerprint(getCartFingerprint(cart));
 
         // Check if there are items to print for KOT
         if (json.data.kotPayload && json.data.kotPayload.length > 0) {
@@ -601,12 +649,8 @@ export default function OrderPage() {
           });
           setPrintKotItems(json.data.kotPayload);
           setPrintType("kot");
-          setRedirectAfterPrint(true);
+          setRedirectAfterPrint(false);
           setIsPrintModalOpen(true);
-        } else {
-          setTimeout(() => {
-            router.push("/sales/floor");
-          }, 1000);
         }
       } else {
         toast.error(json.message);
@@ -649,6 +693,14 @@ export default function OrderPage() {
   const handleRemoveDiscount = () => {
     setAppliedDiscount(null);
     setDiscountCode("");
+  };
+
+  const formatDiscountOption = (coupon) => {
+    const amount =
+      coupon.discountType === "percent"
+        ? `${coupon.value}%`
+        : `$${Number(coupon.value).toFixed(2)}`;
+    return `${coupon.code} — ${amount}`;
   };
 
   const verifyGiftCard = async () => {
@@ -711,6 +763,16 @@ export default function OrderPage() {
       : Math.min(appliedDiscount.value, subtotal)
     : 0;
   const total = subtotal - discountAmount + totalTax;
+  const cardDue = giftCardBalance !== null ? giftCardSplitAmount : total;
+  const parsedCardAmount =
+    cardAmountTendered === "" ? NaN : parseFloat(cardAmountTendered);
+  const cardPayAmount = Number.isFinite(parsedCardAmount)
+    ? parsedCardAmount
+    : cardDue;
+  const cashSplitAmount =
+    paymentMethod === "Card" && cardPayAmount < cardDue
+      ? Math.round((cardDue - cardPayAmount) * 100) / 100
+      : 0;
   // Keep gift-card split in sync when discount changes the total due
   useEffect(() => {
     if (giftCardBalance === null) return;
@@ -721,45 +783,63 @@ export default function OrderPage() {
     }
   }, [total, giftCardBalance]);
 
+  const hasSentKot =
+    Boolean(activeOrder) &&
+    orderStatus !== "Draft" &&
+    kotCartFingerprint === getCartFingerprint(cart);
+  const canPay =
+    hasSentKot && cart.length > 0 && orderStatus !== "PAID";
+
+  const openPaymentModal = () => {
+    if (orderStatus === "PAID") return;
+    if (!hasSentKot) {
+      toast.error("Send the order to kitchen (KOT) before taking payment.");
+      return;
+    }
+    setIsPaymentModalOpen(true);
+  };
+
+  const goToFloor = () => {
+    router.push("/sales/floor");
+  };
+
+  const handleReleaseTable = async (shouldRelease) => {
+    if (!shouldRelease || sessionId === "new") {
+      setIsReleaseModalOpen(false);
+      goToFloor();
+      return;
+    }
+    try {
+      setIsReleasingTable(true);
+      const res = await fetch("/api/sales/sessions", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionId, action: "RELEASE" }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        toast.success("Table released.");
+        setIsReleaseModalOpen(false);
+        goToFloor();
+      } else {
+        toast.error(json.message || "Failed to release table.");
+      }
+    } catch (err) {
+      toast.error("Failed to release table.");
+    } finally {
+      setIsReleasingTable(false);
+    }
+  };
+
   const handlePayment = async () => {
     if (cart.length === 0) return;
+    if (!hasSentKot || !activeOrder) {
+      toast.error("Send the order to kitchen (KOT) before taking payment.");
+      return;
+    }
     try {
       setIsSubmitting(true);
-      let currentOrder = activeOrder;
-
-      if (!currentOrder) {
-        // Create order first
-        const partyName = resolvePartyName();
-        const payload = {
-          items: cart,
-          subTotal: subtotal,
-          taxTotal: totalTax,
-          discountTotal: discountAmount,
-          discountCode: appliedDiscount ? appliedDiscount.code : null,
-          totalAmount: total,
-          specialNote: orderNote,
-          sessionId: sessionId !== "new" ? sessionId : null,
-          tableNo: sessionId === "new" ? guestTable : undefined,
-          guestName: partyName,
-          partyName,
-          guestCount: sessionData?.guestCount ?? null,
-          orderType: orderType,
-        };
-        const res = await fetch("/api/orders/employee", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-        const json = await res.json();
-        if (json.success) {
-          currentOrder = json.data;
-          setActiveOrder(json.data);
-        } else {
-          toast.error(json.message || "Failed to create order before payment.");
-          setIsSubmitting(false);
-          return;
-        }
-      }
+      const currentOrder = activeOrder;
 
       // Proceed with Payment
       const giftCardUsedAmount =
@@ -783,11 +863,11 @@ export default function OrderPage() {
 
       if (paymentMethod === "Card") {
         paymentPayload.cardType = selectedCardType;
-        paymentPayload.cardAmount = cardAmountTendered
-          ? parseFloat(cardAmountTendered)
-          : giftCardBalance !== null
-            ? giftCardSplitAmount
-            : total;
+        paymentPayload.cardAmount = Math.min(cardPayAmount, cardDue);
+        if (cashSplitAmount > 0) {
+          paymentPayload.method = "Card + Cash";
+          paymentPayload.cashAmount = cashSplitAmount;
+        }
       }
 
       if (giftCardBalance !== null) {
@@ -826,9 +906,13 @@ export default function OrderPage() {
           ...(json.data || {}),
           paymentStatus: "PAID",
           paymentMethod:
-            paymentMethod === "Card" && selectedCardType
-              ? `Card - ${selectedCardType}`
-              : paymentMethod,
+            paymentMethod === "Card" && cashSplitAmount > 0
+              ? selectedCardType
+                ? `Card - ${selectedCardType} + Cash`
+                : "Card + Cash"
+              : paymentMethod === "Card" && selectedCardType
+                ? `Card - ${selectedCardType}`
+                : paymentMethod,
           tipAmount: tipAmount,
           discountTotal: discountAmount,
           discountCode: appliedDiscount ? appliedDiscount.code : null,
@@ -847,7 +931,7 @@ export default function OrderPage() {
         setPrintOrderData(updatedOrder);
         setPrintTaxBreakdown(generateTaxBreakdown());
         setPrintType("customer");
-        setRedirectAfterPrint(true);
+        setRedirectAfterPrint(false);
         setIsPrintModalOpen(true);
       } else {
         toast.error(json.message);
@@ -883,9 +967,25 @@ export default function OrderPage() {
         <div className="w-[65%] flex flex-col border-r border-zinc-200 bg-zinc-50">
           {/* LEFT PANEL HEADER */}
           <div className="flex items-center justify-between px-4 py-3 bg-white border-b border-zinc-200 shrink-0">
-            <h2 className="text-[17px] font-black text-zinc-900">
-              Create Order
-            </h2>
+            <div className="min-w-0">
+              <h2 className="text-[17px] font-black text-zinc-900">
+                Create Order
+              </h2>
+              <p className="text-xs font-semibold text-zinc-800 mt-0.5 truncate">
+                {sessionId === "new"
+                  ? guestTable
+                    ? `${guestTable} · Takeaway`
+                    : "Takeaway"
+                  : [
+                      sessionData?.tableNumber
+                        ? `${sessionData.tableNumber}`
+                        : null,
+                      sessionData?.floorName || null,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ") || "Loading table..."}
+              </p>
+            </div>
             <div className="flex items-center gap-1 bg-zinc-100 p-1 rounded-lg">
               <button
                 onClick={() => setViewMode("grid")}
@@ -1193,9 +1293,9 @@ export default function OrderPage() {
                 )}
               </Button>
               <Button
-                onClick={() => setIsPaymentModalOpen(true)}
-                disabled={cart.length === 0 || orderStatus === "PAID"}
-                className="flex-1 h-14 bg-red-600 hover:bg-red-700 text-white font-bold text-sm rounded-xl shadow-none"
+                onClick={openPaymentModal}
+                disabled={!canPay}
+                className="flex-1 h-14 bg-red-600 hover:bg-red-700 text-white font-bold text-sm rounded-xl shadow-none disabled:opacity-50"
               >
                 {orderStatus === "PAID" ? "Paid" : "Pay Now"}
               </Button>
@@ -1210,11 +1310,10 @@ export default function OrderPage() {
           <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl flex flex-col">
             <div className="p-5 border-b border-zinc-100 flex items-center justify-between">
               <div>
-                <h2 className="text-lg font-bold text-zinc-900">
-                  Party Name
-                </h2>
+                <h2 className="text-lg font-bold text-zinc-900">Party Name</h2>
                 <p className="text-sm font-semibold text-zinc-500 mt-0.5">
-                  Whose bill is this for? Optional — leave blank to use table + guests.
+                  Whose bill is this for? Optional — leave blank to use table +
+                  guests.
                 </p>
               </div>
               <button
@@ -1229,7 +1328,9 @@ export default function OrderPage() {
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider flex items-center gap-1.5">
                   <User className="w-3.5 h-3.5" /> Customer / Party Name
-                  <span className="text-zinc-400 font-semibold normal-case">(optional)</span>
+                  <span className="text-zinc-400 font-semibold normal-case">
+                    (optional)
+                  </span>
                 </label>
                 <Input
                   placeholder="e.g. John Doe"
@@ -1249,7 +1350,9 @@ export default function OrderPage() {
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider flex items-center gap-1.5">
                     <MapPin className="w-3.5 h-3.5" /> Table Number
-                    <span className="text-zinc-400 font-semibold normal-case">(if no name)</span>
+                    <span className="text-zinc-400 font-semibold normal-case">
+                      (if no name)
+                    </span>
                   </label>
                   <Input
                     placeholder="e.g. T-01"
@@ -1264,14 +1367,18 @@ export default function OrderPage() {
                 <div className="bg-zinc-50 border border-zinc-200 rounded-xl p-3 text-sm font-semibold text-zinc-600 space-y-1">
                   {getDisplayTableNo() && (
                     <div>
-                      Table:{" "}
-                      <span className="text-zinc-900">{getDisplayTableNo()}</span>
+                      {" "}
+                      <span className="text-zinc-900">
+                        {getDisplayTableNo()}
+                      </span>
                     </div>
                   )}
                   {sessionData?.guestCount != null && (
                     <div>
                       Guests:{" "}
-                      <span className="text-zinc-900">{sessionData.guestCount}</span>
+                      <span className="text-zinc-900">
+                        {sessionData.guestCount}
+                      </span>
                     </div>
                   )}
                 </div>
@@ -1339,7 +1446,7 @@ export default function OrderPage() {
                         sessionData?.tableNumber ||
                         (sessionId === "new" && guestTable)) && (
                         <span className="inline-flex items-center px-2.5 py-1 rounded-lg bg-white border border-zinc-200 text-xs font-bold text-zinc-800">
-                          Table{" "}
+                          {" "}
                           {activeOrder?.tableNo ||
                             sessionData?.tableNumber ||
                             guestTable}
@@ -1435,56 +1542,95 @@ export default function OrderPage() {
                         </div>
                       </div>
                     ) : (
-                      <div className="flex gap-2">
-                        <div className="relative flex-1">
-                          <Percent className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
-                          <input
-                            type="text"
-                            value={discountCode}
-                            onChange={(e) =>
-                              setDiscountCode(e.target.value.toUpperCase())
-                            }
-                            placeholder="Enter discount code..."
-                            className="w-full h-12 pl-9 pr-4 bg-white border border-zinc-200 rounded-xl font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 uppercase"
-                          />
-                        </div>
-                        <Button
-                          type="button"
-                          onClick={handleApplyDiscount}
-                          disabled={!discountCode.trim()}
-                          className="h-12 px-5 bg-zinc-900 hover:bg-zinc-800 text-white font-bold rounded-xl shadow-none"
+                      <div className="space-y-2">
+                        <Select
+                          value={discountCode || undefined}
+                          onValueChange={(value) => setDiscountCode(value)}
                         >
-                          Apply
-                        </Button>
+                          <SelectTrigger className="w-full h-12 bg-white border-zinc-200 rounded-xl font-semibold text-sm focus:ring-orange-500">
+                            <SelectValue placeholder="Select a discount..." />
+                          </SelectTrigger>
+                          <SelectContent className="z-[80]">
+                            {availableDiscounts.length === 0 ? (
+                              <SelectItem value="__none" disabled>
+                                No active discounts
+                              </SelectItem>
+                            ) : (
+                              availableDiscounts.map((coupon) => (
+                                <SelectItem key={coupon._id || coupon.code} value={coupon.code}>
+                                  {formatDiscountOption(coupon)}
+                                </SelectItem>
+                              ))
+                            )}
+                          </SelectContent>
+                        </Select>
+                        <div className="flex gap-2">
+                          <div className="relative flex-1">
+                            <Percent className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+                            <input
+                              type="text"
+                              value={discountCode}
+                              onChange={(e) =>
+                                setDiscountCode(e.target.value.toUpperCase())
+                              }
+                              placeholder="Or enter discount code..."
+                              className="w-full h-12 pl-9 pr-4 bg-white border border-zinc-200 rounded-xl font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 uppercase"
+                            />
+                          </div>
+                          <Button
+                            type="button"
+                            onClick={handleApplyDiscount}
+                            disabled={!discountCode.trim()}
+                            className="h-12 px-5 bg-zinc-900 hover:bg-zinc-800 text-white font-bold rounded-xl shadow-none"
+                          >
+                            Apply
+                          </Button>
+                        </div>
                       </div>
                     )}
                   </div>
 
                   {/* Split payment breakdown */}
-                  {giftCardBalance !== null && (
+                  {(giftCardBalance !== null || cashSplitAmount > 0) && (
                     <div className="bg-white rounded-xl border border-zinc-200 p-4 space-y-2 shadow-sm">
                       <p className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider mb-1">
                         Payment Breakdown
                       </p>
-                      <div className="flex justify-between text-sm font-semibold text-zinc-600">
-                        <span>Gift Card</span>
-                        <span className="text-zinc-900">
-                          $
-                          {Math.max(
-                            0,
-                            Math.round((total - giftCardSplitAmount) * 100) /
-                              100,
-                          ).toFixed(2)}
-                        </span>
-                      </div>
-                      {giftCardSplitAmount > 0 && (
+                      {giftCardBalance !== null && (
+                        <div className="flex justify-between text-sm font-semibold text-zinc-600">
+                          <span>Gift Card</span>
+                          <span className="text-zinc-900">
+                            $
+                            {Math.max(
+                              0,
+                              Math.round((total - giftCardSplitAmount) * 100) /
+                                100,
+                            ).toFixed(2)}
+                          </span>
+                        </div>
+                      )}
+                      {paymentMethod === "Card" && (
+                        <div className="flex justify-between text-sm font-semibold text-zinc-600">
+                          <span>Card</span>
+                          <span className="text-zinc-900">
+                            ${Math.min(cardPayAmount, cardDue).toFixed(2)}
+                          </span>
+                        </div>
+                      )}
+                      {cashSplitAmount > 0 && (
+                        <div className="flex justify-between text-sm font-semibold text-zinc-600">
+                          <span>Cash</span>
+                          <span className="text-zinc-900">
+                            ${cashSplitAmount.toFixed(2)}
+                          </span>
+                        </div>
+                      )}
+                      {giftCardBalance !== null &&
+                        giftCardSplitAmount > 0 &&
+                        paymentMethod !== "Card" && (
                         <div className="flex justify-between text-sm font-semibold text-zinc-600">
                           <span>
-                            {paymentMethod === "Card"
-                              ? "Card"
-                              : paymentMethod === "Cash"
-                                ? "Cash"
-                                : "Remaining"}
+                            {paymentMethod === "Cash" ? "Cash" : "Remaining"}
                           </span>
                           <span className="text-zinc-900">
                             ${giftCardSplitAmount.toFixed(2)}
@@ -1717,25 +1863,77 @@ export default function OrderPage() {
                           </div>
 
                           {selectedCardType && (
-                            <div className="space-y-2">
-                              <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
-                                Amount to Charge
-                              </label>
-                              <div className="relative">
-                                <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-400" />
-                                <input
-                                  type="number"
-                                  min="0"
-                                  value={cardAmountTendered}
-                                  onChange={(e) =>
-                                    setCardAmountTendered(e.target.value)
-                                  }
-                                  placeholder={(giftCardBalance !== null
-                                    ? giftCardSplitAmount
-                                    : total
-                                  ).toFixed(2)}
-                                  className="w-full h-14 pl-10 pr-4 bg-white border border-zinc-200 rounded-xl font-bold text-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
-                                />
+                            <div className="space-y-4">
+                              <div className="space-y-2">
+                                <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
+                                  Amount on Card
+                                </label>
+                                <div className="relative">
+                                  <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-400" />
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    value={cardAmountTendered}
+                                    onChange={(e) =>
+                                      setCardAmountTendered(e.target.value)
+                                    }
+                                    placeholder={cardDue.toFixed(2)}
+                                    className="w-full h-14 pl-10 pr-4 bg-white border border-zinc-200 rounded-xl font-bold text-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                                  />
+                                </div>
+                              </div>
+
+                              <div className="bg-zinc-50 border border-zinc-200 rounded-xl p-4 space-y-3">
+                                <div className="flex justify-between items-center">
+                                  <span className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
+                                    Amount in Cash
+                                  </span>
+                                  <span className="text-xl font-black text-zinc-900">
+                                    ${cashSplitAmount.toFixed(2)}
+                                  </span>
+                                </div>
+                                <p className="text-xs font-semibold text-zinc-500">
+                                  Want to Pay By Cash? Enter the remaning amount to collect via cash.
+                                </p>
+                                {cashSplitAmount > 0 && (
+                                  <>
+                                    <div className="space-y-2">
+                                      <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
+                                        Cash Tendered
+                                      </label>
+                                      <div className="relative">
+                                        <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-400" />
+                                        <input
+                                          type="number"
+                                          min="0"
+                                          value={amountTendered}
+                                          onChange={(e) =>
+                                            setAmountTendered(e.target.value)
+                                          }
+                                          placeholder={cashSplitAmount.toFixed(2)}
+                                          className="w-full h-14 pl-10 pr-4 bg-white border border-zinc-200 rounded-xl font-bold text-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                                        />
+                                      </div>
+                                    </div>
+                                    {parseFloat(amountTendered) >
+                                      cashSplitAmount && (
+                                      <div className="p-4 bg-orange-50 border border-orange-200 rounded-xl">
+                                        <div className="flex justify-between items-center">
+                                          <span className="text-sm font-bold text-orange-900">
+                                            Change Due
+                                          </span>
+                                          <span className="text-xl font-black text-orange-600">
+                                            $
+                                            {(
+                                              parseFloat(amountTendered) -
+                                              cashSplitAmount
+                                            ).toFixed(2)}
+                                          </span>
+                                        </div>
+                                      </div>
+                                    )}
+                                  </>
+                                )}
                               </div>
                             </div>
                           )}
@@ -1839,6 +2037,59 @@ export default function OrderPage() {
                             </span>
                           </div>
 
+                              {parseFloat(amountTendered) >
+                                (giftCardBalance !== null
+                                  ? giftCardSplitAmount
+                                  : total) && (
+                                <div className="p-4 bg-orange-50 border border-orange-200 rounded-xl">
+                                  <div className="flex justify-between items-center mb-3">
+                                    <span className="text-sm font-bold text-orange-900">
+                                      Change Due
+                                    </span>
+                                    <span className="text-xl font-black text-orange-600">
+                                      $
+                                      {(
+                                        parseFloat(amountTendered) -
+                                        (giftCardBalance !== null
+                                          ? giftCardSplitAmount
+                                          : total)
+                                      ).toFixed(2)}
+                                    </span>
+                                  </div>
+                                  <label className="flex items-center gap-3 cursor-pointer group min-h-[44px]">
+                                    <div
+                                      className={`w-6 h-6 rounded border flex items-center justify-center transition-colors ${tipAmount > 0 ? "bg-orange-500 border-orange-500" : "bg-white border-zinc-300 group-hover:border-orange-400"}`}
+                                    >
+                                      {tipAmount > 0 && (
+                                        <CheckCircle2 className="w-4 h-4 text-white" />
+                                      )}
+                                    </div>
+                                    <input
+                                      type="checkbox"
+                                      className="hidden"
+                                      checked={tipAmount > 0}
+                                      onChange={(e) => {
+                                        if (e.target.checked) {
+                                          setTipAmount(
+                                            Math.round(
+                                              (parseFloat(amountTendered) -
+                                                (giftCardBalance !== null
+                                                  ? giftCardSplitAmount
+                                                  : total)) *
+                                                100,
+                                            ) / 100,
+                                          );
+                                        } else {
+                                          setTipAmount(0);
+                                        }
+                                      }}
+                                    />
+                                    <span className="text-sm font-bold text-orange-900">
+                                      Keep as Tip
+                                    </span>
+                                  </label>
+                                </div>
+                              )}
                           <div className="space-y-2">
                             <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
                               Amount Tendered
@@ -1858,84 +2109,6 @@ export default function OrderPage() {
                             </div>
                           </div>
 
-                          <div className="grid grid-cols-5 gap-2">
-                            {[
-                              {
-                                label: "Exact",
-                                value: (giftCardBalance !== null
-                                  ? giftCardSplitAmount
-                                  : total
-                                ).toFixed(2),
-                              },
-                              { label: "$35", value: "35" },
-                              { label: "$40", value: "40" },
-                              { label: "$50", value: "50" },
-                              { label: "$100", value: "100" },
-                            ].map((btn) => (
-                              <button
-                                key={btn.label}
-                                type="button"
-                                onClick={() => setAmountTendered(btn.value)}
-                                className="min-h-[48px] rounded-xl border border-zinc-200 bg-white text-sm font-bold text-zinc-800 hover:border-orange-400 hover:bg-orange-50 transition-colors"
-                              >
-                                {btn.label}
-                              </button>
-                            ))}
-                          </div>
-
-                          {parseFloat(amountTendered) >
-                            (giftCardBalance !== null
-                              ? giftCardSplitAmount
-                              : total) && (
-                            <div className="p-4 bg-orange-50 border border-orange-200 rounded-xl">
-                              <div className="flex justify-between items-center mb-3">
-                                <span className="text-sm font-bold text-orange-900">
-                                  Change Due
-                                </span>
-                                <span className="text-xl font-black text-orange-600">
-                                  $
-                                  {(
-                                    parseFloat(amountTendered) -
-                                    (giftCardBalance !== null
-                                      ? giftCardSplitAmount
-                                      : total)
-                                  ).toFixed(2)}
-                                </span>
-                              </div>
-                              <label className="flex items-center gap-3 cursor-pointer group min-h-[44px]">
-                                <div
-                                  className={`w-6 h-6 rounded border flex items-center justify-center transition-colors ${tipAmount > 0 ? "bg-orange-500 border-orange-500" : "bg-white border-zinc-300 group-hover:border-orange-400"}`}
-                                >
-                                  {tipAmount > 0 && (
-                                    <CheckCircle2 className="w-4 h-4 text-white" />
-                                  )}
-                                </div>
-                                <input
-                                  type="checkbox"
-                                  className="hidden"
-                                  checked={tipAmount > 0}
-                                  onChange={(e) => {
-                                    if (e.target.checked) {
-                                      setTipAmount(
-                                        Math.round(
-                                          (parseFloat(amountTendered) -
-                                            (giftCardBalance !== null
-                                              ? giftCardSplitAmount
-                                              : total)) *
-                                            100,
-                                        ) / 100,
-                                      );
-                                    } else {
-                                      setTipAmount(0);
-                                    }
-                                  }}
-                                />
-                                <span className="text-sm font-bold text-orange-900">
-                                  Keep as Tip
-                                </span>
-                              </label>
-                            </div>
-                          )}
                         </>
                       )}
                     </div>
@@ -2094,11 +2267,12 @@ export default function OrderPage() {
                   (paymentMethod === "GiftCard" && giftCardBalance === null) ||
                   (paymentMethod === "Card" &&
                     (giftCardBalance === null || giftCardSplitAmount > 0) &&
+                    cardPayAmount > 0 &&
                     !selectedCardType) ||
                   (paymentMethod === "Card" &&
-                    cardAmountTendered &&
-                    parseFloat(cardAmountTendered) <
-                      (giftCardBalance !== null ? giftCardSplitAmount : total))
+                    cashSplitAmount > 0 &&
+                    (!amountTendered ||
+                      parseFloat(amountTendered) < cashSplitAmount))
                 }
                 className="flex-[1.4] h-14 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-bold shadow-none text-base"
               >
@@ -2349,6 +2523,7 @@ export default function OrderPage() {
                       </span>
                       <div className="grid gap-2">
                         {selectedProduct.variants.map((v, idx) => {
+                          const isChecked = selectedSizes.includes(v.size);
                           const discountAmount = calculateItemDiscount(
                             selectedProduct,
                             v.price,
@@ -2367,20 +2542,19 @@ export default function OrderPage() {
                             <label
                               key={idx}
                               className={`flex items-center border p-3 rounded-lg cursor-pointer transition-colors group ${
-                                selectedSize === v.size
+                                isChecked
                                   ? "border-orange-500 bg-orange-50/30"
                                   : "border-zinc-200 hover:border-orange-300"
                               }`}
                             >
                               <div
-                                className={`flex-1 flex items-center gap-3 text-[14px] font-bold ${selectedSize === v.size ? "text-zinc-900" : "text-zinc-700 group-hover:text-zinc-900"}`}
+                                className={`flex-1 flex items-center gap-3 text-[14px] font-bold ${isChecked ? "text-zinc-900" : "text-zinc-700 group-hover:text-zinc-900"}`}
                               >
                                 <input
-                                  type="radio"
-                                  name="size"
-                                  checked={selectedSize === v.size}
-                                  onChange={() => setSelectedSize(v.size)}
-                                  className="w-4 h-4 accent-orange-500"
+                                  type="checkbox"
+                                  checked={isChecked}
+                                  onChange={() => toggleVariant(v.size)}
+                                  className="w-4 h-4 accent-orange-500 rounded"
                                 />
                                 <span>{v.size}</span>
                               </div>
@@ -2563,13 +2737,54 @@ export default function OrderPage() {
         </div>
       )}
 
+      {isReleaseModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-900/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl">
+            <div className="p-5 border-b border-zinc-100">
+              <h2 className="text-lg font-bold text-zinc-900">Release Table?</h2>
+              <p className="text-sm font-semibold text-zinc-500 mt-1">
+                Payment is complete
+                {sessionData?.tableNumber ? ` for ${sessionData.tableNumber}` : ""}
+                {sessionData?.floorName ? ` on ${sessionData.floorName}` : ""}.
+                Do you want to release this table now?
+              </p>
+            </div>
+            <div className="p-5 flex gap-3">
+              <Button
+                variant="outline"
+                disabled={isReleasingTable}
+                onClick={() => handleReleaseTable(false)}
+                className="flex-1 h-12 rounded-xl font-bold border-zinc-200 text-zinc-700 shadow-none"
+              >
+                No, Go to Floor
+              </Button>
+              <Button
+                disabled={isReleasingTable}
+                onClick={() => handleReleaseTable(true)}
+                className="flex-1 h-12 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-bold shadow-none"
+              >
+                {isReleasingTable ? <Loader2 className="w-5 h-5 animate-spin" /> : "Yes, Release"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Print Preview Modal */}
       <PrintPreviewModal
         isOpen={isPrintModalOpen}
         onClose={() => {
           setIsPrintModalOpen(false);
+          if (printType === "customer" && orderStatus === "PAID") {
+            if (sessionId !== "new") {
+              setIsReleaseModalOpen(true);
+            } else {
+              goToFloor();
+            }
+            return;
+          }
           if (redirectAfterPrint) {
-            router.push("/sales/floor");
+            goToFloor();
           }
         }}
         printType={printType}

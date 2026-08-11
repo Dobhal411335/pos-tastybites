@@ -102,7 +102,7 @@ const KitchenOrderTicket = ({
                       String(o).toLowerCase().startsWith("style:")
                     ) && (
                     <div className="pl-7 text-[11px] font-semibold italic">
-                      + Style: {item.preparationStyle}
+                      +{item.preparationStyle}
                     </div>
                   )}
                   {item.options?.length > 0 && (

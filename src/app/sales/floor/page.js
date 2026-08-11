@@ -543,32 +543,32 @@ export default function SalesFloorPage() {
             {actionView === "MAIN" && (
               <div className="flex flex-col gap-3">
                 <div className="text-center mb-4">
-                  <p className="text-sm font-semibold text-zinc-500">
+                  <p className="text-sm font-bold text-zinc-900">
                     {floorData.floors.find(f => f.id === floorData.activeFloorId)?.name || "Ground Floor"}
                   </p>
-                  <p className="text-sm font-bold text-zinc-700 mt-1">
+                  <p className="text-sm font-bold text-zinc-900 mt-1">
                     {selectedTable?.session?.guestCount} Guests • {selectedTable?.session?.effectiveSeatCount || selectedTable?.seats} Seats
                   </p>
-                  <p className="text-sm font-semibold text-zinc-500 mt-1">
+                  <p className="text-sm font-bold text-zinc-900 mt-1">
                     Assigned to {selectedTable?.session?.assignedEmployeeName}
                   </p>
-                  <p className="text-xs font-semibold text-zinc-400 mt-1">
+                  <p className="text-xs font-bold text-zinc-900 mt-1">
                     Open for {Math.floor((new Date() - new Date(selectedTable?.session?.openedAt)) / 60000)} min
                   </p>
                 </div>
 
                 <Button
                   variant="outline"
-                  className="h-14 justify-start px-6 font-bold text-zinc-900 border-2 border-zinc-200 bg-zinc-50 hover:bg-zinc-100"
+                  className="h-14 justify-start px-6 font-bold text-zinc-900 border-2 border-zinc-200 bg-zinc-50 hover:bg-orange-400 hover:text-white"
                   onClick={() => router.push(`/sales/orders/${selectedTable?.session?.id}`)}
                 >
                   <CheckCircle2 className="mr-3 h-5 w-5 text-zinc-600" />
-                  {selectedTable?.session?.hasActiveOrder ? "Continue Order" : "Create Order"}
+                  {selectedTable?.session?.hasActiveOrder ? "Continue Order" : "Continue Order"}
                 </Button>
 
                 <Button
                   variant="outline"
-                  className="h-14 justify-start px-6 font-bold text-zinc-700 border-2 border-zinc-200"
+                  className="h-14 justify-start px-6 font-bold text-zinc-700 border-2 border-zinc-200 bg-zinc-50 hover:bg-orange-400 hover:text-white"
                   onClick={() => {
                     setGuestCount(selectedTable?.session?.guestCount || 1);
                     setEffectiveSeatCount(selectedTable?.session?.guestCount || selectedTable?.seats || 1);
@@ -581,7 +581,7 @@ export default function SalesFloorPage() {
 
                 <Button
                   variant="outline"
-                  className="h-14 justify-start px-6 font-bold text-zinc-700 border-2 border-zinc-200"
+                  className="h-14 justify-start px-6 font-bold text-zinc-700 border-2 border-zinc-200 bg-zinc-50 hover:bg-orange-400 hover:text-white"
                   onClick={() => setActionView("TRANSFER")}
                 >
                   <UserPlus className="mr-3 h-5 w-5 text-zinc-400" />
@@ -590,7 +590,7 @@ export default function SalesFloorPage() {
 
                 <Button
                   variant="outline"
-                  className="h-14 justify-start px-6 font-bold text-zinc-700 border-2 border-zinc-200"
+                  className="h-14 justify-start px-6 font-bold text-zinc-700 border-2 border-zinc-200 bg-zinc-50 hover:bg-orange-400 hover:text-white"
                   onClick={() => {
                     setEffectiveSeatCount(selectedTable?.session?.effectiveSeatCount || selectedTable?.seats || 4);
                     setActionView("RECONFIGURE");

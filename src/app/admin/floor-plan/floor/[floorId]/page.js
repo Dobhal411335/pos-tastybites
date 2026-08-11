@@ -254,7 +254,7 @@ export default function FloorPlanEditorPage({ params }) {
           }));
           setTables(mappedTables);
         }
-
+ 
         if (tablesJson.success) {
           setUnassignedTables(tablesJson.data.filter(t => !t.floor));
         }

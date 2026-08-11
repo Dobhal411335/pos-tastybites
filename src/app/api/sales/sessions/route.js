@@ -36,6 +36,7 @@ export const GET = withAuth(async (request) => {
 
     const sessions = await TableSession.find(query)
       .populate("primaryTable", "tableNumber shape seats")
+      .populate("floor", "name")
       .populate("assignedEmployee", "firstName lastName name")
       .populate("openedBy", "firstName lastName name")
       .lean();
@@ -264,7 +265,7 @@ export const PUT = withAuth(async (request) => {
         metadata: { tableNo: releasedTable?.tableNumber || null },
       });
 
-      return sendSuccess(session, "Session released successfully");
+      return sendSuccess(session, "Table released successfully");
     }
 
     if (action === "PAYMENT_PENDING") {

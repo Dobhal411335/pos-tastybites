@@ -1,17 +1,27 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { 
   Search, Clock, ChevronRight, X, 
-  Receipt, ShoppingBag, Loader2, ArrowLeft, RefreshCw
+  Receipt, ShoppingBag, Loader2, ArrowLeft, RefreshCw,
+  DollarSign, Wallet, CreditCard, Banknote, Gift
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
+import PrintPreviewModal from "@/components/receipts/PrintPreviewModal";
+import TodayOrderPaymentModal from "@/components/sales/TodayOrderPaymentModal";
 
-const STATUSES = ["All", "PENDING", "CONFIRMED", "CANCELLED", "PAID"];
+const STATUSES = ["All", "PENDING", "CONFIRMED", "CANCELLED", "PAID", "ONLINE"];
+const STATUS_RANK = {
+  PENDING: 0,
+  CONFIRMED: 1,
+  COMPLETED: 2,
+  PAID: 2,
+  CANCELLED: 3,
+};
 
 function getPlacerName(order) {
   if (order.processedByName) return order.processedByName;
@@ -26,6 +36,71 @@ function getOrderGrandTotal(order) {
   return Number(order?.totalAmount || 0) + Number(order?.tipAmount || 0);
 }
 
+function isOrderPaid(order) {
+  return order?.paymentStatus === "PAID" || order?.status === "PAID";
+}
+
+function getPaymentType(order) {
+  const method = String(order?.paymentMethod || "").trim();
+  const usedGiftCard = Number(order?.giftcardUsedAmount || 0) > 0 || Boolean(order?.giftcardCode);
+  const lower = method.toLowerCase();
+
+  if (!method && !usedGiftCard) {
+    return {
+      label: "Unpaid",
+      Icon: Wallet,
+      className: "bg-rose-50 text-rose-700 border-rose-200",
+    };
+  }
+
+  const isCard = lower.includes("card") && !lower.includes("gift");
+  const isCash = lower.includes("cash");
+  const isGift = lower.includes("gift");
+
+  if (usedGiftCard && (isCard || isCash)) {
+    const cardType = method.replace(/^Card\s*-?\s*/i, "").trim();
+    const other = isCard
+      ? (cardType && cardType.toLowerCase() !== "card" ? `Card · ${cardType}` : "Card")
+      : "Cash";
+    return {
+      label: `Gift + ${other}`,
+      Icon: Gift,
+      className: "bg-violet-50 text-violet-700 border-violet-200",
+    };
+  }
+
+  if (isGift || (usedGiftCard && !isCard && !isCash)) {
+    return {
+      label: "Gift Card",
+      Icon: Gift,
+      className: "bg-violet-50 text-violet-700 border-violet-200",
+    };
+  }
+
+  if (isCard) {
+    const cardType = method.replace(/^Card\s*-\s*/i, "").trim();
+    return {
+      label: cardType && cardType.toLowerCase() !== "card" ? `Card · ${cardType}` : "Card",
+      Icon: CreditCard,
+      className: "bg-sky-50 text-sky-700 border-sky-200",
+    };
+  }
+
+  if (isCash) {
+    return {
+      label: "Cash",
+      Icon: Banknote,
+      className: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    };
+  }
+
+  return {
+    label: method,
+    Icon: Wallet,
+    className: "bg-zinc-100 text-zinc-700 border-zinc-200",
+  };
+}
+
 export default function TodayOrdersPage() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState("All");
@@ -34,6 +109,8 @@ export default function TodayOrdersPage() {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
 
   const fetchOrders = useCallback(async ({ silent = false } = {}) => {
     if (silent) setRefreshing(true);
@@ -72,6 +149,75 @@ export default function TodayOrdersPage() {
     return () => document.removeEventListener("visibilitychange", onVisibility);
   }, [fetchOrders]);
 
+  const stats = useMemo(() => {
+    const valid = orders.filter((o) => o.status !== "CANCELLED");
+    const totalOrders = valid.length;
+    const totalSales = valid.reduce((sum, o) => sum + Number(o.totalAmount || 0), 0);
+    const avgOrderValue = totalOrders > 0 ? totalSales / totalOrders : 0;
+    const tipsEarned = valid.reduce((sum, o) => sum + Number(o.tipAmount || 0), 0);
+    return [
+      { label: "Total Sales", short: "Sales", value: `$${totalSales.toFixed(2)}`, icon: DollarSign },
+      { label: "Total Orders", short: "Orders", value: totalOrders.toString(), icon: ShoppingBag },
+      { label: "Avg Order Value", short: "Avg", value: `$${avgOrderValue.toFixed(2)}`, icon: Receipt },
+      { label: "Tips Earned", short: "Tips", value: `$${tipsEarned.toFixed(2)}`, icon: Wallet },
+    ];
+  }, [orders]);
+
+  const paymentStats = useMemo(() => {
+    const paid = orders.filter((o) => o.status !== "CANCELLED" && isOrderPaid(o));
+    const totals = { cash: 0, card: 0, gift: 0 };
+    const counts = { cash: 0, card: 0, gift: 0 };
+
+    paid.forEach((order) => {
+      const method = String(order.paymentMethod || "").toLowerCase();
+      const giftUsed = Number(order.giftcardUsedAmount || 0);
+      const isCard = method.includes("card") && !method.includes("gift");
+      const isCash = method.includes("cash");
+      const isGift = method.includes("gift");
+      const remaining = Math.max(0, Number(order.totalAmount || 0) - giftUsed);
+      const tip = Number(order.tipAmount || 0);
+
+      if (giftUsed > 0 || isGift) {
+        totals.gift += giftUsed > 0 ? giftUsed : remaining + tip;
+        counts.gift += 1;
+      }
+      if (isCash) {
+        totals.cash += remaining + tip;
+        counts.cash += 1;
+      } else if (isCard) {
+        totals.card += remaining + tip;
+        counts.card += 1;
+      }
+    });
+
+    return [
+      {
+        key: "cash",
+        label: "Cash",
+        value: `$${totals.cash.toFixed(2)}`,
+        count: counts.cash,
+        icon: Banknote,
+        iconColor: "text-emerald-600",
+      },
+      {
+        key: "card",
+        label: "Card",
+        value: `$${totals.card.toFixed(2)}`,
+        count: counts.card,
+        icon: CreditCard,
+        iconColor: "text-sky-600",
+      },
+      {
+        key: "gift",
+        label: "Gift",
+        value: `$${totals.gift.toFixed(2)}`,
+        count: counts.gift,
+        icon: Gift,
+        iconColor: "text-violet-600",
+      },
+    ];
+  }, [orders]);
+
   const getStatusColor = (status) => {
     switch (status?.toUpperCase()) {
       case "PENDING": return "bg-amber-100 text-amber-700";
@@ -85,60 +231,77 @@ export default function TodayOrdersPage() {
 
   const getPaymentColor = (paymentStatus) => {
     switch (paymentStatus?.toUpperCase()) {
-      case "PAID": return "bg-emerald-100 text-emerald-700";
-      case "PARTIAL": return "bg-amber-100 text-amber-700";
-      case "REFUNDED": return "bg-red-100 text-red-700";
-      default: return "bg-zinc-100 text-zinc-600";
+      case "PAID": return "bg-emerald-100 text-emerald-800 border-emerald-200";
+      case "PARTIAL": return "bg-amber-100 text-amber-800 border-amber-200";
+      case "REFUNDED": return "bg-red-100 text-red-800 border-red-200";
+      default: return "bg-rose-100 text-rose-800 border-rose-200";
     }
   };
 
   const getTypeIcon = (source) => {
-    if (source === "ONLINE") return <ShoppingBag className="w-4 h-4 text-zinc-400" />;
-    return <Receipt className="w-4 h-4 text-zinc-400" />;
+    if (source === "ONLINE") return <ShoppingBag className="w-6 h-6 text-white" />;
+    return <Receipt className="w-6 h-6 text-white" />;
   };
 
-  const filteredOrders = orders.filter((o) => {
-    const matchesTab = activeTab === "All" || o.status?.toUpperCase() === activeTab;
-    const placer = getPlacerName(o) || "";
-    const searchString = `${o.orderNumber || ""} ${o.tableNo || ""} ${o.guestName || ""} ${o.source || ""} ${placer}`.toLowerCase();
-    const matchesSearch = searchString.includes(searchQuery.toLowerCase());
-    return matchesTab && matchesSearch;
-  });
+  const filteredOrders = orders
+    .filter((o) => {
+      const matchesTab =
+        activeTab === "All"
+          ? true
+          : activeTab === "ONLINE"
+            ? o.source === "ONLINE"
+            : o.status?.toUpperCase() === activeTab;
+      const placer = getPlacerName(o) || "";
+      const searchString = `${o.orderNumber || ""} ${o.tableNo || ""} ${o.guestName || ""} ${o.source || ""} ${placer}`.toLowerCase();
+      const matchesSearch = searchString.includes(searchQuery.toLowerCase());
+      return matchesTab && matchesSearch;
+    })
+    .sort((a, b) => {
+      const rankA = STATUS_RANK[a.status?.toUpperCase()] ?? 9;
+      const rankB = STATUS_RANK[b.status?.toUpperCase()] ?? 9;
+      if (rankA !== rankB) return rankA - rankB;
+      return new Date(b.createdAt) - new Date(a.createdAt);
+    });
 
-  const closePanel = () => setSelectedOrder(null);
+  const closePanel = () => {
+    setSelectedOrder(null);
+    setIsPaymentModalOpen(false);
+  };
+
+  const isOnlineOrder = selectedOrder?.source === "ONLINE";
+  const showPayNow = selectedOrder && !isOnlineOrder && !isOrderPaid(selectedOrder);
 
   return (
-    <div className="flex-1 flex overflow-hidden bg-zinc-50 font-sans h-screen">
+    <div className="h-full min-h-0 flex overflow-hidden bg-zinc-50 font-sans">
       
       {/* MAIN LIST AREA */}
-      <div className={`flex-1 flex flex-col min-w-0 transition-all duration-300 ${selectedOrder ? "pr-100 xl:pr-[450px]" : ""}`}>
+      <div className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden">
         
         {/* HEADER & FILTERS */}
-        <div className="bg-white p-6 border-b border-zinc-200 shrink-0 shadow-sm z-10">
-          <div className="flex flex-col md:flex-row justify-between gap-4 mb-6">
-            <div>
-              <Button variant="ghost" onClick={() => router.push("/sales/floor")} className="mb-2 -ml-3 text-zinc-500 hover:text-zinc-900">
-                <ArrowLeft className="w-4 h-4 mr-2" /> Back to Floor
+        <div className="bg-white px-4 py-3 border-b border-zinc-200 shrink-0 z-10 space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 min-w-0">
+              <Button variant="ghost" onClick={() => router.push("/sales/floor")} className="h-10 px-2 border bg-red-500 hover:bg-red-600 text-white shrink-0">
+                <ArrowLeft className="w-4 h-4 mr-1" /> Floor
               </Button>
-              <h1 className="text-2xl font-bold text-zinc-900">Today&apos;s Orders</h1>
-              <p className="text-sm text-zinc-500 font-medium mt-1">Track and manage all orders placed today.</p>
+              <h1 className="text-xl font-bold text-zinc-900 leading-none truncate py-1">Today&apos;s Orders</h1>
             </div>
             
-            <div className="flex gap-3 items-end">
+            <div className="flex gap-2 items-center shrink-0">
               <Button
                 variant="outline"
-                className="h-11 rounded-xl border-zinc-200"
+                className="h-10 rounded-xl border-zinc-200 px-4"
                 onClick={() => fetchOrders({ silent: true })}
                 disabled={refreshing || loading}
               >
-                <RefreshCw className={`w-4 h-4 mr-2 ${refreshing ? "animate-spin" : ""}`} />
-                Refresh
+                <RefreshCw className={`w-4 h-4 ${refreshing ? "animate-spin" : ""} sm:mr-2`} />
+                <span className="hidden sm:inline">Refresh</span>
               </Button>
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
                 <Input 
-                  placeholder="Search ID, Name or Table..." 
-                  className="pl-9 w-full md:w-64 bg-zinc-50 border-none rounded-xl h-11 focus-visible:ring-1 focus-visible:ring-orange-500"
+                  placeholder="Search ID, name, table..." 
+                  className="pl-9 w-40 md:w-56 bg-zinc-50 border border-orange-500 font-semibold rounded-xl h-10 text-sm focus-visible:ring-1 focus-visible:ring-orange-500"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
@@ -146,16 +309,46 @@ export default function TodayOrdersPage() {
             </div>
           </div>
 
-          {/* STATUS SCROLL */}
-          <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
+          <div className="overflow-x-auto no-scrollbar">
+            <div className="grid grid-cols-7 gap-2 min-w-[820px] h-20">
+              {stats.map((stat) => (
+                <div key={stat.label} className="flex items-center gap-2.5 rounded-xl border border-zinc-500 bg-zinc-50 px-3 py-2.5 min-w-0">
+                  <div className="p-2 bg-orange-500 text-white rounded-lg shrink-0">
+                    <stat.icon className="w-6 h-6" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[11px] font-bold text-zinc-900 uppercase tracking-wide truncate">{stat.short}</p>
+                    <p className="text-lg font-bold text-zinc-900 leading-tight tabular-nums truncate">{loading ? "—" : stat.value}</p>
+                  </div>
+                </div>
+              ))}
+              {paymentStats.map((stat) => (
+                <div key={stat.key} className="flex items-center gap-2.5 rounded-xl border border-zinc-500 bg-zinc-50 px-3 py-2.5 min-w-0">
+                  <div className={`p-2 rounded-lg shrink-0 bg-orange-500 text-white ${stat.iconColor}`}>
+                    <stat.icon className="w-6 h-6" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[11px] font-bold text-zinc-900 uppercase tracking-wide truncate">
+                      {stat.label}
+                      {!loading && <span className="normal-case tracking-normal text-zinc-900"> · {stat.count}</span>}
+                    </p>
+                    <p className="text-lg font-bold text-zinc-900 leading-tight tabular-nums truncate">{loading ? "—" : stat.value}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex gap-2 overflow-x-auto no-scrollbar">
             {STATUSES.map((status) => (
               <button
                 key={status}
+                type="button"
                 onClick={() => setActiveTab(status)}
                 className={`px-4 py-2 rounded-xl text-sm font-bold whitespace-nowrap transition-colors ${
                   activeTab === status 
                     ? "bg-zinc-900 text-white shadow-sm" 
-                    : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"
+                    : "bg-zinc-200 text-zinc-900 border hover:bg-zinc-300"
                 }`}
               >
                 {status}
@@ -165,7 +358,7 @@ export default function TodayOrdersPage() {
         </div>
 
         {/* LIST */}
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar p-4">
           <div className="max-w-5xl mx-auto space-y-3">
             {loading ? (
               <div className="flex justify-center items-center py-20">
@@ -181,6 +374,8 @@ export default function TodayOrdersPage() {
               filteredOrders.map((order) => {
                 const placerName = getPlacerName(order);
                 const tip = Number(order.tipAmount || 0);
+                const paymentType = getPaymentType(order);
+                const PaymentIcon = paymentType.Icon;
                 return (
                   <div 
                     key={order._id}
@@ -192,7 +387,7 @@ export default function TodayOrdersPage() {
                     }`}
                   >
                     <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 rounded-xl bg-zinc-50 border border-zinc-100 flex items-center justify-center shrink-0">
+                      <div className="w-12 h-12 rounded-xl bg-orange-400 text-white flex items-center justify-center shrink-0">
                         {getTypeIcon(order.source)}
                       </div>
                       <div>
@@ -224,9 +419,10 @@ export default function TodayOrdersPage() {
                       <div className="text-right">
                         <div className="font-bold text-lg text-zinc-900">${getOrderGrandTotal(order).toFixed(2)}</div>
                       </div>
-                      {/* <Badge className={`${getPaymentColor(order.paymentStatus)} px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider border-none shadow-none`}>
-                        {order.paymentStatus || "UNPAID"}
-                      </Badge> */}
+                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[11px] font-bold uppercase tracking-wider whitespace-nowrap ${paymentType.className}`}>
+                        <PaymentIcon className="w-3.5 h-3.5 shrink-0" />
+                        {paymentType.label}
+                      </span>
                       <Badge className={`${getStatusColor(order.status)} px-3 py-1 text-[11px] font-bold uppercase tracking-wider border-none shadow-none`}>
                         {order.status}
                       </Badge>
@@ -240,7 +436,6 @@ export default function TodayOrdersPage() {
         </div>
       </div>
 
-      {/* BACKDROP — click outside to close (between nav + footer) */}
       {selectedOrder && (
         <div
           className="fixed top-16 bottom-12 left-0 right-0 bg-black/20 z-20"
@@ -249,7 +444,6 @@ export default function TodayOrdersPage() {
         />
       )}
 
-      {/* SLIDE-IN DETAIL PANEL — inset so nav (top-16) and footer (bottom-12) stay clear */}
       <div 
         className={`fixed top-16 bottom-12 right-0 w-[400px] xl:w-[450px] bg-white border-l border-zinc-200 shadow-2xl transition-transform duration-300 z-30 flex flex-col ${
           selectedOrder ? "translate-x-0" : "translate-x-full"
@@ -258,7 +452,6 @@ export default function TodayOrdersPage() {
       >
         {selectedOrder && (
           <>
-            {/* Panel Header */}
             <div className="p-5 border-b border-zinc-100 flex justify-between items-start bg-zinc-50 shrink-0 gap-3">
               <div className="min-w-0">
                 <div className="flex items-center gap-2 mb-1 flex-wrap">
@@ -268,11 +461,11 @@ export default function TodayOrdersPage() {
                   </Badge>
                 </div>
                 <p className="text-sm font-semibold text-zinc-800">
-                  {selectedOrder.tableNo ? `Table: ${selectedOrder.tableNo}` : "Takeaway"} • {selectedOrder.source}
+                  {selectedOrder.tableNo ? `${selectedOrder.tableNo}` : "Takeaway"} • {selectedOrder.source}
                   {selectedOrder.guestName && ` • Guest: ${selectedOrder.guestName}`}
                 </p>
                 {getPlacerName(selectedOrder) && (
-                  <p className="text-xs font-medium text-zinc-400 mt-1">
+                  <p className="text-xs font-bold text-zinc-900 mt-1">
                     By {getPlacerName(selectedOrder)}
                     {selectedOrder.processedByRole ? ` (${selectedOrder.processedByRole})` : ""}
                   </p>
@@ -283,18 +476,15 @@ export default function TodayOrdersPage() {
               </Button>
             </div>
 
-            {/* Panel Content (Scrollable) */}
             <div className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-8">
-
-              {/* Payment / tip meta */}
               <div>
                 <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-3">Payment</h3>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between items-center">
-                    <span className="text-zinc-500 font-medium">Status</span>
-                    <Badge className={`${getPaymentColor(selectedOrder.paymentStatus)} text-[10px] uppercase font-bold px-2 py-0.5 border-none shadow-none`}>
+                <div className="space-y-3 text-sm">
+                  <div className={`rounded-xl border-2 px-4 py-3 flex justify-between items-center ${getPaymentColor(selectedOrder.paymentStatus)}`}>
+                    <span className="text-sm font-bold uppercase tracking-wide">Status</span>
+                    <span className="text-md font-black uppercase tracking-tight">
                       {selectedOrder.paymentStatus || "UNPAID"}
-                    </Badge>
+                    </span>
                   </div>
                   {selectedOrder.paymentMethod && (
                     <div className="flex justify-between text-zinc-500 font-medium">
@@ -311,28 +501,27 @@ export default function TodayOrdersPage() {
 
               <div className="h-px bg-zinc-500"></div>
               
-              {/* Items */}
               <div>
-                <h3 className="text-xs font-bold text-zinc-800 uppercase tracking-wider mb-4">Order Items</h3>
-                <div className="space-y-3">
+                <h3 className="text-sm font-bold text-zinc-900 uppercase tracking-wider mb-4">Order Items</h3>
+                <div className="space-y-4">
                   {selectedOrder.items?.map((item, idx) => (
-                    <div key={idx} className="flex justify-between items-start text-sm">
+                    <div key={idx} className="flex justify-between items-start">
                       <div className="flex gap-3 min-w-0">
-                        <span className="font-bold text-zinc-900 shrink-0">{item.qty}x</span>
+                        <span className="text-base font-black text-zinc-900 shrink-0">{item.qty}x</span>
                         <div className="min-w-0">
-                          <span className="font-bold text-zinc-800 block">{item.name}</span>
+                          <span className="text-base font-bold text-zinc-900 block">{item.name}</span>
                           {item.size && item.size !== "Standard" && (
-                            <span className="text-[12px] mt-1 text-zinc-800 block">Variant: {item.size}</span>
+                            <span className="text-sm mt-1 text-zinc-900 font-semibold block">Variant: {item.size}</span>
                           )}
                           {item.preparationStyle && (
-                            <span className="text-[12px] mt-1 text-zinc-900 font-semibold italic">Style: {item.preparationStyle}</span>
+                            <span className="text-sm mt-1 text-zinc-900 font-semibold italic block">{item.preparationStyle}</span>
                           )}
                           {item.options?.map((opt, i) => (
-                            <span key={i} className="text-[12px] mt-1 text-zinc-900 font-semibold block italic">+ {opt}</span>
+                            <span key={i} className="text-sm mt-1 text-zinc-900 font-semibold block italic">+ {opt}</span>
                           ))}
                         </div>
                       </div>
-                      <span className="font-semibold text-zinc-900 shrink-0 ml-3">${(item.price * item.qty).toFixed(2)}</span>
+                      <span className="text-base font-bold text-zinc-900 shrink-0 ml-3">${(item.price * item.qty).toFixed(2)}</span>
                     </div>
                   ))}
                 </div>
@@ -350,7 +539,6 @@ export default function TodayOrdersPage() {
 
               <div className="h-px bg-zinc-100"></div>
 
-              {/* Totals */}
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between text-zinc-500 font-medium">
                   <span className="text-zinc-800">Subtotal</span>
@@ -366,11 +554,17 @@ export default function TodayOrdersPage() {
                     <span className="text-zinc-900">-${Number(selectedOrder.discountTotal).toFixed(2)}</span>
                   </div>
                 )}
+                {Number(selectedOrder.giftcardUsedAmount || 0) > 0 && (
+                  <div className="flex justify-between text-zinc-500 font-medium">
+                    <span className="text-zinc-800">Gift Card</span>
+                    <span className="text-zinc-900">-${Number(selectedOrder.giftcardUsedAmount).toFixed(2)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between text-zinc-500 font-medium">
                   <span className="text-zinc-800">Tip</span>
                   <span className="text-zinc-900">${Number(selectedOrder.tipAmount || 0).toFixed(2)}</span>
                 </div>
-                <div className="flex justify-between text-lg font-bold text-zinc-900 pt-2 border-t border-zinc-100 mt-2">
+                <div className="flex justify-between text-lg font-bold text-zinc-900 pt-2 border-t border-zinc-200 mt-2">
                   <span className="text-zinc-800">Total</span>
                   <span>${getOrderGrandTotal(selectedOrder).toFixed(2)}</span>
                 </div>
@@ -378,11 +572,26 @@ export default function TodayOrdersPage() {
 
             </div>
 
-            {/* Footer Close */}
-            <div className="p-4 border-t border-zinc-100 shrink-0 bg-white">
+            <div className="p-4 border-t border-zinc-400 shrink-0 bg-white space-y-2">
+              {isOnlineOrder && (
+                <Button
+                  onClick={() => setIsPrintModalOpen(true)}
+                  className="w-full h-12 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-none"
+                >
+                  Kitchen / KOT
+                </Button>
+              )}
+              {showPayNow && (
+                <Button
+                  onClick={() => setIsPaymentModalOpen(true)}
+                  className="w-full h-12 bg-red-600 hover:bg-red-700 text-white font-bold rounded shadow-none"
+                >
+                  Pay Now
+                </Button>
+              )}
               <Button
                 variant="outline"
-                className="w-full h-11 rounded-md border-zinc-500 bg-red-500 text-white hover:bg-red-500 hover:text-white font-bold"
+                className="w-full h-11 rounded border-zinc-500 bg-orange-500 text-white hover:bg-orange-600 hover:text-white font-bold"
                 onClick={closePanel}
               >
                 Close
@@ -391,6 +600,25 @@ export default function TodayOrdersPage() {
           </>
         )}
       </div>
+
+      <PrintPreviewModal
+        isOpen={isPrintModalOpen}
+        onClose={() => setIsPrintModalOpen(false)}
+        printType="kot"
+        order={selectedOrder}
+        kotItems={selectedOrder?.items || []}
+        guestCount={selectedOrder?.guestCount}
+        specialNote={selectedOrder?.specialNote}
+        serverName={getPlacerName(selectedOrder || {})}
+      />
+
+      <TodayOrderPaymentModal
+        key={selectedOrder?._id || "payment"}
+        order={selectedOrder}
+        open={isPaymentModalOpen}
+        onClose={() => setIsPaymentModalOpen(false)}
+        onPaid={() => fetchOrders({ silent: true })}
+      />
 
     </div>
   );

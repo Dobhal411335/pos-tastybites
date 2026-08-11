@@ -43,7 +43,14 @@ export const POST = withAuth(async (request) => {
     // For now, we assume the payment succeeds and just update the DB.
 
     order.paymentStatus = "PAID";
-    order.paymentMethod = method === 'Card' && cardType ? `Card - ${cardType}` : (method || "Cash");
+    const methodLabel = String(method || "Cash");
+    if (methodLabel === "Card" && cardType) {
+      order.paymentMethod = `Card - ${cardType}`;
+    } else if (methodLabel.includes("Card") && methodLabel.includes("Cash")) {
+      order.paymentMethod = cardType ? `Card - ${cardType} + Cash` : "Card + Cash";
+    } else {
+      order.paymentMethod = methodLabel;
+    }
     order.status = "PAID";
 
     // Persist checkout discount if applied at payment time

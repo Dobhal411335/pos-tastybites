@@ -16,6 +16,8 @@ export default function SalesMainLayout({ children }) {
   const pathname = usePathname();
   const isLoginPage = pathname === "/sales/login" || pathname === "/login";
   const isFloorPage = pathname === "/sales/floor" || pathname === "/floor";
+  const isTodayOrdersPage = pathname === "/sales/today" || pathname === "/today";
+  const lockViewport = isFloorPage || isTodayOrdersPage;
   const [employeeUser, setEmployeeUser] = useState(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [loading, setLoading] = useState(!isLoginPage);
@@ -74,7 +76,7 @@ export default function SalesMainLayout({ children }) {
             onMenuToggle={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
           />
           <div className="flex-1 flex overflow-hidden relative min-h-0">
-            <main className={`flex-1 min-h-0 ${isFloorPage ? "overflow-hidden" : "overflow-y-auto"}`}>
+            <main className={`flex-1 min-h-0 ${lockViewport ? "overflow-hidden" : "overflow-y-auto"}`}>
               <div className="mx-auto max-w-8xl h-full min-h-0">
                 {children}
               </div>

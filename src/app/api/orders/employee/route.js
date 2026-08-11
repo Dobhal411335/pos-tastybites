@@ -142,19 +142,29 @@ export const POST = withAuth(async (request) => {
     const employeeId = request.user.id;
 
     // Map items
-    const formattedItems = items.map(item => ({
-      menuItemId: item.id,
-      name: item.name,
-      productCode: item.productCode || "",
-      category: item.category || "ITEMS",
-      size: item.size || "Standard",
-      qty: item.qty,
-      price: item.price,
-      tax: item.tax || 0,
-      options: item.options || [],
-      preparationStyle: item.preparationStyle || null,
-      cartId: item.cartId || String(Date.now() + Math.random())
-    }));
+    const formattedItems = items.map(item => {
+      const sizes = Array.isArray(item.sizes)
+        ? item.sizes.filter(Boolean)
+        : (item.size && item.size !== "Standard"
+          ? String(item.size).split(", ").filter(Boolean)
+          : []);
+      const sizeLabel = sizes.length > 0 ? sizes.join(", ") : (item.size || "Standard");
+
+      return {
+        menuItemId: item.id,
+        name: item.name,
+        productCode: item.productCode || "",
+        category: item.category || "ITEMS",
+        size: sizeLabel,
+        sizes,
+        qty: item.qty,
+        price: item.price,
+        tax: item.tax || 0,
+        options: item.options || [],
+        preparationStyle: item.preparationStyle || null,
+        cartId: item.cartId || String(Date.now() + Math.random())
+      };
+    });
 
     // If no sessionId is provided, fallback to legacy behavior
     if (!sessionId) {

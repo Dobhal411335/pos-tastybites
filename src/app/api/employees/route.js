@@ -16,7 +16,6 @@ import RegisteredDevice from "@/models/RegisteredDevice";
 import { sendEmployeeCredentials } from "@/lib/brevo/sendEmployeeCredentials";
 import { generateActivationCode } from "@/utils/crypto";
 import Restaurant from "@/models/Restaurant"
-
 function normalizeHourlyPaid(hourlyPaid) {
   if (!hourlyPaid) return undefined;
   const hours = Number(hourlyPaid.totalWorkingHours);
