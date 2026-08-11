@@ -2,6 +2,7 @@ import { decodeJwt } from 'jose';
 import EmployeeSession from '@/models/employee/EmployeeSession';
 import Employee from '@/models/employee/Employee';
 import { signToken, verifyToken } from '@/utils/jwt';
+import { finalizeAttendanceOnClockOut } from '@/lib/attendance';
 
 /** Matches login + withEmployeeAuth: Active or Approved employees may hold a session. */
 export function isEmployeeEligibleForSession(employee) {
@@ -18,6 +19,36 @@ export async function markEmployeeSessionExpired(sessionId) {
     { $set: { status: 'Expired' } },
     { returnDocument: 'after' }
   );
+}
+
+/**
+ * Expire every Active login session for a restaurant.
+ * Does not touch RegisteredDevice, device tokens, or employee records.
+ */
+export async function expireAllRestaurantSessions(restaurantId) {
+  if (!restaurantId) return { count: 0, sessions: [] };
+
+  const sessions = await EmployeeSession.find({
+    restaurant: restaurantId,
+    status: 'Active',
+  });
+
+  const logoutTime = new Date();
+  const expired = [];
+
+  for (const session of sessions) {
+    const loginMs = session.loginTime
+      ? new Date(session.loginTime).getTime()
+      : logoutTime.getTime();
+    session.logoutTime = logoutTime;
+    session.duration = Math.max(0, Math.floor((logoutTime.getTime() - loginMs) / 1000));
+    session.status = 'Expired';
+    await session.save();
+    await finalizeAttendanceOnClockOut({ session, logoutTime });
+    expired.push(session);
+  }
+
+  return { count: expired.length, sessions: expired };
 }
 
 export async function expireSessionFromRefreshToken(refreshToken) {

@@ -514,11 +514,27 @@ export default function TodayOrdersPage() {
                             <span className="text-sm mt-1 text-zinc-900 font-semibold block">Variant: {item.size}</span>
                           )}
                           {item.preparationStyle && (
-                            <span className="text-sm mt-1 text-zinc-900 font-semibold italic block">{item.preparationStyle}</span>
+                            <span className="text-sm mt-1 text-zinc-900 font-semibold italic block">
+                              {item.preparationStyle}
+                            </span>
                           )}
-                          {item.options?.map((opt, i) => (
-                            <span key={i} className="text-sm mt-1 text-zinc-900 font-semibold block italic">+ {opt}</span>
-                          ))}
+                          {item.options
+                            ?.filter((opt) => {
+                              const value = String(opt || "");
+                              if (value.toLowerCase().startsWith("style:")) return false;
+                              if (
+                                item.preparationStyle &&
+                                value.toLowerCase() === String(item.preparationStyle).toLowerCase()
+                              ) {
+                                return false;
+                              }
+                              return true;
+                            })
+                            .map((opt, i) => (
+                              <span key={i} className="text-sm mt-1 text-zinc-900 font-semibold block italic">
+                                + {opt}
+                              </span>
+                            ))}
                         </div>
                       </div>
                       <span className="text-base font-bold text-zinc-900 shrink-0 ml-3">${(item.price * item.qty).toFixed(2)}</span>

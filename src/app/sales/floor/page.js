@@ -294,8 +294,6 @@ export default function SalesFloorPage() {
               {activeOrderCount > 0 ? ` • ${activeOrderCount} with orders` : ""}
             </p>
           </div>
-        </div>
-
         <div className="mt-3 flex flex-wrap items-center justify-end gap-3">
           <div className="flex items-center gap-1 bg-stone-50 border border-stone-200 rounded-lg p-1">
             <Button
@@ -334,6 +332,8 @@ export default function SalesFloorPage() {
             </div>
           </div>
         </div>
+        </div>
+
       </header>
 
       <div ref={floorViewportRef} className="relative flex flex-1 min-h-0 items-center justify-center overflow-hidden bg-zinc-50/80 p-2 sm:p-3">

@@ -36,6 +36,17 @@ export function SocketProvider({ children, restaurantId, floorId, employeeId }) 
       console.log("Socket disconnected");
     });
 
+    socketInstance.on("auth:force-logout", (payload) => {
+      if (
+        payload?.restaurantId &&
+        restaurantId &&
+        String(payload.restaurantId) !== String(restaurantId)
+      ) {
+        return;
+      }
+      window.location.assign("/login");
+    });
+
     // Reconnect recovery: we might want to tell listeners a reconnect happened
     // so they can refetch stale data.
     socketInstance.on("reconnect", () => {

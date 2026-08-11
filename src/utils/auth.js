@@ -3,6 +3,7 @@ import { cookies } from 'next/headers';
 import { sendError } from './errorHandler';
 import { runWithTenant } from '@/tenant/tenantContext';
 import connectDB from '@/lib/db';
+import EmployeeSession from '@/models/employee/EmployeeSession';
 
 /**
  * Higher-order function to wrap API routes with Authentication and Tenant Context.
@@ -28,6 +29,13 @@ export const withAuth = (handler, allowedRoles = []) => {
       const payload = await verifyToken(token);
       if (!payload) {
         return sendError(new Error('Unauthorized'), 'Invalid or expired token', 401);
+      }
+
+      if (payload.sessionId) {
+        const session = await EmployeeSession.findById(payload.sessionId);
+        if (!session || session.status !== 'Active') {
+          return sendError(new Error('Unauthorized'), 'Session expired or terminated', 401);
+        }
       }
 
       // Role check

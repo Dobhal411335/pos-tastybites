@@ -112,21 +112,7 @@ const CustomerReceipt = ({
                 ${(Number(item.price) * Number(item.qty)).toFixed(2)}
               </span>
             </div>
-            {item.preparationStyle &&
-              !(item.options || []).some((o) =>
-                String(o).toLowerCase().startsWith("style:")
-              ) && (
-              <div className="pl-3 text-[9px] mt-0.5">
-                +{item.preparationStyle}
-              </div>
-            )}
-            {item.options?.length > 0 && (
-              <div className="pl-3 text-[9px] mt-0.5">
-                {item.options.map((opt, oIdx) => (
-                  <div key={oIdx}>+ {opt}</div>
-                ))}
-              </div>
-            )}
+          
           </div>
         ))}
       </div>
@@ -141,7 +127,7 @@ const CustomerReceipt = ({
         {Number(discountTotal) > 0 && (
           <div className="w-full max-w-[160px] flex justify-between">
             <span className="text-zinc-500">
-              Discount{discountCode ? ` (${discountCode})` : ""}:
+              Discount:
             </span>
             <span className="receipt-bold">
               -${Number(discountTotal).toFixed(2)}

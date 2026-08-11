@@ -2,6 +2,16 @@ import React from "react";
 import "./print.css";
 import moment from "moment";
 
+function isStyleOption(opt, preparationStyle) {
+  const value = String(opt || "").trim();
+  const lower = value.toLowerCase();
+  if (lower.startsWith("style:")) return true;
+  if (preparationStyle && lower === String(preparationStyle).trim().toLowerCase()) {
+    return true;
+  }
+  return false;
+}
+
 /**
  * Hardware-independent Kitchen Order Ticket for 80mm thermal paper.
  * Intentionally omits prices, tax, and payment info.
@@ -97,24 +107,23 @@ const KitchenOrderTicket = ({
                       Course: {item.course}
                     </div>
                   )}
-                  {item.preparationStyle &&
-                    !(item.options || []).some((o) =>
-                      String(o).toLowerCase().startsWith("style:")
-                    ) && (
+                  {item.preparationStyle && (
                     <div className="pl-7 text-[11px] font-semibold italic">
-                      +{item.preparationStyle}
+                      + {item.preparationStyle}
                     </div>
                   )}
-                  {item.options?.length > 0 && (
+                  {item.options?.filter((opt) => !isStyleOption(opt, item.preparationStyle)).length > 0 && (
                     <div className="pl-7 mt-1 space-y-0.5">
-                      {item.options.map((opt, oIdx) => (
-                        <div
-                          key={oIdx}
-                          className="text-[11px] font-semibold italic"
-                        >
-                          + {opt}
-                        </div>
-                      ))}
+                      {item.options
+                        .filter((opt) => !isStyleOption(opt, item.preparationStyle))
+                        .map((opt, oIdx) => (
+                          <div
+                            key={oIdx}
+                            className="text-[11px] font-semibold italic"
+                          >
+                            + {opt}
+                          </div>
+                        ))}
                     </div>
                   )}
                 </div>

@@ -3,7 +3,7 @@
 import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LogOut, Menu, Grid2X2, ShoppingBag, Printer, BellRing } from "lucide-react";
+import { LogOut, Menu, Grid2X2, ShoppingBag, Printer, BellRing, Store, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import DateTimeDisplay from "@/components/common/DateTimeDisplay";
@@ -11,6 +11,16 @@ import Image from "next/image";
 import { Badge } from "@/components/ui/badge";
 import NotificationBell from "@/components/common/NotificationBell";
 import { employeeFetch } from "@/lib/employeeFetch";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 const NAV_ITEMS = [
   { label: "Floor", href: "/sales/floor", icon: Grid2X2 },
@@ -29,9 +39,11 @@ function navActive(pathname, href) {
 export default function EmployeeTopNav({ onMenuToggle, employeeName = "Employee", employeeRole = "Server" }) {
   const pathname = usePathname();
   const [loggingOut, setLoggingOut] = React.useState(false);
+  const [confirmCloseOpen, setConfirmCloseOpen] = React.useState(false);
+  const [closingRestaurant, setClosingRestaurant] = React.useState(false);
 
   const handleLogout = async () => {
-    if (loggingOut) return;
+    if (loggingOut || closingRestaurant) return;
     setLoggingOut(true);
     try {
       const controller = new AbortController();
@@ -49,6 +61,32 @@ export default function EmployeeTopNav({ onMenuToggle, employeeName = "Employee"
     } finally {
       // Hard navigate so production always clears client state even if cookies/API glitch
       window.location.assign("/login");
+    }
+  };
+
+  const handleCloseRestaurant = async () => {
+    if (closingRestaurant || loggingOut) return;
+    setConfirmCloseOpen(false);
+    setClosingRestaurant(true);
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 15000);
+      const res = await employeeFetch("/api/employees/close-restaurant", {
+        method: "POST",
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+      if (res.ok) {
+        toast.success("Restaurant closed. All employees logged out.");
+        window.location.assign("/login");
+        return;
+      }
+      const data = await res.json().catch(() => ({}));
+      toast.error(data.message || "Failed to close restaurant.");
+      setClosingRestaurant(false);
+    } catch {
+      toast.error("Failed to close restaurant.");
+      setClosingRestaurant(false);
     }
   };
 
@@ -135,9 +173,19 @@ export default function EmployeeTopNav({ onMenuToggle, employeeName = "Employee"
               </button>
           <Button
             variant="ghost"
+            onClick={() => setConfirmCloseOpen(true)}
+            disabled={loggingOut || closingRestaurant}
+            className="relative z-50 h-10 px-2.5 sm:px-3 bg-zinc-900 text-white hover:bg-zinc-800 hover:text-white border border-zinc-950 shadow-none disabled:opacity-70"
+            title="Close Restaurant"
+          >
+            <Store className="h-4 w-4 sm:mr-1.5" />
+            <span className="hidden sm:inline text-xs font-bold">Close Restaurant</span>
+          </Button>
+          <Button
+            variant="ghost"
             size="icon"
             onClick={handleLogout}
-            disabled={loggingOut}
+            disabled={loggingOut || closingRestaurant}
             className="relative z-50 h-10 w-10 bg-red-600 text-white hover:bg-red-700 hover:text-white border border-red-800 shadow-none disabled:opacity-70"
             title="Logout"
           >
@@ -165,6 +213,38 @@ export default function EmployeeTopNav({ onMenuToggle, employeeName = "Employee"
           );
         })}
       </nav>
+
+      <AlertDialog open={confirmCloseOpen} onOpenChange={setConfirmCloseOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Close restaurant?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to close the restaurant and log out all employees?
+              Staff can clock back in later from the same registered device.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={closingRestaurant}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                handleCloseRestaurant();
+              }}
+              disabled={closingRestaurant}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              Close Restaurant
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {closingRestaurant ? (
+        <div className="fixed inset-0 z-100 flex flex-col items-center justify-center gap-3 bg-black/60">
+          <Loader2 className="h-8 w-8 animate-spin text-white" />
+          <p className="text-sm font-semibold text-white">Logging out all employees…</p>
+        </div>
+      ) : null}
     </header>
   );
 }

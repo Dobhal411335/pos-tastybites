@@ -228,7 +228,7 @@ export default function OrderPage() {
               const parts = [];
               if (item.size && item.size !== "Standard")
                 parts.push(`Size: ${item.size}`);
-              if (style) parts.push(`Style: ${style}`);
+              if (style) parts.push(`${style}`);
               if (extras.length > 0) parts.push(`Extras: ${extras.join(", ")}`);
               return {
                 id: item.menuItemId,
@@ -514,7 +514,7 @@ export default function OrderPage() {
 
     const options = [];
     if (selectedPreparationStyle) {
-      options.push(`Style: ${selectedPreparationStyle}`);
+      options.push(`${selectedPreparationStyle}`);
     }
     selectedAddons.forEach((a) => options.push(a.name));
 
@@ -522,7 +522,7 @@ export default function OrderPage() {
     const parts = [];
     if (sizeLabel && sizeLabel !== "Standard") parts.push(`Size: ${sizeLabel}`);
     if (selectedPreparationStyle)
-      parts.push(`Style: ${selectedPreparationStyle}`);
+      parts.push(`${selectedPreparationStyle}`);
     if (selectedAddons.length > 0) {
       parts.push(`Extras: ${selectedAddons.map((a) => a.name).join(", ")}`);
     }
