@@ -79,15 +79,6 @@ export async function POST(request) {
           message: 'Device token revoked. Please activate again.' 
         }, { status: 403 });
       }
-      
-      // Enforce that this device is exactly the one assigned to the employee
-      if (!employee.assignedDevice || device._id.toString() !== employee.assignedDevice.toString()) {
-        return NextResponse.json({ 
-          success: false, 
-          action: 'DEVICE_ACTIVATION_REQUIRED',
-          message: 'You cannot login from this device. Please use your assigned device or ask an admin to generate a new device token.' 
-        }, { status: 403 });
-      }
     }
 
     // Update login tracking on Employee
@@ -195,10 +186,8 @@ export async function POST(request) {
           _id: null,
           startTime: todayDutyChange.newStartTime || null,
           endTime: todayDutyChange.newEndTime || null,
-          assignedFloor: todayDutyChange.assignedFloor || employee.assignedFloor,
-          assignedTables: todayDutyChange.assignedTables?.length
-            ? todayDutyChange.assignedTables
-            : (employee.assignedTables || []),
+          assignedFloor: todayDutyChange.assignedFloor || null,
+          assignedTables: todayDutyChange.assignedTables || [],
           _fromDutyChange: true,
         };
       }

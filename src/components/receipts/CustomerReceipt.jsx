@@ -77,12 +77,6 @@ const CustomerReceipt = ({
             <span className="text-zinc-500">Table:</span>{" "}
             <span className="receipt-bold">{tableNo || "N/A"}</span>
           </span>
-          {guestCount != null && (
-            <span>
-              <span className="text-zinc-500">Guests:</span>{" "}
-              <span className="receipt-bold">{guestCount}</span>
-            </span>
-          )}
         </div>
         {partyLabel && (
           <div>
@@ -123,7 +117,7 @@ const CustomerReceipt = ({
                 String(o).toLowerCase().startsWith("style:")
               ) && (
               <div className="pl-3 text-[9px] mt-0.5">
-                + Style: {item.preparationStyle}
+                +{item.preparationStyle}
               </div>
             )}
             {item.options?.length > 0 && (

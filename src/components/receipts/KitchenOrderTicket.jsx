@@ -39,11 +39,11 @@ const KitchenOrderTicket = ({
           </div>
         )}
         <h1 className="text-base receipt-bold underline mb-2 uppercase">
-          Kitchen Order Ticket
+          KOT
         </h1>
 
         <div className="text-lg receipt-bold mb-1">
-          {tableNo ? `Table: ${tableNo}` : "Takeaway / No Table"}
+          {tableNo ? `${tableNo}` : "Takeaway / No Table"}
         </div>
       </div>
 
@@ -60,11 +60,6 @@ const KitchenOrderTicket = ({
         {serverName && (
           <div>
             <span className="receipt-bold">Server:</span> {serverName}
-          </div>
-        )}
-        {guestCount != null && (
-          <div>
-            <span className="receipt-bold">Guests:</span> {guestCount}
           </div>
         )}
         {partyLabel && (

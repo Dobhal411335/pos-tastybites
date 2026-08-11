@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useSocket } from "@/components/providers/SocketProvider";
-import { Loader2, Users, AlertCircle, CheckCircle2, Lock, ChevronLeft, Settings2, UserPlus, FileEdit, Star, Printer } from "lucide-react";
+import { Loader2, Users, AlertCircle, CheckCircle2, Lock, ChevronLeft, Settings2, UserPlus, FileEdit, Printer } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,8 +27,7 @@ export default function SalesFloorPage() {
   const [activeEmployees, setActiveEmployees] = useState([]);
   const [scale, setScale] = useState(1);
   const floorViewportRef = React.useRef(null);
-  /** Client-side table view filter: all | mine | available */
-  const [tableFilter, setTableFilter] = useState("all");
+  const [gridMode, setGridMode] = useState("lines"); // "lines" | "dots" | "none"
 
   // Modals
   const [selectedTable, setSelectedTable] = useState(null);
@@ -36,8 +35,6 @@ export default function SalesFloorPage() {
   const [showTableActions, setShowTableActions] = useState(false);
   const [showAdminOverride, setShowAdminOverride] = useState(false);
   const [adminOverrideReason, setAdminOverrideReason] = useState("");
-  // Warning shown when employee is about to claim a table whose defaultEmployee is someone else
-  const [showDefaultWarning, setShowDefaultWarning] = useState(false);
   
   // Action Sub-views
   const [actionView, setActionView] = useState("MAIN"); // MAIN, GUESTS, TRANSFER, RECONFIGURE
@@ -134,17 +131,9 @@ export default function SalesFloorPage() {
     );
 
     if (!session) {
-      // Table is AVAILABLE.
-      // If the table has a defaultEmployee that is someone else, show a brief warning first.
-      // This is UX-only — the backend will still allow the operation.
-      const hasOtherDefault = table.defaultEmployeeId && table.defaultEmployeeId !== currentUserId;
       setSelectedTable(table);
       setGuestCount(table.seats || 2);
-      if (hasOtherDefault && !isAdmin) {
-        setShowDefaultWarning(true);
-      } else {
-        setShowStartSession(true);
-      }
+      setShowStartSession(true);
     } else if (isMineSession || isAdmin) {
       // Occupied by me (or I am admin)
       setSelectedTable({ ...table, session });
@@ -237,19 +226,43 @@ export default function SalesFloorPage() {
   const activeSessionCount = floorData.sessions.length;
   const activeOrderCount = floorData.sessions.filter((s) => s.hasActiveOrder).length;
 
-  // Fit floor canvas to laptop/tablet viewport so tables aren't tiny in empty space
-  // Must run before any early return (Rules of Hooks).
+  const contentBounds = React.useMemo(() => {
+    const tables = floorData.tables || [];
+    if (!tables.length) {
+      return { width: floorWidth, height: floorHeight, offsetX: 0, offsetY: 0 };
+    }
+    const pad = 56;
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = 0;
+    let maxY = 0;
+    tables.forEach((t) => {
+      minX = Math.min(minX, Number(t.x) || 0);
+      minY = Math.min(minY, Number(t.y) || 0);
+      maxX = Math.max(maxX, (Number(t.x) || 0) + (Number(t.width) || 80));
+      maxY = Math.max(maxY, (Number(t.y) || 0) + (Number(t.height) || 80));
+    });
+    const offsetX = Math.max(0, minX - pad);
+    const offsetY = Math.max(0, minY - pad);
+    return {
+      width: Math.max(maxX - offsetX + pad, 320),
+      height: Math.max(maxY - offsetY + pad, 240),
+      offsetX,
+      offsetY,
+    };
+  }, [floorData.tables, floorWidth, floorHeight]);
+
+  // Fit the table cluster to the viewport (ignore unused floor whitespace)
   useEffect(() => {
     const el = floorViewportRef.current;
-    if (!el || !floorWidth || !floorHeight) return;
+    if (!el || !contentBounds.width || !contentBounds.height) return;
 
     const fit = () => {
-      const pad = 24;
-      const availW = Math.max(el.clientWidth - pad, 320);
-      const availH = Math.max(el.clientHeight - pad, 240);
-      const next = Math.min(availW / floorWidth, availH / floorHeight);
-      // Allow mild upscale on large laptops; keep a sensible min for tablets
-      setScale(Math.min(Math.max(next, 0.75), 1.65));
+      const pad = 12;
+      const availW = Math.max(el.clientWidth - pad, 200);
+      const availH = Math.max(el.clientHeight - pad, 200);
+      const next = Math.min(availW / contentBounds.width, availH / contentBounds.height);
+      setScale(Math.min(Math.max(next, 0.35), 3.2));
     };
 
     fit();
@@ -260,7 +273,7 @@ export default function SalesFloorPage() {
       if (ro) ro.disconnect();
       window.removeEventListener("resize", fit);
     };
-  }, [floorWidth, floorHeight, floorData.tables.length]);
+  }, [contentBounds.width, contentBounds.height, floorData.tables.length]);
 
   if (loading && floorData.tables.length === 0) {
     return (
@@ -281,48 +294,21 @@ export default function SalesFloorPage() {
               {activeOrderCount > 0 ? ` • ${activeOrderCount} with orders` : ""}
             </p>
           </div>
-
-          <div className="flex items-center gap-2">
-            <Button
-              onClick={() => router.push("/sales/print-jobs")}
-              variant="outline"
-              size="sm"
-              className="h-9 md:h-10 text-xs md:text-sm font-semibold border-zinc-200 px-3"
-            >
-              <Printer className="w-4 h-4 mr-1.5" />
-              Print Jobs
-            </Button>
-            <Button
-              onClick={() => router.push("/sales/today")}
-              variant="outline"
-              size="sm"
-              className="h-9 md:h-10 text-xs md:text-sm font-semibold border-zinc-200 px-3"
-            >
-              Today&apos;s Orders
-            </Button>
-          </div>
         </div>
 
-        <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-1.5">
-            {[
-              { id: "all", label: "All Tables" },
-              { id: "mine", label: "My Tables" },
-              { id: "available", label: "Available" },
-            ].map((f) => (
-              <button
-                key={f.id}
-                type="button"
-                onClick={() => setTableFilter(f.id)}
-                className={`rounded-lg text-xs border-2 font-semibold px-3 py-1.5 transition-colors ${
-                  tableFilter === f.id
-                    ? "bg-zinc-900 text-white"
-                    : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"
-                }`}
-              >
-                {f.label}
-              </button>
-            ))}
+        <div className="mt-3 flex flex-wrap items-center justify-end gap-3">
+          <div className="flex items-center gap-1 bg-stone-50 border border-stone-200 rounded-lg p-1">
+            <Button
+              type="button"
+              variant={gridMode !== "none" ? "secondary" : "ghost"}
+              size="sm"
+              onClick={() => setGridMode((prev) => (prev === "lines" ? "dots" : prev === "dots" ? "none" : "lines"))}
+              className={`h-8 px-3 rounded-md text-[13px] font-semibold ${
+                gridMode !== "none" ? "bg-orange-600 shadow-sm text-white hover:bg-orange-600" : "text-stone-500 hover:text-stone-900"
+              }`}
+            >
+              {gridMode === "lines" ? "Lines" : gridMode === "dots" ? "Dots" : "Grid Off"}
+            </Button>
           </div>
 
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
@@ -331,45 +317,58 @@ export default function SalesFloorPage() {
               <span className="text-sm font-medium text-zinc-500">Available</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <Star className="h-3 w-3 text-orange-500 fill-orange-500" />
-              <span className="text-sm font-medium text-zinc-500">My Section</span>
+              <span className="h-2.5 w-2.5 rounded-full bg-sky-400 border border-sky-500" />
+              <span className="text-sm font-medium text-zinc-500">Serving</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <span className="h-2.5 w-2.5 rounded-full bg-orange-400 border border-orange-500" />
-              <span className="text-sm font-medium text-zinc-500">Serving</span>
+              <span className="h-2.5 w-2.5 rounded-full bg-orange-500 border border-orange-600" />
+              <span className="text-sm font-medium text-zinc-500">Ordering</span>
             </div>
             <div className="flex items-center gap-1.5">
               <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 border border-emerald-600" />
               <span className="text-sm font-medium text-zinc-500">Payment</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <span className="h-2.5 w-2.5 rounded-full bg-zinc-500 border border-zinc-600" />
-              <span className="text-sm font-medium text-zinc-500">Others</span>
+              <span className="h-2.5 w-2.5 rounded-full bg-zinc-400 border border-zinc-500" />
+              <span className="text-sm font-medium text-zinc-500">Booked</span>
             </div>
           </div>
         </div>
       </header>
 
-      <div ref={floorViewportRef} className="relative flex-1 overflow-auto bg-zinc-50/80 p-3 sm:p-4 custom-scrollbar">
-        <div 
-          className="relative mx-auto rounded-xl border border-zinc-200 bg-white shadow-sm overflow-hidden"
-          style={{ width: floorWidth, height: floorHeight, transform: `scale(${scale})`, transformOrigin: 'top center' }}
+      <div ref={floorViewportRef} className="relative flex flex-1 min-h-0 items-center justify-center overflow-hidden bg-zinc-50/80 p-2 sm:p-3">
+        <div
+          className="relative shrink-0"
+          style={{ width: contentBounds.width * scale, height: contentBounds.height * scale }}
         >
+        <div 
+          className="absolute top-0 left-0 rounded-xl border border-black bg-white shadow-sm overflow-hidden"
+          style={{
+            width: contentBounds.width,
+            height: contentBounds.height,
+            transform: `scale(${scale})`,
+            transformOrigin: "top left",
+          }}
+        >
+          {gridMode !== "none" && (
+            <div
+              className="absolute inset-0 z-0 pointer-events-none"
+              style={{
+                opacity: gridMode === "lines" ? 0.55 : 0.8,
+                backgroundImage: gridMode === "lines"
+                  ? "linear-gradient(to right, #9ca3af 1px, transparent 1px), linear-gradient(to bottom, #9ca3af 1px, transparent 1px)"
+                  : "radial-gradient(#64748b 2px, transparent 2px)",
+                backgroundSize: gridMode === "lines" ? "40px 40px" : "20px 20px",
+              }}
+            />
+          )}
           {floorData.tables.map(table => {
             const tableId = table.id?.toString();
             const session = floorData.sessions.find(s => s.tableId === tableId);
             // Live session ownership — TableSession.assignedEmployee is the source of truth
             const isMine = session && session.assignedEmployeeId === currentUserId;
             const isOther = session && !isMine;
-            // Default section ownership — admin configuration, not live state
-            const isMyDefault = !session && table.defaultEmployeeId && table.defaultEmployeeId === currentUserId;
-            const isOthersDefault = !session && table.defaultEmployeeId && table.defaultEmployeeId !== currentUserId;
-
-            // Client-side filter (UI only — does not change assign/lock logic)
-            const matchesFilter =
-              tableFilter === "all" ||
-              (tableFilter === "available" && !session) ||
-              (tableFilter === "mine" && (isMine || isMyDefault));
+            const hasOrder = Boolean(session?.hasActiveOrder);
             
             let bgClass = "bg-white border-zinc-200 hover:border-zinc-300 hover:shadow-sm";
             let textClass = "text-zinc-900";
@@ -377,153 +376,88 @@ export default function SalesFloorPage() {
             let statusClass = "text-zinc-500";
 
             if (session?.status === "PAYMENT_PENDING") {
-              bgClass = "bg-emerald-50/80 border-emerald-300 hover:border-emerald-400";
+              bgClass = "bg-emerald-100 border-emerald-400 hover:border-emerald-500";
               textClass = "text-emerald-950";
               statusLabel = "PAYMENT";
               statusClass = "text-emerald-700";
-            } else if (isMine) {
-              bgClass = "bg-orange-50/80 border-orange-300 hover:border-orange-400";
-              textClass = "text-orange-950";
-              statusLabel = "SERVING";
-              statusClass = "text-orange-700";
             } else if (isOther) {
-              bgClass = "bg-slate-50 border-slate-300 opacity-95";
-              textClass = "text-slate-700";
-              statusLabel = "OCCUPIED";
-              statusClass = "text-slate-500";
-            } else if (isMyDefault) {
-              bgClass = "bg-orange-50/40 border-orange-200 hover:border-orange-300 hover:shadow-sm";
-              textClass = "text-orange-900";
-              statusLabel = "MY SECTION";
-              statusClass = "text-orange-600";
+              bgClass = "bg-zinc-200 border-zinc-400 hover:border-zinc-500";
+              textClass = "text-zinc-800";
+              statusLabel = "BOOKED";
+              statusClass = "text-zinc-600";
+            } else if (isMine && hasOrder) {
+              bgClass = "bg-orange-100 border-orange-400 hover:border-orange-500";
+              textClass = "text-orange-950";
+              statusLabel = "ORDERING";
+              statusClass = "text-orange-700";
+            } else if (isMine) {
+              bgClass = "bg-sky-50 border-sky-400 hover:border-sky-500";
+              textClass = "text-sky-950";
+              statusLabel = "SERVING";
+              statusClass = "text-sky-700";
             }
 
-            const employeeFirst =
-              session?.assignedEmployeeName?.split(" ")[0] ||
-              table.defaultEmployeeName?.split(" ")[0] ||
-              null;
+            const employeeFirst = session?.assignedEmployeeName?.split(" ")[0] || null;
 
             return (
               <div
                 key={tableId}
-                onClick={() => matchesFilter && handleTableClick(table)}
-                className={`absolute flex flex-col items-center justify-center border-2 transition-all duration-150 px-2.5 py-2 ${bgClass} ${table.shape === "round" ? "rounded-full" : "rounded-xl"} ${
-                  matchesFilter
-                    ? "cursor-pointer"
-                    : "opacity-20 pointer-events-none grayscale"
-                }`}
-                style={{
-                  left: table.x,
-                  top: table.y,
-                  width: table.width,
-                  height: table.height,
+                onClick={() => handleTableClick(table)}
+                className={`absolute z-10 flex flex-col items-center justify-center border-2 transition-all duration-150 px-2.5 py-2 cursor-pointer ${bgClass} ${table.shape === "round" ? "rounded-full" : "rounded-xl"}`}
+                style={{  
+                  left: (table.x || 0) - contentBounds.offsetX - ((table.width || 80) * 0.1),
+                  top: (table.y || 0) - contentBounds.offsetY - ((table.height || 80) * 0.1),
+                  width: (table.width || 80) * 1.2,
+                  height: (table.height || 80) * 1.1,
                   transform: `rotate(${table.rotation}deg)`,
                   boxSizing: "border-box",
                 }}
               >
-                <span className={`text-base md:text-lg font-bold tracking-tight leading-tight ${textClass}`}>
+                <span className={`text-lg md:text-xl font-black tracking-tight leading-tight ${textClass}`}>
                   {table.tableNumber}
                 </span>
 
-                <span className={`mt-1.5 text-[10px] font-bold uppercase tracking-wide leading-none ${statusClass}`}>
+                <span className={`mt-1.5 text-[11px] md:text-xs font-bold uppercase tracking-wide leading-none ${statusClass}`}>
                   {statusLabel}
                 </span>
 
                 {session ? (
                   <div className="mt-2 flex items-center gap-1 min-w-0 px-0.5">
                     {employeeFirst && (
-                      <span className={`text-[11px] font-bold truncate max-w-full ${textClass}`}>
+                      <span className={`text-xs font-bold truncate max-w-full ${textClass}`}>
                         {employeeFirst}
                       </span>
                     )}
                     <div className="flex items-center gap-1">
                       <Users className={`h-4 w-4 ${statusClass}`} />
-                      <span className={`text-[12px] font-semibold ${statusClass}`}>
+                      <span className={`text-sm font-semibold ${statusClass}`}>
                         {session.guestCount}
                       </span>
                     </div>
                   </div>
-                ) : isMyDefault ? (
-                  <div className="mt-2 flex items-center gap-1">
-                    <Star className="h-2.5 w-2.5 text-orange-400 fill-orange-400" />
-                    <span className="text-[10px] font-semibold text-orange-500">
-                      {table.seats} seats
-                    </span>
-                  </div>
-                ) : isOthersDefault ? (
-                  <span className="mt-2 text-[10px] font-medium text-zinc-400 truncate max-w-[90%] text-center">
-                    {employeeFirst || `${table.seats} seats`}
-                  </span>
                 ) : (
-                  <span className="mt-2 text-[10px] font-semibold text-zinc-500">
+                  <span className="mt-2 text-xs font-semibold text-zinc-500">
                     {table.seats} seats
                   </span>
                 )}
 
                 {/* Lock icon for occupied tables owned by other employees */}
                 {isOther && (
-                  <div className="absolute -top-1.5 -right-1.5 bg-zinc-700 border-2 border-white rounded-full p-0.5 shadow-sm">
+                  <div className="absolute -top-1.5 -right-1.5 bg-zinc-700 border-2 border-black rounded-full p-0.5 shadow-sm">
                     <Lock className="h-3 w-3 text-white" />
                   </div>
                 )}
 
                 {/* Subtle serving indicator for my own active table */}
                 {isMine && (
-                  <div className="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-orange-500 border-2 border-white shadow-sm" />
+                  <div className={`absolute -top-1 -right-1 h-3 w-3 rounded-full border-2 border-black shadow-sm ${hasOrder ? "bg-orange-500" : "bg-sky-500"}`} />
                 )}
               </div>
             );
           })}
         </div>
+        </div>
       </div>
-
-      {/* Default Section Warning — shown when claiming another employee's default table */}
-      {/* This is UX-only. The backend does NOT block this operation. */}
-      <Dialog open={showDefaultWarning} onOpenChange={(open) => {
-        if (!open) {
-          setShowDefaultWarning(false);
-          setSelectedTable(null);
-        }
-      }}>
-        <DialogContent className="sm:max-w-[380px]">
-          <DialogHeader>
-            <DialogTitle className="text-lg font-bold tracking-tight text-zinc-900">
-              Table {selectedTable?.tableNumber}
-            </DialogTitle>
-          </DialogHeader>
-          <div className="py-3 space-y-3">
-            <div className="flex items-start gap-3 p-3 rounded-lg bg-amber-50 border border-amber-200">
-              <AlertCircle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
-              <p className="text-sm font-medium text-amber-800 leading-snug">
-                Table {selectedTable?.tableNumber} is normally served by{" "}
-                <span className="font-bold">{selectedTable?.defaultEmployeeName}</span>.
-                You can still take this table.
-              </p>
-            </div>
-          </div>
-          <DialogFooter className="gap-2">
-            <Button
-              variant="outline"
-              className="font-bold border-zinc-200"
-              onClick={() => {
-                setShowDefaultWarning(false);
-                setSelectedTable(null);
-              }}
-            >
-              Cancel
-            </Button>
-            <Button
-              className="bg-zinc-900 hover:bg-zinc-800 text-white font-bold"
-              onClick={() => {
-                setShowDefaultWarning(false);
-                setShowStartSession(true);
-              }}
-            >
-              Take Table
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* Start Session Modal */}
       <Dialog open={showStartSession} onOpenChange={setShowStartSession}>

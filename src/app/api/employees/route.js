@@ -1,7 +1,5 @@
 import { withAuth } from "@/utils/auth";
 import Employee from "@/models/employee/Employee";
-import Floor from "@/models/floor/Floor";
-import Table from "@/models/floor/Table";
 import { hashPassword } from "@/utils/password";
 import { sendSuccess } from "@/utils/apiResponse";
 import { sendError } from "@/utils/errorHandler";
@@ -145,8 +143,7 @@ async function allocateDefaultShifts({
         status: "Scheduled",
         shiftType: "Regular",
         templateId: template._id,
-        assignedFloor: employee.assignedFloor || employee.defaultFloor || null,
-        assignedTables: employee.assignedTables || [],
+        assignedFloor: employee.defaultFloor || null,
         isPlanned: true,
         month,
         generatedAt: now,
@@ -184,9 +181,6 @@ export const GET = withAuth(async (request) => {
     const employees = await Employee.find(query)
       .select("-password -plainPassword")
       .populate("defaultFloor", "name")
-      .populate("assignedFloor", "name")
-      .populate("assignedTables", "tableNumber")
-      .populate("assignedDevice")
       .lean();
 
     return sendSuccess(employees, "Employees retrieved successfully");
@@ -200,7 +194,7 @@ export const GET = withAuth(async (request) => {
 export const POST = withAuth(async (request) => {
   try {
     const data = await request.json();
-    const { firstName, lastName, email, countryCode, phoneNumber, role, password, status, profileImage, defaultFloor, employeeColor, assignedFloor, assignedTables, defaultShiftTemplate, weeklyOff, availableDays, hourlyPaid, staffDiscount, tipPercent } = data;
+    const { firstName, lastName, email, countryCode, phoneNumber, role, password, status, profileImage, defaultFloor, employeeColor, defaultShiftTemplate, weeklyOff, availableDays, hourlyPaid, staffDiscount, tipPercent } = data;
 
     // Validation
     if (!firstName || !lastName || !email || !phoneNumber) {
@@ -239,8 +233,6 @@ export const POST = withAuth(async (request) => {
       profileImage,
       defaultFloor: defaultFloor || null,
       employeeColor: employeeColor || "#4ade80",
-      assignedFloor: assignedFloor || null,
-      assignedTables: assignedTables || [],
       defaultShiftTemplate: defaultShiftTemplate || null,
       weeklyOff: weeklyOff || [],
       availableDays: availableDays || [],
@@ -248,15 +240,6 @@ export const POST = withAuth(async (request) => {
       tipPercent: validatedTipPercent,
       staffDiscount: staffDiscount !== undefined ? staffDiscount : undefined,
     });
-
-    // Update tables with this employee assignment
-    if (assignedTables && assignedTables.length > 0) {
-      await mongoose.model("Table").updateMany(
-        { _id: { $in: assignedTables }, restaurant: request.restaurant },
-        { $set: { assignedEmployee: newEmployee._id } }
-      );
-      logger.info(`Employee Assigned to tables: ${assignedTables.join(', ')}`);
-    }
 
     // Auto-generate planned schedule if defaultShiftTemplate is provided
     if (defaultShiftTemplate) {
@@ -283,7 +266,7 @@ export const POST = withAuth(async (request) => {
 export const PUT = withAuth(async (request) => {
   try {
     const data = await request.json();
-    const { _id, action, firstName, lastName, countryCode, phoneNumber, role, status, profileImage, defaultFloor, employeeColor, assignedFloor, assignedTables, defaultShiftTemplate, weeklyOff, availableDays, hourlyPaid, staffDiscount, tipPercent } = data;
+    const { _id, action, firstName, lastName, countryCode, phoneNumber, role, status, profileImage, defaultFloor, employeeColor, defaultShiftTemplate, weeklyOff, availableDays, hourlyPaid, staffDiscount, tipPercent } = data;
 
     if (!_id) {
       return sendError(new Error("Missing ID"), "Employee ID is required", 400);
@@ -380,7 +363,7 @@ export const PUT = withAuth(async (request) => {
 
       // Auto-create a RegisteredDevice for this employee
       const activationCode = generateActivationCode();
-      const newDevice = await RegisteredDevice.create({
+      await RegisteredDevice.create({
         restaurant: request.restaurant,
         deviceCode: `DEV-${Date.now()}`,
         deviceName: `${existing.firstName}'s Device`,
@@ -397,7 +380,6 @@ export const PUT = withAuth(async (request) => {
       existing.status = "Approved";
       existing.credentialGenerated = true;
       existing.passwordGeneratedAt = new Date();
-      existing.assignedDevice = newDevice._id;
       await existing.save();
 
       logger.info(`Employee Approved & Credentials Generated: ${existing.email}`);
@@ -435,11 +417,14 @@ export const PUT = withAuth(async (request) => {
       const loginUrl = "https://sales.tastybitesrestaurant.com/login";
 
       let activationCode = null;
-      if (existing.assignedDevice) {
-        const device = await RegisteredDevice.findById(existing.assignedDevice);
-        if (device && device.activationCode) {
-          activationCode = device.activationCode;
-        }
+      const pendingDevice = await RegisteredDevice.findOne({
+        restaurant: request.restaurant,
+        assignedEmployee: existing._id,
+        activationStatus: "Pending",
+        activationCode: { $exists: true, $ne: null },
+      }).sort({ createdAt: -1 });
+      if (pendingDevice?.activationCode) {
+        activationCode = pendingDevice.activationCode;
       }
 
       try {
@@ -476,27 +461,24 @@ export const PUT = withAuth(async (request) => {
         return sendError(new Error("Invalid State"), "Employee must be active or approved to generate a new device token", 400);
       }
 
-      // 1. Retire old device if exists
-      if (existing.assignedDevice) {
-        await RegisteredDevice.findByIdAndUpdate(existing.assignedDevice, {
-          status: 'Retired',
-          activationStatus: 'Reset Required'
-        });
-      }
+      // 1. Retire any previous devices created for this employee
+      await RegisteredDevice.updateMany(
+        { assignedEmployee: existing._id, restaurant: request.restaurant },
+        { status: "Retired", activationStatus: "Reset Required" }
+      );
 
       // 2. Generate new device and activation code
       const activationCode = generateActivationCode();
-      const newDevice = await RegisteredDevice.create({
+      await RegisteredDevice.create({
         restaurant: request.restaurant,
         deviceCode: `DEV-${Date.now()}`,
         deviceName: `${existing.firstName}'s Device`,
-        deviceType: 'Tablet',
+        deviceType: "Tablet",
         activationCode,
-        activationStatus: 'Pending',
+        activationStatus: "Pending",
         assignedEmployee: existing._id,
       });
 
-      existing.assignedDevice = newDevice._id;
       existing.deviceActivationRequired = true;
       await existing.save();
 
@@ -539,8 +521,6 @@ export const PUT = withAuth(async (request) => {
       ...(profileImage && { profileImage }),
       ...(defaultFloor && { defaultFloor }),
       ...(employeeColor && { employeeColor }),
-      ...(assignedFloor !== undefined && { assignedFloor }),
-      ...(assignedTables && { assignedTables }),
       ...(defaultShiftTemplate !== undefined && { defaultShiftTemplate }),
       ...(weeklyOff !== undefined && { weeklyOff }),
       ...(availableDays !== undefined && { availableDays }),
@@ -558,23 +538,6 @@ export const PUT = withAuth(async (request) => {
     }
 
     const updatedEmployee = await Employee.findByIdAndUpdate(_id, updateData, { new: true }).select("-password -plainPassword");
-
-    // Manage Table Assignments
-    if (assignedTables !== undefined) {
-      // Unassign from old tables
-      await mongoose.model("Table").updateMany(
-        { assignedEmployee: _id, restaurant: request.restaurant },
-        { $set: { assignedEmployee: null } }
-      );
-      // Assign to new tables
-      if (assignedTables.length > 0) {
-        await mongoose.model("Table").updateMany(
-          { _id: { $in: assignedTables }, restaurant: request.restaurant },
-          { $set: { assignedEmployee: _id } }
-        );
-      }
-      logger.info(`Employee ${_id} assignments updated`);
-    }
 
     logger.info(`Employee updated: ${existing.email}`);
     return sendSuccess(updatedEmployee, "Employee updated successfully");
@@ -600,16 +563,10 @@ export const DELETE = withAuth(async (request) => {
       return sendError(new Error("Not Found"), "Employee not found", 404);
     }
 
-    await Promise.all([
-      Table.updateMany(
-        { assignedEmployee: employee._id, restaurant: request.restaurant },
-        { $set: { assignedEmployee: null } }
-      ),
-      RegisteredDevice.updateMany(
-        { assignedEmployee: employee._id, restaurant: request.restaurant },
-        { $set: { assignedEmployee: null } }
-      ),
-    ]);
+    await RegisteredDevice.updateMany(
+      { assignedEmployee: employee._id, restaurant: request.restaurant },
+      { $set: { assignedEmployee: null } }
+    );
 
     await Promise.all([
       EmployeeShift.deleteMany({ employee: employee._id, restaurant: request.restaurant }),

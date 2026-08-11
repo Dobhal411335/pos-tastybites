@@ -54,10 +54,6 @@ export const withEmployeeAuth = (handler, allowedPermissions = []) => {
         return NextResponse.json({ success: false, message: 'Device has been reset' }, { status: 401 });
       }
 
-      if (employee.assignedDevice && employee.assignedDevice.toString() !== device._id.toString()) {
-        return NextResponse.json({ success: false, message: 'Employee assigned to another device' }, { status: 403 });
-      }
-
       // 3. Check specific permissions if required
       if (allowedPermissions.length > 0) {
         const hasPermission = employee.permissionGroup?.permissions?.some(p => allowedPermissions.includes(p));

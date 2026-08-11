@@ -12,13 +12,15 @@ import {
   LogOut,
   LayoutGrid,
   Edit,
-  Trash
+  Trash,
+  Trash2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardFooter } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
@@ -35,6 +37,10 @@ export default function MenuCategoriesPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
+  const [categoryAddons, setCategoryAddons] = useState([]);
+  const [addonsList, setAddonsList] = useState([]);
+  const [isAddonModalOpen, setIsAddonModalOpen] = useState(false);
+  const [newAddonName, setNewAddonName] = useState("");
   const [editCategoryId, setEditCategoryId] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -55,20 +61,68 @@ export default function MenuCategoriesPage() {
     }
   };
 
+  const fetchAddonsList = async () => {
+    try {
+      const res = await fetch("/api/menu/addons");
+      const json = await res.json();
+      if (json.success) setAddonsList(json.data.map((a) => a.name));
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   React.useEffect(() => {
     fetchCategories();
+    fetchAddonsList();
   }, []);
 
   const handleOpenAdd = () => {
     setEditCategoryId(null);
     setNewCategoryName("");
+    setCategoryAddons([]);
     setIsAddDialogOpen(true);
   };
 
   const handleOpenEdit = (cat) => {
     setEditCategoryId(cat._id);
     setNewCategoryName(cat.name);
+    setCategoryAddons(
+      Array.isArray(cat.addons) && cat.addons.length
+        ? cat.addons.map((a) => ({
+            name: a.name || "",
+            price: a.price ?? "",
+            size: a.size || "Regular",
+            status: a.status !== false,
+          }))
+        : []
+    );
     setIsAddDialogOpen(true);
+  };
+
+  const handleAddAddonSubmit = async (e) => {
+    e.preventDefault();
+    if (!newAddonName.trim()) {
+      toast.error("Please enter a valid name.");
+      return;
+    }
+    try {
+      const res = await fetch("/api/menu/addons", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: newAddonName.trim() }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        toast.success("Addon configured!");
+        setNewAddonName("");
+        setIsAddonModalOpen(false);
+        fetchAddonsList();
+      } else {
+        toast.error(json.message);
+      }
+    } catch (err) {
+      toast.error("Failed to create addon");
+    }
   };
 
   const handleSaveCategory = async (e) => {
@@ -80,7 +134,12 @@ export default function MenuCategoriesPage() {
       setIsSubmitting(true);
       const url = "/api/menu/categories";
       const method = editCategoryId ? "PUT" : "POST";
-      const payload = editCategoryId ? { _id: editCategoryId, name: newCategoryName.trim() } : { name: newCategoryName.trim() };
+      const addonsPayload = categoryAddons
+        .filter((a) => a.name)
+        .map((a) => ({ ...a, price: parseFloat(a.price) || 0 }));
+      const payload = editCategoryId
+        ? { _id: editCategoryId, name: newCategoryName.trim(), addons: addonsPayload }
+        : { name: newCategoryName.trim(), addons: addonsPayload };
 
       const res = await fetch(url, {
         method,
@@ -176,15 +235,15 @@ export default function MenuCategoriesPage() {
                     Add Category
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="sm:max-w-106.25">
+                <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
                   <form onSubmit={handleSaveCategory}>
                     <DialogHeader>
                       <DialogTitle className="text-[22px] font-bold">{editCategoryId ? "Edit Category" : "Add Category"}</DialogTitle>
                       <DialogDescription className="text-[15px]">
-                        {editCategoryId ? "Modify this category's properties." : "Create a new category to group related menu items."}
+                        {editCategoryId ? "Modify this category's properties and default addons." : "Create a new category and optionally attach default addons."}
                       </DialogDescription>
                     </DialogHeader>
-                    <div className="py-6">
+                    <div className="py-6 space-y-6">
                       <div className="space-y-2">
                         <label className="text-[14px] font-semibold" style={{ color: PALETTE.ink }}>
                           Category Name <span className="text-red-500">*</span>
@@ -196,6 +255,79 @@ export default function MenuCategoriesPage() {
                           value={newCategoryName}
                           onChange={(e) => setNewCategoryName(e.target.value)}
                         />
+                      </div>
+
+                      <div className="space-y-4 pt-6 border-t border-zinc-100">
+                        <label className="text-[14px] font-semibold text-zinc-900 block">
+                          Link Addons
+                        </label>
+                        {categoryAddons.map((addon, index) => (
+                          <div key={index} className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end border border-zinc-100 p-4 rounded-md bg-zinc-50/50">
+                            <div className="space-y-2">
+                              <label className="text-[13px] font-semibold text-zinc-900">Price Amount ($)</label>
+                              <Input
+                                type="number"
+                                step="0.01"
+                                placeholder="0.00"
+                                value={addon.price || ""}
+                                onChange={(e) => {
+                                  const next = [...categoryAddons];
+                                  next[index].price = e.target.value;
+                                  setCategoryAddons(next);
+                                }}
+                                className="h-11 text-[16px] bg-white"
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <label className="text-[13px] font-semibold text-zinc-900">Addon Selection</label>
+                              <div className="flex gap-2">
+                                <Select
+                                  value={addon.name || ""}
+                                  onValueChange={(val) => {
+                                    const next = [...categoryAddons];
+                                    next[index].name = val;
+                                    setCategoryAddons(next);
+                                  }}
+                                >
+                                  <SelectTrigger className="h-11 text-[16px] bg-white flex-1">
+                                    <SelectValue placeholder="Select Addon" />
+                                  </SelectTrigger>
+                                  <SelectContent className="bg-white max-h-60 overflow-y-auto">
+                                    {addonsList.map((ad, idx) => (
+                                      <SelectItem key={idx} value={ad}>{ad}</SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                                <Button
+                                  type="button"
+                                  onClick={() => setIsAddonModalOpen(true)}
+                                  variant="outline"
+                                  className="h-11 w-11 p-0 shrink-0 text-zinc-600 hover:text-zinc-900 border-zinc-200"
+                                >
+                                  <Plus className="h-5 w-5" />
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  onClick={() => setCategoryAddons(categoryAddons.filter((_, i) => i !== index))}
+                                  className="h-11 w-11 p-0 shrink-0 text-red-500 hover:text-red-700 border-red-200 hover:bg-red-50"
+                                >
+                                  <Trash2 className="h-5 w-5" />
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                        <div className="flex justify-end mt-2">
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            className="h-9"
+                            onClick={() => setCategoryAddons([...categoryAddons, { name: addonsList[0] || "", price: "", size: "Regular", status: true }])}
+                          >
+                            Add More Addons
+                          </Button>
+                        </div>
                       </div>
                     </div>
                     <DialogFooter>
@@ -240,8 +372,11 @@ export default function MenuCategoriesPage() {
                     <TableHead className="w-[30%] text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6">
                       Category Name <ArrowUpDown className="inline w-3 h-3 ml-1" />
                     </TableHead>
-                    <TableHead className="w-[25%] text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6">
+                    <TableHead className="w-[20%] text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6">
                       Products
+                    </TableHead>
+                    <TableHead className="w-[15%] text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6">
+                      Addons
                     </TableHead>
                     <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6">
                       Status
@@ -265,6 +400,9 @@ export default function MenuCategoriesPage() {
                           <div className="h-4 w-20 bg-zinc-200 rounded animate-pulse" />
                         </TableCell>
                         <TableCell className="px-6">
+                          <div className="h-4 w-12 bg-zinc-200 rounded animate-pulse" />
+                        </TableCell>
+                        <TableCell className="px-6">
                           <div className="h-6 w-16 bg-zinc-200 rounded-full animate-pulse" />
                         </TableCell>
                         <TableCell className="px-6 text-right">
@@ -285,6 +423,9 @@ export default function MenuCategoriesPage() {
                         </TableCell>
                         <TableCell className="px-6 font-medium text-[14px] text-zinc-500">
                           {cat.items || 0} products
+                        </TableCell>
+                        <TableCell className="px-6 font-medium text-[14px] text-zinc-500">
+                          {cat.addons?.length || 0}
                         </TableCell>
                         <TableCell className="px-6">
                           <Button variant="ghost" className="p-0 h-auto hover:bg-transparent" onClick={() => handleToggleStatus(cat)}>
@@ -323,7 +464,7 @@ export default function MenuCategoriesPage() {
                     ))
                   ) : (
                     <TableRow>
-                      <TableCell colSpan={4} className="h-32 text-center text-zinc-500 text-[15px]">
+                      <TableCell colSpan={6} className="h-32 text-center text-zinc-500 text-[15px]">
                         No categories found matching &quot;{searchQuery}&quot;
                       </TableCell>
                     </TableRow>
@@ -358,6 +499,40 @@ export default function MenuCategoriesPage() {
         title="Delete Category"
         description="Are you sure you want to delete this category? Products assigned to it must be removed first."
       />
+
+      <Dialog open={isAddonModalOpen} onOpenChange={setIsAddonModalOpen}>
+        <DialogContent className="sm:max-w-106.25">
+          <form onSubmit={handleAddAddonSubmit}>
+            <DialogHeader>
+              <DialogTitle className="text-[22px] font-bold text-zinc-900">Create Addon</DialogTitle>
+              <DialogDescription className="text-[15px]">
+                Configure a new supplementary product addon.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-2 py-4">
+              <label className="text-[14px] font-semibold text-zinc-900">
+                Addon Name <span className="text-red-500">*</span>
+              </label>
+              <Input
+                autoFocus
+                required
+                placeholder="e.g. Extra Bacon Strips"
+                className="h-11 text-[16px]"
+                value={newAddonName}
+                onChange={(e) => setNewAddonName(e.target.value)}
+              />
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setIsAddonModalOpen(false)} className="h-11 px-6 font-semibold cursor-pointer">
+                Cancel
+              </Button>
+              <Button type="submit" className="h-11 px-6 font-semibold cursor-pointer text-white" style={{ backgroundColor: PALETTE.accent }}>
+                Save Addon
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -194,12 +194,6 @@ function CanvasTable({ table, isSelected, onSelect, onResizeStart, zoom, isPrevi
         {!isStructural && (
           <span className="text-[10px] font-semibold text-stone-500 uppercase tracking-wider mt-0.5">{table.seats} Seats</span>
         )}
-        {table.assignedEmployee && (
-          <div className="mt-1 flex items-center justify-center gap-1 bg-white/90 px-1.5 py-0.5 rounded-full border shadow-sm max-w-full overflow-hidden" style={{ borderColor: table.assignedEmployee.employeeColor || '#ccc' }}>
-            <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: table.assignedEmployee.employeeColor || '#ccc' }} />
-            <span className="text-[9px] font-bold text-stone-700 truncate">{table.assignedEmployee.firstName}</span>
-          </div>
-        )}
       </div>
     </div>
   );
@@ -256,7 +250,6 @@ export default function FloorPlanEditorPage({ params }) {
             h: t.height,
             r: t.rotation,
             locked: false,
-            assignedEmployee: t.assignedEmployee,
             isShape: false
           }));
           setTables(mappedTables);

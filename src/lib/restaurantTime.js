@@ -114,3 +114,13 @@ export function restaurantCalendarDate(
   const local = tzParts(day, timeZone);
   return new Date(Date.UTC(local.year, local.month - 1, local.day, 12, 0, 0));
 }
+
+/** Inclusive start / exclusive end of the restaurant-local calendar day. */
+export function restaurantDayBounds(
+  day = new Date(),
+  timeZone = DEFAULT_RESTAURANT_TIMEZONE
+) {
+  const start = zonedDateTime(day, 0, 0, timeZone);
+  const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
+  return { start, end };
+}

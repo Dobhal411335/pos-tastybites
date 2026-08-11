@@ -15,6 +15,7 @@ export default function SalesMainLayout({ children }) {
   const router = useRouter();
   const pathname = usePathname();
   const isLoginPage = pathname === "/sales/login" || pathname === "/login";
+  const isFloorPage = pathname === "/sales/floor" || pathname === "/floor";
   const [employeeUser, setEmployeeUser] = useState(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [loading, setLoading] = useState(!isLoginPage);
@@ -62,7 +63,7 @@ export default function SalesMainLayout({ children }) {
       restaurantId={(employeeUser?.employee || employeeUser)?.restaurant}
     >
       <AuthProvider user={employeeUser?.employee || employeeUser}>
-        <div className="min-h-[100dvh] bg-[#FAFAFA] flex flex-col antialiased text-zinc-900 font-sans">
+        <div className="h-dvh max-h-dvh overflow-hidden bg-[#FAFAFA] flex flex-col antialiased text-zinc-900 font-sans">
           <EmployeeTopNav
             employeeName={
               (employeeUser?.employee || employeeUser)?.firstName && (employeeUser?.employee || employeeUser)?.lastName
@@ -73,8 +74,8 @@ export default function SalesMainLayout({ children }) {
             onMenuToggle={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
           />
           <div className="flex-1 flex overflow-hidden relative min-h-0">
-            <main className="flex-1 overflow-y-auto">
-              <div className="mx-auto max-w-8xl h-full">
+            <main className={`flex-1 min-h-0 ${isFloorPage ? "overflow-hidden" : "overflow-y-auto"}`}>
+              <div className="mx-auto max-w-8xl h-full min-h-0">
                 {children}
               </div>
             </main>

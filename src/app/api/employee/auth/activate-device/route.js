@@ -49,18 +49,14 @@ export async function POST(request) {
       return NextResponse.json({ success: false, message: 'This activation code has already been used' }, { status: 400 });
     }
 
-    // Assign the device to this employee if not assigned or reassigned
     device.assignedEmployee = employee._id;
     device.activationStatus = 'Activated';
     device.activatedAt = new Date();
     device.activatedBy = employee._id;
-    // Clear activation code so it can't be used again
     device.activationCode = undefined;
     
     await device.save();
 
-    // Also update the employee's assigned device
-    employee.assignedDevice = device._id;
     employee.deviceActivationRequired = false;
     await employee.save();
 

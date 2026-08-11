@@ -25,10 +25,7 @@ export const GET = withAuth(async (request) => {
     // 2. Determine which floor to load tables for
     const activeFloorId = floorId || floors[0]._id.toString();
 
-    // 3. Fetch physical tables for the active floor (populate default employee for section display)
-    const tables = await Table.find({ floor: activeFloorId, restaurant: request.restaurant })
-      .populate("assignedEmployee", "firstName lastName _id")
-      .lean();
+    const tables = await Table.find({ floor: activeFloorId, restaurant: request.restaurant }).lean();
 
     // 4. Fetch active TableSessions for the active floor
     const sessions = await TableSession.find({
@@ -68,12 +65,7 @@ export const GET = withAuth(async (request) => {
         shape: t.shape,
         seats: t.seats,
         section: t.section,
-        type: t.shape, // For frontend consistency
-        // Default section employee (admin configuration — NOT live session ownership)
-        defaultEmployeeId: t.assignedEmployee?._id?.toString() || null,
-        defaultEmployeeName: t.assignedEmployee
-          ? `${t.assignedEmployee.firstName} ${t.assignedEmployee.lastName || ""}`.trim()
-          : null,
+        type: t.shape,
       })),
       sessions: sessions.map((s) => ({
         id: s._id,

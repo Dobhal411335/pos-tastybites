@@ -5,6 +5,20 @@ import { sendSuccess } from "@/utils/apiResponse";
 import { sendError } from "@/utils/errorHandler";
 import { logger } from "@/utils/logger";
 import mongoose from "mongoose";
+import { mergeAddons, normalizeAddons } from "@/lib/menu/addons";
+
+async function syncCategoryAddonsToProducts(restaurantId, categoryId, categoryAddons) {
+  const incoming = normalizeAddons(categoryAddons);
+  if (incoming.length === 0) return;
+
+  const products = await Product.find({ category: categoryId, restaurant: restaurantId });
+  await Promise.all(
+    products.map(async (product) => {
+      product.addons = mergeAddons(product.addons || [], incoming);
+      await product.save();
+    })
+  );
+}
 
 // GET - List all categories with product counts
 export const GET = withAuth(async (request) => {
@@ -39,7 +53,7 @@ export const GET = withAuth(async (request) => {
 export const POST = withAuth(async (request) => {
   try {
     const data = await request.json();
-    const { name } = data;
+    const { name, addons } = data;
 
     if (!name) {
       return sendError(new Error("Missing name"), "Category name is required", 400);
@@ -48,6 +62,7 @@ export const POST = withAuth(async (request) => {
     const newCategory = await Category.create({
       restaurant: request.restaurant,
       name,
+      addons: normalizeAddons(addons),
       status: "Active",
       createdBy: request.user.id
     });
@@ -64,7 +79,7 @@ export const POST = withAuth(async (request) => {
 export const PUT = withAuth(async (request) => {
   try {
     const data = await request.json();
-    const { _id, name, status } = data;
+    const { _id, name, status, addons } = data;
 
     if (!_id) {
       return sendError(new Error("Missing ID"), "Category ID is required", 400);
@@ -73,6 +88,7 @@ export const PUT = withAuth(async (request) => {
     const updateData = { updatedBy: request.user.id };
     if (name) updateData.name = name;
     if (status) updateData.status = status;
+    if (addons !== undefined) updateData.addons = normalizeAddons(addons);
 
     const updatedCategory = await Category.findOneAndUpdate(
       { _id, restaurant: request.restaurant },
@@ -82,6 +98,10 @@ export const PUT = withAuth(async (request) => {
 
     if (!updatedCategory) {
       return sendError(new Error("Not Found"), "Category not found", 404);
+    }
+
+    if (addons !== undefined) {
+      await syncCategoryAddonsToProducts(request.restaurant, _id, updatedCategory.addons);
     }
 
     logger.info(`Category updated: ${_id}`);

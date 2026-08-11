@@ -22,6 +22,8 @@ import {
   DollarSign,
   ClipboardList,
   TrendingUp,
+  TrendingDown,
+  Loader2,
   ArrowUpRight,
   CalendarDays,
   Plus,
@@ -45,7 +47,6 @@ import {
   Wallet,
   Coffee,
   Megaphone,
-  TabletSmartphone,
   ChevronLeft
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -61,21 +62,79 @@ import { PALETTE } from "@/utils/paletteeColor";
 import DateTimeDisplay from "@/components/common/DateTimeDisplay";
 import NotificationBell from "@/components/common/NotificationBell";
 
-// --- Mock Data for Charts ---
-const revenueData = [
-  { time: "8AM", val: 100 }, { time: "10AM", val: 300 },
-  { time: "12PM", val: 800 }, { time: "2PM", val: 650 },
-  { time: "4PM", val: 900 }, { time: "6PM", val: 1250 },
+const EMPTY_CHART = [
+  { time: "8AM", val: 0 }, { time: "10AM", val: 0 },
+  { time: "12PM", val: 0 }, { time: "2PM", val: 0 },
+  { time: "4PM", val: 0 }, { time: "6PM", val: 0 },
 ];
-const orderData = [
-  { time: "8AM", val: 5 }, { time: "10AM", val: 12 },
-  { time: "12PM", val: 35 }, { time: "2PM", val: 20 },
-  { time: "4PM", val: 18 }, { time: "6PM", val: 84 },
-];
+
+const EMPTY_STATS = {
+  volume: 0,
+  newCount: 0,
+  pending: 0,
+  confirmed: 0,
+  revenue: 0,
+  taxes: 0,
+  tips: 0,
+  avgOrder: 0,
+  volumeChange: 0,
+  revenueChange: 0,
+  orderChart: EMPTY_CHART,
+  revenueChart: EMPTY_CHART,
+};
+
+function formatMoney(value) {
+  return `$${Number(value || 0).toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
+
+function ChangeBadge({ value }) {
+  const up = value >= 0;
+  const Icon = up ? TrendingUp : TrendingDown;
+  return (
+    <div className={`flex items-center gap-2 mt-3 text-sm font-bold w-max px-2.5 py-1 rounded-lg ${
+      up ? "text-emerald-600 bg-emerald-50" : "text-rose-600 bg-rose-50"
+    }`}>
+      <Icon className="w-4 h-4" />
+      {up ? "+" : ""}{value}% from yesterday
+    </div>
+  );
+}
 
 export default function AdminDashboardPage() {
   const { adminUser } = useAdmin();
   const [activeCategory, setActiveCategory] = useState(null);
+  const [stats, setStats] = useState(EMPTY_STATS);
+  const [statsLoading, setStatsLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadStats = async () => {
+      try {
+        setStatsLoading(true);
+        const res = await fetch("/api/orders/stats", { credentials: "include" });
+        const json = await res.json();
+        if (!cancelled && res.ok && json.success && json.data) {
+          setStats({
+            ...EMPTY_STATS,
+            ...json.data,
+            orderChart: json.data.orderChart?.length ? json.data.orderChart : EMPTY_CHART,
+            revenueChart: json.data.revenueChart?.length ? json.data.revenueChart : EMPTY_CHART,
+          });
+        }
+      } catch (err) {
+        if (!cancelled) toast.error("Failed to load today's sales");
+      } finally {
+        if (!cancelled) setStatsLoading(false);
+      }
+    };
+
+    loadStats();
+    return () => { cancelled = true; };
+  }, []);
 
   const handleLogout = async () => {
     try {
@@ -217,19 +276,18 @@ export default function AdminDashboardPage() {
                     <div className="flex items-center gap-2 text-slate-500 font-bold tracking-wide uppercase text-xs mb-3">
                       <ClipboardList className="w-4 h-4 text-orange-500" /> Today&apos;s Volume
                     </div>
-                    <div className="text-5xl font-black text-slate-900 tracking-tighter">84</div>
-                    <div className="flex items-center gap-2 mt-3 text-sm font-bold text-emerald-600 bg-emerald-50 w-max px-2.5 py-1 rounded-lg">
-                      <TrendingUp className="w-4 h-4" /> +12% from yesterday
+                    <div className="text-5xl font-black text-slate-900 tracking-tighter min-h-12 flex items-center">
+                      {statsLoading ? <Loader2 className="w-8 h-8 animate-spin text-slate-300" /> : stats.volume}
                     </div>
+                    <ChangeBadge value={stats.volumeChange} />
                   </div>
 
-                  {/* Miniature Chart in Header */}
                   <div className="w-60 h-30">
                     <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={orderData}>
+                      <BarChart data={stats.orderChart}>
                         <Bar dataKey="val" radius={[4, 4, 0, 0]}>
-                          {orderData.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={index === orderData.length - 1 ? "#F97316" : "#FED7AA"} />
+                          {stats.orderChart.map((entry, index) => (
+                            <Cell key={`cell-${entry.time}-${index}`} fill={index === stats.orderChart.length - 1 ? "#F97316" : "#FED7AA"} />
                           ))}
                         </Bar>
                       </BarChart>
@@ -240,17 +298,17 @@ export default function AdminDashboardPage() {
                 <div className="mt-8 pt-6 border-t border-slate-100 flex gap-4">
                   <div className="flex-1">
                     <div className="text-slate-400 text-xs font-bold uppercase mb-1">New</div>
-                    <div className="text-slate-900 font-bold">4</div>
+                    <div className="text-slate-900 font-bold">{stats.newCount}</div>
                   </div>
                   <div className="w-px h-8 bg-slate-100"></div>
                   <div className="flex-1">
                     <div className="text-slate-400 text-xs font-bold uppercase mb-1">Pending</div>
-                    <div className="text-orange-600 font-bold">35</div>
+                    <div className="text-orange-600 font-bold">{stats.pending}</div>
                   </div>
                   <div className="w-px h-8 bg-slate-100"></div>
                   <div className="flex-1">
                     <div className="text-slate-400 text-xs font-bold uppercase mb-1">Confirmed</div>
-                    <div className="text-emerald-600 font-bold">45</div>
+                    <div className="text-emerald-600 font-bold">{stats.confirmed}</div>
                   </div>
                 </div>
               </CardContent>
@@ -264,16 +322,15 @@ export default function AdminDashboardPage() {
                     <div className="flex items-center gap-2 text-slate-500 font-bold tracking-wide uppercase text-xs mb-3">
                       <DollarSign className="w-4 h-4 text-emerald-500" /> Today&apos;s Revenue
                     </div>
-                    <div className="text-5xl font-black text-slate-900 tracking-tighter">$1,250</div>
-                    <div className="flex items-center gap-2 mt-3 text-sm font-bold text-emerald-600 bg-emerald-50 w-max px-2.5 py-1 rounded-lg">
-                      <TrendingUp className="w-4 h-4" /> +8% from yesterday
+                    <div className="text-5xl font-black text-slate-900 tracking-tighter min-h-12 flex items-center">
+                      {statsLoading ? <Loader2 className="w-8 h-8 animate-spin text-slate-300" /> : formatMoney(stats.revenue)}
                     </div>
+                    <ChangeBadge value={stats.revenueChange} />
                   </div>
 
-                  {/* Miniature Area Chart */}
                   <div className="w-35 h-15 translate-y-2">
                     <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={revenueData}>
+                      <AreaChart data={stats.revenueChart}>
                         <defs>
                           <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
                             <stop offset="5%" stopColor="#10B981" stopOpacity={0.3} />
@@ -289,17 +346,17 @@ export default function AdminDashboardPage() {
                 <div className="mt-8 pt-6 border-t border-slate-100 flex gap-4">
                   <div className="flex-1">
                     <div className="text-slate-400 text-xs font-bold uppercase mb-1">Taxes</div>
-                    <div className="text-slate-900 font-bold">$162.50</div>
+                    <div className="text-slate-900 font-bold">{formatMoney(stats.taxes)}</div>
                   </div>
                   <div className="w-px h-8 bg-slate-100"></div>
                   <div className="flex-1">
                     <div className="text-slate-400 text-xs font-bold uppercase mb-1">Avg Order</div>
-                    <div className="text-blue-600 font-bold">$14.88</div>
+                    <div className="text-blue-600 font-bold">{formatMoney(stats.avgOrder)}</div>
                   </div>
                   <div className="w-px h-8 bg-slate-100"></div>
                   <div className="flex-1">
                     <div className="text-slate-400 text-xs font-bold uppercase mb-1">Tips</div>
-                    <div className="text-emerald-600 font-bold">$42.00</div>
+                    <div className="text-emerald-600 font-bold">{formatMoney(stats.tips)}</div>
                   </div>
                 </div>
               </CardContent>
@@ -343,7 +400,6 @@ export default function AdminDashboardPage() {
                     <ModuleCard href="/admin/menu" icon={UtensilsCrossed} color="orange" title="Create Menu" stat="Configure" desc="Configure categories, items, modifiers, pricing, and availability." />
                     <ModuleCard href="/admin/floor-plan" icon={LayoutGrid} color="amber" title="Floor Management" stat="Tables" desc="Setup dining sections, table layouts, seating capacities, and status tracking." />
                     <ModuleCard href="/admin/employee" icon={Users} color="indigo" title="Staff Portal" stat="Employees" desc="Manage employee profiles, access permissions, and designation matrices." />
-                    <ModuleCard href="/admin/employee/device-assignment?action=new" icon={TabletSmartphone} color="blue" title="Device Assignment" stat="Devices" desc="Register POS devices and assign them to staff members." />
                     <ModuleCard href="/admin/promotions" icon={Gift} color="rose" title="Season Promotions" stat="Offers" desc="Setup promotional codes, percentage/flat discounts, and happy hour schedules." />
                     <ModuleCard href="/admin/tax" icon={Percent} color="emerald" title="Configure Tax And Fees" stat="Tax" desc="Define applicable tax slabs (GST/VAT), service charges, and additional surcharges." />
                     <ModuleCard href="/admin/users" icon={UserPlus} color="blue" title="Master Admin Users" stat="Admins" desc="Setup super-admin accounts with system-wide configuration rights." />

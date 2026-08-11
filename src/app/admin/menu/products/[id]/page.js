@@ -191,6 +191,10 @@ export default function ProductDetailsConfigPage() {
   };
 
   const handleDeleteAddon = (index) => {
+    if (addons[index]?.fromCategory) {
+      toast.error("This addon comes from the category and cannot be removed here.");
+      return;
+    }
     const newAddons = [...addons];
     newAddons.splice(index, 1);
     setAddons(newAddons);
@@ -477,7 +481,14 @@ export default function ProductDetailsConfigPage() {
                         {addons.map((addon, index) => (
                           <div key={index} className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end border border-zinc-100 p-4 rounded-md bg-zinc-50/50">
                             <div className="space-y-2">
-                              <label className="text-[13px] font-semibold text-zinc-900">Price Amount ($)</label>
+                              <label className="text-[13px] font-semibold text-zinc-900 flex items-center gap-2">
+                                Price Amount ($)
+                                {addon.fromCategory && (
+                                  <Badge className="bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-50 text-[10px] uppercase tracking-wide">
+                                    Category
+                                  </Badge>
+                                )}
+                              </label>
                               <Input
                                 type="number"
                                 step="0.01"
@@ -501,6 +512,7 @@ export default function ProductDetailsConfigPage() {
                                     newAddons[index].name = val;
                                     setAddons(newAddons);
                                   }}
+                                  disabled={addon.fromCategory}
                                 >
                                   <SelectTrigger className="h-11 text-[16px] bg-white flex-1">
                                     <SelectValue placeholder="Select Addon" />
@@ -523,7 +535,8 @@ export default function ProductDetailsConfigPage() {
                                   type="button"
                                   variant="outline"
                                   onClick={() => handleDeleteAddon(index)}
-                                  className="h-11 w-11 p-0 shrink-0 text-red-500 hover:text-red-700 border-red-200 hover:bg-red-50"
+                                  disabled={addon.fromCategory}
+                                  className="h-11 w-11 p-0 shrink-0 text-red-500 hover:text-red-700 border-red-200 hover:bg-red-50 disabled:opacity-40"
                                 >
                                   <Trash2 className="h-5 w-5" />
                                 </Button>
@@ -703,7 +716,7 @@ export default function ProductDetailsConfigPage() {
 
               {/* Table 2: Addons */}
               <Card className="shadow-sm border-zinc-200 bg-white overflow-hidden">
-                <CardHeader className="px-6 py-5 border-b border-zinc-200">
+                <CardHeader className="px-4 py-5 border-b border-zinc-200">
                   <CardTitle className="text-[16px] font-bold text-zinc-900">Active Addons</CardTitle>
                 </CardHeader>
                 <CardContent className="p-0">
@@ -719,9 +732,16 @@ export default function ProductDetailsConfigPage() {
                     <TableBody>
                       {addons.length > 0 ? addons.map((add, index) => (
                         <TableRow key={index} className="h-16 hover:bg-zinc-50 transition-colors">
-                          <TableCell className="px-6">
+                          <TableCell className="px-4">
                             <div className="flex flex-col">
-                              <span className="text-[15px] font-semibold text-zinc-900">{add.name}</span>
+                              <span className="text-[15px] font-semibold text-zinc-900 flex items-center gap-2">
+                                {add.name}
+                                {add.fromCategory && (
+                                  <Badge className="bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-50 text-[10px] uppercase tracking-wide">
+                                    Category
+                                  </Badge>
+                                )}
+                              </span>
                               <span className="text-[13px] text-zinc-500 mt-0.5">{add.size}</span>
                             </div>
                           </TableCell>
@@ -746,7 +766,7 @@ export default function ProductDetailsConfigPage() {
                             </button>
                           </TableCell>
                           <TableCell className="px-6 text-center">
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50" onClick={() => handleDeleteAddon(index)}>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50 disabled:opacity-40" onClick={() => handleDeleteAddon(index)} disabled={add.fromCategory}>
                               <Trash className="h-4 w-4" />
                             </Button>
                           </TableCell>

@@ -284,8 +284,7 @@ export const POST = withAuth(async (request) => {
               status:         "Scheduled",
               shiftType:      "Regular",
               templateId:     template._id,
-              assignedFloor:  emp.assignedFloor || emp.defaultFloor || null,
-              assignedTables: emp.assignedTables || [],
+              assignedFloor:  emp.defaultFloor || null,
               // Planned schedule metadata
               isPlanned:      true,
               month,

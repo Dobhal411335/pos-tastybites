@@ -49,12 +49,20 @@ export const POST = withAuth(async (request) => {
       else totalFixed += t.value;
     });
 
+    const categoryAddons = Array.isArray(category.addons) ? category.addons : [];
+
     const productsToCreate = names.map((name, index) => ({
       restaurant: request.restaurant,
       category: categoryId,
       name: name.trim(),
       productCode: codes && codes[index] ? codes[index].trim() : "",
       status: "Active",
+      addons: categoryAddons.map((addon) => ({
+        name: addon.name,
+        price: Number(addon.price) || 0,
+        size: addon.size || "Regular",
+        status: addon.status !== false,
+      })),
       taxes: taxIds,
       taxData: {
         totalPercentage,

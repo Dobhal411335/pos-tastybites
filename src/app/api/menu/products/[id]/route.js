@@ -6,6 +6,7 @@ import { sendError } from "@/utils/errorHandler";
 import { logger } from "@/utils/logger";
 import { deleteImage } from "@/lib/cloudinary/deleteImage";
 import Tax from "@/models/tax/Tax";
+import { markCategoryAddons, mergeAddons, normalizeAddons } from "@/lib/menu/addons";
 // GET - Get single product details
 export const GET = withAuth(async (request, { params }) => {
   try {
@@ -16,13 +17,15 @@ export const GET = withAuth(async (request, { params }) => {
     }
 
     const product = await Product.findOne({ _id: id, restaurant: request.restaurant })
-      .populate("category", "name")
+      .populate("category", "name addons")
       .populate("taxes")
       .lean();
 
     if (!product) {
       return sendError(new Error("Not Found"), "Product not found", 404);
     }
+
+    product.addons = markCategoryAddons(product.addons || [], product.category?.addons || []);
 
     return sendSuccess(product, "Product retrieved successfully");
   } catch (error) {
@@ -47,7 +50,14 @@ export const PUT = withAuth(async (request, { params }) => {
     const updateData = { updatedBy: request.user.id };
     
     if (name !== undefined) updateData.name = name;
-    if (category !== undefined) updateData.category = category;
+    if (category !== undefined) {
+      updateData.category = category;
+      const nextCategory = await Category.findOne({ _id: category, restaurant: request.restaurant }).lean();
+      if (nextCategory?.addons?.length) {
+        const current = await Product.findOne({ _id: id, restaurant: request.restaurant }).select("addons").lean();
+        updateData.addons = mergeAddons(addons || current?.addons || [], normalizeAddons(nextCategory.addons));
+      }
+    }
     if (productCode !== undefined) updateData.productCode = productCode;
     if (description !== undefined) updateData.description = description;
     if (taxes !== undefined) {

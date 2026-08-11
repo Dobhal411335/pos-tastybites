@@ -3,8 +3,6 @@ import { withEmployeeAuth } from "@/utils/employeeAuth";
 import Employee from "@/models/employee/Employee";
 import EmployeeShift from "@/models/employee/EmployeeShift";
 import Order from "@/models/Order";
-import Floor from "@/models/floor/Floor";
-import Table from "@/models/floor/Table";
 import { logger } from "@/utils/logger";
 import { sendSuccess } from "@/utils/apiResponse";
 import {sendError} from "@/utils/errorHandler"
@@ -18,10 +16,7 @@ export const GET = withEmployeeAuth(async (request) => {
     }
 
     // 1. Fetch Employee Profile
-    const employee = await Employee.findOne({ _id: employeeId, restaurant: restaurantId })
-      .populate("assignedFloor")
-      .populate("assignedTables")
-      .lean();
+    const employee = await Employee.findOne({ _id: employeeId, restaurant: restaurantId }).lean();
 
     if (!employee) {
       return sendError(new Error("Not Found"), "Employee not found", 404);
@@ -71,13 +66,9 @@ export const GET = withEmployeeAuth(async (request) => {
     // Calculate approximate sales total for "tips" or "sales" stat
     const totalSales = completedOrders.reduce((sum, order) => sum + (order.totalAmount || 0), 0);
 
-    // 4. Assemble payload
-    // Prefer shift assignments, fallback to employee default assignments
-    const tables = activeShift?.assignedTables?.length > 0 
-      ? activeShift.assignedTables 
-      : (employee.assignedTables || []);
-
-    const floor = activeShift?.assignedFloor?.name || employee.assignedFloor?.name || "Main Floor";
+    // 4. Assemble payload from the active shift only
+    const tables = activeShift?.assignedTables || [];
+    const floor = activeShift?.assignedFloor?.name || "Main Floor";
 
     const payload = {
       profile: {
