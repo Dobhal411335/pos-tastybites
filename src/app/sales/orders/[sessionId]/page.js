@@ -182,8 +182,15 @@ export default function OrderPage() {
               (s) => s.id === sessionId,
             );
             if (currentSession) {
-              setSessionData(currentSession);
-              setGuestTable(currentSession.tableId);
+              const table = (floorJson.data.tables || []).find(
+                (t) => String(t.id) === String(currentSession.tableId),
+              );
+              const tableNumber = table?.tableNumber || null;
+              setSessionData({
+                ...currentSession,
+                tableNumber,
+              });
+              if (tableNumber) setGuestTable(tableNumber);
             }
           }
 
@@ -197,6 +204,9 @@ export default function OrderPage() {
             setActiveOrder(existingOrder);
             setOrderStatus(existingOrder.status);
             setOrderNote(existingOrder.specialNote || "");
+            if (existingOrder.partyName || existingOrder.guestName) {
+              setGuestName(existingOrder.partyName || existingOrder.guestName);
+            }
 
             // Reconstruct cart
             const restoredCart = existingOrder.items.map((item) => {
@@ -511,22 +521,44 @@ export default function OrderPage() {
     setCart((prev) => prev.filter((item) => (item.cartId || item.id) !== id));
   };
 
+  const getDisplayTableNo = () => {
+    return (
+      activeOrder?.tableNo ||
+      sessionData?.tableNumber ||
+      (sessionId === "new" ? guestTable : "") ||
+      ""
+    );
+  };
+
+  const resolvePartyName = (nameOverride) => {
+    const trimmed = (nameOverride ?? guestName ?? "").trim();
+    if (trimmed) return trimmed;
+
+    const tableNo = getDisplayTableNo();
+    const guestCount = sessionData?.guestCount;
+    if (tableNo && guestCount != null) {
+      return `${tableNo} · ${guestCount} guest${guestCount === 1 ? "" : "s"}`;
+    }
+    if (tableNo) return `${tableNo}`;
+    if (guestCount != null) {
+      return `${guestCount} guest${guestCount === 1 ? "" : "s"}`;
+    }
+    return "Walk-in";
+  };
+
   const handleSendToKitchen = () => {
     if (cart.length === 0) return;
-
-    // If it's an existing session, we can skip the kitchen modal and just send it
-    if (sessionId !== "new") {
-      handleConfirmKitchen();
-    } else {
-      setIsKitchenModalOpen(true);
-    }
+    setIsKitchenModalOpen(true);
   };
 
   const handleConfirmKitchen = async () => {
-    if (sessionId === "new" && !guestName && !guestTable) {
-      toast.error("Please enter a guest name or table number.");
+    if (sessionId === "new" && !guestName.trim() && !guestTable.trim()) {
+      toast.error("Enter a party name or table number.");
       return;
     }
+
+    const partyName = resolvePartyName();
+
     try {
       setIsSubmitting(true);
       const payload = {
@@ -539,7 +571,9 @@ export default function OrderPage() {
         specialNote: orderNote,
         sessionId: sessionId !== "new" ? sessionId : null,
         tableNo: sessionId === "new" ? guestTable : undefined,
-        guestName: guestName,
+        guestName: partyName,
+        partyName,
+        guestCount: sessionData?.guestCount ?? null,
         orderType: orderType,
       };
 
@@ -553,12 +587,18 @@ export default function OrderPage() {
       if (json.success) {
         toast.success("Order sent to kitchen!");
         setIsKitchenModalOpen(false);
+        setGuestName(partyName);
         setActiveOrder(json.data);
         setOrderStatus("PENDING");
 
         // Check if there are items to print for KOT
         if (json.data.kotPayload && json.data.kotPayload.length > 0) {
-          setPrintOrderData(json.data);
+          setPrintOrderData({
+            ...json.data,
+            partyName,
+            guestName: partyName,
+            guestCount: sessionData?.guestCount ?? json.data.guestCount ?? null,
+          });
           setPrintKotItems(json.data.kotPayload);
           setPrintType("kot");
           setRedirectAfterPrint(true);
@@ -651,6 +691,15 @@ export default function OrderPage() {
     }
     setIsGiftCardModalOpen(false);
   };
+
+  const handleRemoveGiftCard = () => {
+    setGiftCardBalance(null);
+    setGiftCardDetails(null);
+    setGiftCardCode("");
+    setGiftCardError("");
+    setGiftCardSplitAmount(0);
+    setIsGiftCardModalOpen(false);
+  };
   const subtotal = cart.reduce((sum, item) => sum + item.price * item.qty, 0);
   const totalTax = cart.reduce(
     (sum, item) => sum + (item.tax || 0) * item.qty,
@@ -680,6 +729,7 @@ export default function OrderPage() {
 
       if (!currentOrder) {
         // Create order first
+        const partyName = resolvePartyName();
         const payload = {
           items: cart,
           subTotal: subtotal,
@@ -690,7 +740,9 @@ export default function OrderPage() {
           specialNote: orderNote,
           sessionId: sessionId !== "new" ? sessionId : null,
           tableNo: sessionId === "new" ? guestTable : undefined,
-          guestName: guestName,
+          guestName: partyName,
+          partyName,
+          guestCount: sessionData?.guestCount ?? null,
           orderType: orderType,
         };
         const res = await fetch("/api/orders/employee", {
@@ -714,6 +766,7 @@ export default function OrderPage() {
         giftCardBalance !== null
           ? Math.round((total - giftCardSplitAmount) * 100) / 100
           : 0;
+      const partyName = resolvePartyName();
 
       const paymentPayload = {
         orderId: currentOrder._id,
@@ -723,6 +776,9 @@ export default function OrderPage() {
         tipAmount: tipAmount,
         discountTotal: discountAmount,
         discountCode: appliedDiscount ? appliedDiscount.code : null,
+        guestName: partyName,
+        partyName,
+        guestCount: sessionData?.guestCount ?? null,
       };
 
       if (paymentMethod === "Card") {
@@ -782,6 +838,9 @@ export default function OrderPage() {
           giftcardCode:
             giftCardBalance !== null ? giftCardCode.trim().toUpperCase() : null,
           giftcardUsedAmount: giftCardUsedAmount,
+          guestName: partyName,
+          partyName,
+          guestCount: sessionData?.guestCount ?? null,
         };
 
         // Open Customer Receipt Print Preview
@@ -1145,17 +1204,17 @@ export default function OrderPage() {
         </div>
       </div>
 
-      {/* KITCHEN MODAL ONLY FOR WALK-INS (sessionId === "new") */}
+      {/* KITCHEN / PARTY NAME MODAL */}
       {isKitchenModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-900/50 backdrop-blur-sm">
           <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl flex flex-col">
             <div className="p-5 border-b border-zinc-100 flex items-center justify-between">
               <div>
                 <h2 className="text-lg font-bold text-zinc-900">
-                  Confirm Order
+                  Party Name
                 </h2>
                 <p className="text-sm font-semibold text-zinc-500 mt-0.5">
-                  Guest info or table number required.
+                  Whose bill is this for? Optional — leave blank to use table + guests.
                 </p>
               </div>
               <button
@@ -1169,35 +1228,54 @@ export default function OrderPage() {
             <div className="p-5 space-y-4">
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider flex items-center gap-1.5">
-                  <User className="w-3.5 h-3.5" /> Guest Name
+                  <User className="w-3.5 h-3.5" /> Customer / Party Name
+                  <span className="text-zinc-400 font-semibold normal-case">(optional)</span>
                 </label>
                 <Input
                   placeholder="e.g. John Doe"
                   value={guestName}
                   onChange={(e) => setGuestName(e.target.value)}
-                  className="h-11 border-zinc-200 rounded-lg text-sm font-semibold focus-visible:ring-blue-500"
+                  className="h-12 border-zinc-200 rounded-lg text-sm font-semibold focus-visible:ring-blue-500"
                 />
+                <p className="text-[12px] text-zinc-500 font-medium">
+                  If empty, will use:{" "}
+                  <span className="font-bold text-zinc-700">
+                    {resolvePartyName("")}
+                  </span>
+                </p>
               </div>
 
-              <div className="flex items-center gap-3 my-1">
-                <div className="flex-1 h-px bg-zinc-100" />
-                <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">
-                  or
-                </span>
-                <div className="flex-1 h-px bg-zinc-100" />
-              </div>
+              {sessionId === "new" && (
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider flex items-center gap-1.5">
+                    <MapPin className="w-3.5 h-3.5" /> Table Number
+                    <span className="text-zinc-400 font-semibold normal-case">(if no name)</span>
+                  </label>
+                  <Input
+                    placeholder="e.g. T-01"
+                    value={guestTable}
+                    onChange={(e) => setGuestTable(e.target.value)}
+                    className="h-12 border-zinc-200 rounded-lg text-sm font-semibold focus-visible:ring-blue-500"
+                  />
+                </div>
+              )}
 
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider flex items-center gap-1.5">
-                  <MapPin className="w-3.5 h-3.5" /> Table Number
-                </label>
-                <Input
-                  placeholder="e.g. T-01"
-                  value={guestTable}
-                  onChange={(e) => setGuestTable(e.target.value)}
-                  className="h-11 border-zinc-200 rounded-lg text-sm font-semibold focus-visible:ring-blue-500"
-                />
-              </div>
+              {sessionId !== "new" && (
+                <div className="bg-zinc-50 border border-zinc-200 rounded-xl p-3 text-sm font-semibold text-zinc-600 space-y-1">
+                  {getDisplayTableNo() && (
+                    <div>
+                      Table:{" "}
+                      <span className="text-zinc-900">{getDisplayTableNo()}</span>
+                    </div>
+                  )}
+                  {sessionData?.guestCount != null && (
+                    <div>
+                      Guests:{" "}
+                      <span className="text-zinc-900">{sessionData.guestCount}</span>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="p-5 border-t border-zinc-100 flex gap-3">
@@ -1230,7 +1308,9 @@ export default function OrderPage() {
           <div className="bg-white rounded-2xl w-full max-w-5xl shadow-2xl flex flex-col max-h-[94vh] overflow-hidden">
             {/* Header */}
             <div className="px-5 py-4 border-b border-zinc-100 flex items-center justify-between shrink-0">
-              <h2 className="text-xl font-black text-zinc-900 tracking-tight">PAYMENT</h2>
+              <h2 className="text-xl font-black text-zinc-900 tracking-tight">
+                PAYMENT
+              </h2>
               <button
                 onClick={() => setIsPaymentModalOpen(false)}
                 className="w-10 h-10 bg-zinc-100 rounded-full flex items-center justify-center text-zinc-500 hover:bg-zinc-200 transition-colors"
@@ -1256,32 +1336,59 @@ export default function OrderPage() {
                         </span>
                       )}
                       {(activeOrder?.tableNo ||
+                        sessionData?.tableNumber ||
                         (sessionId === "new" && guestTable)) && (
                         <span className="inline-flex items-center px-2.5 py-1 rounded-lg bg-white border border-zinc-200 text-xs font-bold text-zinc-800">
-                          Table {activeOrder?.tableNo || guestTable}
+                          Table{" "}
+                          {activeOrder?.tableNo ||
+                            sessionData?.tableNumber ||
+                            guestTable}
                         </span>
                       )}
-                      {guestName && (
+                      {sessionData?.guestCount != null && (
                         <span className="inline-flex items-center px-2.5 py-1 rounded-lg bg-white border border-zinc-200 text-xs font-bold text-zinc-800">
-                          {guestName}
+                          {sessionData.guestCount} guest
+                          {sessionData.guestCount === 1 ? "" : "s"}
                         </span>
                       )}
+                    </div>
+
+                    <div className="space-y-2 mb-4">
+                      <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider flex items-center gap-1.5">
+                        <User className="w-3.5 h-3.5" />
+                        Party / Customer Name
+                        <span className="text-zinc-400 font-semibold normal-case">
+                          (optional)
+                        </span>
+                      </label>
+                      <Input
+                        placeholder="e.g. John Doe"
+                        value={guestName}
+                        onChange={(e) => setGuestName(e.target.value)}
+                        className="h-11 bg-white border-zinc-200 rounded-xl text-sm font-semibold focus-visible:ring-orange-500"
+                      />
                     </div>
 
                     <div className="bg-white rounded-xl border border-zinc-200 p-4 space-y-2.5 shadow-sm">
                       <div className="flex justify-between text-sm font-semibold text-zinc-500">
                         <span>Subtotal</span>
-                        <span className="text-zinc-900">${subtotal.toFixed(2)}</span>
+                        <span className="text-zinc-900">
+                          ${subtotal.toFixed(2)}
+                        </span>
                       </div>
                       <div className="flex justify-between text-sm font-semibold text-zinc-500">
                         <span>Tax</span>
-                        <span className="text-zinc-900">${totalTax.toFixed(2)}</span>
+                        <span className="text-zinc-900">
+                          ${totalTax.toFixed(2)}
+                        </span>
                       </div>
                       {discountAmount > 0 && (
                         <div className="flex justify-between text-sm font-semibold text-green-600">
                           <span>
                             Discount
-                            {appliedDiscount?.code ? ` (${appliedDiscount.code})` : ""}
+                            {appliedDiscount?.code
+                              ? ` (${appliedDiscount.code})`
+                              : ""}
                           </span>
                           <span>-${discountAmount.toFixed(2)}</span>
                         </div>
@@ -1321,7 +1428,7 @@ export default function OrderPage() {
                             type="button"
                             variant="outline"
                             onClick={handleRemoveDiscount}
-                            className="h-10 px-4 rounded-lg border-green-200 text-green-800 hover:bg-green-100 font-bold text-sm shadow-none shrink-0"
+                            className="h-10 px-4 rounded-lg bg-red-500 border-red-200 text-white hover:bg-red-600 font-bold text-sm shadow-none shrink-0"
                           >
                             Remove
                           </Button>
@@ -1365,7 +1472,8 @@ export default function OrderPage() {
                           $
                           {Math.max(
                             0,
-                            Math.round((total - giftCardSplitAmount) * 100) / 100,
+                            Math.round((total - giftCardSplitAmount) * 100) /
+                              100,
                           ).toFixed(2)}
                         </span>
                       </div>
@@ -1442,20 +1550,31 @@ export default function OrderPage() {
                               value={giftCardCode}
                               onChange={(e) => setGiftCardCode(e.target.value)}
                               placeholder="Enter code..."
-                              className="w-full h-12 pl-9 pr-4 bg-white border border-zinc-200 rounded-xl font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 uppercase"
+                              disabled={giftCardBalance !== null}
+                              className="w-full h-12 pl-9 pr-4 bg-white border border-zinc-200 rounded-xl font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 uppercase disabled:bg-zinc-50 disabled:text-zinc-500"
                             />
                           </div>
-                          <Button
-                            onClick={verifyGiftCard}
-                            disabled={!giftCardCode || isVerifyingGiftCard}
-                            className="h-12 px-4 bg-zinc-900 hover:bg-zinc-800 text-white font-bold rounded-xl shadow-none"
-                          >
-                            {isVerifyingGiftCard ? (
-                              <Loader2 className="w-4 h-4 animate-spin" />
-                            ) : (
-                              "Verify"
-                            )}
-                          </Button>
+                          {giftCardBalance !== null ? (
+                            <Button
+                              type="button"
+                              onClick={handleRemoveGiftCard}
+                              className="h-12 px-4 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl shadow-none"
+                            >
+                              Remove
+                            </Button>
+                          ) : (
+                            <Button
+                              onClick={verifyGiftCard}
+                              disabled={!giftCardCode || isVerifyingGiftCard}
+                              className="h-12 px-4 bg-zinc-900 hover:bg-zinc-800 text-white font-bold rounded-xl shadow-none"
+                            >
+                              {isVerifyingGiftCard ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                              ) : (
+                                "Verify"
+                              )}
+                            </Button>
+                          )}
                         </div>
                         {giftCardError && (
                           <p className="text-xs font-bold text-red-500">
@@ -1474,8 +1593,9 @@ export default function OrderPage() {
                               $
                               {Math.max(
                                 0,
-                                Math.round((total - giftCardSplitAmount) * 100) /
-                                  100,
+                                Math.round(
+                                  (total - giftCardSplitAmount) * 100,
+                                ) / 100,
                               ).toFixed(2)}
                             </span>
                           </div>
@@ -1490,64 +1610,64 @@ export default function OrderPage() {
                         </div>
                       )}
 
-                      
-{selectedCardType &&
-                            cardAmountTendered &&
-                            parseFloat(cardAmountTendered) >
-                              (giftCardBalance !== null
-                                ? giftCardSplitAmount
-                                : total) && (
-                              <div className="p-4 bg-orange-50 border border-orange-200 rounded-xl">
-                                <div className="flex justify-between items-center mb-3">
-                                  <span className="text-sm font-bold text-orange-900">
-                                    Overpayment / Tip
-                                  </span>
-                                  <span className="text-xl font-black text-orange-600">
-                                    $
-                                    {(
-                                      parseFloat(cardAmountTendered) -
-                                      (giftCardBalance !== null
-                                        ? giftCardSplitAmount
-                                        : total)
-                                    ).toFixed(2)}
-                                  </span>
-                                </div>
-                                <label className="flex items-center gap-3 cursor-pointer group min-h-[44px]">
-                                  <div
-                                    className={`w-6 h-6 rounded border flex items-center justify-center transition-colors ${tipAmount > 0 ? "bg-orange-500 border-orange-500" : "bg-white border-zinc-300 group-hover:border-orange-400"}`}
-                                  >
-                                    {tipAmount > 0 && (
-                                      <CheckCircle2 className="w-4 h-4 text-white" />
-                                    )}
-                                  </div>
-                                  <input
-                                    type="checkbox"
-                                    className="hidden"
-                                    checked={tipAmount > 0}
-                                    onChange={(e) => {
-                                      if (e.target.checked) {
-                                        setTipAmount(
-                                          Math.round(
-                                            (parseFloat(cardAmountTendered) -
-                                              (giftCardBalance !== null
-                                                ? giftCardSplitAmount
-                                                : total)) *
-                                              100,
-                                          ) / 100,
-                                        );
-                                      } else {
-                                        setTipAmount(0);
-                                      }
-                                    }}
-                                  />
-                                  <span className="text-sm font-bold text-orange-900">
-                                    Keep as Tip
-                                  </span>
-                                </label>
+                      {selectedCardType &&
+                        cardAmountTendered &&
+                        parseFloat(cardAmountTendered) >
+                          (giftCardBalance !== null
+                            ? giftCardSplitAmount
+                            : total) && (
+                          <div className="p-4 bg-orange-50 border border-orange-200 rounded-xl">
+                            <div className="flex justify-between items-center mb-3">
+                              <span className="text-sm font-bold text-orange-900">
+                                Overpayment / Tip
+                              </span>
+                              <span className="text-xl font-black text-orange-600">
+                                $
+                                {(
+                                  parseFloat(cardAmountTendered) -
+                                  (giftCardBalance !== null
+                                    ? giftCardSplitAmount
+                                    : total)
+                                ).toFixed(2)}
+                              </span>
+                            </div>
+                            <label className="flex items-center gap-3 cursor-pointer group min-h-[44px]">
+                              <div
+                                className={`w-6 h-6 rounded border flex items-center justify-center transition-colors ${tipAmount > 0 ? "bg-orange-500 border-orange-500" : "bg-white border-zinc-300 group-hover:border-orange-400"}`}
+                              >
+                                {tipAmount > 0 && (
+                                  <CheckCircle2 className="w-4 h-4 text-white" />
+                                )}
                               </div>
-                            )}
+                              <input
+                                type="checkbox"
+                                className="hidden"
+                                checked={tipAmount > 0}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setTipAmount(
+                                      Math.round(
+                                        (parseFloat(cardAmountTendered) -
+                                          (giftCardBalance !== null
+                                            ? giftCardSplitAmount
+                                            : total)) *
+                                          100,
+                                      ) / 100,
+                                    );
+                                  } else {
+                                    setTipAmount(0);
+                                  }
+                                }}
+                              />
+                              <span className="text-sm font-bold text-orange-900">
+                                Keep as Tip
+                              </span>
+                            </label>
+                          </div>
+                        )}
 
-                      {(giftCardBalance === null || giftCardSplitAmount > 0) && (
+                      {(giftCardBalance === null ||
+                        giftCardSplitAmount > 0) && (
                         <>
                           <div className="space-y-2">
                             <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
@@ -1619,7 +1739,6 @@ export default function OrderPage() {
                               </div>
                             </div>
                           )}
-
                         </>
                       )}
                     </div>
@@ -1644,20 +1763,31 @@ export default function OrderPage() {
                               value={giftCardCode}
                               onChange={(e) => setGiftCardCode(e.target.value)}
                               placeholder="Enter code..."
-                              className="w-full h-12 pl-9 pr-4 bg-white border border-zinc-200 rounded-xl font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 uppercase"
+                              disabled={giftCardBalance !== null}
+                              className="w-full h-12 pl-9 pr-4 bg-white border border-zinc-200 rounded-xl font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 uppercase disabled:bg-zinc-50 disabled:text-zinc-500"
                             />
                           </div>
-                          <Button
-                            onClick={verifyGiftCard}
-                            disabled={!giftCardCode || isVerifyingGiftCard}
-                            className="h-12 px-4 bg-zinc-900 hover:bg-zinc-800 text-white font-bold rounded-xl shadow-none"
-                          >
-                            {isVerifyingGiftCard ? (
-                              <Loader2 className="w-4 h-4 animate-spin" />
-                            ) : (
-                              "Verify"
-                            )}
-                          </Button>
+                          {giftCardBalance !== null ? (
+                            <Button
+                              type="button"
+                              onClick={handleRemoveGiftCard}
+                              className="h-12 px-4 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl shadow-none"
+                            >
+                              Remove
+                            </Button>
+                          ) : (
+                            <Button
+                              onClick={verifyGiftCard}
+                              disabled={!giftCardCode || isVerifyingGiftCard}
+                              className="h-12 px-4 bg-zinc-900 hover:bg-zinc-800 text-white font-bold rounded-xl shadow-none"
+                            >
+                              {isVerifyingGiftCard ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                              ) : (
+                                "Verify"
+                              )}
+                            </Button>
+                          )}
                         </div>
                         {giftCardError && (
                           <p className="text-xs font-bold text-red-500">
@@ -1676,8 +1806,9 @@ export default function OrderPage() {
                               $
                               {Math.max(
                                 0,
-                                Math.round((total - giftCardSplitAmount) * 100) /
-                                  100,
+                                Math.round(
+                                  (total - giftCardSplitAmount) * 100,
+                                ) / 100,
                               ).toFixed(2)}
                             </span>
                           </div>
@@ -1692,7 +1823,8 @@ export default function OrderPage() {
                         </div>
                       )}
 
-                      {(giftCardBalance === null || giftCardSplitAmount > 0) && (
+                      {(giftCardBalance === null ||
+                        giftCardSplitAmount > 0) && (
                         <>
                           <div className="bg-zinc-50 border border-zinc-200 rounded-xl p-4 flex justify-between items-center">
                             <span className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
@@ -1730,10 +1862,9 @@ export default function OrderPage() {
                             {[
                               {
                                 label: "Exact",
-                                value: (
-                                  giftCardBalance !== null
-                                    ? giftCardSplitAmount
-                                    : total
+                                value: (giftCardBalance !== null
+                                  ? giftCardSplitAmount
+                                  : total
                                 ).toFixed(2),
                               },
                               { label: "$35", value: "35" },
@@ -1829,20 +1960,31 @@ export default function OrderPage() {
                               value={giftCardCode}
                               onChange={(e) => setGiftCardCode(e.target.value)}
                               placeholder="Enter code..."
-                              className="w-full h-12 pl-9 pr-4 bg-white border border-zinc-200 rounded-xl font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 uppercase"
+                              disabled={giftCardBalance !== null}
+                              className="w-full h-12 pl-9 pr-4 bg-white border border-zinc-200 rounded-xl font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 uppercase disabled:bg-zinc-50 disabled:text-zinc-500"
                             />
                           </div>
-                          <Button
-                            onClick={verifyGiftCard}
-                            disabled={!giftCardCode || isVerifyingGiftCard}
-                            className="h-12 px-4 bg-zinc-900 hover:bg-zinc-800 text-white font-bold rounded-xl shadow-none"
-                          >
-                            {isVerifyingGiftCard ? (
-                              <Loader2 className="w-4 h-4 animate-spin" />
-                            ) : (
-                              "Verify"
-                            )}
-                          </Button>
+                          {giftCardBalance !== null ? (
+                            <Button
+                              type="button"
+                              onClick={handleRemoveGiftCard}
+                              className="h-12 px-4 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl shadow-none"
+                            >
+                              Remove
+                            </Button>
+                          ) : (
+                            <Button
+                              onClick={verifyGiftCard}
+                              disabled={!giftCardCode || isVerifyingGiftCard}
+                              className="h-12 px-4 bg-zinc-900 hover:bg-zinc-800 text-white font-bold rounded-xl shadow-none"
+                            >
+                              {isVerifyingGiftCard ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                              ) : (
+                                "Verify"
+                              )}
+                            </Button>
+                          )}
                         </div>
                         {giftCardError && (
                           <p className="text-xs font-bold text-red-500">
@@ -1869,8 +2011,9 @@ export default function OrderPage() {
                               $
                               {Math.max(
                                 0,
-                                Math.round((total - giftCardSplitAmount) * 100) /
-                                  100,
+                                Math.round(
+                                  (total - giftCardSplitAmount) * 100,
+                                ) / 100,
                               ).toFixed(2)}
                             </span>
                           </div>
@@ -1973,14 +2116,14 @@ export default function OrderPage() {
       {/* GIFTCARD VERIFICATION MODAL */}
       {isGiftCardModalOpen && giftCardDetails && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-zinc-900/50 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl flex flex-col max-h-[90vh]">
+          <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl flex flex-col max-h-[90vh] custom-scrollbar">
             <div className="p-5 border-b border-zinc-100 flex items-center justify-between">
               <h2 className="text-xl font-bold text-zinc-900">
-                Giftcard History
+                Gift Card Details
               </h2>
               <button
                 onClick={() => setIsGiftCardModalOpen(false)}
-                className="w-8 h-8 rounded-full flex items-center justify-center text-zinc-500 hover:bg-zinc-100"
+                className="w-8 h-8 rounded border border-zinc-700 bg-red-500 text-white flex items-center justify-center hover:bg-zinc-100"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -2007,6 +2150,96 @@ export default function OrderPage() {
                     )?.toFixed(2)}
                   </p>
                 </div>
+                {giftCardDetails.name && (
+                  <div className="col-span-2">
+                    <p className="text-xs font-bold text-zinc-500 uppercase">
+                      Card Name
+                    </p>
+                    <p className="font-semibold text-zinc-900">
+                      {giftCardDetails.name}
+                    </p>
+                  </div>
+                )}
+                <div>
+                  <p className="text-xs font-bold text-zinc-500 uppercase">
+                    Original Value
+                  </p>
+                  <p className="font-semibold text-zinc-900">
+                    ${Number(giftCardDetails.value || 0).toFixed(2)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-zinc-500 uppercase">
+                    Status
+                  </p>
+                  <p className="font-semibold text-zinc-900">
+                    {giftCardDetails.status || "Active"}
+                    {giftCardDetails.isIssued ? " · Issued" : ""}
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-white border border-zinc-200 rounded-xl p-4 space-y-3">
+                <h3 className="text-sm font-bold text-zinc-900">Issued To</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <p className="text-xs font-bold text-zinc-500 uppercase">
+                      Name
+                    </p>
+                    <p className="text-sm font-semibold text-zinc-900">
+                      {giftCardDetails.recipientName || "—"}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-zinc-500 uppercase">
+                      Email
+                    </p>
+                    <p className="text-sm font-semibold text-zinc-900 break-all">
+                      {giftCardDetails.recipientEmail || "—"}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-zinc-500 uppercase">
+                      Phone
+                    </p>
+                    <p className="text-sm font-semibold text-zinc-900">
+                      {giftCardDetails.recipientPhone || "—"}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-zinc-500 uppercase">
+                      Issue Date
+                    </p>
+                    <p className="text-sm font-semibold text-zinc-900">
+                      {giftCardDetails.issueDate
+                        ? new Date(
+                            giftCardDetails.issueDate,
+                          ).toLocaleDateString()
+                        : "—"}
+                    </p>
+                  </div>
+                  {(giftCardDetails.validFrom ||
+                    giftCardDetails.validUntil) && (
+                    <div className="sm:col-span-2">
+                      <p className="text-xs font-bold text-zinc-500 uppercase">
+                        Valid Period
+                      </p>
+                      <p className="text-sm font-semibold text-zinc-900">
+                        {giftCardDetails.validFrom
+                          ? new Date(
+                              giftCardDetails.validFrom,
+                            ).toLocaleDateString()
+                          : "—"}
+                        {" → "}
+                        {giftCardDetails.validUntil
+                          ? new Date(
+                              giftCardDetails.validUntil,
+                            ).toLocaleDateString()
+                          : "—"}
+                      </p>
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div>
@@ -2019,9 +2252,10 @@ export default function OrderPage() {
                     <table className="w-full text-sm text-left">
                       <thead className="bg-zinc-50 text-xs text-zinc-500 font-bold uppercase">
                         <tr>
-                          <th className="px-4 py-2">Date</th>
-                          <th className="px-4 py-2">Used</th>
-                          <th className="px-4 py-2">Balance</th>
+                          <th className="px-3 py-2">Date</th>
+                          <th className="px-3 py-2">Used</th>
+                          <th className="px-3 py-2">Balance</th>
+                          <th className="px-3 py-2">Order</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-zinc-200">
@@ -2030,11 +2264,14 @@ export default function OrderPage() {
                             <td className="px-4 py-2 text-zinc-600">
                               {new Date(h.usedAt).toLocaleDateString()}
                             </td>
-                            <td className="px-4 py-2 text-red-600">
+                            <td className="px-3 py-2 text-red-600">
                               -${h.amountUsed?.toFixed(2)}
                             </td>
-                            <td className="px-4 py-2 font-medium">
+                            <td className="px-3 py-2 font-medium">
                               ${h.balanceAfter?.toFixed(2)}
+                            </td>
+                            <td className="px-3 py-2 text-zinc-600 text-xs">
+                              {h.orderId || h.note || "—"}
                             </td>
                           </tr>
                         ))}
@@ -2340,6 +2577,7 @@ export default function OrderPage() {
         kotItems={printKotItems}
         taxBreakdown={printTaxBreakdown}
         serverName={serverName}
+        guestCount={printOrderData?.guestCount ?? sessionData?.guestCount}
       />
     </div>
   );

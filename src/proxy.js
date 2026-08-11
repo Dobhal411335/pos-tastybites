@@ -57,9 +57,21 @@ export async function proxy(request) {
   // If the user visits pos.tastybitesrestaurant.com/foo, we map it to /admin/foo
   // If the user visits sales.tastybitesrestaurant.com/foo, we map it to /sales/foo
   let targetPath = pathname;
+
+  // Public/static assets must not be rewritten onto /sales or /admin
+  // (e.g. /favicon/favicon.ico was becoming /sales/favicon/favicon.ico → 404)
+  const isStaticAsset =
+    pathname.startsWith('/favicon') ||
+    pathname.startsWith('/uploads') ||
+    /\.(?:ico|png|jpg|jpeg|gif|webp|svg|woff2?|ttf|eot|txt|xml|webmanifest|json|map)$/i.test(pathname);
   
   // To avoid rewriting already prefixed paths (e.g., API routes or static files)
-  if (!pathname.startsWith('/api') && !pathname.startsWith('/_next') && pathname !== '/login') {
+  if (
+    !pathname.startsWith('/api') &&
+    !pathname.startsWith('/_next') &&
+    pathname !== '/login' &&
+    !isStaticAsset
+  ) {
     if (isPos && !isAdminPage && !isSalesPage) {
       targetPath = `/admin${pathname === '/' ? '/dashboard' : pathname}`;
     } else if (isSales && !isSalesPage && !isAdminPage) {
@@ -112,9 +124,9 @@ export async function proxy(request) {
 }
 
 export const config = {
-  // Match all request paths except for static assets to ensure Request ID is globally generated
+  // Match all request paths except static assets (favicon folder, images, fonts, etc.)
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico).*)',
+    '/((?!_next/static|_next/image|favicon(?:\\.ico|/)|.*\\.(?:ico|png|jpg|jpeg|gif|webp|svg|woff2?|ttf|eot|txt|xml|webmanifest)$).*)',
   ],
 };
 

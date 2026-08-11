@@ -2,6 +2,7 @@ import { createServer } from 'http';
 import { parse } from 'url';
 import next from 'next';
 import { Server } from 'socket.io';
+import { logger } from './src/utils/logger.js';
 
 const dev = process.env.NODE_ENV !== 'production';
 const hostname = 'localhost';
@@ -17,7 +18,7 @@ app.prepare().then(() => {
       const parsedUrl = parse(req.url, true);
       handle(req, res, parsedUrl);
     } catch (err) {
-      console.error('Error occurred handling', req.url, err);
+      logger.error('Error occurred handling request', err, { url: req.url });
       res.statusCode = 500;
       res.end('internal server error');
     }
@@ -35,29 +36,29 @@ app.prepare().then(() => {
   global.io = io;
 
   io.on('connection', (socket) => {
-    console.log(`Socket Connected: ${socket.id}`);
+    logger.info(`Socket Connected: ${socket.id}`);
 
     // Allow clients to explicitly join a room
     socket.on('join', (room) => {
       socket.join(room);
-      console.log(`Socket ${socket.id} joined room: ${room}`);
+      logger.info(`Socket ${socket.id} joined room: ${room}`);
     });
 
     socket.on('leave', (room) => {
       socket.leave(room);
-      console.log(`Socket ${socket.id} left room: ${room}`);
+      logger.info(`Socket ${socket.id} left room: ${room}`);
     });
 
     socket.on('disconnect', () => {
-      console.log(`Socket Disconnected: ${socket.id}`);
+      logger.info(`Socket Disconnected: ${socket.id}`);
     });
   });
 
   server.listen(port, () => {
-    console.log(`> Ready on http://${hostname}:${port}`);
-    console.log(`> Socket.IO Server attached`);
+    logger.info(`Ready on http://${hostname}:${port}`);
+    logger.info('Socket.IO Server attached');
   });
 }).catch((err) => {
-  console.error("Next.js preparation failed:", err);
+  logger.error('Next.js preparation failed', err);
   process.exit(1);
 });

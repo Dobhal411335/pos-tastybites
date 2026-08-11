@@ -128,7 +128,12 @@ async function enqueueKotPrintJob({ order, kotItems, employeeId, guestCount }) {
 export const POST = withAuth(async (request) => {
   try {
     const data = await request.json();
-    const { items, subTotal, taxTotal, discountTotal, discountCode, totalAmount, specialNote, sessionId, guestName, orderType } = data;
+    const { items, subTotal, taxTotal, discountTotal, discountCode, totalAmount, specialNote, sessionId, guestName, partyName, guestCount, orderType } = data;
+    const resolvedPartyName = (partyName || guestName || "").trim() || null;
+    const resolvedGuestCount =
+      guestCount !== undefined && guestCount !== null && guestCount !== ""
+        ? Number(guestCount)
+        : null;
 
     if (!items || items.length === 0) {
       return sendError(new Error("Empty cart"), "Cart cannot be empty", 400);
@@ -165,7 +170,9 @@ export const POST = withAuth(async (request) => {
         totalAmount: Number(totalAmount) || 0,
         specialNote: specialNote,
         tableNo: data.tableNo, // Legacy table string
-        guestName: guestName || null,
+        guestName: resolvedPartyName,
+        partyName: resolvedPartyName,
+        guestCount: Number.isFinite(resolvedGuestCount) ? resolvedGuestCount : null,
         status: "PENDING",
         source: "POS",
         processedBy: employeeId
@@ -176,7 +183,7 @@ export const POST = withAuth(async (request) => {
         order: newOrder,
         kotItems: kotPayload,
         employeeId,
-        guestCount: null,
+        guestCount: Number.isFinite(resolvedGuestCount) ? resolvedGuestCount : null,
       });
 
       const serverName = await resolveServerName(employeeId);
@@ -241,6 +248,17 @@ export const POST = withAuth(async (request) => {
       order.discountCode = discountCode || null;
       order.totalAmount = Number(totalAmount) || 0;
       order.specialNote = specialNote;
+      if (resolvedPartyName !== null || partyName !== undefined || guestName !== undefined) {
+        order.guestName = resolvedPartyName;
+        order.partyName = resolvedPartyName;
+      }
+      if (guestCount !== undefined) {
+        order.guestCount = Number.isFinite(resolvedGuestCount)
+          ? resolvedGuestCount
+          : (session.guestCount ?? null);
+      } else if (order.guestCount == null && session.guestCount != null) {
+        order.guestCount = session.guestCount;
+      }
       await order.save();
       
       if (global.io) global.io.to(`floor:${session.floor}`).emit('order:updated', { orderId: order._id, sessionId });
@@ -317,7 +335,11 @@ export const POST = withAuth(async (request) => {
         table: session.primaryTable._id,
         floor: session.floor,
         tableNo: session.primaryTable.tableNumber, // For legacy compatibility
-        guestName: guestName || null,
+        guestName: resolvedPartyName,
+        partyName: resolvedPartyName,
+        guestCount: Number.isFinite(resolvedGuestCount)
+          ? resolvedGuestCount
+          : (session.guestCount ?? null),
         
         status: "PENDING",
         source: "POS",

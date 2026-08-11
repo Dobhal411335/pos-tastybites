@@ -29,7 +29,9 @@ const OrderSchema = new mongoose.Schema(
     totalAmount: { type: Number, required: true },
     tipAmount: { type: Number, default: 0 },
     specialNote: { type: String },
-    guestName: { type: String },
+    guestName: { type: String }, // legacy; kept in sync with partyName
+    partyName: { type: String }, // customer / party name for the bill
+    guestCount: { type: Number, default: null }, // guests at the table when order was taken
     contactNumber: { type: String },
     tableNo: { type: String }, // Legacy string reference
     tableSession: { type: mongoose.Schema.Types.ObjectId, ref: 'TableSession' },

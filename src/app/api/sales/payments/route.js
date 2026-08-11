@@ -25,6 +25,9 @@ export const POST = withAuth(async (request) => {
       splitAmount,
       discountTotal,
       discountCode,
+      guestName,
+      partyName,
+      guestCount,
     } = data;
 
     if (!orderId) {
@@ -66,6 +69,19 @@ export const POST = withAuth(async (request) => {
       order.giftcardUsedAmount = used;
     }
 
+    // Persist party / customer name for the bill
+    if (partyName !== undefined || guestName !== undefined) {
+      const resolvedPartyName = (partyName || guestName || "").trim() || null;
+      order.partyName = resolvedPartyName;
+      order.guestName = resolvedPartyName;
+    }
+
+    // Persist guest count on the order
+    if (guestCount !== undefined && guestCount !== null && guestCount !== "") {
+      const n = Number(guestCount);
+      if (Number.isFinite(n)) order.guestCount = n;
+    }
+
     // Save tip if provided
     if (tipAmount && tipAmount > 0) {
       order.tipAmount = Math.round(Number(tipAmount) * 100) / 100;
@@ -73,7 +89,7 @@ export const POST = withAuth(async (request) => {
 
     await order.save();
 
-    let guestCount = null;
+    let receiptGuestCount = order.guestCount ?? null;
     let session = null;
 
     // If this order is linked to a session, optionally update the session status to PAYMENT_PENDING if not already
@@ -81,7 +97,11 @@ export const POST = withAuth(async (request) => {
     if (sessionId) {
       session = await TableSession.findById(sessionId);
       if (session) {
-        guestCount = session.guestCount ?? null;
+        if (order.guestCount == null && session.guestCount != null) {
+          order.guestCount = session.guestCount;
+          await order.save();
+        }
+        receiptGuestCount = order.guestCount ?? session.guestCount ?? null;
       }
       
       if (global.io && session) {
@@ -124,7 +144,7 @@ export const POST = withAuth(async (request) => {
       const { job } = await createReceiptPrintJob({
         order,
         requestedBy: request.user.id,
-        guestCount,
+        guestCount: receiptGuestCount,
         serverName,
         restaurantName: restaurant?.name || null,
       });

@@ -16,8 +16,9 @@ const KitchenOrderTicket = ({
 }) => {
   if (!order || !kotItems.length) return null;
 
-  const { orderNumber, tableNo, guestName, createdAt } = order;
+  const { orderNumber, tableNo, guestName, partyName, createdAt } = order;
   const note = specialNote || order.specialNote;
+  const partyLabel = partyName || guestName;
 
   const groupedItems = kotItems.reduce((acc, item) => {
     const groupName = item.category || "ITEMS";
@@ -66,9 +67,9 @@ const KitchenOrderTicket = ({
             <span className="receipt-bold">Guests:</span> {guestCount}
           </div>
         )}
-        {guestName && (
+        {partyLabel && (
           <div>
-            <span className="receipt-bold">Party:</span> {guestName}
+            <span className="receipt-bold">Party:</span> {partyLabel}
           </div>
         )}
       </div>

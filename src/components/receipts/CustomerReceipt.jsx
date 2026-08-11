@@ -31,6 +31,7 @@ const CustomerReceipt = ({
     tableNo,
     createdAt,
   } = order;
+  const partyLabel = order.partyName || guestName;
 
   const restName = restaurantDetails?.name || "TASTY BITES";
   const restAddress =
@@ -83,10 +84,10 @@ const CustomerReceipt = ({
             </span>
           )}
         </div>
-        {guestName && (
+        {partyLabel && (
           <div>
             <span className="text-zinc-500">Party:</span>{" "}
-            <span className="receipt-bold">{guestName}</span>
+            <span className="receipt-bold">{partyLabel}</span>
           </div>
         )}
         <div>
@@ -175,7 +176,7 @@ const CustomerReceipt = ({
         {Number(giftcardUsedAmount) > 0 && (
           <div className="w-full max-w-[160px] flex justify-between">
             <span className="text-zinc-500">
-              Gift Card{giftcardCode ? ` (${giftcardCode})` : ""}:
+              Gift Card:
             </span>
             <span className="receipt-bold">
               -${Number(giftcardUsedAmount).toFixed(2)}
