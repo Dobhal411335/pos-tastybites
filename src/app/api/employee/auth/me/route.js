@@ -14,12 +14,15 @@ const getMeHandler = async (request) => {
       success: true,
       data: {
         employee: {
-          id: employee.employeeId,
+          _id: employee._id,
+          id: employee._id,
+          employeeId: employee.employeeId,
           firstName: employee.firstName,
           lastName: employee.lastName,
           email: employee.email,
           phoneNumber: employee.phoneNumber,
           role: employee.role,
+          restaurant: employee.restaurant,
           joinDate: employee.createdAt,
           profileImage: employee.profileImage,
           permissions: employee.permissionGroup?.permissions || []

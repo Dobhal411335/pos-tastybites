@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { employeeFetch } from "@/lib/employeeFetch";
+import { isSalesAdminRole } from "@/utils/roles";
 
 export default function SalesFloorPage() {
   const router = useRouter();
@@ -45,6 +46,38 @@ export default function SalesFloorPage() {
   const [guestCount, setGuestCount] = useState(1);
   const [effectiveSeatCount, setEffectiveSeatCount] = useState(1);
   const [actionLoading, setActionLoading] = useState(false);
+
+  const loadData = useCallback(async () => {
+    try {
+      setLoading(true);
+      // Fetch user — /api/auth/me returns the Employee or POS Admin document.
+      const userRes = await employeeFetch("/api/auth/me");
+      const userData = await userRes.json();
+      if (userRes.ok && userData.success && userData.data) {
+        const u = userData.data.employee || userData.data;
+        setCurrentUser(u);
+      }
+
+      const floorRes = await employeeFetch("/api/sales/floor");
+      const floorJson = await floorRes.json();
+      if (floorRes.ok && floorJson.success && floorJson.data) {
+        setFloorData(floorJson.data);
+      } else {
+        toast.error(floorJson.message || "Failed to load floor data");
+        return;
+      }
+
+      const empRes = await employeeFetch("/api/sales/employees");
+      const empData = await empRes.json();
+      if (empRes.ok && empData.success) {
+        setActiveEmployees(empData.data || []);
+      }
+    } catch (err) {
+      toast.error("Failed to load floor data");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     loadData();
@@ -81,7 +114,7 @@ export default function SalesFloorPage() {
         socket.off('NEW_PRINT_JOB');
       }
     };
-  }, [socket]);
+  }, [socket, loadData]);
 
   useEffect(() => {
     if (socket && floorData.activeFloorId) {
@@ -89,47 +122,12 @@ export default function SalesFloorPage() {
     }
   }, [socket, floorData.activeFloorId]);
 
-  // Stable reference so socket.on/socket.off always get the same function identity.
-  // loadData only calls setters and fetch — it doesn't read any state directly,
-  // so the empty dependency array is safe.
-  const loadData = useCallback(async () => {
-    try {
-      setLoading(true);
-      // Fetch user — /api/auth/me returns the full Employee document.
-      // We store it as-is; the MongoDB _id is available as currentUser._id.
-      const userRes = await employeeFetch("/api/auth/me");
-      const userData = await userRes.json();
-      if (userData.success) {
-        const u = userData.data.employee || userData.data;
-        setCurrentUser(u);
-      }
-
-      // Fetch floor data
-      const floorRes = await employeeFetch("/api/sales/floor");
-      const floorData = await floorRes.json();
-      if (floorData.success) {
-        setFloorData(floorData.data);
-      }
-
-      // Fetch eligible employees for transfer
-      const empRes = await employeeFetch("/api/sales/employees");
-      const empData = await empRes.json();
-      if (empData.success) {
-        setActiveEmployees(empData.data);
-      }
-    } catch (err) {
-      toast.error("Failed to load floor data");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
   // Helper: get the current employee's MongoDB _id as a string for reliable comparison
   const currentUserId = currentUser?._id?.toString() || currentUser?.id?.toString() || null;
 
   const handleTableClick = (table) => {
     const session = floorData.sessions.find(s => s.tableId === table.id?.toString());
-    const isAdmin = currentUser?.role === 'Admin' || currentUser?.role === 'Super Admin';
+    const isAdmin = isSalesAdminRole(currentUser?.role);
     // Reliable comparison: session owner uses MongoDB _id
     const isMineSession = session && (
       session.assignedEmployeeId === currentUserId
@@ -217,7 +215,7 @@ export default function SalesFloorPage() {
         loadData();
       } else {
         if (json.message && json.message.includes("Cannot release table with unpaid")) {
-          if (currentUser && ["Admin", "Super Admin", "Manager"].includes(currentUser.role)) {
+          if (isSalesAdminRole(currentUser?.role) || currentUser?.role === "Manager") {
             setShowAdminOverride(true);
           } else {
             toast.error("Cannot release table with unpaid orders.");
@@ -705,7 +703,7 @@ export default function SalesFloorPage() {
                   </p>
                 </div>
 
-                {(currentUser?.role === 'Admin' || currentUser?.role === 'Super Admin') && (
+                {isSalesAdminRole(currentUser?.role) && (
                   <Button
                     variant="outline"
                     className="h-12 mt-4 font-bold text-zinc-700 border-2 border-zinc-200 w-full"

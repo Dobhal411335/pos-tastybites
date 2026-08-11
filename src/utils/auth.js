@@ -52,9 +52,14 @@ export const withAuth = (handler, allowedRoles = []) => {
       }
 
       // Attach context to request object (simulated via custom properties on NextRequest)
-      request.user = { id: payload.userId || payload.employeeId };
+      request.user = {
+        id: payload.userId || payload.employeeId,
+        role: payload.role,
+      };
       request.restaurant = payload.restaurantId;
       request.role = payload.role;
+      request.tokenType = payload.type;
+      request.employeeId = payload.employeeId;
 
       // Run the handler inside the Tenant Context (AsyncLocalStorage)
       return runWithTenant(payload.restaurantId, () => handler(request, context));

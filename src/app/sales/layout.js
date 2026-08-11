@@ -14,20 +14,24 @@ import NotificationSoundPrompt from "@/components/common/NotificationSoundPrompt
 export default function SalesMainLayout({ children }) {
   const router = useRouter();
   const pathname = usePathname();
+  const isLoginPage = pathname === "/sales/login" || pathname === "/login";
   const [employeeUser, setEmployeeUser] = useState(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!isLoginPage);
 
-  useEmployeeSessionRefresh({ enabled: !loading && Boolean(employeeUser) });
+  useEmployeeSessionRefresh({ enabled: !isLoginPage && !loading && Boolean(employeeUser) });
 
   useEffect(() => {
+    if (isLoginPage) return;
+
     const verifyAuth = async () => {
       try {
         const res = await employeeFetch("/api/auth/me");
         if (!res.ok) throw new Error("Unauthorized");
         const data = await res.json();
-        if (data.success && data.data) {
-          setEmployeeUser(data.data);
+        const user = data.data?.employee || data.data;
+        if (data.success && user) {
+          setEmployeeUser(user);
         } else {
           throw new Error("Unauthorized");
         }
@@ -38,7 +42,11 @@ export default function SalesMainLayout({ children }) {
       }
     };
     verifyAuth();
-  }, [router, pathname]);
+  }, [router, pathname, isLoginPage]);
+
+  if (isLoginPage) {
+    return children;
+  }
 
   if (loading) {
     return (

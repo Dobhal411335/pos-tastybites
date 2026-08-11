@@ -57,10 +57,22 @@ export class AuthService {
     return { token, user: { id: employee._id.toString(), email: employee.email, role: employee.role } };
   }
 
-  async getCurrentUser(userId, role) {
-    if (role === 'ADMIN' || role === 'Super Admin' || role === 'Admin') {
-      return await this.authRepo.findAdminById(userId);
+  async getCurrentUser(userId, role, options = {}) {
+    const { tokenType, employeeId } = options;
+
+    // Sales clock-in JWT (employee_access_token) — role can be "Admin"
+    // but the record lives in the Employee collection, not POS Admin.
+    if (tokenType === 'access' || employeeId) {
+      return await this.authRepo.findEmployeeById(userId);
     }
+
+    const isPosAdminRole = role === 'ADMIN' || role === 'Super Admin' || role === 'Admin';
+    if (isPosAdminRole) {
+      const admin = await this.authRepo.findAdminById(userId);
+      if (admin) return admin;
+      return await this.authRepo.findEmployeeById(userId);
+    }
+
     return await this.authRepo.findEmployeeById(userId);
   }
 

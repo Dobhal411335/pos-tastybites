@@ -57,14 +57,14 @@ export default function EmployeeTopNav({ onMenuToggle, employeeName = "Employee"
       <div className="flex lg:h-14 xl:h-15 items-center gap-3 px-3 sm:px-5">
         {/* LEFT — brand */}
         <div className="flex items-center gap-2.5 min-w-0 shrink-0">
-          <Button
+          {/* <Button
             variant="ghost"
             size="icon"
             className="md:hidden h-10 w-10"
             onClick={onMenuToggle}
           >
             <Menu className="h-5 w-5" />
-          </Button>
+          </Button> */}
 
           <Link href="/sales/floor" className="flex items-center gap-2.5 min-w-0">
             <Image

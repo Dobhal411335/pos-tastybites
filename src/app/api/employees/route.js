@@ -432,7 +432,7 @@ export const PUT = withAuth(async (request) => {
       const restaurantModel = mongoose.model('Restaurant');
       const restaurant = await restaurantModel.findById(request.restaurant);
       const restaurantName = restaurant ? restaurant.name : "";
-      const loginUrl = process.env.NEXT_PUBLIC_BASE_URL ? `${process.env.NEXT_PUBLIC_BASE_URL}/login` : "https://pos.tastybitesrestaurant.com/login";
+      const loginUrl = "https://sales.tastybitesrestaurant.com/login";
 
       let activationCode = null;
       if (existing.assignedDevice) {
@@ -504,7 +504,7 @@ export const PUT = withAuth(async (request) => {
       const restaurantModel = mongoose.model('Restaurant');
       const restaurant = await restaurantModel.findById(request.restaurant);
       const restaurantName = restaurant ? restaurant.name : "";
-      const loginUrl = process.env.NEXT_PUBLIC_BASE_URL ? `${process.env.NEXT_PUBLIC_BASE_URL}/login` : "https://pos.tastybitesrestaurant.com/login";
+      const loginUrl = "https://sales.tastybitesrestaurant.com/login";
 
       try {
         await sendEmployeeCredentials({

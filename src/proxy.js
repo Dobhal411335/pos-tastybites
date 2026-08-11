@@ -24,7 +24,7 @@ export async function proxy(request) {
   // We are renaming employee to sales
   const isAdminPage = pathname.startsWith('/admin');
   const isSalesPage = pathname.startsWith('/sales');
-  const isAuthPage = pathname === '/login';
+  const isAuthPage = pathname === '/login' || pathname === '/sales/login';
 
   let adminPayload = null;
   if (adminToken) {
@@ -69,12 +69,13 @@ export async function proxy(request) {
   if (
     !pathname.startsWith('/api') &&
     !pathname.startsWith('/_next') &&
-    pathname !== '/login' &&
     !isStaticAsset
   ) {
-    if (isPos && !isAdminPage && !isSalesPage) {
+    if (isSales && pathname === '/login') {
+      targetPath = '/sales/login';
+    } else if (pathname !== '/login' && isPos && !isAdminPage && !isSalesPage) {
       targetPath = `/admin${pathname === '/' ? '/dashboard' : pathname}`;
-    } else if (isSales && !isSalesPage && !isAdminPage) {
+    } else if (pathname !== '/login' && isSales && !isSalesPage && !isAdminPage) {
       targetPath = `/sales${pathname === '/' ? '/floor' : pathname}`;
     }
   }
@@ -92,7 +93,7 @@ export async function proxy(request) {
         ? NextResponse.rewrite(new URL(targetPath, request.url), { request: { headers: requestHeaders } })
         : NextResponse.next({ request: { headers: requestHeaders } });
     }
-  } else if (isTargetSales) {
+  } else if (isTargetSales && targetPath !== '/sales/login') {
     if (!employeePayload && !adminPayload && !employeeRefreshValid) {
       response = NextResponse.redirect(new URL('/login', request.url));
     } else {
@@ -100,7 +101,7 @@ export async function proxy(request) {
         ? NextResponse.rewrite(new URL(targetPath, request.url), { request: { headers: requestHeaders } })
         : NextResponse.next({ request: { headers: requestHeaders } });
     }
-  } else if (isAuthPage) {
+  } else if (isAuthPage || targetPath === '/sales/login') {
     if (isSales && (adminPayload || employeePayload)) {
       response = NextResponse.redirect(new URL('/floor', request.url));
     } else if (isPos && adminPayload) {
@@ -110,7 +111,9 @@ export async function proxy(request) {
     } else if (employeePayload || employeeRefreshValid) {
       response = NextResponse.redirect(new URL('/sales/floor', request.url));
     } else {
-      response = NextResponse.next({ request: { headers: requestHeaders } });
+      response = targetPath !== pathname
+        ? NextResponse.rewrite(new URL(targetPath, request.url), { request: { headers: requestHeaders } })
+        : NextResponse.next({ request: { headers: requestHeaders } });
     }
   } else {
     response = targetPath !== pathname 

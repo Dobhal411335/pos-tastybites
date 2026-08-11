@@ -37,9 +37,11 @@ export function withSalesOrDeviceAuth(handler, allowedRoles = []) {
             }
           }
 
-          request.user = { id: payload.userId || payload.employeeId };
+          request.user = { id: payload.userId || payload.employeeId, role: payload.role };
           request.restaurant = payload.restaurantId;
           request.role = payload.role;
+          request.tokenType = payload.type;
+          request.employeeId = payload.employeeId;
           request.authSource = 'user';
 
           return runWithTenant(payload.restaurantId, () => handler(request, context));

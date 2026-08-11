@@ -12,7 +12,7 @@ export const GET = withAuth(async (request) => {
       restaurant: request.restaurant,           // ← correct field name (was restaurantId)
       isActive: true,
       status: { $in: ["Active", "Approved"] },  // ← correct field (Employee has no isVerified)
-      role: { $in: ["Server", "Bartender", "Manager", "Wait Staff", "Staff", "Employee"] }
+      role: { $in: ["Server", "Bartender", "Manager", "Wait Staff", "Staff", "Employee", "Admin", "Super Admin"] }
     })
       .select("_id firstName lastName role employeeColor")
       .lean();

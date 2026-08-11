@@ -8,6 +8,12 @@ import { sendError } from "@/utils/errorHandler";
 import { logger } from "@/utils/logger";
 import { v4 as uuidv4 } from "uuid";
 import { createNotification } from "@/lib/notifications/notificationService";
+import { isSalesAdminRole } from "@/utils/roles";
+
+function actorTypeFromRequest(request) {
+  const role = request.role || request.user?.role;
+  return isSalesAdminRole(role) || role === "Manager" ? "Admin" : "Employee";
+}
 
 // GET - List active sessions for a floor, or get a specific session
 export const GET = withAuth(async (request) => {
@@ -108,7 +114,7 @@ export const POST = withAuth(async (request) => {
     await OperationalAuditLog.create({
       restaurantId: request.restaurant,
       actorId: request.user.id,
-      actorType: request.user.role === 'Admin' || request.user.role === 'Super Admin' || request.user.role === 'Manager' ? 'Admin' : 'Employee',
+      actorType: actorTypeFromRequest(request),
       actorName: request.user.name || request.user.firstName,
       action: 'TABLE_ASSIGNED',
       floorId: table.floor,
@@ -170,7 +176,7 @@ export const PUT = withAuth(async (request) => {
       await OperationalAuditLog.create({
         restaurantId: request.restaurant,
         actorId: request.user.id,
-        actorType: request.user.role === 'Admin' || request.user.role === 'Super Admin' || request.user.role === 'Manager' ? 'Admin' : 'Employee',
+        actorType: actorTypeFromRequest(request),
         actorName: request.user.name || request.user.firstName,
         action: 'GUEST_COUNT_CHANGED',
         floorId: session.floor,
@@ -197,7 +203,7 @@ export const PUT = withAuth(async (request) => {
       });
 
       if (unpaidOrdersCount > 0) {
-        if (adminOverride && (request.user.role === "Admin" || request.user.role === "Super Admin" || request.user.role === "Manager")) {
+        if (adminOverride && (isSalesAdminRole(request.role || request.user?.role) || request.role === "Manager" || request.user?.role === "Manager")) {
           logger.info(`Admin ${request.user.id} forced release of session ${session.sessionId} with unpaid orders. Reason: ${releaseReason}`);
           session.notes = session.notes ? session.notes + ` | Admin Override Release: ${releaseReason}` : `Admin Override Release: ${releaseReason}`;
         } else {
@@ -219,7 +225,7 @@ export const PUT = withAuth(async (request) => {
       await OperationalAuditLog.create({
         restaurantId: request.restaurant,
         actorId: request.user.id,
-        actorType: request.user.role === 'Admin' || request.user.role === 'Super Admin' || request.user.role === 'Manager' ? 'Admin' : 'Employee',
+        actorType: actorTypeFromRequest(request),
         actorName: request.user.name || request.user.firstName,
         action: 'TABLE_RELEASED',
         floorId: session.floor,
@@ -287,7 +293,7 @@ export const PUT = withAuth(async (request) => {
       await OperationalAuditLog.create({
         restaurantId: request.restaurant,
         actorId: request.user.id,
-        actorType: request.user.role === 'Admin' || request.user.role === 'Super Admin' || request.user.role === 'Manager' ? 'Admin' : 'Employee',
+        actorType: actorTypeFromRequest(request),
         actorName: request.user.name || request.user.firstName,
         action: 'TABLE_TRANSFERRED',
         floorId: session.floor,
@@ -329,7 +335,7 @@ export const PUT = withAuth(async (request) => {
       await OperationalAuditLog.create({
         restaurantId: request.restaurant,
         actorId: request.user.id,
-        actorType: request.user.role === 'Admin' || request.user.role === 'Super Admin' || request.user.role === 'Manager' ? 'Admin' : 'Employee',
+        actorType: actorTypeFromRequest(request),
         actorName: request.user.name || request.user.firstName,
         action: 'TABLE_RECONFIGURED',
         floorId: session.floor,
