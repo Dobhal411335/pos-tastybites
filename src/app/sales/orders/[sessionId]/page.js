@@ -129,6 +129,7 @@ export default function OrderPage() {
   const [heads, setHeads] = useState([{ _id: "all", name: "All" }]);
   const [productHeads, setProductHeads] = useState([]);
   const [activeHead, setActiveHead] = useState("All");
+  const [offers, setOffers] = useState([]);
   const [isClearOrderModalOpen, setIsClearOrderModalOpen] = useState(false);
 
   const headIconMap = {
@@ -146,25 +147,44 @@ export default function OrderPage() {
   const getHeadIcon = (headName) => {
     if (headName === "All")
       return <LayoutGrid className="w-6 h-6 mb-1" strokeWidth={1.5} />;
+    if (headName === "Offer")
+      return <Tag className="w-6 h-6 mb-1" strokeWidth={1.5} />;
     const Icon = headIconMap[headName] || Utensils;
     return <Icon className="w-6 h-6 mb-1" strokeWidth={1.5} />;
+  };
+
+  const isOfferActive = (offer) => {
+    if (!offer || offer.status === false) return false;
+    // Validity window checked when adding; list shows status=true offers
+    return true;
+  };
+
+  const isOfferInDateRange = (offer) => {
+    if (!offer) return false;
+    const now = Date.now();
+    if (offer.validFrom && new Date(offer.validFrom).getTime() > now) return false;
+    if (offer.validTo && new Date(offer.validTo).getTime() < now) return false;
+    return true;
   };
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [catRes, prodRes, taxRes, headRes, phRes] = await Promise.all([
-          fetch("/api/menu/categories"),
-          fetch("/api/menu/products"),
-          fetch("/api/tax"),
-          fetch("/api/menu/heads"),
-          fetch("/api/menu/product-heads"),
-        ]);
+        const [catRes, prodRes, taxRes, headRes, phRes, offerRes] =
+          await Promise.all([
+            fetch("/api/menu/categories"),
+            fetch("/api/menu/products"),
+            fetch("/api/tax"),
+            fetch("/api/menu/heads"),
+            fetch("/api/menu/product-heads"),
+            fetch("/api/menu/offers"),
+          ]);
         const catJson = await catRes.json();
         const prodJson = await prodRes.json();
         const taxJson = await taxRes.json();
         const headJson = await headRes.json();
         const phJson = await phRes.json();
+        const offerJson = await offerRes.json();
 
         if (catJson.success) {
           const cats = catJson.data.map((c) => c.name);
@@ -177,10 +197,25 @@ export default function OrderPage() {
           setGlobalTaxes(taxJson.data.filter((t) => t.status === "Active"));
         }
         if (headJson.success) {
-          setHeads([{ _id: "all", name: "All" }, ...headJson.data]);
+          const menuHeads = (headJson.data || []).filter(
+            (h) => String(h.name).toLowerCase() !== "offer",
+          );
+          setHeads([
+            { _id: "all", name: "All" },
+            ...menuHeads,
+            { _id: "offer", name: "Offer" },
+          ]);
+        } else {
+          setHeads([
+            { _id: "all", name: "All" },
+            { _id: "offer", name: "Offer" },
+          ]);
         }
         if (phJson.success) {
           setProductHeads(phJson.data);
+        }
+        if (offerJson.success) {
+          setOffers(Array.isArray(offerJson.data) ? offerJson.data : []);
         }
 
         // Fetch session and existing order data if not "new"
@@ -335,6 +370,7 @@ export default function OrderPage() {
   }, [socket, fetchOrderOnly]);
 
   const filteredProducts = menuItems.filter((p) => {
+    if (activeHead === "Offer") return false;
     let matchesHead = true;
     if (viewMode === "grid" && activeHead !== "All") {
       const ph = productHeads.find((h) => h.head?.name === activeHead);
@@ -354,6 +390,26 @@ export default function OrderPage() {
       .includes(searchQuery.toLowerCase());
     return matchesHead && matchesCat && matchesSearch;
   });
+
+  const filteredOffers = offers.filter((offer) => {
+    if (!isOfferActive(offer)) return false;
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase();
+    return (
+      offer.name?.toLowerCase().includes(q) ||
+      offer.description?.toLowerCase().includes(q)
+    );
+  });
+
+  const calculateOfferTax = (offer, basePrice) => {
+    const price = Number(basePrice) || 0;
+    if (offer?.taxData) {
+      const pct = Number(offer.taxData.totalPercentage) || 0;
+      const fixed = Number(offer.taxData.totalFixed) || 0;
+      return (price * pct) / 100 + fixed;
+    }
+    return calculateItemTax(offer, price);
+  };
 
   const calculateItemTax = (item, basePrice) => {
     let taxesToUse =
@@ -485,6 +541,58 @@ export default function OrderPage() {
         },
       ];
     });
+  };
+
+  const addOfferToCart = (offer) => {
+    if (!isOfferInDateRange(offer)) {
+      toast.error("This offer is not valid today");
+      return;
+    }
+    const price = Number(offer.price) || 0;
+    const itemTax = calculateOfferTax(offer, price);
+    const extras = [];
+    if (offer.inclusions?.length) {
+      extras.push(`Includes: ${offer.inclusions.join(", ")}`);
+    }
+    if (offer.choices?.length) {
+      extras.push(`Choices: ${offer.choices.join(", ")}`);
+    }
+    if (offer.drinks?.length) {
+      extras.push(`Drinks: ${offer.drinks.join(", ")}`);
+    }
+
+    setCart((prev) => {
+      const existing = prev.find(
+        (item) => item.id === offer._id && item.category === "Offer",
+      );
+      if (existing) {
+        return prev.map((item) =>
+          item.id === offer._id && item.category === "Offer"
+            ? { ...item, qty: item.qty + 1 }
+            : item,
+        );
+      }
+      return [
+        ...prev,
+        {
+          id: offer._id,
+          name: offer.name,
+          productCode: "",
+          category: "Offer",
+          price,
+          tax: itemTax,
+          qty: 1,
+          size: "Standard",
+          sizes: [],
+          preparationStyle: null,
+          options: extras,
+          modifier: extras.length ? extras.join(" • ") : null,
+          cartId: Date.now(),
+          isOffer: true,
+        },
+      ];
+    });
+    toast.success(`${offer.name} added`);
   };
 
   const addModifiedItemToCart = () => {
@@ -1064,7 +1172,82 @@ export default function OrderPage() {
 
           <div className="flex-1 bg-zinc-50/50 overflow-y-auto custom-scrollbar">
             <div className="flex flex-col p-4 gap-3">
-              {filteredProducts.map((product) => {
+              {activeHead === "Offer" ? (
+                filteredOffers.length === 0 ? (
+                  <p className="text-sm text-zinc-500 text-center py-10">
+                    No active offers available.
+                  </p>
+                ) : (
+                  filteredOffers.map((offer) => {
+                    const basePrice = Number(offer.price) || 0;
+                    const taxAmount = calculateOfferTax(offer, basePrice);
+                    const detailBits = [
+                      ...(offer.inclusions || []).slice(0, 2),
+                      ...(offer.choices || []).slice(0, 1),
+                    ].filter(Boolean);
+
+                    return (
+                      <div
+                        key={offer._id}
+                        className="flex flex-col sm:flex-row items-stretch bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden transition-all hover:shadow-md min-h-[76px]"
+                      >
+                        <div className="flex-1 flex flex-col justify-center px-4 py-3 border-b sm:border-b-0 sm:border-r border-zinc-200">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-[10px] font-bold text-violet-700 bg-violet-50 border border-violet-100 rounded px-1.5 py-0.5 shrink-0">
+                              OFFER
+                            </span>
+                            <span className="font-bold text-zinc-900 text-xs md:text-sm">
+                              {offer.name}
+                            </span>
+                          </div>
+                          <div className="flex flex-col gap-0.5">
+                            {offer.description ? (
+                              <span className="text-xs font-medium text-zinc-500 line-clamp-2">
+                                {offer.description}
+                              </span>
+                            ) : null}
+                            {detailBits.length > 0 ? (
+                              <span className="text-xs font-semibold text-zinc-400 truncate">
+                                {detailBits.join(" · ")}
+                              </span>
+                            ) : (
+                              <span className="text-xs font-semibold text-zinc-500">
+                                Offer
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center">
+                          <div className="w-20 flex flex-col items-center justify-center px-3 py-2 border-r border-zinc-200 h-full">
+                            <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+                              Price
+                            </span>
+                            <span className="text-sm font-black text-zinc-900">
+                              ${basePrice.toFixed(2)}
+                            </span>
+                            {taxAmount > 0 ? (
+                              <span className="text-[10px] text-zinc-400">
+                                +${taxAmount.toFixed(2)} tax
+                              </span>
+                            ) : null}
+                          </div>
+                        </div>
+
+                        <div className="w-full sm:w-32 shrink-0 p-2 flex items-center justify-center">
+                          <Button
+                            className="w-full h-full min-h-[44px] bg-orange-500 hover:bg-orange-600 text-white font-bold text-sm rounded-lg shadow-sm transition-colors"
+                            onClick={() => addOfferToCart(offer)}
+                          >
+                            Add
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })
+                )
+              ) : (
+                filteredProducts.map((product) => {
                 const hasOptions = productNeedsOptions(product);
                 const isAvailable = product.inStock !== false;
                 const basePrice =
@@ -1129,7 +1312,8 @@ export default function OrderPage() {
                     </div>
                   </div>
                 );
-              })}
+              })
+              )}
             </div>
           </div>
         </div>

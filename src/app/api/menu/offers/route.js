@@ -5,7 +5,7 @@ import { sendError } from "@/utils/errorHandler";
 import { logger } from "@/utils/logger";
 import Tax from "@/models/tax/Tax";
 
-// GET - List all offers for the restaurant
+// GET - List all offers for the restaurant (POS + admin)
 export const GET = withAuth(async (request) => {
   try {
     const offers = await Offer.find({ restaurant: request.restaurant })
@@ -16,7 +16,7 @@ export const GET = withAuth(async (request) => {
     logger.error("Failed to list offers", error);
     return sendError(error, "Failed to retrieve offers", 500);
   }
-}, ["ADMIN", "MANAGER"]);
+}); // any authenticated restaurant user (same as products/heads)
 
 // POST - Create a new promotional offer
 export const POST = withAuth(async (request) => {
