@@ -29,6 +29,16 @@ const OrderSchema = new mongoose.Schema(
     giftcardUsedAmount: { type: Number, default: 0 },
     totalAmount: { type: Number, required: true },
     tipAmount: { type: Number, default: 0 },
+    cashAmount: { type: Number, default: null },
+    cardAmount: { type: Number, default: null },
+    taxBreakdown: [
+      {
+        taxId: { type: mongoose.Schema.Types.ObjectId, ref: 'Tax' },
+        name: { type: String },
+        rate: { type: Number, default: 0 },
+        amount: { type: Number, default: 0 },
+      },
+    ],
     specialNote: { type: String },
     guestName: { type: String }, // legacy; kept in sync with partyName
     partyName: { type: String }, // customer / party name for the bill

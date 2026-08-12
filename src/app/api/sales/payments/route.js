@@ -9,6 +9,9 @@ import { sendError } from "@/utils/errorHandler";
 import { logger } from "@/utils/logger";
 import { createReceiptPrintJob } from "@/lib/printing/printJobService";
 import { createNotification } from "@/lib/notifications/notificationService";
+import { buildTaxBreakdownForOrder } from "@/lib/eod/buildTaxBreakdown";
+
+const r2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 
 // POST - Process a payment for an order
 export const POST = withAuth(async (request) => {
@@ -28,6 +31,8 @@ export const POST = withAuth(async (request) => {
       guestName,
       partyName,
       guestCount,
+      cashAmount,
+      cardAmount,
     } = data;
 
     if (!orderId) {
@@ -92,6 +97,50 @@ export const POST = withAuth(async (request) => {
     // Save tip if provided
     if (tipAmount && tipAmount > 0) {
       order.tipAmount = Math.round(Number(tipAmount) * 100) / 100;
+    }
+
+    // Persist tender split amounts when provided by POS
+    if (cashAmount !== undefined && cashAmount !== null && cashAmount !== "") {
+      const n = Number(cashAmount);
+      if (Number.isFinite(n)) order.cashAmount = r2(n);
+    }
+    if (cardAmount !== undefined && cardAmount !== null && cardAmount !== "") {
+      const n = Number(cardAmount);
+      if (Number.isFinite(n)) order.cardAmount = r2(n);
+    }
+
+    // Infer tenders from method when UI did not send split amounts
+    if (
+      (order.cashAmount == null || order.cashAmount === undefined) &&
+      (order.cardAmount == null || order.cardAmount === undefined)
+    ) {
+      const due = r2(order.totalAmount);
+      const tip = r2(order.tipAmount);
+      const gc = r2(order.giftcardUsedAmount);
+      const methodStr = String(order.paymentMethod || methodLabel || "");
+      const isCashOnly = /^cash$/i.test(methodStr.trim());
+      const isGiftOnly = /gift\s*card/i.test(methodStr) && !/card\s*-/i.test(methodStr);
+      if (isCashOnly) {
+        order.cashAmount = r2(due + tip - gc);
+        order.cardAmount = 0;
+      } else if (isGiftOnly || gc >= due) {
+        order.cashAmount = 0;
+        order.cardAmount = 0;
+      } else if (/cash/i.test(methodStr) && /card/i.test(methodStr)) {
+        // Split without amounts: leave nulls so EOD can fall back to method string
+      } else if (/card/i.test(methodStr) || /visa|master|debit|credit/i.test(methodStr)) {
+        order.cardAmount = r2(due + tip - gc);
+        order.cashAmount = 0;
+      }
+    }
+
+    try {
+      order.taxBreakdown = await buildTaxBreakdownForOrder(
+        order,
+        order.restaurantId || request.restaurant
+      );
+    } catch (taxErr) {
+      logger.error("Failed to build taxBreakdown at payment", taxErr);
     }
 
     await order.save();

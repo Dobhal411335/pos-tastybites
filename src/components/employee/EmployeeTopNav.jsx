@@ -3,7 +3,7 @@
 import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LogOut, Menu, Grid2X2, ShoppingBag, Printer, BellRing, Store, Loader2 } from "lucide-react";
+import { LogOut, Menu, Grid2X2, ShoppingBag, Printer, BellRing, Store, Loader2, FileBarChart2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import DateTimeDisplay from "@/components/common/DateTimeDisplay";
@@ -26,6 +26,7 @@ const NAV_ITEMS = [
   { label: "Floor", href: "/sales/floor", icon: Grid2X2 },
   { label: "Orders", href: "/sales/today", icon: ShoppingBag },
   { label: "Print Jobs", href: "/sales/print-jobs", icon: Printer },
+  { label: "EOD", href: "/sales/reports/end-of-day", icon: FileBarChart2 },
   { label: "Notifications", href: "/sales/notifications", icon: BellRing },
 ];
 
@@ -154,7 +155,7 @@ export default function EmployeeTopNav({ onMenuToggle, employeeName = "Employee"
 
               <button
                 type="button"
-                className="flex items-center gap-2.5 rounded-xl border border-stone-500 bg-white px-2.5 py-1.5 hover:bg-stone-50 transition-colors max-w-[200px]"
+                className="flex items-center gap-2.5 rounded-xl border border-stone-500 bg-white px-2.5 py-1.5 hover:bg-stone-50 transition-colors max-w-50"
               >
                 <div className="relative shrink-0">
                   <div className="flex h-9 w-9 items-center justify-center rounded-full bg-linear-to-br from-orange-500 to-orange-600 text-white text-sm font-bold">
