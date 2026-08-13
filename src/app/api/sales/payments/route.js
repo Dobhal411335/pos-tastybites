@@ -23,6 +23,7 @@ export const POST = withAuth(async (request) => {
       method,
       sessionId,
       tipAmount,
+      tipMethod,
       cardType,
       giftCardCode,
       splitAmount,
@@ -119,6 +120,23 @@ export const POST = withAuth(async (request) => {
     // Save tip if provided
     if (tipAmount && tipAmount > 0) {
       order.tipAmount = Math.round(Number(tipAmount) * 100) / 100;
+      if (tipMethod) {
+        order.tipMethod = String(tipMethod).trim();
+      } else {
+        // Infer tip tender from payment method when UI did not send tipMethod
+        const methodStr = String(order.paymentMethod || method || "");
+        if (/gift\s*card/i.test(methodStr) && !/cash|card\s*-/i.test(methodStr)) {
+          order.tipMethod = "Gift Card";
+        } else if (/cash/i.test(methodStr) && !/card/i.test(methodStr)) {
+          order.tipMethod = "Cash";
+        } else if (/card/i.test(methodStr) && !/cash/i.test(methodStr)) {
+          order.tipMethod = "Card";
+        } else if (/cash/i.test(methodStr)) {
+          order.tipMethod = "Cash";
+        } else if (/card/i.test(methodStr)) {
+          order.tipMethod = "Card";
+        }
+      }
     }
 
     // Persist tender split amounts when provided by POS

@@ -161,6 +161,8 @@ export default function TodayOrderPaymentModal({
       ? round2(cashPayAmount - effectiveCashDue)
       : 0;
   const autoTip = round2(cardOverpay || cashOverpay || 0);
+  const tipMethod =
+    cashOverpay > 0 ? "Cash" : cardOverpay > 0 ? "Card" : null;
 
   const selectPaymentMethod = (method) => {
     setLockedCardAmount(0);
@@ -408,6 +410,7 @@ export default function TodayOrderPaymentModal({
         method: resolvedPaymentMethod,
         sessionId: resolvedSessionId || undefined,
         tipAmount: tip,
+        tipMethod: tip > 0 ? tipMethod : null,
         discountTotal: discountAmount,
         discountCode: appliedDiscount ? appliedDiscount.code : null,
         guestName: partyName,
@@ -459,6 +462,7 @@ export default function TodayOrderPaymentModal({
           paymentStatus: "PAID",
           paymentMethod: paidOrder.paymentMethod || resolvedPaymentMethod,
           tipAmount: paidOrder.tipAmount ?? tip,
+          tipMethod: paidOrder.tipMethod ?? (tip > 0 ? tipMethod : null),
           discountTotal: paidOrder.discountTotal ?? discountAmount,
           discountCode:
             paidOrder.discountCode ??
@@ -887,7 +891,7 @@ export default function TodayOrderPaymentModal({
                             </div>
 
                             {cardOverpay > 0 && (
-                              <OverpayTip overpay={cardOverpay} />
+                              <OverpayTip overpay={cardOverpay} method="Card" />
                             )}
 
                             {cashSplitAmount > 0 && (
@@ -991,7 +995,7 @@ export default function TodayOrderPaymentModal({
                         </div>
 
                         {cashOverpay > 0 && (
-                          <OverpayTip overpay={cashOverpay} />
+                          <OverpayTip overpay={cashOverpay} method="Cash" />
                         )}
 
                         {cardSplitFromCash > 0 && (
@@ -1450,10 +1454,12 @@ function CardTypePicker({ selectedCardType, setSelectedCardType }) {
   );
 }
 
-function OverpayTip({ overpay }) {
+function OverpayTip({ overpay, method = "Cash" }) {
   return (
     <div className="flex items-center justify-between gap-3 p-3 bg-orange-50 border border-orange-200 rounded-xl">
-      <span className="text-sm font-bold text-orange-900">Tip</span>
+      <span className="text-sm font-bold text-orange-900">
+        Tip ({method})
+      </span>
       <span className="text-base font-black text-orange-600">
         ${Number(overpay || 0).toFixed(2)}
       </span>

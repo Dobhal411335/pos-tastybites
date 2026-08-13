@@ -36,6 +36,7 @@ const CustomerReceipt = ({
     giftcardUsedAmount = 0,
     totalAmount = 0,
     tipAmount = 0,
+    tipMethod,
     paymentMethod,
     cashAmount,
     cardAmount,
@@ -72,6 +73,23 @@ const CustomerReceipt = ({
   const cardLabel = cardLabelMatch
     ? `Card (${cardLabelMatch[1].trim()})`
     : "Card";
+
+  const tipLabel = (() => {
+    if (!(tip > 0)) return "Tip";
+    const raw = String(tipMethod || "").trim();
+    if (/gift/i.test(raw)) return "Tip (Gift Card)";
+    if (/cash/i.test(raw)) return "Tip (Cash)";
+    if (/card/i.test(raw)) return "Tip (Card)";
+    // Fallback from payment method when tipMethod missing on older orders
+    if (/gift\s*card/i.test(methodStr) && !/cash|card\s*-/i.test(methodStr)) {
+      return "Tip (Gift Card)";
+    }
+    if (/cash/i.test(methodStr) && !/card/i.test(methodStr)) return "Tip (Cash)";
+    if (/card/i.test(methodStr) && !/cash/i.test(methodStr)) return "Tip (Card)";
+    if (/cash/i.test(methodStr)) return "Tip (Cash)";
+    if (/card/i.test(methodStr)) return "Tip (Card)";
+    return "Tip";
+  })();
 
   const hasPaymentSplit =
     giftUsed > 0 || cash > 0 || card > 0 || Boolean(paymentMethod);
@@ -162,7 +180,7 @@ const CustomerReceipt = ({
           />
         )}
         {hstAmount > 0 && <Row label="HST" value={money(hstAmount)} muted />}
-        {tip > 0 && <Row label="Tip" value={money(tip)} muted />}
+        {tip > 0 && <Row label={tipLabel} value={money(tip)} muted />}
       </div>
 
       {hasPaymentSplit && (
