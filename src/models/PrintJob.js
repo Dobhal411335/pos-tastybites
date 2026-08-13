@@ -16,12 +16,12 @@ const PrintJobSchema = new mongoose.Schema(
     },
     printType: {
       type: String,
-      enum: ["RECEIPT", "KOT"],
+      enum: ["RECEIPT", "KOT", "BAR_RECEIPT"],
       required: true,
     },
     printerTarget: {
       type: String,
-      enum: ["RECEIPT", "KITCHEN"],
+      enum: ["RECEIPT", "KITCHEN", "COUNTER"],
       required: true,
     },
     status: {
@@ -45,6 +45,7 @@ const PrintJobSchema = new mongoose.Schema(
     /**
      * Lightweight job-specific data only (not a full order dump).
      * KOT: { kotItems, specialNote, guestCount, tableNo, serverName, restaurantName }
+     * BAR_RECEIPT: { kotItems/barItems, specialNote, guestCount, tableNo, serverName, restaurantName }
      * RECEIPT: { guestCount, tableNo, serverName } — totals come from Order
      */
     metadata: {

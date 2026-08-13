@@ -4,11 +4,18 @@ import { Button } from '@/components/ui/button';
 import { Printer } from 'lucide-react';
 import CustomerReceipt from './CustomerReceipt';
 import KitchenOrderTicket from './KitchenOrderTicket';
+import BarReceipt from './BarReceipt';
+
+const PREVIEW_TITLES = {
+  customer: 'Customer Receipt Preview',
+  kot: 'Kitchen Order Ticket (KOT)',
+  bar: 'Bar Receipt',
+};
 
 const PrintPreviewModal = ({ 
   isOpen, 
   onClose, 
-  printType, // 'customer' or 'kot'
+  printType, // 'customer' | 'kot' | 'bar'
   order, 
   kotItems = [], 
   taxBreakdown = [],
@@ -30,7 +37,7 @@ const PrintPreviewModal = ({
           <DialogHeader className="p-4 border-b bg-white shrink-0">
             <DialogTitle className="text-xl font-bold flex items-center gap-2">
               <Printer className="w-5 h-5" />
-              {printType === 'customer' ? 'Customer Receipt Preview' : 'Kitchen Order Ticket (KOT)'}
+              {PREVIEW_TITLES[printType] || 'Print Preview'}
             </DialogTitle>
           </DialogHeader>
 
@@ -50,6 +57,16 @@ const PrintPreviewModal = ({
                 <KitchenOrderTicket 
                   order={order} 
                   kotItems={kotItems}
+                  restaurantName={restaurantDetails?.name}
+                  serverName={serverName}
+                  guestCount={guestCount}
+                  specialNote={specialNote}
+                />
+              )}
+              {printType === 'bar' && (
+                <BarReceipt
+                  order={order}
+                  barItems={kotItems}
                   restaurantName={restaurantDetails?.name}
                   serverName={serverName}
                   guestCount={guestCount}
@@ -86,6 +103,16 @@ const PrintPreviewModal = ({
           <KitchenOrderTicket 
             order={order} 
             kotItems={kotItems}
+            restaurantName={restaurantDetails?.name}
+            serverName={serverName}
+            guestCount={guestCount}
+            specialNote={specialNote}
+          />
+        )}
+        {printType === 'bar' && (
+          <BarReceipt
+            order={order}
+            barItems={kotItems}
             restaurantName={restaurantDetails?.name}
             serverName={serverName}
             guestCount={guestCount}

@@ -363,187 +363,163 @@ export default function SalesFloorPage() {
               {activeOrderCount > 0 ? ` • ${activeOrderCount} with orders` : ""}
             </p>
           </div>
-          <div className="flex flex-wrap items-center justify-end gap-3">
-            <div className="flex items-center gap-1 bg-stone-50 border border-stone-200 rounded-lg p-1">
+
+          {/* Online staff — count + names */}
+          <Popover>
+            <PopoverTrigger asChild>
               <Button
                 type="button"
-                variant={gridMode !== "none" ? "secondary" : "ghost"}
+                variant="outline"
                 size="sm"
-                onClick={() =>
-                  setGridMode((prev) =>
-                    prev === "lines"
-                      ? "dots"
-                      : prev === "dots"
-                        ? "none"
-                        : "lines",
-                  )
-                }
-                className={`h-8 px-3 rounded-md text-[13px] font-semibold ${
-                  gridMode !== "none"
-                    ? "bg-orange-600 shadow-sm text-white hover:bg-orange-600"
-                    : "text-stone-500 hover:text-stone-900"
-                }`}
+                className="h-9 gap-2 rounded-lg border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 hover:text-emerald-900"
               >
-                {gridMode === "lines"
-                  ? "Lines"
-                  : gridMode === "dots"
-                    ? "Dots"
-                    : "Grid Off"}
+                <span className="relative flex h-2 w-2">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
+                  <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+                </span>
+                <Users className="h-4 w-4" />
+                <span className="font-semibold tabular-nums">
+                  {onlineStaff.count} Online
+                </span>
               </Button>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
-              <div className="flex items-center gap-1.5">
-                <span className="h-2.5 w-2.5 rounded-full bg-white border border-zinc-300" />
-                <span className="text-sm font-medium text-zinc-500">
-                  Available
-                </span>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-72 p-0 bg-white">
+              <div className="border-b border-stone-100 px-3 py-2">
+                <p className="text-sm font-semibold text-stone-900">
+                  Currently logged in
+                </p>
+                <p className="text-xs text-stone-500">
+                  {onlineStaff.count} staff with an active session
+                </p>
               </div>
-              <div className="flex items-center gap-1.5">
-                <span className="h-2.5 w-2.5 rounded-full bg-sky-400 border border-sky-500" />
-                <span className="text-sm font-medium text-zinc-500">
-                  Serving
-                </span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="h-2.5 w-2.5 rounded-full bg-orange-500 border border-orange-600" />
-                <span className="text-sm font-medium text-zinc-500">
-                  Ordering
-                </span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 border border-emerald-600" />
-                <span className="text-sm font-medium text-zinc-500">
-                  Payment
-                </span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="h-2.5 w-2.5 rounded-full bg-zinc-400 border border-zinc-500" />
-                <span className="text-sm font-medium text-zinc-500">
-                  Booked
-                </span>
-              </div>
-            </div>
-            {/* Online staff — count + names */}
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-9 gap-2 rounded-lg border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 hover:text-emerald-900"
-                >
-                  <span className="relative flex h-2 w-2">
-                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
-                    <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
-                  </span>
-                  <Users className="h-4 w-4" />
-                  <span className="font-semibold tabular-nums">
-                    {onlineStaff.count} Online
-                  </span>
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent align="end" className="w-72 p-0 bg-white">
-                <div className="border-b border-stone-100 px-3 py-2">
-                  <p className="text-sm font-semibold text-stone-900">
-                    Currently logged in
+              <div className="max-h-64 overflow-y-auto py-1">
+                {onlineStaff.online.length === 0 ? (
+                  <p className="px-3 py-4 text-sm text-stone-400">
+                    No one online right now.
                   </p>
-                  <p className="text-xs text-stone-500">
-                    {onlineStaff.count} staff with an active session
-                  </p>
-                </div>
-                <div className="max-h-64 overflow-y-auto py-1">
-                  {onlineStaff.online.length === 0 ? (
-                    <p className="px-3 py-4 text-sm text-stone-400">
-                      No one online right now.
-                    </p>
-                  ) : (
-                    onlineStaff.online.map((emp, idx) => (
-                      <div
-                        key={emp.id}
-                        className="flex items-center gap-2.5 px-3 py-2 hover:bg-stone-50"
-                      >
-                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-100 border text-xs font-bold text-emerald-800">
-                          {emp.name?.charAt(0)?.toUpperCase() || "?"}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-medium text-stone-900">
-                            {idx + 1}. {emp.name}
-                          </p>
-                          <p className="truncate text-[11px] text-stone-500 uppercase tracking-wide">
-                            {emp.role || "Staff"}
-                            {emp.employeeId ? ` • ${emp.employeeId}` : ""}
-                          </p>
-                        </div>
+                ) : (
+                  onlineStaff.online.map((emp, idx) => (
+                    <div
+                      key={emp.id}
+                      className="flex items-center gap-2.5 px-3 py-2 hover:bg-stone-50"
+                    >
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-100 border text-xs font-bold text-emerald-800">
+                        {emp.name?.charAt(0)?.toUpperCase() || "?"}
                       </div>
-                    ))
-                  )}
-                </div>
-              </PopoverContent>
-            </Popover>
-          </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-stone-900">
+                          {idx + 1}. {emp.name}
+                        </p>
+                        <p className="truncate text-[11px] text-stone-500 uppercase tracking-wide">
+                          {emp.role || "Staff"}
+                          {emp.employeeId ? ` • ${emp.employeeId}` : ""}
+                        </p>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </PopoverContent>
+          </Popover>
         </div>
       </header>
 
-      <div
-        ref={floorViewportRef}
-        className="relative flex flex-1 min-h-0 items-center justify-center overflow-hidden bg-zinc-50/80 p-2 sm:p-3"
-      >
+      {/* Mobile legend strip */}
+      <div className="sm:hidden shrink-0 border-b border-zinc-200 bg-white px-3 py-2 flex items-center gap-3 overflow-x-auto no-scrollbar">
+        <Button
+          type="button"
+          size="sm"
+          onClick={() =>
+            setGridMode((prev) =>
+              prev === "lines"
+                ? "dots"
+                : prev === "dots"
+                  ? "none"
+                  : "lines",
+            )
+          }
+          className={`h-7 shrink-0 px-2.5 rounded-md text-[12px] font-semibold ${
+            gridMode !== "none"
+              ? "bg-orange-600 text-white hover:bg-orange-600"
+              : "bg-stone-100 text-stone-500 hover:bg-stone-200"
+          }`}
+        >
+          {gridMode === "lines" ? "Lines" : gridMode === "dots" ? "Dots" : "Grid Off"}
+        </Button>
+        {[
+          { label: "Available", className: "bg-white border border-zinc-300" },
+          { label: "Serving", className: "bg-sky-400 border border-sky-500" },
+          { label: "Ordering", className: "bg-orange-500 border border-orange-600" },
+          { label: "Payment", className: "bg-emerald-500 border border-emerald-600" },
+          { label: "Booked", className: "bg-red-900 border border-red-500" },
+        ].map((item) => (
+          <div key={item.label} className="flex items-center gap-1.5 shrink-0">
+            <span className={`h-2 w-2 rounded-full ${item.className}`} />
+            <span className="text-[11px] font-medium text-zinc-500">{item.label}</span>
+          </div>
+        ))}
+      </div>
+
+      <div className="flex flex-1 min-h-0 overflow-hidden">
         <div
-          className="relative shrink-0"
-          style={{
-            width: contentBounds.width * scale,
-            height: contentBounds.height * scale,
-          }}
+          ref={floorViewportRef}
+          className="relative flex flex-1 min-h-0 items-center justify-center overflow-hidden bg-zinc-50/80 p-2 sm:p-3"
         >
           <div
-            className="absolute top-0 left-0 rounded-xl border border-black bg-white shadow-sm overflow-hidden"
+            className="relative shrink-0"
             style={{
-              width: contentBounds.width,
-              height: contentBounds.height,
-              transform: `scale(${scale})`,
-              transformOrigin: "top left",
+              width: contentBounds.width * scale,
+              height: contentBounds.height * scale,
             }}
           >
-            {gridMode !== "none" && (
-              <div
-                className="absolute inset-0 z-0 pointer-events-none"
-                style={{
-                  opacity: gridMode === "lines" ? 0.55 : 0.8,
-                  backgroundImage:
-                    gridMode === "lines"
-                      ? "linear-gradient(to right, #9ca3af 1px, transparent 1px), linear-gradient(to bottom, #9ca3af 1px, transparent 1px)"
-                      : "radial-gradient(#64748b 2px, transparent 2px)",
-                  backgroundSize:
-                    gridMode === "lines" ? "40px 40px" : "20px 20px",
-                }}
-              />
-            )}
-            {floorData.tables.map((table) => {
-              const tableId = table.id?.toString();
-              const session = floorData.sessions.find(
-                (s) => s.tableId === tableId,
-              );
-              // Live session ownership — TableSession.assignedEmployee is the source of truth
-              const isMine =
-                session && session.assignedEmployeeId === currentUserId;
-              const isOther = session && !isMine;
-              const hasOrder = Boolean(session?.hasActiveOrder);
+            <div
+              className="absolute top-0 left-0 rounded-xl border border-black bg-white shadow-sm overflow-hidden"
+              style={{
+                width: contentBounds.width,
+                height: contentBounds.height,
+                transform: `scale(${scale})`,
+                transformOrigin: "top left",
+              }}
+            >
+              {gridMode !== "none" && (
+                <div
+                  className="absolute inset-0 z-0 pointer-events-none"
+                  style={{
+                    opacity: gridMode === "lines" ? 0.55 : 0.8,
+                    backgroundImage:
+                      gridMode === "lines"
+                        ? "linear-gradient(to right, #9ca3af 1px, transparent 1px), linear-gradient(to bottom, #9ca3af 1px, transparent 1px)"
+                        : "radial-gradient(#64748b 2px, transparent 2px)",
+                    backgroundSize:
+                      gridMode === "lines" ? "40px 40px" : "20px 20px",
+                  }}
+                />
+              )}
+              {floorData.tables.map((table) => {
+                const tableId = table.id?.toString();
+                const session = floorData.sessions.find(
+                  (s) => s.tableId === tableId,
+                );
+                // Live session ownership — TableSession.assignedEmployee is the source of truth
+                const isMine =
+                  session && session.assignedEmployeeId === currentUserId;
+                const isOther = session && !isMine;
+                const hasOrder = Boolean(session?.hasActiveOrder);
 
-              let bgClass =
-                "bg-white border-zinc-200 hover:border-zinc-300 hover:shadow-sm";
-              let textClass = "text-zinc-900";
-              let statusLabel = "AVAILABLE";
-              let statusClass = "text-zinc-500";
+                let bgClass =
+                  "bg-white border-zinc-200 hover:border-zinc-300 hover:shadow-sm";
+                let textClass = "text-zinc-900";
+                let statusLabel = "AVAILABLE";
+                let statusClass = "text-zinc-500";
 
-              if (session?.status === "PAYMENT_PENDING") {
+                if (session?.status === "PAYMENT_PENDING") {
                 bgClass =
                   "bg-emerald-100 border-emerald-400 hover:border-emerald-500";
                 textClass = "text-emerald-950";
                 statusLabel = "PAYMENT";
                 statusClass = "text-emerald-700";
               } else if (isOther) {
-                bgClass = "bg-zinc-200 border-zinc-400 hover:border-zinc-500";
+                bgClass = "bg-red-300 border-red-500 hover:border-red-600";
                 textClass = "text-zinc-800";
                 statusLabel = "BOOKED";
                 statusClass = "text-zinc-600";
@@ -584,7 +560,7 @@ export default function SalesFloorPage() {
                   }}
                 >
                   <span
-                    className={`text-lg md:text-xl font-black tracking-tight leading-tight ${textClass}`}
+                    className={`text-lg md:text-md font-bold tracking-tight leading-tight ${textClass}`}
                   >
                     {table.tableNumber}
                   </span>
@@ -635,8 +611,65 @@ export default function SalesFloorPage() {
                 </div>
               );
             })}
+
+
           </div>
         </div>
+        </div>
+
+        {/* Legend + grid toggle — under Online, parallel to tables */}
+        <aside className="hidden sm:flex w-44 shrink-0 flex-col gap-3 border-l border-zinc-200 bg-white p-3 overflow-y-auto">
+          <div className="flex items-center gap-1 bg-stone-50 border border-stone-200 rounded-lg p-1">
+            <Button
+              type="button"
+              variant={gridMode !== "none" ? "secondary" : "ghost"}
+              size="sm"
+              onClick={() =>
+                setGridMode((prev) =>
+                  prev === "lines"
+                    ? "dots"
+                    : prev === "dots"
+                      ? "none"
+                      : "lines",
+                )
+              }
+              className={`h-8 w-full px-3 rounded-md text-[13px] font-semibold ${
+                gridMode !== "none"
+                  ? "bg-orange-600 shadow-sm text-white hover:bg-orange-600"
+                  : "text-stone-500 hover:text-stone-900"
+              }`}
+            >
+              {gridMode === "lines"
+                ? "Lines"
+                : gridMode === "dots"
+                  ? "Dots"
+                  : "Grid Off"}
+            </Button>
+          </div>
+
+          <div className="flex flex-col gap-2.5">
+            <div className="flex items-center gap-2">
+              <span className="h-3 w-3 shrink-0 rounded-full bg-white border border-zinc-500" />
+              <span className="text-sm font-medium text-zinc-900">Available</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="h-3 w-3 shrink-0 rounded-full bg-sky-400 border border-sky-500" />
+              <span className="text-sm font-medium text-zinc-900">Serving</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="h-3 w-3 shrink-0 rounded-full bg-orange-500 border border-orange-600" />
+              <span className="text-sm font-medium text-zinc-900">Ordering</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="h-3 w-3 shrink-0 rounded-full bg-emerald-500 border border-emerald-600" />
+              <span className="text-sm font-medium text-zinc-900">Payment</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="h-3 w-3 shrink-0 rounded-full bg-red-500 border border-zinc-500" />
+              <span className="text-sm font-medium text-zinc-900">Booked</span>
+            </div>
+          </div>
+        </aside>
       </div>
 
       {/* Start Session Modal */}

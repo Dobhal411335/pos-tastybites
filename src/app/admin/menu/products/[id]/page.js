@@ -37,8 +37,7 @@ export default function ProductDetailsConfigPage() {
   const [availableTaxes, setAvailableTaxes] = useState([]);
   const [selectedTaxes, setSelectedTaxes] = useState([]);
   const [preparationStyles, setPreparationStyles] = useState([""]);
-
-
+  const [productType, setProductType] = useState("");
 
   // Custom selection lists
   const [sizesList, setSizesList] = useState([]);
@@ -63,6 +62,7 @@ export default function ProductDetailsConfigPage() {
         setVariants(p.variants || []);
         setAddons(p.addons || []);
         setPreparationStyles(p.preparationStyles?.length ? p.preparationStyles : [""]);
+        setProductType(p.productType === "BAR" ? "BAR" : p.productType === "KITCHEN" ? "KITCHEN" : "");
         setSelectedTaxes(p.taxes?.map(t => typeof t === 'object' ? t._id : t) || []);
       } else {
         toast.error("Failed to load product details");
@@ -201,6 +201,11 @@ export default function ProductDetailsConfigPage() {
   };
 
   const handleSaveConfiguration = async () => {
+    if (!productType || !["KITCHEN", "BAR"].includes(productType)) {
+      toast.error("Product type is required. Select Kitchen Item or Bar / Counter.");
+      return;
+    }
+
     setSaving(true);
     try {
       const res = await fetch(`/api/menu/products/${id}`, {
@@ -208,6 +213,7 @@ export default function ProductDetailsConfigPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           description,
+          productType,
           taxValue: parseFloat(taxValue) || 0,
           taxes: availableTaxes.map(t => t._id),
           variants: variants.filter(v => v.size).map(v => ({ ...v, price: parseFloat(v.price) || 0 })),
@@ -328,6 +334,23 @@ export default function ProductDetailsConfigPage() {
                           value={product?.name || ""}
                         />
                       </div>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[14px] font-semibold text-zinc-900">
+                        Product Type <span className="text-red-500">*</span>
+                      </label>
+                      <Select value={productType || undefined} onValueChange={setProductType}>
+                        <SelectTrigger className="h-11 text-[16px] bg-white w-full">
+                          <SelectValue placeholder="Select product type" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-white">
+                          <SelectItem value="KITCHEN">For Kitchen Item</SelectItem>
+                          <SelectItem value="BAR">Bar / Counter</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <p className="text-[12px] text-zinc-500">
+                        Controls whether this item routes to the kitchen KOT or bar/counter ticket.
+                      </p>
                     </div>
                     <div className="space-y-2">
                       <label className="text-[14px] font-semibold text-zinc-900">

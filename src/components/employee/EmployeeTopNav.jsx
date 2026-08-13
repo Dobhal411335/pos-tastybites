@@ -3,8 +3,17 @@
 import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LogOut, Menu, Grid2X2, ShoppingBag, Printer, BellRing, Store, Loader2, FileBarChart2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import {
+  LogOut,
+  Grid2X2,
+  ShoppingBag,
+  Printer,
+  BellRing,
+  Store,
+  Loader2,
+  FileBarChart2,
+  ChevronDown,
+} from "lucide-react";
 import { toast } from "sonner";
 import DateTimeDisplay from "@/components/common/DateTimeDisplay";
 import Image from "next/image";
@@ -21,13 +30,21 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
-const NAV_ITEMS = [
+const PRIMARY_NAV = [
   { label: "Floor", href: "/sales/floor", icon: Grid2X2 },
   { label: "Orders", href: "/sales/today", icon: ShoppingBag },
-  { label: "Print Jobs", href: "/sales/print-jobs", icon: Printer },
-  { label: "EOD", href: "/sales/reports/end-of-day", icon: FileBarChart2 },
-  { label: "Notifications", href: "/sales/notifications", icon: BellRing },
+];
+
+const MENU_LINKS = [
+  { label: "EOD", href: "/sales/reports/end-of-day", icon: FileBarChart2, color: "text-black bg-violet-300" },
+  { label: "Print Jobs", href: "/sales/print-jobs", icon: Printer, color: "text-black bg-sky-300" },
+  { label: "Notifications", href: "/sales/notifications", icon: BellRing, color: "text-black bg-amber-400" },
 ];
 
 function navActive(pathname, href) {
@@ -37,15 +54,21 @@ function navActive(pathname, href) {
   return pathname === href || pathname?.startsWith(href + "/");
 }
 
-export default function EmployeeTopNav({ onMenuToggle, employeeName = "Employee", employeeRole = "Server" }) {
+export default function EmployeeTopNav({
+  onMenuToggle,
+  employeeName = "Employee",
+  employeeRole = "Server",
+}) {
   const pathname = usePathname();
   const [loggingOut, setLoggingOut] = React.useState(false);
   const [confirmCloseOpen, setConfirmCloseOpen] = React.useState(false);
   const [closingRestaurant, setClosingRestaurant] = React.useState(false);
+  const [menuOpen, setMenuOpen] = React.useState(false);
 
   const handleLogout = async () => {
     if (loggingOut || closingRestaurant) return;
     setLoggingOut(true);
+    setMenuOpen(false);
     try {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 8000);
@@ -60,7 +83,6 @@ export default function EmployeeTopNav({ onMenuToggle, employeeName = "Employee"
     } catch {
       toast.message("Signing out…");
     } finally {
-      // Hard navigate so production always clears client state even if cookies/API glitch
       window.location.assign("/login");
     }
   };
@@ -96,15 +118,6 @@ export default function EmployeeTopNav({ onMenuToggle, employeeName = "Employee"
       <div className="flex lg:h-14 xl:h-15 items-center gap-3 px-3 sm:px-5">
         {/* LEFT — brand */}
         <div className="flex items-center gap-2.5 min-w-0 shrink-0">
-          {/* <Button
-            variant="ghost"
-            size="icon"
-            className="md:hidden h-10 w-10"
-            onClick={onMenuToggle}
-          >
-            <Menu className="h-5 w-5" />
-          </Button> */}
-
           <Link href="/sales/floor" className="flex items-center gap-2.5 min-w-0">
             <Image
               src="/BannerImage.png"
@@ -123,9 +136,9 @@ export default function EmployeeTopNav({ onMenuToggle, employeeName = "Employee"
           </Link>
         </div>
 
-        {/* CENTER — primary nav */}
+        {/* CENTER — Floor + Orders only */}
         <nav className="hidden md:flex flex-1 items-center justify-center gap-1.5 min-w-0">
-          {NAV_ITEMS.map((item) => {
+          {PRIMARY_NAV.map((item) => {
             const active = navActive(pathname, item.href);
             const Icon = item.icon;
             return (
@@ -145,7 +158,7 @@ export default function EmployeeTopNav({ onMenuToggle, employeeName = "Employee"
           })}
         </nav>
 
-        {/* RIGHT — time, bell, profile */}
+        {/* RIGHT — time, bell, profile dropdown */}
         <div className="flex items-center justify-end gap-2 sm:gap-2.5 ml-auto shrink-0">
           <div className="hidden lg:block">
             <DateTimeDisplay compact />
@@ -153,9 +166,11 @@ export default function EmployeeTopNav({ onMenuToggle, employeeName = "Employee"
 
           <NotificationBell viewAllHref="/sales/notifications" />
 
+          <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
+            <DropdownMenuTrigger asChild>
               <button
                 type="button"
-                className="flex items-center gap-2.5 rounded-xl border border-stone-500 bg-white px-2.5 py-1.5 hover:bg-stone-50 transition-colors max-w-50"
+                className="flex items-center gap-2.5 rounded-xl border border-stone-500 bg-white px-2.5 py-1.5 hover:bg-stone-50 transition-colors max-w-50 outline-none focus-visible:ring-2 focus-visible:ring-orange-400"
               >
                 <div className="relative shrink-0">
                   <div className="flex h-9 w-9 items-center justify-center rounded-full bg-linear-to-br from-orange-500 to-orange-600 text-white text-sm font-bold">
@@ -171,33 +186,93 @@ export default function EmployeeTopNav({ onMenuToggle, employeeName = "Employee"
                     {employeeRole}
                   </p>
                 </div>
+                <ChevronDown
+                  className={`h-4 w-4 shrink-0 text-stone-500 transition-transform duration-200 ${
+                    menuOpen ? "rotate-180" : ""
+                  }`}
+                />
               </button>
-          <Button
-            variant="ghost"
-            onClick={() => setConfirmCloseOpen(true)}
-            disabled={loggingOut || closingRestaurant}
-            className="relative z-50 h-10 px-2.5 sm:px-3 bg-zinc-900 text-white hover:bg-zinc-800 hover:text-white border border-zinc-950 shadow-none disabled:opacity-70"
-            title="Close Restaurant"
-          >
-            <Store className="h-4 w-4 sm:mr-1.5" />
-            <span className="hidden sm:inline text-xs font-bold">Close Restaurant</span>
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={handleLogout}
-            disabled={loggingOut || closingRestaurant}
-            className="relative z-50 h-10 w-10 bg-red-600 text-white hover:bg-red-700 hover:text-white border border-red-800 shadow-none disabled:opacity-70"
-            title="Logout"
-          >
-            <LogOut className="h-5 w-5" />
-          </Button>
+            </DropdownMenuTrigger>
+
+            <DropdownMenuContent
+              align="end"
+              sideOffset={8}
+              className="w-[300px] rounded-3xl border border-stone-200 bg-stone-100 p-3 shadow-xl"
+            >
+              <div className="rounded-2xl bg-white p-3 shadow-sm">
+                <div className="mb-3 flex items-center justify-between px-1">
+                  <p className="text-sm font-semibold text-stone-800">
+                    Quick links
+                  </p>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  {MENU_LINKS.map((item) => {
+                    const Icon = item.icon;
+                    return (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        onClick={() => setMenuOpen(false)}
+                        className="flex flex-col items-center gap-1.5 rounded-xl px-2 py-2.5 text-center hover:bg-stone-50 transition-colors"
+                      >
+                        <span
+                          className={`flex h-11 w-11 border border-stone-800 items-center justify-center rounded-2xl ${item.color}`}
+                        >
+                          <Icon className="h-5 w-5" />
+                        </span>
+                        <span className="text-[12px] font-medium text-stone-700 leading-tight">
+                          {item.label}
+                        </span>
+                      </Link>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="mt-3 grid grid-cols-2 gap-2 px-0.5">
+                <button
+                  type="button"
+                  disabled={loggingOut || closingRestaurant}
+                  onClick={() => {
+                    setMenuOpen(false);
+                    setConfirmCloseOpen(true);
+                  }}
+                  className="flex flex-col items-center gap-1.5 rounded-xl bg-white px-2 py-2.5 text-center shadow-sm hover:bg-stone-50 transition-colors disabled:opacity-60"
+                >
+                  <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-zinc-900 text-white">
+                    <Store className="h-5 w-5" />
+                  </span>
+                  <span className="text-[12px] font-medium text-stone-700 leading-tight">
+                    Day Close
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  disabled={loggingOut || closingRestaurant}
+                  onClick={handleLogout}
+                  className="flex flex-col items-center gap-1.5 rounded-xl bg-white px-2 py-2.5 text-center shadow-sm hover:bg-red-50 transition-colors disabled:opacity-60"
+                >
+                  <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-red-600 text-white">
+                    {loggingOut ? (
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                    ) : (
+                      <LogOut className="h-5 w-5" />
+                    )}
+                  </span>
+                  <span className="text-[12px] font-medium text-stone-700 leading-tight">
+                    Logout
+                  </span>
+                </button>
+              </div>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
       {/* Mobile / small tablet primary nav */}
       <nav className="md:hidden flex items-center gap-1.5 overflow-x-auto px-3 pb-2.5 no-scrollbar">
-        {NAV_ITEMS.map((item) => {
+        {PRIMARY_NAV.map((item) => {
           const active = navActive(pathname, item.href);
           return (
             <Link

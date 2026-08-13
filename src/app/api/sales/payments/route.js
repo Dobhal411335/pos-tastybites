@@ -51,8 +51,30 @@ export const POST = withAuth(async (request) => {
     const methodLabel = String(method || "Cash");
     if (methodLabel === "Card" && cardType) {
       order.paymentMethod = `Card - ${cardType}`;
+    } else if (
+      /card/i.test(methodLabel) &&
+      /cash/i.test(methodLabel) &&
+      cardType &&
+      !/card\s*-/i.test(methodLabel)
+    ) {
+      // Prefer explicit card type when UI sent a generic "Card + Cash"
+      order.paymentMethod = `Card - ${cardType} + Cash`;
     } else if (methodLabel.includes("Card") && methodLabel.includes("Cash")) {
-      order.paymentMethod = cardType ? `Card - ${cardType} + Cash` : "Card + Cash";
+      order.paymentMethod = methodLabel.includes("Card -")
+        ? methodLabel
+        : cardType
+          ? `Card - ${cardType} + Cash`
+          : "Card + Cash";
+    } else if (
+      /gift\s*card/i.test(methodLabel) &&
+      /card/i.test(methodLabel) &&
+      cardType &&
+      !/card\s*-/i.test(methodLabel)
+    ) {
+      order.paymentMethod = methodLabel.replace(
+        /\bCard\b/,
+        `Card - ${cardType}`,
+      );
     } else {
       order.paymentMethod = methodLabel;
     }

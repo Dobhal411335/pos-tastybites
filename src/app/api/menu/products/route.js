@@ -56,6 +56,7 @@ export const POST = withAuth(async (request) => {
       category: categoryId,
       name: name.trim(),
       productCode: codes && codes[index] ? codes[index].trim() : "",
+      productType: "KITCHEN",
       status: "Active",
       addons: categoryAddons.map((addon) => ({
         name: addon.name,

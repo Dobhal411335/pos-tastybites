@@ -373,7 +373,6 @@ export default function AdminDashboardPage() {
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 <ModuleCard onClick={() => setActiveCategory("core")} icon={UtensilsCrossed} color="orange" title="Core Modules" stat="Setup" desc="Configure menu, floor plan, staff, taxes, and settings." actionLabel="View Modules" />
-                <ModuleCard onClick={() => setActiveCategory("operations")} icon={Receipt} color="indigo" title="Restaurant Operations" stat="Live" desc="Manage billing, online orders, staff orders, and tracking." actionLabel="View Modules" />
                 <ModuleCard onClick={() => setActiveCategory("quick")} icon={Boxes} color="emerald" title="Quick Actions" stat="Fast" desc="Instant stock, menu, floor, and staff updates." actionLabel="View Modules" />
                 <ModuleCard onClick={() => setActiveCategory("web")} icon={Globe} color="blue" title="Web Portal" stat="Cloud" desc="Secure cloud dashboard and remote reporting." actionLabel="View Modules" />
                 <ModuleCard onClick={() => setActiveCategory("reports")} icon={BarChart3} color="rose" title="Report Module" stat="Data" desc="Guest, inventory, invoices, financial, and stock logs." actionLabel="View Modules" />
@@ -401,28 +400,13 @@ export default function AdminDashboardPage() {
                     <ModuleCard href="/admin/floor-plan" icon={LayoutGrid} color="amber" title="Floor Management" stat="Tables" desc="Setup dining sections, table layouts, seating capacities, and status tracking." />
                     <ModuleCard href="/admin/employee" icon={Users} color="indigo" title="Staff Portal" stat="Employees" desc="Manage employee profiles, access permissions, and designation matrices." />
                     <ModuleCard href="/admin/promotions" icon={Gift} color="rose" title="Season Promotions" stat="Offers" desc="Setup promotional codes, percentage/flat discounts, and happy hour schedules." />
+                    <ModuleCard href="/admin/giftcard" icon={Gift} color="rose" title="Issue GiftCard" stat="Offer" desc="Issue or sell gift cards, track balances, and manage redemptions." />
                     <ModuleCard href="/admin/tax" icon={Percent} color="emerald" title="Configure Tax And Fees" stat="Tax" desc="Define applicable tax slabs (GST/VAT), service charges, and additional surcharges." />
                     <ModuleCard href="/admin/users" icon={UserPlus} color="blue" title="Master Admin Users" stat="Admins" desc="Setup super-admin accounts with system-wide configuration rights." />
                     <ModuleCard href="/admin/settings" icon={Settings} color="amber" title="System Settings & Integrations" stat="Setup" desc="Configure payment gateways, hardware peripherals, and receipt templates." />
                   </div>
                 </section>
               )}
-
-              {activeCategory === "operations" && (
-                <section>
-                  <h2 className="text-2xl font-black text-slate-900 mb-6">Restaurant Operations</h2>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    <ModuleCard href="/admin/billing/admin" icon={Receipt} color="indigo" title="Admin Billing" stat="Terminal" desc="High-privilege terminal for direct invoicing, final settlements, and bill overrides." />
-                    <ModuleCard href="/admin/billing/server" icon={CreditCard} color="blue" title="Server Billing" stat="Floor" desc="Floor-level terminal for taking orders, splitting checks, and printing Kot/BoR slips." />
-                    <ModuleCard href="/admin/orders/online" icon={Globe} color="emerald" title="Online Orders" stat="Queue" desc="Centralized dashboard to accept, review, and queue web or aggregator orders." />
-                    <ModuleCard href="/admin/orders/staff/create" icon={ChefHat} color="orange" title="Staff Orders" stat="Internal" desc="Dedicated channel for recording employee meals or internal consumption." />
-                    <ModuleCard href="/admin/orders" icon={ClipboardList} color="blue" title="Order Tracking" stat="Live" desc="Real-time visibility of order lifecycle from preparation to fulfillment." />
-                    <ModuleCard href="/admin/giftcard" icon={Gift} color="rose" title="Issue GiftCard" stat="Offer" desc="Issue or sell gift cards, track balances, and manage redemptions." />
-                    <ModuleCard href="/admin/invoices" icon={FileText} color="rose" title="Invoices" stat="Records" desc="Archive of historical bills, digital receipts, and transaction records." />
-                  </div>
-                </section>
-              )}
-
               {activeCategory === "quick" && (
                 <section>
                   <h2 className="text-2xl font-black text-slate-900 mb-6">Quick Actions And Useful</h2>

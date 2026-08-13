@@ -16,6 +16,7 @@ import { toast } from "sonner";
 import { useSocket } from "@/components/providers/SocketProvider";
 import CustomerReceipt from "@/components/receipts/CustomerReceipt";
 import KitchenOrderTicket from "@/components/receipts/KitchenOrderTicket";
+import BarReceipt from "@/components/receipts/BarReceipt";
 import moment from "moment";
 
 const STATUS_STYLES = {
@@ -25,6 +26,12 @@ const STATUS_STYLES = {
   FAILED: "bg-red-100 text-red-800",
   CANCELLED: "bg-zinc-100 text-zinc-600",
 };
+
+function printerTargetLabel(target) {
+  if (target === "KITCHEN") return "Kitchen";
+  if (target === "COUNTER") return "Counter";
+  return "Receipt Front";
+}
 
 export default function PrintJobDetailPage() {
   const { id } = useParams();
@@ -142,6 +149,12 @@ export default function PrintJobDetailPage() {
 
   const { job, order, restaurant, guestCount, serverName, kotItems } = data;
   const isKot = job.printType === "KOT";
+  const isBar = job.printType === "BAR_RECEIPT";
+  const ticketItems =
+    kotItems?.length
+      ? kotItems
+      : job.metadata?.barItems || job.metadata?.kotItems || [];
+  const isReprint = (job.attemptCount || 0) > 1;
 
   return (
     <div className="flex flex-col lg:flex-row gap-4 p-3 max-w-5xl mx-auto">
@@ -174,7 +187,7 @@ export default function PrintJobDetailPage() {
             <div className="flex justify-between gap-2">
               <dt>Target</dt>
               <dd className="font-semibold text-zinc-900">
-                {job.printerTarget === "KITCHEN" ? "Kitchen" : "Receipt Front"}
+                {printerTargetLabel(job.printerTarget)}
               </dd>
             </div>
             <div className="flex justify-between gap-2">
@@ -253,13 +266,32 @@ export default function PrintJobDetailPage() {
           {isKot ? (
             <KitchenOrderTicket
               order={order || { orderNumber: job.metadata?.orderNumber }}
-              kotItems={kotItems.length ? kotItems : job.metadata?.kotItems || []}
+              kotItems={ticketItems}
               restaurantName={
                 job.metadata?.restaurantName || restaurant?.name
               }
               serverName={serverName || job.metadata?.serverName}
               guestCount={guestCount ?? job.metadata?.guestCount}
               specialNote={job.metadata?.specialNote}
+            />
+          ) : isBar ? (
+            <BarReceipt
+              order={
+                order || {
+                  orderNumber: job.metadata?.orderNumber,
+                  tableNo: job.metadata?.tableNo,
+                  guestName: job.metadata?.guestName,
+                  partyName: job.metadata?.partyName,
+                }
+              }
+              barItems={ticketItems}
+              restaurantName={
+                job.metadata?.restaurantName || restaurant?.name
+              }
+              serverName={serverName || job.metadata?.serverName}
+              guestCount={guestCount ?? job.metadata?.guestCount}
+              specialNote={job.metadata?.specialNote}
+              isReprint={isReprint}
             />
           ) : (
             <CustomerReceipt

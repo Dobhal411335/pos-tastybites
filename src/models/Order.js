@@ -12,6 +12,7 @@ const OrderItemSchema = new mongoose.Schema({
   tax: { type: Number, default: 0 },
   options: [{ type: String }],
   preparationStyle: { type: String, default: null },
+  productType: { type: String, enum: ['KITCHEN', 'BAR'], default: 'KITCHEN' },
   sentQty: { type: Number, default: 0 },
   cartId: { type: String }, // To match incoming items reliably
 });

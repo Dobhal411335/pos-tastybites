@@ -321,9 +321,6 @@ export default function GiftcardsConfigPage() {
           <Card className="shadow-sm border-zinc-200 bg-white overflow-hidden mt-8">
             <CardHeader className="px-6 py-5 border-b border-zinc-200 flex flex-row items-center justify-between">
               <CardTitle className="text-[16px] font-bold text-zinc-900">Giftcard Overview</CardTitle>
-              <Button variant="outline" size="sm" className="h-8 text-[13px] font-medium hidden sm:flex">
-                <FileDown className="w-4 h-4 mr-2" /> Download All PDFs
-              </Button>
             </CardHeader>
             <CardContent className="p-0">
               <Table>

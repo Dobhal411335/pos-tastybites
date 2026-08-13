@@ -19,6 +19,12 @@ const ProductSchema = new mongoose.Schema(
     category: { type: mongoose.Schema.Types.ObjectId, ref: 'Category', required: true },
     name: { type: String, required: true, trim: true },
     productCode: { type: String, trim: true, default: '' },
+    productType: {
+      type: String,
+      enum: ['KITCHEN', 'BAR'],
+      default: 'KITCHEN',
+      required: true,
+    },
     description: { type: String, trim: true, default: '' },
     taxes: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Tax' }],
     taxData: {

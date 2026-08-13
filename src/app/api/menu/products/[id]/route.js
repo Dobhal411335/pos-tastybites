@@ -45,9 +45,17 @@ export const PUT = withAuth(async (request, { params }) => {
 
     const data = await request.json();
     // Allow updating basic info, description, taxes, status, variants, addons, image, discount
-    const { name, category, productCode, description, taxes, status, variants, addons, image, preparationStyles } = data;
+    const { name, category, productCode, productType, description, taxes, status, variants, addons, image, preparationStyles } = data;
 
     const updateData = { updatedBy: request.user.id };
+
+    if (productType !== undefined) {
+      const normalizedType = String(productType).toUpperCase();
+      if (!["KITCHEN", "BAR"].includes(normalizedType)) {
+        return sendError(new Error("Invalid productType"), "Product type must be KITCHEN or BAR", 400);
+      }
+      updateData.productType = normalizedType;
+    }
     
     if (name !== undefined) updateData.name = name;
     if (category !== undefined) {

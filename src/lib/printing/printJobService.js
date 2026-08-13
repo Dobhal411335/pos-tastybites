@@ -159,6 +159,49 @@ export async function createKotPrintJob({
   });
 }
 
+export async function createBarReceiptPrintJob({
+  order,
+  barItems,
+  requestedBy,
+  guestCount,
+  serverName,
+  restaurantName,
+  specialNote,
+}) {
+  if (!barItems || barItems.length === 0) {
+    return { job: null, created: false };
+  }
+
+  const itemSig = barItems
+    .map((i) => `${i.cartId || i.menuItemId || i.name}:${i.qty}`)
+    .sort()
+    .join("|");
+  const idempotencyKey = `bar:${order._id}:${itemSig}`;
+
+  return createPrintJob({
+    restaurantId: order.restaurantId,
+    orderId: order._id,
+    printType: "BAR_RECEIPT",
+    printerTarget: "COUNTER",
+    requestedBy,
+    floorId: order.floor,
+    orderNumber: order.orderNumber,
+    idempotencyKey,
+    metadata: {
+      kotItems: barItems,
+      barItems,
+      specialNote: specialNote || order.specialNote || null,
+      guestCount: guestCount ?? null,
+      tableNo: order.tableNo || null,
+      guestName: order.guestName || null,
+      partyName: order.partyName || order.guestName || null,
+      serverName: serverName || null,
+      restaurantName: restaurantName || null,
+      orderNumber: order.orderNumber,
+    },
+  });
+}
+
 export async function createReceiptPrintJob({
   order,
   requestedBy,

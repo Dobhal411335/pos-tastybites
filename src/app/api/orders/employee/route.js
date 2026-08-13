@@ -8,9 +8,17 @@ import { sendError } from "@/utils/errorHandler";
 import { logger } from "@/utils/logger";
 import { getNextOrderNumber } from "@/utils/generateOrderNumber"; 
 import OperationalAuditLog from "@/models/OperationalAuditLog";
-import { createKotPrintJob } from "@/lib/printing/printJobService";
+import { createKotPrintJob, createBarReceiptPrintJob } from "@/lib/printing/printJobService";
 import { createNotification } from "@/lib/notifications/notificationService";
 import Table from "@/models/floor/Table";
+
+function normalizeProductType(value) {
+  return String(value || "").toUpperCase() === "BAR" ? "BAR" : "KITCHEN";
+}
+
+function cartHasKitchenItem(items = []) {
+  return items.some((item) => normalizeProductType(item.productType) !== "BAR");
+}
 
 function formatPersonName(person) {
   if (!person) return null;
@@ -101,26 +109,44 @@ async function notifyOrderEvent({
   });
 }
 
-async function enqueueKotPrintJob({ order, kotItems, employeeId, guestCount }) {
-  if (!kotItems?.length) return null;
+async function enqueueOrderTicketPrintJob({
+  order,
+  ticketItems,
+  employeeId,
+  guestCount,
+  routeToKitchen,
+}) {
+  if (!ticketItems?.length) return { job: null, ticketType: routeToKitchen ? "KOT" : "BAR_RECEIPT" };
   try {
     const [serverName, restaurant] = await Promise.all([
       resolveServerName(employeeId),
       Restaurant.findById(order.restaurantId).select("name").lean(),
     ]);
-    const { job } = await createKotPrintJob({
+    const common = {
       order,
-      kotItems,
       requestedBy: employeeId,
       guestCount,
       serverName,
       restaurantName: restaurant?.name || null,
       specialNote: order.specialNote,
+    };
+
+    if (routeToKitchen) {
+      const { job } = await createKotPrintJob({
+        ...common,
+        kotItems: ticketItems,
+      });
+      return { job, ticketType: "KOT" };
+    }
+
+    const { job } = await createBarReceiptPrintJob({
+      ...common,
+      barItems: ticketItems,
     });
-    return job;
+    return { job, ticketType: "BAR_RECEIPT" };
   } catch (err) {
-    logger.error("Failed to create KOT PrintJob (order still saved)", err);
-    return null;
+    logger.error("Failed to create ticket PrintJob (order still saved)", err);
+    return { job: null, ticketType: routeToKitchen ? "KOT" : "BAR_RECEIPT" };
   }
 }
 
@@ -162,9 +188,12 @@ export const POST = withAuth(async (request) => {
         tax: item.tax || 0,
         options: item.options || [],
         preparationStyle: item.preparationStyle || null,
+        productType: normalizeProductType(item.productType),
         cartId: item.cartId || String(Date.now() + Math.random())
       };
     });
+
+    const routeToKitchen = cartHasKitchenItem(formattedItems);
 
     // If no sessionId is provided, fallback to legacy behavior
     if (!sessionId) {
@@ -189,11 +218,12 @@ export const POST = withAuth(async (request) => {
       });
 
       const kotPayload = formattedItems;
-      const printJob = await enqueueKotPrintJob({
+      const { job: printJob, ticketType } = await enqueueOrderTicketPrintJob({
         order: newOrder,
-        kotItems: kotPayload,
+        ticketItems: kotPayload,
         employeeId,
         guestCount: Number.isFinite(resolvedGuestCount) ? resolvedGuestCount : null,
+        routeToKitchen,
       });
 
       const serverName = await resolveServerName(employeeId);
@@ -214,10 +244,17 @@ export const POST = withAuth(async (request) => {
         });
       }
 
-      logger.info(`Legacy POS Order created: ${orderNumber} by Employee ${employeeId}`);
+      logger.info(`Legacy POS Order created: ${orderNumber} by Employee ${employeeId} ticket=${ticketType}`);
       return sendSuccess(
-        { ...newOrder.toObject(), kotPayload, printJobId: printJob?._id || null },
-        "Order sent to kitchen successfully",
+        {
+          ...newOrder.toObject(),
+          kotPayload,
+          printJobId: printJob?._id || null,
+          ticketType,
+        },
+        routeToKitchen
+          ? "Order sent to kitchen successfully"
+          : "Bar ticket created successfully",
         201
       );
     }
@@ -286,11 +323,12 @@ export const POST = withAuth(async (request) => {
         orderId: order._id
       });
 
-      const printJob = await enqueueKotPrintJob({
+      const { job: printJob, ticketType } = await enqueueOrderTicketPrintJob({
         order,
-        kotItems: kotPayload,
+        ticketItems: kotPayload,
         employeeId,
         guestCount: session.guestCount,
+        routeToKitchen,
       });
 
       const serverName = await resolveServerName(employeeId);
@@ -320,10 +358,17 @@ export const POST = withAuth(async (request) => {
         }
       }
 
-      logger.info(`POS Order updated: ${order.orderNumber} for Session ${sessionId} by Employee ${employeeId}`);
+      logger.info(`POS Order updated: ${order.orderNumber} for Session ${sessionId} by Employee ${employeeId} ticket=${ticketType}`);
       return sendSuccess(
-        { ...order.toObject(), kotPayload, printJobId: printJob?._id || null },
-        "Order updated successfully",
+        {
+          ...order.toObject(),
+          kotPayload,
+          printJobId: printJob?._id || null,
+          ticketType,
+        },
+        routeToKitchen
+          ? "Order updated successfully"
+          : "Bar ticket updated successfully",
         200
       );
     } else {
@@ -376,11 +421,12 @@ export const POST = withAuth(async (request) => {
       });
 
       const kotPayload = formattedItems;
-      const printJob = await enqueueKotPrintJob({
+      const { job: printJob, ticketType } = await enqueueOrderTicketPrintJob({
         order: newOrder,
-        kotItems: kotPayload,
+        ticketItems: kotPayload,
         employeeId,
         guestCount: session.guestCount,
+        routeToKitchen,
       });
 
       const serverName = await resolveServerName(employeeId);
@@ -408,10 +454,17 @@ export const POST = withAuth(async (request) => {
         });
       }
 
-      logger.info(`POS Order created: ${orderNumber} for Session ${sessionId} by Employee ${employeeId}`);
+      logger.info(`POS Order created: ${orderNumber} for Session ${sessionId} by Employee ${employeeId} ticket=${ticketType}`);
       return sendSuccess(
-        { ...newOrder.toObject(), kotPayload, printJobId: printJob?._id || null },
-        "Order sent to kitchen successfully",
+        {
+          ...newOrder.toObject(),
+          kotPayload,
+          printJobId: printJob?._id || null,
+          ticketType,
+        },
+        routeToKitchen
+          ? "Order sent to kitchen successfully"
+          : "Bar ticket created successfully",
         201
       );
     }

@@ -265,7 +265,11 @@ export default function PrintJobsPage() {
                       {job.printType}
                     </div>
                     <div className="text-xs text-zinc-600">
-                      {job.printerTarget === "KITCHEN" ? "Kitchen" : "Front"}
+                      {job.printerTarget === "KITCHEN"
+                        ? "Kitchen"
+                        : job.printerTarget === "COUNTER"
+                          ? "Counter"
+                          : "Front"}
                     </div>
                     <div className="text-xs text-zinc-500">
                       {moment(job.createdAt).format("HH:mm")}

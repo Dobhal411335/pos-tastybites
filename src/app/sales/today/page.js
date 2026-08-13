@@ -110,7 +110,13 @@ export default function TodayOrdersPage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
+  const [printType, setPrintType] = useState("kot");
+  const [pendingReleaseAfterPrint, setPendingReleaseAfterPrint] =
+    useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [isReleaseModalOpen, setIsReleaseModalOpen] = useState(false);
+  const [isReleasingTable, setIsReleasingTable] = useState(false);
+  const [releaseOrder, setReleaseOrder] = useState(null);
 
   const fetchOrders = useCallback(async ({ silent = false } = {}) => {
     if (silent) setRefreshing(true);
@@ -266,10 +272,66 @@ export default function TodayOrdersPage() {
   const closePanel = () => {
     setSelectedOrder(null);
     setIsPaymentModalOpen(false);
+    setIsReleaseModalOpen(false);
+    setReleaseOrder(null);
+    setPendingReleaseAfterPrint(false);
+    setIsPrintModalOpen(false);
+  };
+
+  const getOrderSessionId = (order) => {
+    const session = order?.tableSession;
+    if (!session) return null;
+    if (typeof session === "object") return session._id || session.id || null;
+    return session;
+  };
+
+  const handleStayAfterPayment = () => {
+    setIsReleaseModalOpen(false);
+    setReleaseOrder(null);
+  };
+
+  const handleReleaseTable = async (shouldRelease) => {
+    if (!shouldRelease) {
+      handleStayAfterPayment();
+      return;
+    }
+
+    const sessionId = getOrderSessionId(releaseOrder || selectedOrder);
+    if (!sessionId) {
+      toast.error("No table session found for this order.");
+      handleStayAfterPayment();
+      return;
+    }
+
+    try {
+      setIsReleasingTable(true);
+      const res = await fetch("/api/sales/sessions", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionId, action: "RELEASE" }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        toast.success("Table released.");
+        setIsReleaseModalOpen(false);
+        setReleaseOrder(null);
+        await fetchOrders({ silent: true });
+      } else {
+        toast.error(json.message || "Failed to release table.");
+      }
+    } catch (err) {
+      toast.error("Failed to release table.");
+    } finally {
+      setIsReleasingTable(false);
+    }
   };
 
   const isOnlineOrder = selectedOrder?.source === "ONLINE";
   const showPayNow = selectedOrder && !isOnlineOrder && !isOrderPaid(selectedOrder);
+  const releaseTableLabel =
+    releaseOrder?.tableNo ||
+    selectedOrder?.tableNo ||
+    "";
 
   return (
     <div className="h-full min-h-0 flex overflow-hidden bg-zinc-50 font-sans">
@@ -591,7 +653,11 @@ export default function TodayOrdersPage() {
             <div className="p-4 border-t border-zinc-400 shrink-0 bg-white space-y-2">
               {isOnlineOrder && (
                 <Button
-                  onClick={() => setIsPrintModalOpen(true)}
+                  onClick={() => {
+                    setPrintType("kot");
+                    setPendingReleaseAfterPrint(false);
+                    setIsPrintModalOpen(true);
+                  }}
                   className="w-full h-12 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-none"
                 >
                   Kitchen / KOT
@@ -619,8 +685,16 @@ export default function TodayOrdersPage() {
 
       <PrintPreviewModal
         isOpen={isPrintModalOpen}
-        onClose={() => setIsPrintModalOpen(false)}
-        printType="kot"
+        onClose={() => {
+          setIsPrintModalOpen(false);
+          if (printType === "customer" && pendingReleaseAfterPrint) {
+            setPendingReleaseAfterPrint(false);
+            setIsReleaseModalOpen(true);
+            return;
+          }
+          setPendingReleaseAfterPrint(false);
+        }}
+        printType={printType}
         order={selectedOrder}
         kotItems={selectedOrder?.items || []}
         guestCount={selectedOrder?.guestCount}
@@ -633,8 +707,57 @@ export default function TodayOrdersPage() {
         order={selectedOrder}
         open={isPaymentModalOpen}
         onClose={() => setIsPaymentModalOpen(false)}
-        onPaid={() => fetchOrders({ silent: true })}
+        onPaid={async (updatedOrder) => {
+          const paid = updatedOrder || selectedOrder;
+          if (paid) {
+            setSelectedOrder((prev) => ({ ...(prev || {}), ...paid }));
+          }
+          await fetchOrders({ silent: true });
+
+          const sessionId = getOrderSessionId(paid);
+          setReleaseOrder(sessionId ? paid : null);
+          setPendingReleaseAfterPrint(Boolean(sessionId));
+          setPrintType("customer");
+          setIsPrintModalOpen(true);
+        }}
+        redeemNote="Today Orders Payment"
       />
+
+      {isReleaseModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-900/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl">
+            <div className="p-5 border-b border-zinc-100">
+              <h2 className="text-lg font-bold text-zinc-900">Release Table?</h2>
+              <p className="text-sm font-semibold text-zinc-500 mt-1">
+                Payment is complete
+                {releaseTableLabel ? ` for ${releaseTableLabel}` : ""}.
+                Do you want to release this table now, or stay on this order?
+              </p>
+            </div>
+            <div className="p-5 flex gap-3">
+              <Button
+                variant="outline"
+                disabled={isReleasingTable}
+                onClick={() => handleReleaseTable(false)}
+                className="flex-1 h-12 rounded-xl font-bold border-zinc-200 text-zinc-700 shadow-none"
+              >
+                Stay on Order
+              </Button>
+              <Button
+                disabled={isReleasingTable}
+                onClick={() => handleReleaseTable(true)}
+                className="flex-1 h-12 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-bold shadow-none"
+              >
+                {isReleasingTable ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  "Yes, Release"
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

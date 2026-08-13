@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import Image from "next/image";
 import { useParams, useRouter } from "next/navigation";
 import { useSocket } from "@/components/providers/SocketProvider";
@@ -14,8 +14,6 @@ import {
   CheckCircle2,
   X,
   Tag,
-  DollarSign,
-  Percent,
   User,
   Phone,
   MapPin,
@@ -33,9 +31,6 @@ import {
   Pizza,
   Sandwich,
   ShoppingCart,
-  CreditCard,
-  Banknote,
-  Gift,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -50,6 +45,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import PrintPreviewModal from "@/components/receipts/PrintPreviewModal";
+import TodayOrderPaymentModal from "@/components/sales/TodayOrderPaymentModal";
 import { useAuth } from "@/components/providers/AuthProvider";
 
 function getCartFingerprint(items) {
@@ -82,8 +78,8 @@ export default function OrderPage() {
 
   const [isOptionsModalOpen, setIsOptionsModalOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
-  const [selectedSizes, setSelectedSizes] = useState([]);
-  const [selectedAddons, setSelectedAddons] = useState([]);
+  const [variantQtyBySize, setVariantQtyBySize] = useState({});
+  const [addonQtyById, setAddonQtyById] = useState({});
   const [selectedPreparationStyle, setSelectedPreparationStyle] = useState("");
 
   // New states
@@ -91,30 +87,15 @@ export default function OrderPage() {
   const [guestName, setGuestName] = useState("");
   const [guestTable, setGuestTable] = useState("");
   const [orderNote, setOrderNote] = useState("");
-  const [discountCode, setDiscountCode] = useState("");
-  const [availableDiscounts, setAvailableDiscounts] = useState([]);
   const [appliedDiscount, setAppliedDiscount] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeOrder, setActiveOrder] = useState(null);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState("Card"); // Card, Cash, GiftCard
-  const [amountTendered, setAmountTendered] = useState("");
-  const [tipAmount, setTipAmount] = useState(0);
-  const [selectedCardType, setSelectedCardType] = useState("");
-  const [cardAmountTendered, setCardAmountTendered] = useState("");
-
-  // Split payment / Gift card states
-  const [isGiftCardModalOpen, setIsGiftCardModalOpen] = useState(false);
-  const [giftCardDetails, setGiftCardDetails] = useState(null);
-  const [giftCardCode, setGiftCardCode] = useState("");
-  const [giftCardBalance, setGiftCardBalance] = useState(null);
-  const [giftCardError, setGiftCardError] = useState("");
-  const [isVerifyingGiftCard, setIsVerifyingGiftCard] = useState(false);
-  const [giftCardSplitAmount, setGiftCardSplitAmount] = useState(0);
+  const cartIdSeq = useRef(0);
 
   // Print State
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
-  const [printType, setPrintType] = useState("customer"); // 'customer' | 'kot'
+  const [printType, setPrintType] = useState("customer"); // 'customer' | 'kot' | 'bar'
   const [printOrderData, setPrintOrderData] = useState(null);
   const [printKotItems, setPrintKotItems] = useState([]);
   const [printTaxBreakdown, setPrintTaxBreakdown] = useState([]);
@@ -281,6 +262,7 @@ export default function OrderPage() {
                     : []),
                 preparationStyle: style,
                 options: item.options || [],
+                productType: item.productType === "BAR" ? "BAR" : "KITCHEN",
                 modifier: parts.length > 0 ? parts.join(" | ") : undefined,
                 cartId: item.cartId || Date.now() + Math.random(),
               };
@@ -316,20 +298,6 @@ export default function OrderPage() {
       setServerName(fullName);
     }
   }, [currentUser]);
-
-  useEffect(() => {
-    if (!isPaymentModalOpen) return;
-    const loadDiscounts = async () => {
-      try {
-        const res = await fetch("/api/orders/discount");
-        const json = await res.json();
-        if (json.success) setAvailableDiscounts(json.data || []);
-      } catch (err) {
-        setAvailableDiscounts([]);
-      }
-    };
-    loadDiscounts();
-  }, [isPaymentModalOpen]);
 
   const fetchOrderOnly = useCallback(async () => {
     if (sessionId === "new") return;
@@ -465,27 +433,37 @@ export default function OrderPage() {
 
   const handleOpenOptions = (item) => {
     setSelectedProduct(item);
-    setSelectedSizes(
-      item.variants && item.variants.length > 0 ? [item.variants[0].size] : [],
-    );
-    setSelectedAddons([]);
+    const initialVariants = {};
+    if (item.variants && item.variants.length > 0) {
+      initialVariants[item.variants[0].size] = 1;
+    }
+    setVariantQtyBySize(initialVariants);
+    setAddonQtyById({});
     const styles = (item.preparationStyles || []).filter(Boolean);
     setSelectedPreparationStyle(styles.length === 1 ? styles[0] : "");
     setIsOptionsModalOpen(true);
   };
 
-  const toggleAddon = (addon) => {
-    setSelectedAddons((prev) => {
-      const exists = prev.some((a) => a._id === addon._id);
-      if (exists) return prev.filter((a) => a._id !== addon._id);
-      return [...prev, addon];
+  const setVariantQty = (size, qty) => {
+    const next = Math.max(0, Math.floor(Number(qty) || 0));
+    setVariantQtyBySize((prev) => {
+      const copy = { ...prev };
+      if (next <= 0) delete copy[size];
+      else copy[size] = next;
+      return copy;
     });
   };
 
-  const toggleVariant = (size) => {
-    setSelectedSizes((prev) => {
-      if (prev.includes(size)) return prev.filter((s) => s !== size);
-      return [...prev, size];
+  const setAddonQty = (addon, qty) => {
+    const next = Math.max(0, Math.floor(Number(qty) || 0));
+    setAddonQtyById((prev) => {
+      const copy = { ...prev };
+      if (next <= 0) {
+        delete copy[addon._id];
+      } else {
+        copy[addon._id] = { qty: next, addon };
+      }
+      return copy;
     });
   };
 
@@ -537,6 +515,7 @@ export default function OrderPage() {
           sizes: [],
           preparationStyle: null,
           options: [],
+          productType: product.productType === "BAR" ? "BAR" : "KITCHEN",
           cartId: Date.now(),
         },
       ];
@@ -587,6 +566,7 @@ export default function OrderPage() {
           preparationStyle: null,
           options: extras,
           modifier: extras.length ? extras.join(" • ") : null,
+          productType: "KITCHEN",
           cartId: Date.now(),
           isOffer: true,
         },
@@ -600,62 +580,104 @@ export default function OrderPage() {
 
     const hasVariants =
       selectedProduct.variants && selectedProduct.variants.length > 0;
-    if (hasVariants && selectedSizes.length === 0) {
+    const variantEntries = Object.entries(variantQtyBySize).filter(
+      ([, qty]) => qty > 0,
+    );
+    if (hasVariants && variantEntries.length === 0) {
       toast.error("Select at least one variant");
       return;
     }
 
-    let basePrice = selectedProduct.price || 0;
-    if (hasVariants) {
-      basePrice = selectedProduct.variants
-        .filter((v) => selectedSizes.includes(v.size))
-        .reduce((sum, v) => sum + (Number(v.price) || 0), 0);
-    }
-
-    const addonsPrice = selectedAddons.reduce(
-      (sum, a) => sum + (a.price || 0),
-      0,
+    const addonEntries = Object.values(addonQtyById).filter(
+      (entry) => entry?.qty > 0 && entry?.addon,
     );
-    const finalPrice = basePrice + addonsPrice;
 
-    const finalTax = calculateItemTax(selectedProduct, finalPrice);
+    const baseTs = ++cartIdSeq.current;
+    const newLines = [];
 
-    const options = [];
-    if (selectedPreparationStyle) {
-      options.push(`${selectedPreparationStyle}`);
-    }
-    selectedAddons.forEach((a) => options.push(a.name));
+    if (hasVariants) {
+      variantEntries.forEach(([size, qty], idx) => {
+        const variant = selectedProduct.variants.find((v) => v.size === size);
+        const unitPrice = Number(variant?.price) || 0;
+        const unitTax = calculateItemTax(selectedProduct, unitPrice);
+        const options = [];
+        if (selectedPreparationStyle) options.push(selectedPreparationStyle);
+        const parts = [`Size: ${size}`];
+        if (selectedPreparationStyle) parts.push(selectedPreparationStyle);
 
-    const sizeLabel = formatSizeLabel(selectedSizes);
-    const parts = [];
-    if (sizeLabel && sizeLabel !== "Standard") parts.push(`Size: ${sizeLabel}`);
-    if (selectedPreparationStyle)
-      parts.push(`${selectedPreparationStyle}`);
-    if (selectedAddons.length > 0) {
-      parts.push(`Extras: ${selectedAddons.map((a) => a.name).join(", ")}`);
-    }
-
-    setCart((prev) => [
-      ...prev,
-      {
+        newLines.push({
+          id: selectedProduct._id,
+          cartId: baseTs + idx,
+          name: selectedProduct.name,
+          productCode: selectedProduct.productCode || "",
+          category: selectedProduct.category?.name || "ITEMS",
+          price: unitPrice,
+          tax: unitTax,
+          qty,
+          size,
+          sizes: [size],
+          preparationStyle: selectedPreparationStyle || null,
+          options,
+          productType:
+            selectedProduct.productType === "BAR" ? "BAR" : "KITCHEN",
+          modifier: parts.join(" | "),
+        });
+      });
+    } else {
+      const unitPrice = selectedProduct.price || 0;
+      const unitTax = calculateItemTax(selectedProduct, unitPrice);
+      const options = [];
+      if (selectedPreparationStyle) options.push(selectedPreparationStyle);
+      newLines.push({
         id: selectedProduct._id,
-        cartId: Date.now(),
+        cartId: baseTs,
         name: selectedProduct.name,
         productCode: selectedProduct.productCode || "",
         category: selectedProduct.category?.name || "ITEMS",
-        price: finalPrice,
-        tax: finalTax,
+        price: unitPrice,
+        tax: unitTax,
         qty: 1,
-        size: sizeLabel,
-        sizes: selectedSizes,
+        size: "Standard",
+        sizes: [],
         preparationStyle: selectedPreparationStyle || null,
         options,
-        modifier: parts.length > 0 ? parts.join(" | ") : undefined,
-      },
-    ]);
+        productType: selectedProduct.productType === "BAR" ? "BAR" : "KITCHEN",
+        modifier: selectedPreparationStyle || undefined,
+      });
+    }
+
+    addonEntries.forEach((entry, idx) => {
+      const addon = entry.addon;
+      const unitPrice = Number(addon.price) || 0;
+      const unitTax = calculateItemTax(selectedProduct, unitPrice);
+      newLines.push({
+        id: selectedProduct._id,
+        cartId: baseTs + 1000 + idx,
+        name: selectedProduct.name,
+        productCode: selectedProduct.productCode || "",
+        category: selectedProduct.category?.name || "ITEMS",
+        price: unitPrice,
+        tax: unitTax,
+        qty: entry.qty,
+        size: "Extra",
+        sizes: [],
+        preparationStyle: null,
+        options: [addon.name],
+        productType: selectedProduct.productType === "BAR" ? "BAR" : "KITCHEN",
+        modifier: `Extra: ${addon.name}`,
+      });
+    });
+
+    if (newLines.length === 0) {
+      toast.error("Select a variant or extra");
+      return;
+    }
+
+    setCart((prev) => [...prev, ...newLines]);
     setIsOptionsModalOpen(false);
     setSelectedPreparationStyle("");
-    setSelectedSizes([]);
+    setVariantQtyBySize({});
+    setAddonQtyById({});
   };
 
   const updateQty = (id, delta) => {
@@ -740,14 +762,20 @@ export default function OrderPage() {
       const json = await res.json();
 
       if (json.success) {
-        toast.success("Order sent to kitchen!");
+        const ticketType = json.data.ticketType || "KOT";
+        const isBarTicket = ticketType === "BAR_RECEIPT";
+        toast.success(
+          isBarTicket
+            ? "Bar ticket created!"
+            : "Order sent to kitchen!",
+        );
         setIsKitchenModalOpen(false);
         setGuestName(partyName);
         setActiveOrder(json.data);
         setOrderStatus("PENDING");
         setKotCartFingerprint(getCartFingerprint(cart));
 
-        // Check if there are items to print for KOT
+        // Check if there are items to print for KOT / Bar receipt
         if (json.data.kotPayload && json.data.kotPayload.length > 0) {
           setPrintOrderData({
             ...json.data,
@@ -756,7 +784,7 @@ export default function OrderPage() {
             guestCount: sessionData?.guestCount ?? json.data.guestCount ?? null,
           });
           setPrintKotItems(json.data.kotPayload);
-          setPrintType("kot");
+          setPrintType(isBarTicket ? "bar" : "kot");
           setRedirectAfterPrint(false);
           setIsPrintModalOpen(true);
         }
@@ -770,96 +798,6 @@ export default function OrderPage() {
     }
   };
 
-  const handleApplyDiscount = async () => {
-    if (!discountCode.trim()) {
-      toast.error("Enter a discount code.");
-      return;
-    }
-    try {
-      const res = await fetch("/api/orders/discount", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code: discountCode }),
-      });
-      const json = await res.json();
-      if (json.success) {
-        setAppliedDiscount({
-          code: json.data.code,
-          value: json.data.value,
-          type: json.data.discountType === "percent" ? "%" : "$",
-        });
-        toast.success("Discount applied!");
-      } else {
-        toast.error(json.message || "Invalid discount code");
-        setAppliedDiscount(null);
-      }
-    } catch (err) {
-      toast.error("Failed to apply discount");
-    }
-  };
-
-  const handleRemoveDiscount = () => {
-    setAppliedDiscount(null);
-    setDiscountCode("");
-  };
-
-  const formatDiscountOption = (coupon) => {
-    const amount =
-      coupon.discountType === "percent"
-        ? `${coupon.value}%`
-        : `$${Number(coupon.value).toFixed(2)}`;
-    return `${coupon.code} — ${amount}`;
-  };
-
-  const verifyGiftCard = async () => {
-    if (!giftCardCode.trim()) return;
-    const normalizedCode = giftCardCode.trim().toUpperCase();
-    setGiftCardCode(normalizedCode);
-    setIsVerifyingGiftCard(true);
-    setGiftCardError("");
-    setGiftCardBalance(null);
-    setGiftCardDetails(null);
-    try {
-      const res = await fetch(
-        `/api/menu/giftcards?code=${encodeURIComponent(normalizedCode)}`,
-      );
-      const json = await res.json();
-      if (json.success) {
-        setGiftCardDetails(json.data);
-        setIsGiftCardModalOpen(true);
-      } else {
-        setGiftCardError(
-          json.message || "Only issued active gift cards can be used",
-        );
-      }
-    } catch (err) {
-      setGiftCardError("Failed to verify Gift Card");
-    } finally {
-      setIsVerifyingGiftCard(false);
-    }
-  };
-
-  const handleApplyGiftCard = () => {
-    const actualBalance = giftCardDetails.balance ?? giftCardDetails.value;
-    setGiftCardBalance(actualBalance);
-    if (actualBalance < total) {
-      setGiftCardSplitAmount(Math.round((total - actualBalance) * 100) / 100);
-    } else {
-      setGiftCardSplitAmount(0);
-      setAmountTendered("");
-      setCardAmountTendered("");
-    }
-    setIsGiftCardModalOpen(false);
-  };
-
-  const handleRemoveGiftCard = () => {
-    setGiftCardBalance(null);
-    setGiftCardDetails(null);
-    setGiftCardCode("");
-    setGiftCardError("");
-    setGiftCardSplitAmount(0);
-    setIsGiftCardModalOpen(false);
-  };
   const subtotal = cart.reduce((sum, item) => sum + item.price * item.qty, 0);
   const totalTax = cart.reduce(
     (sum, item) => sum + (item.tax || 0) * item.qty,
@@ -871,36 +809,20 @@ export default function OrderPage() {
       : Math.min(appliedDiscount.value, subtotal)
     : 0;
   const total = subtotal - discountAmount + totalTax;
-  const cardDue = giftCardBalance !== null ? giftCardSplitAmount : total;
-  const parsedCardAmount =
-    cardAmountTendered === "" ? NaN : parseFloat(cardAmountTendered);
-  const cardPayAmount = Number.isFinite(parsedCardAmount)
-    ? parsedCardAmount
-    : cardDue;
-  const cashSplitAmount =
-    paymentMethod === "Card" && cardPayAmount < cardDue
-      ? Math.round((cardDue - cardPayAmount) * 100) / 100
-      : 0;
-  // Keep gift-card split in sync when discount changes the total due
-  useEffect(() => {
-    if (giftCardBalance === null) return;
-    if (giftCardBalance < total) {
-      setGiftCardSplitAmount(Math.round((total - giftCardBalance) * 100) / 100);
-    } else {
-      setGiftCardSplitAmount(0);
-    }
-  }, [total, giftCardBalance]);
 
   const hasSentKot =
     Boolean(activeOrder) &&
     orderStatus !== "Draft" &&
     kotCartFingerprint === getCartFingerprint(cart);
-  const canPay =
-    hasSentKot && cart.length > 0 && orderStatus !== "PAID";
+  const canPay = hasSentKot && cart.length > 0 && orderStatus !== "PAID";
 
   const openPaymentModal = () => {
     if (orderStatus === "PAID") return;
     if (!hasSentKot) {
+      toast.error("Send the order to kitchen (KOT) before taking payment.");
+      return;
+    }
+    if (!activeOrder) {
       toast.error("Send the order to kitchen (KOT) before taking payment.");
       return;
     }
@@ -939,118 +861,6 @@ export default function OrderPage() {
     }
   };
 
-  const handlePayment = async () => {
-    if (cart.length === 0) return;
-    if (!hasSentKot || !activeOrder) {
-      toast.error("Send the order to kitchen (KOT) before taking payment.");
-      return;
-    }
-    try {
-      setIsSubmitting(true);
-      const currentOrder = activeOrder;
-
-      // Proceed with Payment
-      const giftCardUsedAmount =
-        giftCardBalance !== null
-          ? Math.round((total - giftCardSplitAmount) * 100) / 100
-          : 0;
-      const partyName = resolvePartyName();
-
-      const paymentPayload = {
-        orderId: currentOrder._id,
-        amount: total,
-        method: paymentMethod,
-        sessionId: sessionId !== "new" ? sessionId : undefined,
-        tipAmount: tipAmount,
-        discountTotal: discountAmount,
-        discountCode: appliedDiscount ? appliedDiscount.code : null,
-        guestName: partyName,
-        partyName,
-        guestCount: sessionData?.guestCount ?? null,
-      };
-
-      if (paymentMethod === "Card") {
-        paymentPayload.cardType = selectedCardType;
-        paymentPayload.cardAmount = Math.min(cardPayAmount, cardDue);
-        if (cashSplitAmount > 0) {
-          paymentPayload.method = "Card + Cash";
-          paymentPayload.cashAmount = cashSplitAmount;
-        }
-      }
-
-      if (giftCardBalance !== null) {
-        paymentPayload.giftCardCode = giftCardCode.trim().toUpperCase();
-        paymentPayload.splitAmount = giftCardSplitAmount;
-      }
-
-      const res = await fetch("/api/sales/payments", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(paymentPayload),
-      });
-      const json = await res.json();
-      if (json.success) {
-        if (giftCardBalance !== null && giftCardCode) {
-          const amountToUse = giftCardUsedAmount;
-          await fetch("/api/menu/giftcards/redeem", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              code: giftCardCode.trim().toUpperCase(),
-              amountToUse: amountToUse,
-              orderId: currentOrder.orderNumber || currentOrder._id,
-              note: "POS Payment",
-            }),
-          });
-        }
-
-        toast.success("Payment collected successfully!");
-        setOrderStatus("PAID");
-        setIsPaymentModalOpen(false);
-
-        // Update current order with payment details so the receipt prints correctly
-        const updatedOrder = {
-          ...currentOrder,
-          ...(json.data || {}),
-          paymentStatus: "PAID",
-          paymentMethod:
-            paymentMethod === "Card" && cashSplitAmount > 0
-              ? selectedCardType
-                ? `Card - ${selectedCardType} + Cash`
-                : "Card + Cash"
-              : paymentMethod === "Card" && selectedCardType
-                ? `Card - ${selectedCardType}`
-                : paymentMethod,
-          tipAmount: tipAmount,
-          discountTotal: discountAmount,
-          discountCode: appliedDiscount ? appliedDiscount.code : null,
-          totalAmount: total,
-          subTotal: subtotal,
-          taxTotal: totalTax,
-          giftcardCode:
-            giftCardBalance !== null ? giftCardCode.trim().toUpperCase() : null,
-          giftcardUsedAmount: giftCardUsedAmount,
-          guestName: partyName,
-          partyName,
-          guestCount: sessionData?.guestCount ?? null,
-        };
-
-        // Open Customer Receipt Print Preview
-        setPrintOrderData(updatedOrder);
-        setPrintTaxBreakdown(generateTaxBreakdown());
-        setPrintType("customer");
-        setRedirectAfterPrint(false);
-        setIsPrintModalOpen(true);
-      } else {
-        toast.error(json.message);
-      }
-    } catch (err) {
-      toast.error("Failed to process payment.");
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
   const handleClearOrder = () => {
     setCart([]);
     setOrderNote("");
@@ -1068,7 +878,7 @@ export default function OrderPage() {
   }
 
   return (
-    <div className="flex flex-col h-[calc(100vh-140px)] w-full bg-zinc-50 font-sans overflow-hidden border border-zinc-200 rounded-xl shadow-sm">
+    <div className="flex flex-col h-[calc(100vh-115px)] w-full bg-zinc-50 font-sans overflow-hidden border border-zinc-200 rounded-xl shadow-sm">
       {/* SPLIT PANELS */}
       <div className="flex-1 flex min-h-0 overflow-hidden">
         {/* LEFT PANEL (MENU) */}
@@ -1573,7 +1383,7 @@ export default function OrderPage() {
               <Button
                 variant="outline"
                 onClick={() => setIsKitchenModalOpen(false)}
-                className="flex-1 h-12 rounded-xl font-bold border-zinc-200 text-zinc-700 shadow-none"
+                className="flex-1 h-12 rounded-xl font-bold border-zinc-200 shadow-none bg-red-500 text-white hover:bg-red-600"
               >
                 Cancel
               </Button>
@@ -1593,1080 +1403,64 @@ export default function OrderPage() {
         </div>
       )}
 
-      {/* PAYMENT MODAL */}
-      {isPaymentModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-zinc-900/50 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl w-full max-w-5xl shadow-2xl flex flex-col max-h-[94vh] overflow-hidden">
-            {/* Header */}
-            <div className="px-5 py-4 border-b border-zinc-100 flex items-center justify-between shrink-0">
-              <h2 className="text-xl font-black text-zinc-900 tracking-tight">
-                PAYMENT
-              </h2>
-              <button
-                onClick={() => setIsPaymentModalOpen(false)}
-                className="w-10 h-10 bg-zinc-100 rounded-full flex items-center justify-center text-zinc-500 hover:bg-zinc-200 transition-colors"
-                aria-label="Close payment"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Body: two columns on tablet+ */}
-            <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar">
-              <div className="grid grid-cols-1 md:grid-cols-2 min-h-full">
-                {/* LEFT — Order Summary + Discount */}
-                <div className="p-5 md:p-6 border-b md:border-b-0 md:border-r border-zinc-100 bg-zinc-50/60 space-y-5">
-                  <div>
-                    <p className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider mb-3">
-                      Order Summary
-                    </p>
-                    <div className="flex flex-wrap gap-2 mb-4">
-                      {activeOrder?.orderNumber && (
-                        <span className="inline-flex items-center px-2.5 py-1 rounded-lg bg-white border border-zinc-200 text-xs font-bold text-zinc-800">
-                          Order #{activeOrder.orderNumber}
-                        </span>
-                      )}
-                      {(activeOrder?.tableNo ||
-                        sessionData?.tableNumber ||
-                        (sessionId === "new" && guestTable)) && (
-                        <span className="inline-flex items-center px-2.5 py-1 rounded-lg bg-white border border-zinc-200 text-xs font-bold text-zinc-800">
-                          {" "}
-                          {activeOrder?.tableNo ||
-                            sessionData?.tableNumber ||
-                            guestTable}
-                        </span>
-                      )}
-                      {sessionData?.guestCount != null && (
-                        <span className="inline-flex items-center px-2.5 py-1 rounded-lg bg-white border border-zinc-200 text-xs font-bold text-zinc-800">
-                          {sessionData.guestCount} guest
-                          {sessionData.guestCount === 1 ? "" : "s"}
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="space-y-2 mb-4">
-                      <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider flex items-center gap-1.5">
-                        <User className="w-3.5 h-3.5" />
-                        Party / Customer Name
-                        <span className="text-zinc-400 font-semibold normal-case">
-                          (optional)
-                        </span>
-                      </label>
-                      <Input
-                        placeholder="e.g. John Doe"
-                        value={guestName}
-                        onChange={(e) => setGuestName(e.target.value)}
-                        className="h-11 bg-white border-zinc-200 rounded-xl text-sm font-semibold focus-visible:ring-orange-500"
-                      />
-                    </div>
-
-                    <div className="bg-white rounded-xl border border-zinc-200 p-4 space-y-2.5 shadow-sm">
-                      <div className="flex justify-between text-sm font-semibold text-zinc-500">
-                        <span>Subtotal</span>
-                        <span className="text-zinc-900">
-                          ${subtotal.toFixed(2)}
-                        </span>
-                      </div>
-                      <div className="flex justify-between text-sm font-semibold text-zinc-500">
-                        <span>Tax</span>
-                        <span className="text-zinc-900">
-                          ${totalTax.toFixed(2)}
-                        </span>
-                      </div>
-                      {discountAmount > 0 && (
-                        <div className="flex justify-between text-sm font-semibold text-green-600">
-                          <span>
-                            Discount
-                            {appliedDiscount?.code
-                              ? ` (${appliedDiscount.code})`
-                              : ""}
-                          </span>
-                          <span>-${discountAmount.toFixed(2)}</span>
-                        </div>
-                      )}
-                      <div className="h-px bg-zinc-200 my-1" />
-                      <div className="flex justify-between items-end pt-1">
-                        <span className="text-sm font-black text-zinc-900 uppercase tracking-wide">
-                          Total Due
-                        </span>
-                        <span className="text-3xl font-black text-zinc-900 leading-none">
-                          ${total.toFixed(2)}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Discount */}
-                  <div className="space-y-2">
-                    <p className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider">
-                      Apply Discount
-                    </p>
-                    {appliedDiscount ? (
-                      <div className="bg-green-50 border border-green-200 rounded-xl p-4 space-y-3">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="flex items-center gap-2 min-w-0">
-                            <CheckCircle2 className="w-5 h-5 text-green-600 shrink-0" />
-                            <div className="min-w-0">
-                              <p className="text-sm font-black text-green-900 truncate">
-                                {appliedDiscount.code}
-                              </p>
-                              <p className="text-sm font-bold text-green-700">
-                                -${discountAmount.toFixed(2)}
-                              </p>
-                            </div>
-                          </div>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            onClick={handleRemoveDiscount}
-                            className="h-10 px-4 rounded-lg bg-red-500 border-red-200 text-white hover:bg-red-600 font-bold text-sm shadow-none shrink-0"
-                          >
-                            Remove
-                          </Button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="space-y-2">
-                        <Select
-                          value={discountCode || undefined}
-                          onValueChange={(value) => setDiscountCode(value)}
-                        >
-                          <SelectTrigger className="w-full h-12 bg-white border-zinc-200 rounded-xl font-semibold text-sm focus:ring-orange-500">
-                            <SelectValue placeholder="Select a discount..." />
-                          </SelectTrigger>
-                          <SelectContent className="z-[80]">
-                            {availableDiscounts.length === 0 ? (
-                              <SelectItem value="__none" disabled>
-                                No active discounts
-                              </SelectItem>
-                            ) : (
-                              availableDiscounts.map((coupon) => (
-                                <SelectItem key={coupon._id || coupon.code} value={coupon.code}>
-                                  {formatDiscountOption(coupon)}
-                                </SelectItem>
-                              ))
-                            )}
-                          </SelectContent>
-                        </Select>
-                        <div className="flex gap-2">
-                          <div className="relative flex-1">
-                            <Percent className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
-                            <input
-                              type="text"
-                              value={discountCode}
-                              onChange={(e) =>
-                                setDiscountCode(e.target.value.toUpperCase())
-                              }
-                              placeholder="Or enter discount code..."
-                              className="w-full h-12 pl-9 pr-4 bg-white border border-zinc-200 rounded-xl font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 uppercase"
-                            />
-                          </div>
-                          <Button
-                            type="button"
-                            onClick={handleApplyDiscount}
-                            disabled={!discountCode.trim()}
-                            className="h-12 px-5 bg-zinc-900 hover:bg-zinc-800 text-white font-bold rounded-xl shadow-none"
-                          >
-                            Apply
-                          </Button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Split payment breakdown */}
-                  {(giftCardBalance !== null || cashSplitAmount > 0) && (
-                    <div className="bg-white rounded-xl border border-zinc-200 p-4 space-y-2 shadow-sm">
-                      <p className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider mb-1">
-                        Payment Breakdown
-                      </p>
-                      {giftCardBalance !== null && (
-                        <div className="flex justify-between text-sm font-semibold text-zinc-600">
-                          <span>Gift Card</span>
-                          <span className="text-zinc-900">
-                            $
-                            {Math.max(
-                              0,
-                              Math.round((total - giftCardSplitAmount) * 100) /
-                                100,
-                            ).toFixed(2)}
-                          </span>
-                        </div>
-                      )}
-                      {paymentMethod === "Card" && (
-                        <div className="flex justify-between text-sm font-semibold text-zinc-600">
-                          <span>Card</span>
-                          <span className="text-zinc-900">
-                            ${Math.min(cardPayAmount, cardDue).toFixed(2)}
-                          </span>
-                        </div>
-                      )}
-                      {cashSplitAmount > 0 && (
-                        <div className="flex justify-between text-sm font-semibold text-zinc-600">
-                          <span>Cash</span>
-                          <span className="text-zinc-900">
-                            ${cashSplitAmount.toFixed(2)}
-                          </span>
-                        </div>
-                      )}
-                      {giftCardBalance !== null &&
-                        giftCardSplitAmount > 0 &&
-                        paymentMethod !== "Card" && (
-                        <div className="flex justify-between text-sm font-semibold text-zinc-600">
-                          <span>
-                            {paymentMethod === "Cash" ? "Cash" : "Remaining"}
-                          </span>
-                          <span className="text-zinc-900">
-                            ${giftCardSplitAmount.toFixed(2)}
-                          </span>
-                        </div>
-                      )}
-                      <div className="h-px bg-zinc-200" />
-                      <div className="flex justify-between text-sm font-black text-zinc-900">
-                        <span>Total</span>
-                        <span>${total.toFixed(2)}</span>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* RIGHT — Payment Method */}
-                <div className="p-5 md:p-6 space-y-5">
-                  <div>
-                    <p className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider mb-3">
-                      Payment Method
-                    </p>
-                    <div className="grid grid-cols-3 gap-2.5">
-                      {[
-                        { key: "Card", label: "Card", Icon: CreditCard },
-                        { key: "Cash", label: "Cash", Icon: Banknote },
-                        { key: "GiftCard", label: "Gift Card", Icon: Gift },
-                      ].map(({ key, label, Icon }) => (
-                        <button
-                          key={key}
-                          type="button"
-                          onClick={() => setPaymentMethod(key)}
-                          className={`flex flex-col items-center justify-center gap-1.5 min-h-[72px] rounded-xl border-2 transition-all ${
-                            paymentMethod === key
-                              ? "border-orange-500 bg-orange-50 text-orange-700 shadow-sm"
-                              : "border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300"
-                          }`}
-                        >
-                          <Icon className="w-6 h-6" strokeWidth={2} />
-                          <span className="text-xs font-black uppercase tracking-wide">
-                            {label}
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* CARD */}
-                  {paymentMethod === "Card" && (
-                    <div className="space-y-4">
-                      <h3 className="text-sm font-black text-zinc-900 uppercase tracking-wide">
-                        Card Payment
-                      </h3>
-
-                      <div className="space-y-2">
-                        <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
-                          Apply Gift Card (Optional)
-                        </label>
-                        <div className="flex gap-2">
-                          <div className="relative flex-1">
-                            <Tag className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
-                            <input
-                              type="text"
-                              value={giftCardCode}
-                              onChange={(e) => setGiftCardCode(e.target.value)}
-                              placeholder="Enter code..."
-                              disabled={giftCardBalance !== null}
-                              className="w-full h-12 pl-9 pr-4 bg-white border border-zinc-200 rounded-xl font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 uppercase disabled:bg-zinc-50 disabled:text-zinc-500"
-                            />
-                          </div>
-                          {giftCardBalance !== null ? (
-                            <Button
-                              type="button"
-                              onClick={handleRemoveGiftCard}
-                              className="h-12 px-4 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl shadow-none"
-                            >
-                              Remove
-                            </Button>
-                          ) : (
-                            <Button
-                              onClick={verifyGiftCard}
-                              disabled={!giftCardCode || isVerifyingGiftCard}
-                              className="h-12 px-4 bg-zinc-900 hover:bg-zinc-800 text-white font-bold rounded-xl shadow-none"
-                            >
-                              {isVerifyingGiftCard ? (
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                              ) : (
-                                "Verify"
-                              )}
-                            </Button>
-                          )}
-                        </div>
-                        {giftCardError && (
-                          <p className="text-xs font-bold text-red-500">
-                            {giftCardError}
-                          </p>
-                        )}
-                      </div>
-
-                      {giftCardBalance !== null && (
-                        <div className="p-4 bg-green-50 border border-green-200 rounded-xl space-y-2">
-                          <div className="flex justify-between items-center text-sm">
-                            <span className="font-bold text-green-900">
-                              Gift Card Applied
-                            </span>
-                            <span className="font-black text-green-700">
-                              $
-                              {Math.max(
-                                0,
-                                Math.round(
-                                  (total - giftCardSplitAmount) * 100,
-                                ) / 100,
-                              ).toFixed(2)}
-                            </span>
-                          </div>
-                          <div className="flex justify-between items-center text-sm pt-2 border-t border-green-200/50">
-                            <span className="font-bold text-orange-600">
-                              Remaining Due (Card)
-                            </span>
-                            <span className="font-black text-orange-600">
-                              ${giftCardSplitAmount.toFixed(2)}
-                            </span>
-                          </div>
-                        </div>
-                      )}
-
-                      {selectedCardType &&
-                        cardAmountTendered &&
-                        parseFloat(cardAmountTendered) >
-                          (giftCardBalance !== null
-                            ? giftCardSplitAmount
-                            : total) && (
-                          <div className="p-4 bg-orange-50 border border-orange-200 rounded-xl">
-                            <div className="flex justify-between items-center mb-3">
-                              <span className="text-sm font-bold text-orange-900">
-                                Overpayment / Tip
-                              </span>
-                              <span className="text-xl font-black text-orange-600">
-                                $
-                                {(
-                                  parseFloat(cardAmountTendered) -
-                                  (giftCardBalance !== null
-                                    ? giftCardSplitAmount
-                                    : total)
-                                ).toFixed(2)}
-                              </span>
-                            </div>
-                            <label className="flex items-center gap-3 cursor-pointer group min-h-[44px]">
-                              <div
-                                className={`w-6 h-6 rounded border flex items-center justify-center transition-colors ${tipAmount > 0 ? "bg-orange-500 border-orange-500" : "bg-white border-zinc-300 group-hover:border-orange-400"}`}
-                              >
-                                {tipAmount > 0 && (
-                                  <CheckCircle2 className="w-4 h-4 text-white" />
-                                )}
-                              </div>
-                              <input
-                                type="checkbox"
-                                className="hidden"
-                                checked={tipAmount > 0}
-                                onChange={(e) => {
-                                  if (e.target.checked) {
-                                    setTipAmount(
-                                      Math.round(
-                                        (parseFloat(cardAmountTendered) -
-                                          (giftCardBalance !== null
-                                            ? giftCardSplitAmount
-                                            : total)) *
-                                          100,
-                                      ) / 100,
-                                    );
-                                  } else {
-                                    setTipAmount(0);
-                                  }
-                                }}
-                              />
-                              <span className="text-sm font-bold text-orange-900">
-                                Keep as Tip
-                              </span>
-                            </label>
-                          </div>
-                        )}
-
-                      {(giftCardBalance === null ||
-                        giftCardSplitAmount > 0) && (
-                        <>
-                          <div className="space-y-2">
-                            <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
-                              Select Card Type
-                            </label>
-                            <div className="grid grid-cols-5 gap-2">
-                              {[
-                                { name: "Visa", image: "/card/visa.png" },
-                                {
-                                  name: "Mastercard",
-                                  image: "/card/mastercard.webp",
-                                },
-                                { name: "RuPay", image: "/card/rupay.webp" },
-                                {
-                                  name: "Amex",
-                                  image: "/card/american-express.webp",
-                                },
-                                {
-                                  name: "Discover",
-                                  image: "/card/discover.png",
-                                },
-                              ].map((card) => (
-                                <button
-                                  key={card.name}
-                                  type="button"
-                                  onClick={() => setSelectedCardType(card.name)}
-                                  className={`flex flex-col items-center justify-center min-h-[64px] p-2 rounded-xl border-2 transition-all ${
-                                    selectedCardType === card.name
-                                      ? "border-orange-500 bg-orange-50 ring-1 ring-orange-500"
-                                      : "border-zinc-200 bg-white hover:border-orange-300"
-                                  }`}
-                                >
-                                  <div className="relative w-10 h-6 mb-1">
-                                    <Image
-                                      src={card.image}
-                                      alt={card.name}
-                                      fill
-                                      className="object-contain"
-                                    />
-                                  </div>
-                                  <span className="text-[10px] font-bold text-zinc-600 text-center leading-tight">
-                                    {card.name}
-                                  </span>
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-
-                          {selectedCardType && (
-                            <div className="space-y-4">
-                              <div className="space-y-2">
-                                <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
-                                  Amount on Card
-                                </label>
-                                <div className="relative">
-                                  <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-400" />
-                                  <input
-                                    type="number"
-                                    min="0"
-                                    value={cardAmountTendered}
-                                    onChange={(e) =>
-                                      setCardAmountTendered(e.target.value)
-                                    }
-                                    placeholder={cardDue.toFixed(2)}
-                                    className="w-full h-14 pl-10 pr-4 bg-white border border-zinc-200 rounded-xl font-bold text-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
-                                  />
-                                </div>
-                              </div>
-
-                              <div className="bg-zinc-50 border border-zinc-200 rounded-xl p-4 space-y-3">
-                                <div className="flex justify-between items-center">
-                                  <span className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
-                                    Amount in Cash
-                                  </span>
-                                  <span className="text-xl font-black text-zinc-900">
-                                    ${cashSplitAmount.toFixed(2)}
-                                  </span>
-                                </div>
-                                <p className="text-xs font-semibold text-zinc-500">
-                                  Want to Pay By Cash? Enter the remaning amount to collect via cash.
-                                </p>
-                                {cashSplitAmount > 0 && (
-                                  <>
-                                    <div className="space-y-2">
-                                      <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
-                                        Cash Tendered
-                                      </label>
-                                      <div className="relative">
-                                        <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-400" />
-                                        <input
-                                          type="number"
-                                          min="0"
-                                          value={amountTendered}
-                                          onChange={(e) =>
-                                            setAmountTendered(e.target.value)
-                                          }
-                                          placeholder={cashSplitAmount.toFixed(2)}
-                                          className="w-full h-14 pl-10 pr-4 bg-white border border-zinc-200 rounded-xl font-bold text-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
-                                        />
-                                      </div>
-                                    </div>
-                                    {parseFloat(amountTendered) >
-                                      cashSplitAmount && (
-                                      <div className="p-4 bg-orange-50 border border-orange-200 rounded-xl">
-                                        <div className="flex justify-between items-center">
-                                          <span className="text-sm font-bold text-orange-900">
-                                            Change Due
-                                          </span>
-                                          <span className="text-xl font-black text-orange-600">
-                                            $
-                                            {(
-                                              parseFloat(amountTendered) -
-                                              cashSplitAmount
-                                            ).toFixed(2)}
-                                          </span>
-                                        </div>
-                                      </div>
-                                    )}
-                                  </>
-                                )}
-                              </div>
-                            </div>
-                          )}
-                        </>
-                      )}
-                    </div>
-                  )}
-
-                  {/* CASH */}
-                  {paymentMethod === "Cash" && (
-                    <div className="space-y-4">
-                      <h3 className="text-sm font-black text-zinc-900 uppercase tracking-wide">
-                        Cash Payment
-                      </h3>
-
-                      <div className="space-y-2">
-                        <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
-                          Apply Gift Card (Optional)
-                        </label>
-                        <div className="flex gap-2">
-                          <div className="relative flex-1">
-                            <Tag className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
-                            <input
-                              type="text"
-                              value={giftCardCode}
-                              onChange={(e) => setGiftCardCode(e.target.value)}
-                              placeholder="Enter code..."
-                              disabled={giftCardBalance !== null}
-                              className="w-full h-12 pl-9 pr-4 bg-white border border-zinc-200 rounded-xl font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 uppercase disabled:bg-zinc-50 disabled:text-zinc-500"
-                            />
-                          </div>
-                          {giftCardBalance !== null ? (
-                            <Button
-                              type="button"
-                              onClick={handleRemoveGiftCard}
-                              className="h-12 px-4 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl shadow-none"
-                            >
-                              Remove
-                            </Button>
-                          ) : (
-                            <Button
-                              onClick={verifyGiftCard}
-                              disabled={!giftCardCode || isVerifyingGiftCard}
-                              className="h-12 px-4 bg-zinc-900 hover:bg-zinc-800 text-white font-bold rounded-xl shadow-none"
-                            >
-                              {isVerifyingGiftCard ? (
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                              ) : (
-                                "Verify"
-                              )}
-                            </Button>
-                          )}
-                        </div>
-                        {giftCardError && (
-                          <p className="text-xs font-bold text-red-500">
-                            {giftCardError}
-                          </p>
-                        )}
-                      </div>
-
-                      {giftCardBalance !== null && (
-                        <div className="p-4 bg-green-50 border border-green-200 rounded-xl space-y-2">
-                          <div className="flex justify-between items-center text-sm">
-                            <span className="font-bold text-green-900">
-                              Gift Card Applied
-                            </span>
-                            <span className="font-black text-green-700">
-                              $
-                              {Math.max(
-                                0,
-                                Math.round(
-                                  (total - giftCardSplitAmount) * 100,
-                                ) / 100,
-                              ).toFixed(2)}
-                            </span>
-                          </div>
-                          <div className="flex justify-between items-center text-sm pt-2 border-t border-green-200/50">
-                            <span className="font-bold text-orange-600">
-                              Remaining Due (Cash)
-                            </span>
-                            <span className="font-black text-orange-600">
-                              ${giftCardSplitAmount.toFixed(2)}
-                            </span>
-                          </div>
-                        </div>
-                      )}
-
-                      {(giftCardBalance === null ||
-                        giftCardSplitAmount > 0) && (
-                        <>
-                          <div className="bg-zinc-50 border border-zinc-200 rounded-xl p-4 flex justify-between items-center">
-                            <span className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
-                              Amount Due
-                            </span>
-                            <span className="text-2xl font-black text-zinc-900">
-                              $
-                              {(giftCardBalance !== null
-                                ? giftCardSplitAmount
-                                : total
-                              ).toFixed(2)}
-                            </span>
-                          </div>
-
-                              {parseFloat(amountTendered) >
-                                (giftCardBalance !== null
-                                  ? giftCardSplitAmount
-                                  : total) && (
-                                <div className="p-4 bg-orange-50 border border-orange-200 rounded-xl">
-                                  <div className="flex justify-between items-center mb-3">
-                                    <span className="text-sm font-bold text-orange-900">
-                                      Change Due
-                                    </span>
-                                    <span className="text-xl font-black text-orange-600">
-                                      $
-                                      {(
-                                        parseFloat(amountTendered) -
-                                        (giftCardBalance !== null
-                                          ? giftCardSplitAmount
-                                          : total)
-                                      ).toFixed(2)}
-                                    </span>
-                                  </div>
-                                  <label className="flex items-center gap-3 cursor-pointer group min-h-[44px]">
-                                    <div
-                                      className={`w-6 h-6 rounded border flex items-center justify-center transition-colors ${tipAmount > 0 ? "bg-orange-500 border-orange-500" : "bg-white border-zinc-300 group-hover:border-orange-400"}`}
-                                    >
-                                      {tipAmount > 0 && (
-                                        <CheckCircle2 className="w-4 h-4 text-white" />
-                                      )}
-                                    </div>
-                                    <input
-                                      type="checkbox"
-                                      className="hidden"
-                                      checked={tipAmount > 0}
-                                      onChange={(e) => {
-                                        if (e.target.checked) {
-                                          setTipAmount(
-                                            Math.round(
-                                              (parseFloat(amountTendered) -
-                                                (giftCardBalance !== null
-                                                  ? giftCardSplitAmount
-                                                  : total)) *
-                                                100,
-                                            ) / 100,
-                                          );
-                                        } else {
-                                          setTipAmount(0);
-                                        }
-                                      }}
-                                    />
-                                    <span className="text-sm font-bold text-orange-900">
-                                      Keep as Tip
-                                    </span>
-                                  </label>
-                                </div>
-                              )}
-                          <div className="space-y-2">
-                            <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
-                              Amount Tendered
-                            </label>
-                            <div className="relative">
-                              <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-400" />
-                              <input
-                                type="number"
-                                min="0"
-                                value={amountTendered}
-                                onChange={(e) =>
-                                  setAmountTendered(e.target.value)
-                                }
-                                placeholder="0.00"
-                                className="w-full h-14 pl-10 pr-4 bg-white border border-zinc-200 rounded-xl font-bold text-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
-                              />
-                            </div>
-                          </div>
-
-                        </>
-                      )}
-                    </div>
-                  )}
-
-                  {/* GIFT CARD */}
-                  {paymentMethod === "GiftCard" && (
-                    <div className="space-y-4">
-                      <h3 className="text-sm font-black text-zinc-900 uppercase tracking-wide">
-                        Gift Card Payment
-                      </h3>
-
-                      <div className="space-y-2">
-                        <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
-                          Gift Card Code
-                        </label>
-                        <div className="flex gap-2">
-                          <div className="relative flex-1">
-                            <Tag className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
-                            <input
-                              type="text"
-                              value={giftCardCode}
-                              onChange={(e) => setGiftCardCode(e.target.value)}
-                              placeholder="Enter code..."
-                              disabled={giftCardBalance !== null}
-                              className="w-full h-12 pl-9 pr-4 bg-white border border-zinc-200 rounded-xl font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 uppercase disabled:bg-zinc-50 disabled:text-zinc-500"
-                            />
-                          </div>
-                          {giftCardBalance !== null ? (
-                            <Button
-                              type="button"
-                              onClick={handleRemoveGiftCard}
-                              className="h-12 px-4 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl shadow-none"
-                            >
-                              Remove
-                            </Button>
-                          ) : (
-                            <Button
-                              onClick={verifyGiftCard}
-                              disabled={!giftCardCode || isVerifyingGiftCard}
-                              className="h-12 px-4 bg-zinc-900 hover:bg-zinc-800 text-white font-bold rounded-xl shadow-none"
-                            >
-                              {isVerifyingGiftCard ? (
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                              ) : (
-                                "Verify"
-                              )}
-                            </Button>
-                          )}
-                        </div>
-                        {giftCardError && (
-                          <p className="text-xs font-bold text-red-500">
-                            {giftCardError}
-                          </p>
-                        )}
-                      </div>
-
-                      {giftCardBalance !== null && (
-                        <div className="p-4 bg-green-50 border border-green-200 rounded-xl space-y-2.5">
-                          <div className="flex justify-between items-center text-sm">
-                            <span className="font-bold text-green-900">
-                              Available Balance
-                            </span>
-                            <span className="font-black text-green-700">
-                              ${giftCardBalance.toFixed(2)}
-                            </span>
-                          </div>
-                          <div className="flex justify-between items-center text-sm">
-                            <span className="font-bold text-green-900">
-                              Amount Applied
-                            </span>
-                            <span className="font-black text-green-700">
-                              $
-                              {Math.max(
-                                0,
-                                Math.round(
-                                  (total - giftCardSplitAmount) * 100,
-                                ) / 100,
-                              ).toFixed(2)}
-                            </span>
-                          </div>
-                          {giftCardSplitAmount > 0 ? (
-                            <>
-                              <div className="h-px bg-green-200/80" />
-                              <div className="flex justify-between items-center text-sm">
-                                <span className="font-bold text-zinc-700">
-                                  Order Total
-                                </span>
-                                <span className="font-black text-zinc-900">
-                                  ${total.toFixed(2)}
-                                </span>
-                              </div>
-                              <div className="flex justify-between items-center text-sm">
-                                <span className="font-bold text-orange-600">
-                                  Remaining Due
-                                </span>
-                                <span className="font-black text-orange-600">
-                                  ${giftCardSplitAmount.toFixed(2)}
-                                </span>
-                              </div>
-                              <div className="grid grid-cols-2 gap-2 pt-2">
-                                <button
-                                  type="button"
-                                  onClick={() => setPaymentMethod("Cash")}
-                                  className="min-h-[48px] rounded-xl border-2 border-zinc-200 bg-white font-bold text-sm text-zinc-800 hover:border-orange-400 hover:bg-orange-50"
-                                >
-                                  Pay Remaining Cash
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => setPaymentMethod("Card")}
-                                  className="min-h-[48px] rounded-xl border-2 border-zinc-200 bg-white font-bold text-sm text-zinc-800 hover:border-orange-400 hover:bg-orange-50"
-                                >
-                                  Pay Remaining Card
-                                </button>
-                              </div>
-                            </>
-                          ) : (
-                            <div className="flex justify-between items-center text-sm pt-2 border-t border-green-200/50">
-                              <span className="font-bold text-green-900">
-                                Remaining Balance After
-                              </span>
-                              <span className="font-bold text-green-700">
-                                ${(giftCardBalance - total).toFixed(2)}
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Footer */}
-            <div className="p-4 sm:p-5 border-t border-zinc-100 flex gap-3 shrink-0 bg-white">
-              <Button
-                variant="outline"
-                onClick={() => setIsPaymentModalOpen(false)}
-                className="flex-1 h-14 rounded-xl font-bold border-zinc-200 text-zinc-700 shadow-none hover:bg-zinc-50 text-base"
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={handlePayment}
-                disabled={
-                  isSubmitting ||
-                  (paymentMethod === "Cash" &&
-                    giftCardSplitAmount > 0 &&
-                    (!amountTendered ||
-                      parseFloat(amountTendered) < giftCardSplitAmount)) ||
-                  (paymentMethod === "Cash" &&
-                    giftCardBalance === null &&
-                    (!amountTendered || parseFloat(amountTendered) < total)) ||
-                  (paymentMethod === "GiftCard" && giftCardBalance === null) ||
-                  (paymentMethod === "Card" &&
-                    (giftCardBalance === null || giftCardSplitAmount > 0) &&
-                    cardPayAmount > 0 &&
-                    !selectedCardType) ||
-                  (paymentMethod === "Card" &&
-                    cashSplitAmount > 0 &&
-                    (!amountTendered ||
-                      parseFloat(amountTendered) < cashSplitAmount))
-                }
-                className="flex-[1.4] h-14 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-bold shadow-none text-base"
-              >
-                {isSubmitting ? (
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                ) : (
-                  "Complete Payment"
-                )}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* GIFTCARD VERIFICATION MODAL */}
-      {isGiftCardModalOpen && giftCardDetails && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-zinc-900/50 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl flex flex-col max-h-[90vh] custom-scrollbar">
-            <div className="p-5 border-b border-zinc-100 flex items-center justify-between">
-              <h2 className="text-xl font-bold text-zinc-900">
-                Gift Card Details
-              </h2>
-              <button
-                onClick={() => setIsGiftCardModalOpen(false)}
-                className="w-8 h-8 rounded border border-zinc-700 bg-red-500 text-white flex items-center justify-center hover:bg-zinc-100"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="p-5 space-y-4 overflow-y-auto">
-              <div className="grid grid-cols-2 gap-4 bg-zinc-50 p-4 rounded-xl border border-zinc-200">
-                <div>
-                  <p className="text-xs font-bold text-zinc-500 uppercase">
-                    Code
-                  </p>
-                  <p className="font-mono text-zinc-900">
-                    {giftCardDetails.code}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs font-bold text-zinc-500 uppercase">
-                    Balance
-                  </p>
-                  <p className="font-bold text-green-600">
-                    $
-                    {(
-                      giftCardDetails.balance ?? giftCardDetails.value
-                    )?.toFixed(2)}
-                  </p>
-                </div>
-                {giftCardDetails.name && (
-                  <div className="col-span-2">
-                    <p className="text-xs font-bold text-zinc-500 uppercase">
-                      Card Name
-                    </p>
-                    <p className="font-semibold text-zinc-900">
-                      {giftCardDetails.name}
-                    </p>
-                  </div>
-                )}
-                <div>
-                  <p className="text-xs font-bold text-zinc-500 uppercase">
-                    Original Value
-                  </p>
-                  <p className="font-semibold text-zinc-900">
-                    ${Number(giftCardDetails.value || 0).toFixed(2)}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs font-bold text-zinc-500 uppercase">
-                    Status
-                  </p>
-                  <p className="font-semibold text-zinc-900">
-                    {giftCardDetails.status || "Active"}
-                    {giftCardDetails.isIssued ? " · Issued" : ""}
-                  </p>
-                </div>
-              </div>
-
-              <div className="bg-white border border-zinc-200 rounded-xl p-4 space-y-3">
-                <h3 className="text-sm font-bold text-zinc-900">Issued To</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <p className="text-xs font-bold text-zinc-500 uppercase">
-                      Name
-                    </p>
-                    <p className="text-sm font-semibold text-zinc-900">
-                      {giftCardDetails.recipientName || "—"}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xs font-bold text-zinc-500 uppercase">
-                      Email
-                    </p>
-                    <p className="text-sm font-semibold text-zinc-900 break-all">
-                      {giftCardDetails.recipientEmail || "—"}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xs font-bold text-zinc-500 uppercase">
-                      Phone
-                    </p>
-                    <p className="text-sm font-semibold text-zinc-900">
-                      {giftCardDetails.recipientPhone || "—"}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xs font-bold text-zinc-500 uppercase">
-                      Issue Date
-                    </p>
-                    <p className="text-sm font-semibold text-zinc-900">
-                      {giftCardDetails.issueDate
-                        ? new Date(
-                            giftCardDetails.issueDate,
-                          ).toLocaleDateString()
-                        : "—"}
-                    </p>
-                  </div>
-                  {(giftCardDetails.validFrom ||
-                    giftCardDetails.validUntil) && (
-                    <div className="sm:col-span-2">
-                      <p className="text-xs font-bold text-zinc-500 uppercase">
-                        Valid Period
-                      </p>
-                      <p className="text-sm font-semibold text-zinc-900">
-                        {giftCardDetails.validFrom
-                          ? new Date(
-                              giftCardDetails.validFrom,
-                            ).toLocaleDateString()
-                          : "—"}
-                        {" → "}
-                        {giftCardDetails.validUntil
-                          ? new Date(
-                              giftCardDetails.validUntil,
-                            ).toLocaleDateString()
-                          : "—"}
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div>
-                <h3 className="text-sm font-bold text-zinc-900 mb-2">
-                  Usage History
-                </h3>
-                {giftCardDetails.history &&
-                giftCardDetails.history.length > 0 ? (
-                  <div className="border border-zinc-200 rounded-lg overflow-hidden">
-                    <table className="w-full text-sm text-left">
-                      <thead className="bg-zinc-50 text-xs text-zinc-500 font-bold uppercase">
-                        <tr>
-                          <th className="px-3 py-2">Date</th>
-                          <th className="px-3 py-2">Used</th>
-                          <th className="px-3 py-2">Balance</th>
-                          <th className="px-3 py-2">Order</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-zinc-200">
-                        {giftCardDetails.history.map((h, i) => (
-                          <tr key={i}>
-                            <td className="px-4 py-2 text-zinc-600">
-                              {new Date(h.usedAt).toLocaleDateString()}
-                            </td>
-                            <td className="px-3 py-2 text-red-600">
-                              -${h.amountUsed?.toFixed(2)}
-                            </td>
-                            <td className="px-3 py-2 font-medium">
-                              ${h.balanceAfter?.toFixed(2)}
-                            </td>
-                            <td className="px-3 py-2 text-zinc-600 text-xs">
-                              {h.orderId || h.note || "—"}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                ) : (
-                  <p className="text-sm text-zinc-500">
-                    No previous usage history.
-                  </p>
-                )}
-              </div>
-            </div>
-
-            <div className="p-5 border-t border-zinc-100 flex gap-3 shrink-0">
-              <Button
-                variant="outline"
-                onClick={() => setIsGiftCardModalOpen(false)}
-                className="flex-1 font-bold border-zinc-200 text-zinc-700 shadow-none"
-              >
-                No, Cancel
-              </Button>
-              <Button
-                onClick={handleApplyGiftCard}
-                className="flex-2 bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-none"
-              >
-                Yes, Apply
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+      <TodayOrderPaymentModal
+        key={activeOrder?._id || "session-payment"}
+        open={isPaymentModalOpen}
+        onClose={() => setIsPaymentModalOpen(false)}
+        sessionId={sessionId !== "new" ? sessionId : undefined}
+        guestName={guestName}
+        onGuestNameChange={setGuestName}
+        redeemNote="POS Payment"
+        order={
+          activeOrder
+            ? {
+                ...activeOrder,
+                subTotal: subtotal,
+                taxTotal: totalTax,
+                discountCode:
+                  appliedDiscount?.code || activeOrder.discountCode || null,
+                discountTotal:
+                  discountAmount || activeOrder.discountTotal || 0,
+                partyName:
+                  guestName ||
+                  activeOrder.partyName ||
+                  activeOrder.guestName ||
+                  "",
+                guestName:
+                  guestName || activeOrder.guestName || "",
+                guestCount:
+                  sessionData?.guestCount ?? activeOrder.guestCount ?? null,
+                tableNo:
+                  activeOrder.tableNo ||
+                  sessionData?.tableNumber ||
+                  (sessionId === "new" ? guestTable : "") ||
+                  "",
+                tableSession: sessionId !== "new" ? sessionId : undefined,
+              }
+            : null
+        }
+        onPaid={(updatedOrder) => {
+          setOrderStatus("PAID");
+          setActiveOrder((prev) => ({ ...(prev || {}), ...updatedOrder }));
+          if (updatedOrder?.discountCode) {
+            setAppliedDiscount({
+              code: updatedOrder.discountCode,
+              value: Number(updatedOrder.discountTotal || 0),
+              type: "$",
+            });
+          }
+          setPrintOrderData(updatedOrder);
+          setPrintTaxBreakdown(generateTaxBreakdown());
+          setPrintType("customer");
+          setRedirectAfterPrint(false);
+          setIsPrintModalOpen(true);
+        }}
+      />
 
       {/* OPTIONS MODAL */}
       {isOptionsModalOpen && selectedProduct && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-zinc-900/50 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl flex flex-col max-h-[85vh] animate-in zoom-in-95 duration-200">
+          <div className="bg-white rounded-2xl w-full max-w-2xl shadow-2xl flex flex-col max-h-[85vh] animate-in zoom-in-95 duration-200">
             <div className="p-5 bg-zinc-50 border-b border-zinc-100 flex items-center justify-between shrink-0 rounded-t-2xl">
               <div>
                 <h2 className="text-xl font-bold text-zinc-900">
@@ -2691,12 +1485,13 @@ export default function OrderPage() {
 
             <div className="flex-1 p-6 overflow-y-auto custom-scrollbar">
               <div className="space-y-6">
-                <div className="flex text-[11px] font-bold uppercase tracking-wider text-zinc-400 mb-2 border-b border-zinc-100 pb-2 px-3">
-                  <div className="flex-1">Option</div>
-                  <div className="w-16 text-center">Base</div>
-                  <div className="w-20 text-center">Discount</div>
-                  <div className="w-20 text-center">Tax</div>
-                  <div className="w-24 text-right">Final Price</div>
+                <div className="flex text-[11px] font-bold uppercase tracking-wider text-zinc-400 mb-2 border-b border-zinc-100 pb-2 px-3 gap-1">
+                  <div className="flex-1 min-w-[100px]">Option</div>
+                  <div className="w-20 text-center">Qty</div>
+                  <div className="w-14 text-center">Base</div>
+                  <div className="w-16 text-center">Discount</div>
+                  <div className="w-16 text-center">Tax</div>
+                  <div className="w-20 text-right">Total</div>
                 </div>
 
                 {selectedProduct.variants &&
@@ -2707,7 +1502,8 @@ export default function OrderPage() {
                       </span>
                       <div className="grid gap-2">
                         {selectedProduct.variants.map((v, idx) => {
-                          const isChecked = selectedSizes.includes(v.size);
+                          const qty = variantQtyBySize[v.size] || 0;
+                          const isChecked = qty > 0;
                           const discountAmount = calculateItemDiscount(
                             selectedProduct,
                             v.price,
@@ -2720,43 +1516,65 @@ export default function OrderPage() {
                             selectedProduct,
                             discountedPrice,
                           );
-                          const finalPrice = discountedPrice + taxAmount;
+                          const unitFinal = discountedPrice + taxAmount;
+                          const lineTax = taxAmount * qty;
+                          const lineTotal = unitFinal * qty;
 
                           return (
-                            <label
+                            <div
                               key={idx}
-                              className={`flex items-center border p-3 rounded-lg cursor-pointer transition-colors group ${
+                              className={`flex items-center border p-3 rounded-lg transition-colors gap-1 ${
                                 isChecked
                                   ? "border-orange-500 bg-orange-50/30"
-                                  : "border-zinc-200 hover:border-orange-300"
+                                  : "border-zinc-200"
                               }`}
                             >
                               <div
-                                className={`flex-1 flex items-center gap-3 text-[14px] font-bold ${isChecked ? "text-zinc-900" : "text-zinc-700 group-hover:text-zinc-900"}`}
+                                className={`flex-1 min-w-[100px] text-[14px] font-bold ${isChecked ? "text-zinc-900" : "text-zinc-700"}`}
                               >
-                                <input
-                                  type="checkbox"
-                                  checked={isChecked}
-                                  onChange={() => toggleVariant(v.size)}
-                                  className="w-4 h-4 accent-orange-500 rounded"
-                                />
-                                <span>{v.size}</span>
+                                {v.size}
                               </div>
-                              <div className="w-16 text-center font-bold text-[13px] text-zinc-900">
+                              <div className="w-20 flex items-center justify-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setVariantQty(v.size, qty - 1)
+                                  }
+                                  className="w-7 h-7 rounded bg-zinc-100 flex items-center justify-center text-zinc-700 hover:bg-zinc-200"
+                                  aria-label={`Decrease ${v.size}`}
+                                >
+                                  <Minus className="w-3.5 h-3.5" />
+                                </button>
+                                <span className="w-5 text-center font-bold text-sm text-zinc-900">
+                                  {qty}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setVariantQty(v.size, qty + 1)
+                                  }
+                                  className="w-7 h-7 rounded bg-zinc-100 flex items-center justify-center text-zinc-700 hover:bg-zinc-200"
+                                  aria-label={`Increase ${v.size}`}
+                                >
+                                  <Plus className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                              <div className="w-14 text-center font-bold text-[12px] text-zinc-900">
                                 ${v.price.toFixed(2)}
                               </div>
-                              <div className="w-20 text-center text-red-500 font-medium text-[13px]">
+                              <div className="w-16 text-center text-red-500 font-medium text-[12px]">
                                 {discountAmount > 0
-                                  ? `-$${discountAmount.toFixed(2)}`
+                                  ? `-$${(discountAmount * Math.max(qty, 1)).toFixed(2)}`
                                   : "-"}
                               </div>
-                              <div className="w-20 text-center text-zinc-500 font-medium text-[13px]">
-                                +${taxAmount.toFixed(2)}
+                              <div className="w-16 text-center text-zinc-500 font-medium text-[12px]">
+                                +${(qty > 0 ? lineTax : taxAmount).toFixed(2)}
                               </div>
-                              <div className="w-24 text-right font-bold text-[14px] text-zinc-900">
-                                ${finalPrice.toFixed(2)}
+                              <div className="w-20 text-right font-bold text-[13px] text-zinc-900">
+                                $
+                                {(qty > 0 ? lineTotal : unitFinal).toFixed(2)}
                               </div>
-                            </label>
+                            </div>
                           );
                         })}
                       </div>
@@ -2815,9 +1633,8 @@ export default function OrderPage() {
                       </span>
                       <div className="grid gap-2">
                         {selectedProduct.addons.map((addon) => {
-                          const isChecked = selectedAddons.some(
-                            (a) => a._id === addon._id,
-                          );
+                          const qty = addonQtyById[addon._id]?.qty || 0;
+                          const isChecked = qty > 0;
                           const discountAmount = calculateItemDiscount(
                             selectedProduct,
                             addon.price,
@@ -2830,37 +1647,61 @@ export default function OrderPage() {
                             selectedProduct,
                             discountedPrice,
                           );
-                          const finalPrice = discountedPrice + taxAmount;
+                          const unitFinal = discountedPrice + taxAmount;
+                          const lineTax = taxAmount * qty;
+                          const lineTotal = unitFinal * qty;
 
                           return (
-                            <label
+                            <div
                               key={addon._id}
-                              className="flex items-center border border-zinc-200 p-3 rounded-lg cursor-pointer hover:border-orange-300 transition-colors group"
+                              className={`flex items-center border p-3 rounded-lg transition-colors gap-1 ${
+                                isChecked
+                                  ? "border-orange-500 bg-orange-50/30"
+                                  : "border-zinc-200"
+                              }`}
                             >
-                              <div className="flex-1 flex items-center gap-3 text-[14px] font-bold text-zinc-700 group-hover:text-zinc-900">
-                                <input
-                                  type="checkbox"
-                                  checked={isChecked}
-                                  onChange={() => toggleAddon(addon)}
-                                  className="w-4 h-4 accent-orange-500 rounded"
-                                />
-                                <span>{addon.name}</span>
+                              <div
+                                className={`flex-1 min-w-[100px] text-[14px] font-bold ${isChecked ? "text-zinc-900" : "text-zinc-700"}`}
+                              >
+                                {addon.name}
                               </div>
-                              <div className="w-16 text-center font-bold text-[13px] text-zinc-900">
+                              <div className="w-20 flex items-center justify-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => setAddonQty(addon, qty - 1)}
+                                  className="w-7 h-7 rounded bg-zinc-100 flex items-center justify-center text-zinc-700 hover:bg-zinc-200"
+                                  aria-label={`Decrease ${addon.name}`}
+                                >
+                                  <Minus className="w-3.5 h-3.5" />
+                                </button>
+                                <span className="w-5 text-center font-bold text-sm text-zinc-900">
+                                  {qty}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => setAddonQty(addon, qty + 1)}
+                                  className="w-7 h-7 rounded bg-zinc-100 flex items-center justify-center text-zinc-700 hover:bg-zinc-200"
+                                  aria-label={`Increase ${addon.name}`}
+                                >
+                                  <Plus className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                              <div className="w-14 text-center font-bold text-[12px] text-zinc-900">
                                 +${addon.price.toFixed(2)}
                               </div>
-                              <div className="w-20 text-center text-red-500 font-medium text-[13px]">
+                              <div className="w-16 text-center text-red-500 font-medium text-[12px]">
                                 {discountAmount > 0
-                                  ? `-$${discountAmount.toFixed(2)}`
+                                  ? `-$${(discountAmount * Math.max(qty, 1)).toFixed(2)}`
                                   : "-"}
                               </div>
-                              <div className="w-20 text-center text-zinc-500 font-medium text-[13px]">
-                                +${taxAmount.toFixed(2)}
+                              <div className="w-16 text-center text-zinc-500 font-medium text-[12px]">
+                                +${(qty > 0 ? lineTax : taxAmount).toFixed(2)}
                               </div>
-                              <div className="w-24 text-right font-bold text-[14px] text-zinc-900">
-                                +${finalPrice.toFixed(2)}
+                              <div className="w-20 text-right font-bold text-[13px] text-zinc-900">
+                                +$
+                                {(qty > 0 ? lineTotal : unitFinal).toFixed(2)}
                               </div>
-                            </label>
+                            </div>
                           );
                         })}
                       </div>
