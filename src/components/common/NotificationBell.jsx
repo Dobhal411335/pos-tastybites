@@ -123,7 +123,12 @@ export default function NotificationBell({ viewAllHref = "/sales/notifications",
     if (playSound) {
       playNotificationSound(incoming);
       showSystemNotification(incoming);
-      if (incoming.priority === "high" || incoming.playSound) {
+      // Toast for high-priority ops alerts, and for employee clock-in so staff notice
+      if (
+        incoming.priority === "high" ||
+        incoming.playSound ||
+        incoming.type === "EMPLOYEE_LOGIN"
+      ) {
         toast.message(incoming.title, { description: incoming.message });
       }
     }

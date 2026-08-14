@@ -62,6 +62,47 @@ function getCartFingerprint(items) {
     .join("|");
 }
 
+function cartOptionsKey(options) {
+  return JSON.stringify(
+    [...(options || [])]
+      .map((opt) => String(opt).trim())
+      .filter(Boolean)
+      .sort(),
+  );
+}
+
+function isSameCartLine(a, b) {
+  return (
+    String(a.id) === String(b.id) &&
+    String(a.size || "Standard") === String(b.size || "Standard") &&
+    String(a.preparationStyle || "") === String(b.preparationStyle || "") &&
+    Number(a.price) === Number(b.price) &&
+    Boolean(a.isOffer) === Boolean(b.isOffer) &&
+    cartOptionsKey(a.options) === cartOptionsKey(b.options)
+  );
+}
+
+function nextCartId(seqRef) {
+  seqRef.current += 1;
+  return `c-${seqRef.current}`;
+}
+
+function mergeCartLines(prev, incomingLines, seqRef) {
+  const next = [...prev];
+  for (const line of incomingLines) {
+    const idx = next.findIndex((item) => isSameCartLine(item, line));
+    if (idx >= 0) {
+      next[idx] = { ...next[idx], qty: next[idx].qty + line.qty };
+    } else {
+      next.push({
+        ...line,
+        cartId: line.cartId || nextCartId(seqRef),
+      });
+    }
+  }
+  return next;
+}
+
 function OfferChipRow({ label, items }) {
   if (!items.length) return null;
   return (
@@ -291,7 +332,7 @@ export default function OrderPage() {
             }
 
             // Reconstruct cart
-            const restoredCart = existingOrder.items.map((item) => {
+            const restoredCart = existingOrder.items.map((item, idx) => {
               const style = item.preparationStyle || null;
               const extras = (item.options || []).filter(
                 (o) => !String(o).toLowerCase().startsWith("style:"),
@@ -339,7 +380,7 @@ export default function OrderPage() {
                 choices,
                 drinks,
                 modifier: parts.length > 0 ? parts.join(" | ") : undefined,
-                cartId: item.cartId || Date.now() + Math.random(),
+                cartId: item.cartId || `r-${Date.now()}-${idx}`,
               };
             });
             setCart(restoredCart);
@@ -375,7 +416,7 @@ export default function OrderPage() {
               if (existingOrder.staffOrderReason) {
                 setStaffOrderReason(existingOrder.staffOrderReason);
               }
-              const restoredCart = existingOrder.items.map((item) => {
+              const restoredCart = existingOrder.items.map((item, idx) => {
                 const style = item.preparationStyle || null;
                 const extras = (item.options || []).filter(
                   (o) => !String(o).toLowerCase().startsWith("style:"),
@@ -423,7 +464,7 @@ export default function OrderPage() {
                   choices,
                   drinks,
                   modifier: parts.length > 0 ? parts.join(" | ") : undefined,
-                  cartId: item.cartId || Date.now() + Math.random(),
+                  cartId: item.cartId || `r-${Date.now()}-${idx}`,
                 };
               });
               setCart(restoredCart);
@@ -679,36 +720,29 @@ export default function OrderPage() {
     const itemTax = calculateItemTax(product, price);
     const itemServiceCharge = calculateItemServiceCharge(price);
 
-    setCart((prev) => {
-      const existing = prev.find(
-        (item) =>
-          item.id === product._id && !item.modifier && !item.preparationStyle,
-      );
-      if (existing) {
-        return prev.map((item) =>
-          item.id === product._id ? { ...item, qty: item.qty + 1 } : item,
-        );
-      }
-      return [
-        ...prev,
-        {
-          id: product._id,
-          name: product.name,
-          productCode: product.productCode || "",
-          category: product.category?.name || "ITEMS",
-          price,
-          tax: itemTax,
-          serviceCharge: itemServiceCharge,
-          qty: 1,
-          size: "Standard",
-          sizes: [],
-          preparationStyle: null,
-          options: [],
-          productType: product.productType === "BAR" ? "BAR" : "KITCHEN",
-          cartId: Date.now(),
-        },
-      ];
-    });
+    setCart((prev) =>
+      mergeCartLines(
+        prev,
+        [
+          {
+            id: product._id,
+            name: product.name,
+            productCode: product.productCode || "",
+            category: product.category?.name || "ITEMS",
+            price,
+            tax: itemTax,
+            serviceCharge: itemServiceCharge,
+            qty: 1,
+            size: "Standard",
+            sizes: [],
+            preparationStyle: null,
+            options: [],
+            productType: product.productType === "BAR" ? "BAR" : "KITCHEN",
+          },
+        ],
+        cartIdSeq,
+      ),
+    );
   };
 
   const addOfferToCart = (offer) => {
@@ -724,42 +758,34 @@ export default function OrderPage() {
     const drinks = cleanOfferList(offer.drinks);
     const extras = buildOfferOptions({ inclusions, choices, drinks });
 
-    setCart((prev) => {
-      const existing = prev.find(
-        (item) => item.id === offer._id && isOfferItem(item),
-      );
-      if (existing) {
-        return prev.map((item) =>
-          item.id === offer._id && isOfferItem(item)
-            ? { ...item, qty: item.qty + 1 }
-            : item,
-        );
-      }
-      return [
-        ...prev,
-        {
-          id: offer._id,
-          name: offer.name,
-          productCode: "",
-          category: OFFER_CATEGORY,
-          price,
-          tax: itemTax,
-          serviceCharge: itemServiceCharge,
-          qty: 1,
-          size: "Standard",
-          sizes: [],
-          preparationStyle: null,
-          options: extras,
-          modifier: extras.length ? extras.join(" • ") : null,
-          productType: "KITCHEN",
-          cartId: Date.now(),
-          isOffer: true,
-          inclusions,
-          choices,
-          drinks,
-        },
-      ];
-    });
+    setCart((prev) =>
+      mergeCartLines(
+        prev,
+        [
+          {
+            id: offer._id,
+            name: offer.name,
+            productCode: "",
+            category: OFFER_CATEGORY,
+            price,
+            tax: itemTax,
+            serviceCharge: itemServiceCharge,
+            qty: 1,
+            size: "Standard",
+            sizes: [],
+            preparationStyle: null,
+            options: extras,
+            modifier: extras.length ? extras.join(" • ") : null,
+            productType: "KITCHEN",
+            isOffer: true,
+            inclusions,
+            choices,
+            drinks,
+          },
+        ],
+        cartIdSeq,
+      ),
+    );
     toast.success(`${offer.name} added`);
   };
 
@@ -780,7 +806,6 @@ export default function OrderPage() {
       (entry) => entry?.qty > 0 && entry?.addon,
     );
 
-    const baseTs = ++cartIdSeq.current;
     const newLines = [];
 
     if (hasVariants) {
@@ -796,7 +821,6 @@ export default function OrderPage() {
 
         newLines.push({
           id: selectedProduct._id,
-          cartId: baseTs + idx,
           name: selectedProduct.name,
           productCode: selectedProduct.productCode || "",
           category: selectedProduct.category?.name || "ITEMS",
@@ -821,7 +845,6 @@ export default function OrderPage() {
       if (selectedPreparationStyle) options.push(selectedPreparationStyle);
       newLines.push({
         id: selectedProduct._id,
-        cartId: baseTs,
         name: selectedProduct.name,
         productCode: selectedProduct.productCode || "",
         category: selectedProduct.category?.name || "ITEMS",
@@ -845,7 +868,6 @@ export default function OrderPage() {
       const unitServiceCharge = calculateItemServiceCharge(unitPrice);
       newLines.push({
         id: selectedProduct._id,
-        cartId: baseTs + 1000 + idx,
         name: selectedProduct.name,
         productCode: selectedProduct.productCode || "",
         category: selectedProduct.category?.name || "ITEMS",
@@ -867,7 +889,7 @@ export default function OrderPage() {
       return;
     }
 
-    setCart((prev) => [...prev, ...newLines]);
+    setCart((prev) => mergeCartLines(prev, newLines, cartIdSeq));
     setIsOptionsModalOpen(false);
     setSelectedPreparationStyle("");
     setVariantQtyBySize({});
@@ -1006,7 +1028,7 @@ export default function OrderPage() {
   };
 
   const handleSendToKitchen = () => {
-    if (cart.length === 0) return;
+    if (cart.length === 0 || hasSentKot) return;
     if (isStaffOrder) {
       setIsStaffModalOpen(true);
     } else {
@@ -1435,7 +1457,7 @@ export default function OrderPage() {
                       : [];
                     return (
                     <div
-                      key={item.cartId || idx}
+                      key={item.cartId || `${item.id}-${idx}`}
                       className="bg-white rounded-lg p-3 border border-zinc-200 shadow-sm"
                     >
                       <div className="flex justify-between items-start">
@@ -1571,11 +1593,13 @@ export default function OrderPage() {
             <div className="flex gap-2">
               <Button
                 onClick={handleSendToKitchen}
-                disabled={cart.length === 0 || isSubmitting}
-                className="flex-1 h-14 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm rounded-xl shadow-none"
+                disabled={cart.length === 0 || isSubmitting || hasSentKot}
+                className="flex-1 h-14 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm rounded-xl shadow-none disabled:opacity-50"
               >
                 {isSubmitting ? (
                   <Loader2 className="w-5 h-5 animate-spin" />
+                ) : hasSentKot ? (
+                  "KOT Sent"
                 ) : (
                   "Kitchen / KOT"
                 )}

@@ -10,6 +10,7 @@ import { logger } from "@/utils/logger";
 import { createReceiptPrintJob } from "@/lib/printing/printJobService";
 import { createNotification } from "@/lib/notifications/notificationService";
 import { buildTaxBreakdownForOrder } from "@/lib/eod/buildTaxBreakdown";
+import { redeemGiftCardAtomic } from "@/lib/giftcards/redeemGiftCardAtomic";
 
 const r2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 
@@ -42,13 +43,93 @@ export const POST = withAuth(async (request) => {
       return sendError(new Error("Missing ID"), "orderId is required", 400);
     }
 
-    const order = await Order.findById(orderId);
+    const order = await Order.findOne({
+      _id: orderId,
+      restaurantId: request.restaurant,
+    });
     if (!order) {
       return sendError(new Error("Not Found"), "Order not found", 404);
     }
 
+    if (order.paymentStatus === "PAID" || order.status === "PAID") {
+      return sendError(
+        new Error("Already Paid"),
+        "This order has already been paid",
+        409,
+      );
+    }
+
+    if (["CANCELLED", "WAIVED"].includes(String(order.status || ""))) {
+      return sendError(
+        new Error("Invalid Status"),
+        "Cannot take payment for a cancelled or waived order",
+        400,
+      );
+    }
+
     // In a real application, you would interface with a payment gateway here.
     // For now, we assume the payment succeeds and just update the DB.
+
+    // Never trust client totals for the payable amount — recompute from persisted order lines.
+    let workingServiceCharge = r2(order.serviceChargeTotal);
+    if (serviceChargeTotal !== undefined && serviceChargeTotal !== null) {
+      const sc = r2(serviceChargeTotal);
+      if (sc < 0) {
+        return sendError(new Error("Invalid Charge"), "Service charge cannot be negative", 400);
+      }
+      // Allow setting service charge at checkout when previously unset/zero.
+      if (workingServiceCharge == null || workingServiceCharge === 0 || Math.abs(workingServiceCharge - sc) <= 0.02) {
+        workingServiceCharge = sc;
+        order.serviceChargeTotal = sc;
+      } else {
+        return sendError(
+          new Error("Invalid Charge"),
+          "Service charge does not match the order",
+          400,
+        );
+      }
+    }
+    if (serviceChargeName !== undefined) {
+      order.serviceChargeName = serviceChargeName || null;
+    }
+
+    const orderCeiling = r2(
+      (Number(order.subTotal) || 0) +
+        (Number(order.taxTotal) || 0) +
+        (Number(workingServiceCharge) || 0),
+    );
+
+    if (discountTotal !== undefined && discountTotal !== null) {
+      const incomingDiscount = r2(discountTotal);
+      if (incomingDiscount < 0 || incomingDiscount > orderCeiling + 0.01) {
+        return sendError(
+          new Error("Invalid Discount"),
+          "Discount amount is invalid for this order",
+          400,
+        );
+      }
+      order.discountTotal = incomingDiscount;
+    }
+    if (discountCode !== undefined) {
+      order.discountCode = discountCode ? String(discountCode).trim().toUpperCase() : null;
+    }
+
+    order.totalAmount = r2(
+      Math.max(0, orderCeiling - (Number(order.discountTotal) || 0)),
+    );
+
+    // Client `amount` may only confirm the server-computed total — never overwrite it.
+    const dueAmount = r2(order.totalAmount);
+    if (amount !== undefined && amount !== null) {
+      const clientAmount = r2(amount);
+      if (Math.abs(clientAmount - dueAmount) > 0.02) {
+        return sendError(
+          new Error("Amount Mismatch"),
+          `Payment amount does not match order total ($${dueAmount.toFixed(2)})`,
+          400,
+        );
+      }
+    }
 
     order.paymentStatus = "PAID";
     const methodLabel = String(method || "Cash");
@@ -83,34 +164,18 @@ export const POST = withAuth(async (request) => {
     }
     order.status = "PAID";
 
-    // Persist checkout discount if applied at payment time
-    if (discountTotal !== undefined && discountTotal !== null) {
-      order.discountTotal = Math.round(Number(discountTotal) * 100) / 100;
-    }
-    if (discountCode !== undefined) {
-      order.discountCode = discountCode || null;
-    }
-    if (amount !== undefined && amount !== null) {
-      order.totalAmount = Math.round(Number(amount) * 100) / 100;
-    }
-
-    if (serviceChargeTotal !== undefined && serviceChargeTotal !== null) {
-      order.serviceChargeTotal = r2(serviceChargeTotal);
-    }
-    if (serviceChargeName !== undefined) {
-      order.serviceChargeName = serviceChargeName || null;
-    }
-
-    // Persist gift card usage on the order for receipts
+    // Persist gift card usage on the order for receipts (amount capped to order total)
+    let giftCardDebitAmount = 0;
     if (giftCardCode) {
-      const due = Number(amount ?? order.totalAmount) || 0;
+      const due = r2(order.totalAmount);
       const remaining = Number(splitAmount);
       const used =
         Number.isFinite(remaining) && remaining >= 0
-          ? Math.max(0, Math.round((due - remaining) * 100) / 100)
+          ? Math.max(0, r2(due - remaining))
           : due;
+      giftCardDebitAmount = Math.min(used, due);
       order.giftcardCode = String(giftCardCode).trim().toUpperCase();
-      order.giftcardUsedAmount = used;
+      order.giftcardUsedAmount = giftCardDebitAmount;
     }
 
     // Persist party / customer name for the bill
@@ -127,23 +192,29 @@ export const POST = withAuth(async (request) => {
     }
 
     // Save tip if provided
-    if (tipAmount && tipAmount > 0) {
-      order.tipAmount = Math.round(Number(tipAmount) * 100) / 100;
-      if (tipMethod) {
-        order.tipMethod = String(tipMethod).trim();
-      } else {
-        // Infer tip tender from payment method when UI did not send tipMethod
-        const methodStr = String(order.paymentMethod || method || "");
-        if (/gift\s*card/i.test(methodStr) && !/cash|card\s*-/i.test(methodStr)) {
-          order.tipMethod = "Gift Card";
-        } else if (/cash/i.test(methodStr) && !/card/i.test(methodStr)) {
-          order.tipMethod = "Cash";
-        } else if (/card/i.test(methodStr) && !/cash/i.test(methodStr)) {
-          order.tipMethod = "Card";
-        } else if (/cash/i.test(methodStr)) {
-          order.tipMethod = "Cash";
-        } else if (/card/i.test(methodStr)) {
-          order.tipMethod = "Card";
+    if (tipAmount !== undefined && tipAmount !== null && tipAmount !== "") {
+      const tip = r2(tipAmount);
+      if (tip < 0) {
+        return sendError(new Error("Invalid Tip"), "Tip cannot be negative", 400);
+      }
+      if (tip > 0) {
+        order.tipAmount = tip;
+        if (tipMethod) {
+          order.tipMethod = String(tipMethod).trim();
+        } else {
+          // Infer tip tender from payment method when UI did not send tipMethod
+          const methodStr = String(order.paymentMethod || method || "");
+          if (/gift\s*card/i.test(methodStr) && !/cash|card\s*-/i.test(methodStr)) {
+            order.tipMethod = "Gift Card";
+          } else if (/cash/i.test(methodStr) && !/card/i.test(methodStr)) {
+            order.tipMethod = "Cash";
+          } else if (/card/i.test(methodStr) && !/cash/i.test(methodStr)) {
+            order.tipMethod = "Card";
+          } else if (/cash/i.test(methodStr)) {
+            order.tipMethod = "Cash";
+          } else if (/card/i.test(methodStr)) {
+            order.tipMethod = "Card";
+          }
         }
       }
     }
@@ -192,6 +263,25 @@ export const POST = withAuth(async (request) => {
       logger.error("Failed to build taxBreakdown at payment", taxErr);
     }
 
+    // Debit gift card BEFORE marking paid — fail closed if redeem fails
+    if (giftCardDebitAmount > 0 && order.giftcardCode) {
+      const redeem = await redeemGiftCardAtomic({
+        restaurantId: request.restaurant,
+        code: order.giftcardCode,
+        amountToUse: giftCardDebitAmount,
+        orderId: order._id,
+        note: "POS payment",
+        sendEmail: true,
+      });
+      if (!redeem.ok) {
+        return sendError(
+          new Error("Gift Card Redeem Failed"),
+          redeem.error || "Failed to redeem gift card",
+          redeem.status || 400,
+        );
+      }
+    }
+
     await order.save();
 
     let receiptGuestCount = order.guestCount ?? null;
@@ -200,7 +290,10 @@ export const POST = withAuth(async (request) => {
     // If this order is linked to a session, optionally update the session status to PAYMENT_PENDING if not already
     // Actually, if it's paid, the session is now ready to be RELEASED.
     if (sessionId) {
-      session = await TableSession.findById(sessionId);
+      session = await TableSession.findOne({
+        _id: sessionId,
+        restaurant: request.restaurant,
+      });
       if (session) {
         if (order.guestCount == null && session.guestCount != null) {
           order.guestCount = session.guestCount;

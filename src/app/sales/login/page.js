@@ -19,6 +19,11 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  installNotificationAudioUnlockOnGesture,
+  playNotificationSoundPreview,
+  getNotificationSoundEnabled,
+} from "@/lib/notifications/notificationSound";
 
 export default function SalesLoginPage() {
   const [loading, setLoading] = useState(false);
@@ -49,12 +54,18 @@ export default function SalesLoginPage() {
       setValue("employeeId", savedId);
     }
 
-    return () => clearInterval(timer);
+    // Unlock audio on first tap so login alerts can ring on this device
+    const cleanupGesture = installNotificationAudioUnlockOnGesture();
+
+    return () => {
+      clearInterval(timer);
+      cleanupGesture();
+    };
   }, [setValue]);
 
   const redirectAfterLogin = () => {
     const onSalesHost = window.location.hostname.includes("sales");
-    window.location.assign(onSalesHost ? "/floor" : "/sales/floor");
+    window.location.assign(onSalesHost ? "/sales/floor" : "/sales/floor");
   };
 
   const onEmployeeSubmit = async (data) => {
@@ -75,6 +86,11 @@ export default function SalesLoginPage() {
       const json = await res.json();
       if (res.ok && json.success) {
         toast.success(`Welcome back, ${json.data.employee.firstName}`);
+
+        // Local confirmation ring (other POS devices get the socket EMPLOYEE_LOGIN sound)
+        if (getNotificationSoundEnabled()) {
+          void playNotificationSoundPreview();
+        }
 
         if (rememberDevice) {
           localStorage.setItem("rememberedEmployeeId", data.employeeId);

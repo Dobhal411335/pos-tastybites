@@ -42,9 +42,24 @@ const PRIMARY_NAV = [
 ];
 
 const MENU_LINKS = [
-  { label: "EOD", href: "/sales/reports/end-of-day", icon: FileBarChart2, color: "text-black bg-violet-300" },
-  { label: "Print Jobs", href: "/sales/print-jobs", icon: Printer, color: "text-black bg-sky-300" },
-  { label: "Notifications", href: "/sales/notifications", icon: BellRing, color: "text-black bg-amber-400" },
+  {
+    label: "EOD",
+    href: "/sales/reports/end-of-day",
+    icon: FileBarChart2,
+    color: "text-black bg-violet-300",
+  },
+  {
+    label: "Print Jobs",
+    href: "/sales/print-jobs",
+    icon: Printer,
+    color: "text-black bg-sky-300",
+  },
+  {
+    label: "Notifications",
+    href: "/sales/notifications",
+    icon: BellRing,
+    color: "text-black bg-amber-400",
+  },
 ];
 
 function navActive(pathname, href) {
@@ -119,7 +134,10 @@ export default function EmployeeTopNav({
       <div className="flex lg:h-14 xl:h-15 items-center gap-3 px-3 sm:px-5">
         {/* LEFT — brand */}
         <div className="flex items-center gap-2.5 min-w-0 shrink-0">
-          <Link href="/sales/floor" className="flex items-center gap-2.5 min-w-0">
+          <Link
+            href="/sales/floor"
+            className="flex items-center gap-2.5 min-w-0"
+          >
             <Image
               src="/BannerImage.png"
               alt="Tasty Bites"
@@ -171,24 +189,24 @@ export default function EmployeeTopNav({
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
-                className="flex items-center gap-2.5 rounded-xl border border-stone-500 bg-white px-2.5 py-1.5 hover:bg-stone-50 transition-colors max-w-50 outline-none focus-visible:ring-2 focus-visible:ring-orange-400"
+                className="flex items-center gap-2 rounded-xl border border-stone-300 bg-white px-2 py-1 hover:bg-stone-50 transition-colors max-w-48 outline-none focus-visible:ring-2 focus-visible:ring-orange-400"
               >
                 <div className="relative shrink-0">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-linear-to-br from-orange-500 to-orange-600 text-white text-sm font-bold">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-linear-to-br from-orange-500 to-orange-600 text-white text-sm font-bold">
                     {employeeName?.charAt(0)?.toUpperCase() || "E"}
                   </div>
-                  <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-white bg-emerald-500" />
+                  <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-white bg-emerald-500" />
                 </div>
                 <div className="hidden sm:block leading-tight text-left min-w-0">
                   <p className="text-sm font-semibold text-stone-900 truncate">
                     {employeeName || "Employee"}
                   </p>
-                  <p className="text-[11px] font-medium text-stone-500 uppercase tracking-wide truncate">
+                  <p className="text-[10px] font-semibold text-stone-500 uppercase tracking-wide truncate">
                     {employeeRole}
                   </p>
                 </div>
                 <ChevronDown
-                  className={`h-4 w-4 shrink-0 text-stone-500 transition-transform duration-200 ${
+                  className={`h-4 w-4 shrink-0 text-stone-400 transition-transform duration-200 ${
                     menuOpen ? "rotate-180" : ""
                   }`}
                 />
@@ -197,40 +215,51 @@ export default function EmployeeTopNav({
 
             <DropdownMenuContent
               align="end"
-              sideOffset={8}
-              className="w-[300px] rounded-3xl border border-stone-200 bg-stone-100 p-3 shadow-xl"
+              sideOffset={12}
+              className="w-[390px] rounded-[28px] border border-stone-200/70 bg-white p-5 shadow-[0_20px_50px_rgba(0,0,0,0.12)]"
             >
-              <div className="rounded-2xl bg-white p-3 shadow-sm">
-                <div className="mb-3 flex items-center justify-between px-1">
-                  <p className="text-sm font-semibold text-stone-800">
-                    Quick links
-                  </p>
-                </div>
-                <div className="grid grid-cols-3 gap-2">
-                  {MENU_LINKS.map((item) => {
-                    const Icon = item.icon;
-                    return (
-                      <Link
-                        key={item.href}
-                        href={item.href}
-                        onClick={() => setMenuOpen(false)}
-                        className="flex flex-col items-center gap-1.5 rounded-xl px-2 py-2.5 text-center hover:bg-stone-50 transition-colors"
-                      >
-                        <span
-                          className={`flex h-11 w-11 border border-stone-800 items-center justify-center rounded-2xl ${item.color}`}
-                        >
-                          <Icon className="h-5 w-5" />
-                        </span>
-                        <span className="text-[12px] font-medium text-stone-700 leading-tight">
-                          {item.label}
-                        </span>
-                      </Link>
-                    );
-                  })}
-                </div>
+              {/* Header */}
+              <div className="mb-5 px-1">
+                <h3 className="text-[21px] font-medium tracking-tight text-stone-900">
+                  Quick links
+                </h3>
               </div>
 
-              <div className="mt-3 grid grid-cols-2 gap-2 px-0.5">
+              {/* Quick Actions */}
+              <div className="grid grid-cols-3 gap-x-3 gap-y-4">
+                {MENU_LINKS.map((item) => {
+                  const Icon = item.icon;
+
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      onClick={() => setMenuOpen(false)}
+                      className="group flex flex-col items-center text-center"
+                    >
+                      <div
+                        className={`
+              flex h-[60px] w-[60px]
+              items-center justify-center
+              rounded-[22px]
+              shadow-[0_8px_18px_rgba(0,0,0,0.08)]
+              transition-all duration-200
+              group-hover:-translate-y-1
+              group-hover:shadow-[0_12px_24px_rgba(0,0,0,0.12)]
+              ${item.color}
+            `}
+                      >
+                        <Icon className="h-6 w-6 stroke-[1.8]" />
+                      </div>
+
+                      <span className="mt-3 text-[15px] font-medium leading-tight text-stone-800">
+                        {item.label}
+                      </span>
+                    </Link>
+                  );
+                })}
+
+                {/* Day Close */}
                 <button
                   type="button"
                   disabled={loggingOut || closingRestaurant}
@@ -238,30 +267,56 @@ export default function EmployeeTopNav({
                     setMenuOpen(false);
                     setConfirmCloseOpen(true);
                   }}
-                  className="flex flex-col items-center gap-1.5 rounded-xl bg-white px-2 py-2.5 text-center shadow-sm hover:bg-stone-50 transition-colors disabled:opacity-60"
+                  className="group flex flex-col items-center text-center disabled:opacity-50"
                 >
-                  <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-zinc-900 text-white">
-                    <Store className="h-5 w-5" />
-                  </span>
-                  <span className="text-[12px] font-medium text-stone-700 leading-tight">
+                  <div
+                    className="
+          flex h-[60px] w-[60px]
+          items-center justify-center
+          rounded-[22px]
+          bg-white
+          shadow-[0_8px_18px_rgba(0,0,0,0.08)]
+          ring-1 ring-stone-100
+          transition-all duration-200
+          group-hover:-translate-y-1
+          group-hover:shadow-[0_12px_24px_rgba(0,0,0,0.12)]
+        "
+                  >
+                    <Store className="h-6 w-6 stroke-[1.8] text-stone-700" />
+                  </div>
+
+                  <span className="mt-3 text-[15px] font-medium leading-tight text-stone-800">
                     Day Close
                   </span>
                 </button>
 
+                {/* Logout */}
                 <button
                   type="button"
                   disabled={loggingOut || closingRestaurant}
                   onClick={handleLogout}
-                  className="flex flex-col items-center gap-1.5 rounded-xl bg-white px-2 py-2.5 text-center shadow-sm hover:bg-red-50 transition-colors disabled:opacity-60"
+                  className="group flex flex-col items-center text-center disabled:opacity-50"
                 >
-                  <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-red-600 text-white">
+                  <div
+                    className="
+          flex h-[60px] w-[60px]
+          items-center justify-center
+          rounded-[22px]
+          bg-[#F9A3A5]
+          shadow-[0_8px_18px_rgba(0,0,0,0.08)]
+          transition-all duration-200
+          group-hover:-translate-y-1
+          group-hover:shadow-[0_12px_24px_rgba(0,0,0,0.12)]
+        "
+                  >
                     {loggingOut ? (
-                      <Loader2 className="h-5 w-5 animate-spin" />
+                      <Loader2 className="h-6 w-6 animate-spin text-red-800" />
                     ) : (
-                      <LogOut className="h-5 w-5" />
+                      <LogOut className="h-6 w-6 stroke-[1.8] text-red-800" />
                     )}
-                  </span>
-                  <span className="text-[12px] font-medium text-stone-700 leading-tight">
+                  </div>
+
+                  <span className="mt-3 text-[15px] font-medium leading-tight text-stone-800">
                     Logout
                   </span>
                 </button>
@@ -296,12 +351,15 @@ export default function EmployeeTopNav({
           <AlertDialogHeader>
             <AlertDialogTitle>Close restaurant?</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to close the restaurant and log out all employees?
-              Staff can clock back in later from the same registered device.
+              Are you sure you want to close the restaurant and log out all
+              employees? Staff can clock back in later from the same registered
+              device.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={closingRestaurant}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={closingRestaurant}>
+              Cancel
+            </AlertDialogCancel>
             <AlertDialogAction
               onClick={(e) => {
                 e.preventDefault();
@@ -319,7 +377,9 @@ export default function EmployeeTopNav({
       {closingRestaurant ? (
         <div className="fixed inset-0 z-100 flex flex-col items-center justify-center gap-3 bg-black/60">
           <Loader2 className="h-8 w-8 animate-spin text-white" />
-          <p className="text-sm font-semibold text-white">Logging out all employees…</p>
+          <p className="text-sm font-semibold text-white">
+            Logging out all employees…
+          </p>
         </div>
       ) : null}
     </header>

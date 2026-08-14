@@ -2,8 +2,9 @@ import { NextResponse } from 'next/server';
 import { uploadImage } from '@/lib/cloudinary/uploadImage';
 import { deleteImage } from '@/lib/cloudinary/deleteImage';
 import { validateImage } from '@/lib/cloudinary/utils/imageValidator';
+import { withAuth } from '@/utils/auth';
 
-export async function POST(request) {
+export const POST = withAuth(async (request) => {
   try {
     const formData = await request.formData();
     const file = formData.get('file');
@@ -33,14 +34,14 @@ export async function POST(request) {
     console.error('Cloudinary upload error:', error);
     return NextResponse.json({ error: 'Image upload failed', details: error.message }, { status: 500 });
   }
-}
+}, ['ADMIN', 'MANAGER']);
 
-export async function DELETE(request) {
+export const DELETE = withAuth(async (request) => {
   try {
     const { searchParams } = new URL(request.url);
     const key = searchParams.get('key');
 
-    if (!key) {
+    if (!key || typeof key !== 'string') {
       return NextResponse.json({ error: 'Key is required to delete' }, { status: 400 });
     }
 
@@ -51,4 +52,4 @@ export async function DELETE(request) {
     console.error('Cloudinary delete error:', error);
     return NextResponse.json({ error: 'Image deletion failed', details: error.message }, { status: 500 });
   }
-}
+}, ['ADMIN', 'MANAGER']);

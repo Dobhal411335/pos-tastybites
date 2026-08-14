@@ -1,6 +1,7 @@
 import connectDB from "@/lib/db";
 import Webpage from "@/models/Web/Webpage";
 import { NextResponse } from "next/server";
+import { withAuth } from "@/utils/auth";
 
 const ALLOWED_TEMPLATE_TYPES = new Set(["design1", "design2", "design3", "design4", "design5", "design6", "design7"]);
 
@@ -152,10 +153,14 @@ export async function PATCH(request, { params }) {
       }
     }
 
-    const updated = await Webpage.findByIdAndUpdate(id, update, {
-      new: true,
-      runValidators: true,
-    });
+    const updated = await Webpage.findOneAndUpdate(
+      { _id: id, restaurant: request.restaurant },
+      update,
+      {
+        new: true,
+        runValidators: true,
+      },
+    );
 
     if (!updated) {
       return NextResponse.json({ error: "Webpage not found" }, { status: 404 });

@@ -291,12 +291,20 @@ export default function TodayOrderPaymentModal({
       );
       const json = await res.json();
       if (json.success) {
+        const actualBalance = Number(json.data?.balance ?? json.data?.value ?? 0);
+        if (actualBalance <= 0) {
+          const exhausted = "Gift card balance is exhausted";
+          setGiftCardError(exhausted);
+          toast.error(exhausted);
+          return;
+        }
         setGiftCardDetails(json.data);
         setIsGiftCardModalOpen(true);
       } else {
-        setGiftCardError(
-          json.message || "Only issued active gift cards can be used",
-        );
+        const message =
+          json.message || "Only issued active gift cards can be used";
+        setGiftCardError(message);
+        toast.error(message);
       }
     } catch {
       setGiftCardError("Failed to verify Gift Card");
@@ -442,23 +450,6 @@ export default function TodayOrderPaymentModal({
       });
       const json = await res.json();
       if (json.success) {
-        if (
-          giftCardBalance !== null &&
-          giftCardCode &&
-          giftCardUsedAmount > 0
-        ) {
-          await fetch("/api/menu/giftcards/redeem", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              code: giftCardCode.trim().toUpperCase(),
-              amountToUse: giftCardUsedAmount,
-              orderId: order.orderNumber || order._id,
-              note: redeemNote,
-            }),
-          });
-        }
-
         toast.success("Payment collected successfully!");
 
         const paidOrder = json.data || {};
@@ -836,7 +827,7 @@ export default function TodayOrderPaymentModal({
                       Card Payment
                     </h3>
 
-                    <GiftCardField
+                    {/* <GiftCardField
                       giftCardCode={giftCardCode}
                       setGiftCardCode={setGiftCardCode}
                       giftCardBalance={giftCardBalance}
@@ -845,7 +836,7 @@ export default function TodayOrderPaymentModal({
                       onVerify={verifyGiftCard}
                       onRemove={handleRemoveGiftCard}
                       label="Apply Gift Card (Optional)"
-                    />
+                    /> */}
 
                     {giftCardBalance !== null && (
                       <GiftUseEditor
@@ -947,7 +938,7 @@ export default function TodayOrderPaymentModal({
                       Cash Payment
                     </h3>
 
-                    <GiftCardField
+                    {/* <GiftCardField
                       giftCardCode={giftCardCode}
                       setGiftCardCode={setGiftCardCode}
                       giftCardBalance={giftCardBalance}
@@ -956,7 +947,7 @@ export default function TodayOrderPaymentModal({
                       onVerify={verifyGiftCard}
                       onRemove={handleRemoveGiftCard}
                       label="Apply Gift Card (Optional)"
-                    />
+                    /> */}
 
                     {giftCardBalance !== null && (
                       <GiftUseEditor

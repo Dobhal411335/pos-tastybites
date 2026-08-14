@@ -4,10 +4,31 @@ import Admin from "@/models/Admin";
 import { hashPassword } from "@/utils/password";
 import { sendError } from "@/utils/errorHandler";
 
+/**
+ * Bootstrap-only endpoint. Disabled unless REGISTER_ADMIN_SECRET is set and
+ * provided via header `x-register-admin-secret` or body `registerSecret`.
+ */
 export async function POST(request) {
   try {
+    const bootstrapSecret = process.env.REGISTER_ADMIN_SECRET;
+    if (!bootstrapSecret) {
+      return Response.json(
+        { success: false, message: "Admin registration is disabled" },
+        { status: 403 }
+      );
+    }
+
     await connectDB();
-    const { name, email, password, restaurantName } = await request.json();
+    const body = await request.json();
+    const { name, email, password, restaurantName, registerSecret } = body;
+    const headerSecret = request.headers.get("x-register-admin-secret");
+
+    if (headerSecret !== bootstrapSecret && registerSecret !== bootstrapSecret) {
+      return Response.json(
+        { success: false, message: "Admin registration is disabled" },
+        { status: 403 }
+      );
+    }
 
     if (!name || !email || !password) {
       return Response.json(

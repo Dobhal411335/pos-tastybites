@@ -9,7 +9,7 @@ import {
   ensureTodayEmployeeActivityNotifications,
 } from '@/lib/notifications/notificationService';
 
-const ROLES = ['ADMIN', 'MANAGER', 'SERVER', 'BARTENDER', 'EMPLOYEE'];
+const ROLES = ['ADMIN', 'MANAGER', 'SERVER', 'BARTENDER', 'EMPLOYEE', 'DEVICE'];
 
 /**
  * GET /api/sales/notifications

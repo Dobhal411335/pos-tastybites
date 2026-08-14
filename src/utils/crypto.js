@@ -38,9 +38,10 @@ export function decryptString(text) {
 
 export function generateActivationCode() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Excluded confusing chars like 1, I, 0, O
+  const bytes = crypto.randomBytes(8);
   let part1 = '';
   let part2 = '';
-  for (let i = 0; i < 4; i++) part1 += chars[Math.floor(Math.random() * chars.length)];
-  for (let i = 0; i < 4; i++) part2 += chars[Math.floor(Math.random() * chars.length)];
+  for (let i = 0; i < 4; i++) part1 += chars[bytes[i] % chars.length];
+  for (let i = 0; i < 4; i++) part2 += chars[bytes[i + 4] % chars.length];
   return `EMP-${part1}-${part2}`;
 }

@@ -14,16 +14,49 @@ import {
   setEmployeeAccessCookie,
   setEmployeeRefreshCookie,
 } from '@/lib/employeeAuthCookies';
+import {
+  checkRateLimit,
+  clientIpFromRequest,
+  rateLimitResponse,
+} from '@/lib/rateLimit';
 
 export async function POST(request) {
   try {
     await connectDB();
 
+    const ip = clientIpFromRequest(request);
+    const limited = checkRateLimit({
+      key: `employee-login:${ip}`,
+      limit: 20,
+      windowMs: 15 * 60_000,
+    });
+    if (!limited.ok) {
+      return rateLimitResponse(limited.retryAfterSec, 'Too many login attempts. Please try again later.');
+    }
+
     const body = await request.json();
-    const { employeeId, password, browserFingerprint, ipAddress, platform } = body;
+    const employeeIdRaw = body?.employeeId;
+    const password = typeof body?.password === 'string' ? body.password : null;
+    const { browserFingerprint, ipAddress, platform } = body;
+
+    const employeeId =
+      typeof employeeIdRaw === 'string'
+        ? employeeIdRaw.trim()
+        : typeof employeeIdRaw === 'number'
+          ? String(employeeIdRaw)
+          : null;
 
     if (!employeeId || !password) {
       return NextResponse.json({ success: false, message: 'Missing required fields' }, { status: 400 });
+    }
+
+    const perAccount = checkRateLimit({
+      key: `employee-login-id:${employeeId.toLowerCase()}:${ip}`,
+      limit: 10,
+      windowMs: 15 * 60_000,
+    });
+    if (!perAccount.ok) {
+      return rateLimitResponse(perAccount.retryAfterSec, 'Too many login attempts. Please try again later.');
     }
 
     const employee = await Employee.findOne({ 
@@ -81,6 +114,14 @@ export async function POST(request) {
           success: false, 
           action: 'DEVICE_ACTIVATION_REQUIRED', 
           message: 'Device token revoked. Please activate again.' 
+        }, { status: 403 });
+      }
+
+      if (String(device.restaurant) !== String(employee.restaurant)) {
+        return NextResponse.json({
+          success: false,
+          action: 'DEVICE_ACTIVATION_REQUIRED',
+          message: 'This device is registered to a different restaurant. Please activate a device for your restaurant.',
         }, { status: 403 });
       }
     }
@@ -295,7 +336,8 @@ export async function POST(request) {
     const refreshToken = await signToken({
       employeeId: employee._id.toString(),
       sessionId: session._id.toString(),
-      type: 'refresh'
+      type: 'refresh',
+      version: session.refreshTokenVersion || 1,
     }, '7d');
 
     const response = NextResponse.json({

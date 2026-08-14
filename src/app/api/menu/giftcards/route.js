@@ -5,18 +5,33 @@ import { sendError } from "@/utils/errorHandler";
 import { logger } from "@/utils/logger";
 import { sendGiftCardIssuedEmail } from "@/lib/brevo/sendGiftCardIssuedEmail";
 import mongoose from "mongoose";
+import { randomBytes } from "crypto";
+import {
+  checkRateLimit,
+  clientIpFromRequest,
+  rateLimitResponse,
+} from "@/lib/rateLimit";
+
+function isAdminOrManager(role) {
+  const upper = String(role || "").toUpperCase();
+  return upper === "ADMIN" || upper === "SUPER ADMIN" || upper === "MANAGER";
+}
 
 // Helper to generate a random code
 const generateGiftCardCode = () => {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // Removed O, I, 0, 1
 
-  const randomPart = (length) =>
-    Array.from({ length }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
+  const randomPart = (length) => {
+    const buf = randomBytes(length);
+    let out = "";
+    for (let i = 0; i < length; i++) out += chars[buf[i] % chars.length];
+    return out;
+  };
 
   return `TB-GC-${randomPart(4)}-${randomPart(4)}`;
 };
 
-// GET - List all giftcards grouped by batch
+// GET - Lookup by code (POS) or list/batch views (admin)
 export const GET = withAuth(async (request) => {
   try {
     const { searchParams } = new URL(request.url);
@@ -26,11 +41,25 @@ export const GET = withAuth(async (request) => {
     const code = searchParams.get("code");
 
     if (code) {
+      const ip = clientIpFromRequest(request);
+      const limited = checkRateLimit({
+        key: `giftcard-lookup:${request.restaurant}:${ip}`,
+        limit: 40,
+        windowMs: 60_000,
+      });
+      if (!limited.ok) {
+        return rateLimitResponse(limited.retryAfterSec, "Too many gift card lookups");
+      }
+
       const normalizedCode = code.trim().toUpperCase();
       const purpose = searchParams.get("purpose") || "redeem";
 
       // Lookup unissued card for admin issue flow
       if (purpose === "issue") {
+        if (!isAdminOrManager(request.role)) {
+          return sendError(new Error("Forbidden"), "Only managers/admins can look up cards for issue", 403);
+        }
+
         const giftcard = await Giftcard.findOne({
           restaurant: request.restaurant,
           code: normalizedCode,
@@ -81,31 +110,46 @@ export const GET = withAuth(async (request) => {
         isIssued: true,
         status: "Active",
       });
+
+      // Uniform failure message reduces gift-card code enumeration
+      const invalidLookupMessage = "Gift card is invalid or cannot be used";
+
       if (!giftcard) {
-        return sendError(
-          new Error("Not Found"),
-          "Gift card with this code was not found, not issued, or inactive",
-          404
-        );
+        return sendError(new Error("Invalid"), invalidLookupMessage, 404);
       }
 
       const now = new Date();
       if (giftcard.validFrom && now < giftcard.validFrom) {
-        return sendError(new Error("Not Yet Valid"), "This gift card is not valid yet", 400);
+        return sendError(new Error("Invalid"), invalidLookupMessage, 404);
       }
       if (giftcard.validUntil && now > giftcard.validUntil) {
-        return sendError(new Error("Expired"), "This gift card has expired", 400);
+        return sendError(new Error("Invalid"), invalidLookupMessage, 404);
       }
 
       const currentBalance = giftcard.balance != null ? giftcard.balance : giftcard.value;
       if (currentBalance <= 0) {
-        return sendError(new Error("Empty Balance"), "This gift card has no remaining balance", 400);
+        return sendError(new Error("Invalid"), invalidLookupMessage, 404);
       }
 
+      // POS lookup: return only fields needed to apply the card (no recipient PII / full history)
       return sendSuccess(
-        { ...giftcard.toObject(), balance: currentBalance },
+        {
+          _id: giftcard._id,
+          code: giftcard.code,
+          name: giftcard.name,
+          discountType: giftcard.discountType,
+          value: giftcard.value,
+          balance: currentBalance,
+          validFrom: giftcard.validFrom,
+          validUntil: giftcard.validUntil,
+        },
         "Giftcard retrieved successfully"
       );
+    }
+
+    // Listing all cards/batches is admin/manager only
+    if (!isAdminOrManager(request.role)) {
+      return sendError(new Error("Forbidden"), "Only managers/admins can list gift cards", 403);
     }
 
     if (view === "flat") {
@@ -178,7 +222,7 @@ export const GET = withAuth(async (request) => {
     logger.error("Failed to list giftcards", error);
     return sendError(error, "Failed to retrieve giftcards", 500);
   }
-}, ["ADMIN", "MANAGER", "STAFF", "EMPLOYEE"]);
+}, ["ADMIN", "MANAGER", "STAFF", "EMPLOYEE", "SERVER", "BARTENDER"]);
 
 // POST - Create one or multiple giftcards
 export const POST = withAuth(async (request) => {

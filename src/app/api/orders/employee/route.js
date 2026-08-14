@@ -11,6 +11,7 @@ import OperationalAuditLog from "@/models/OperationalAuditLog";
 import { createKotPrintJob, createBarReceiptPrintJob } from "@/lib/printing/printJobService";
 import { createNotification } from "@/lib/notifications/notificationService";
 import Table from "@/models/floor/Table";
+import { repricePosCartItems } from "@/lib/orders/repricePosCartItems";
 
 function normalizeProductType(value) {
   return String(value || "").toUpperCase() === "BAR" ? "BAR" : "KITCHEN";
@@ -154,7 +155,7 @@ async function enqueueOrderTicketPrintJob({
 export const POST = withAuth(async (request) => {
   try {
     const data = await request.json();
-    const { items, subTotal, taxTotal, serviceChargeTotal, serviceChargeName, discountTotal, discountCode, totalAmount, specialNote, sessionId, guestName, partyName, guestCount, orderType } = data;
+    const { items, specialNote, sessionId, guestName, partyName, guestCount, orderType } = data;
     const resolvedPartyName = (partyName || guestName || "").trim() || null;
     const resolvedGuestCount =
       guestCount !== undefined && guestCount !== null && guestCount !== ""
@@ -167,41 +168,31 @@ export const POST = withAuth(async (request) => {
 
     const employeeId = request.user.id;
 
-    // Map items
-    const formattedItems = items.map(item => {
-      const sizes = Array.isArray(item.sizes)
-        ? item.sizes.filter(Boolean)
-        : (item.size && item.size !== "Standard"
-          ? String(item.size).split(", ").filter(Boolean)
-          : []);
-      const sizeLabel = sizes.length > 0 ? sizes.join(", ") : (item.size || "Standard");
+    let priced;
+    try {
+      priced = await repricePosCartItems({
+        restaurantId: request.restaurant,
+        items,
+        discountCode: data.discountCode || null,
+      });
+    } catch (priceErr) {
+      return sendError(
+        priceErr,
+        priceErr.message || "Failed to price order",
+        priceErr.status || 400,
+      );
+    }
 
-      const isOffer = Boolean(item.isOffer) || /^offers?$/i.test(String(item.category || ""));
-      const inclusions = Array.isArray(item.inclusions) ? item.inclusions.filter(Boolean) : [];
-      const choices = Array.isArray(item.choices) ? item.choices.filter(Boolean) : [];
-      const drinks = Array.isArray(item.drinks) ? item.drinks.filter(Boolean) : [];
-
-      return {
-        menuItemId: item.id,
-        name: item.name,
-        productCode: item.productCode || "",
-        category: isOffer ? "Offers" : (item.category || "ITEMS"),
-        size: sizeLabel,
-        sizes,
-        qty: item.qty,
-        price: item.price,
-        tax: item.tax || 0,
-        serviceCharge: item.serviceCharge || 0,
-        options: item.options || [],
-        preparationStyle: item.preparationStyle || null,
-        productType: normalizeProductType(item.productType),
-        isOffer,
-        inclusions,
-        choices,
-        drinks,
-        cartId: item.cartId || String(Date.now() + Math.random())
-      };
-    });
+    const {
+      formattedItems,
+      subTotal,
+      taxTotal,
+      serviceChargeTotal,
+      serviceChargeName,
+      discountTotal,
+      discountCode,
+      totalAmount,
+    } = priced;
 
     const routeToKitchen = cartHasKitchenItem(formattedItems);
 
@@ -222,7 +213,10 @@ export const POST = withAuth(async (request) => {
         if (!staffForId) {
           return sendError(new Error("Staff ID missing"), "Please select a staff member", 400);
         }
-        const staffMember = await Employee.findById(staffForId);
+        const staffMember = await Employee.findOne({
+          _id: staffForId,
+          restaurant: request.restaurant,
+        });
         if (!staffMember) {
           return sendError(new Error("Invalid Staff"), "Selected staff member not found", 404);
         }
@@ -265,13 +259,13 @@ export const POST = withAuth(async (request) => {
         });
 
         order.items = finalItems;
-        order.subTotal = Number(subTotal) || 0;
-        order.taxTotal = Number(taxTotal) || 0;
-        order.serviceChargeTotal = Number(serviceChargeTotal) || 0;
+        order.subTotal = subTotal;
+        order.taxTotal = taxTotal;
+        order.serviceChargeTotal = serviceChargeTotal;
         order.serviceChargeName = serviceChargeName || null;
-        order.discountTotal = Number(discountTotal) || 0;
+        order.discountTotal = discountTotal;
         order.discountCode = discountCode || null;
-        order.totalAmount = Number(totalAmount) || 0;
+        order.totalAmount = totalAmount;
         order.specialNote = specialNote;
         order.guestName = directPartyName;
         order.partyName = directPartyName;
@@ -326,13 +320,13 @@ export const POST = withAuth(async (request) => {
         restaurantId: request.restaurant,
         orderNumber,
         items: formattedItems.map((item) => ({ ...item, sentQty: item.qty })),
-        subTotal: Number(subTotal) || 0,
-        taxTotal: Number(taxTotal) || 0,
-        serviceChargeTotal: Number(serviceChargeTotal) || 0,
+        subTotal,
+        taxTotal,
+        serviceChargeTotal,
         serviceChargeName: serviceChargeName || null,
-        discountTotal: Number(discountTotal) || 0,
+        discountTotal,
         discountCode: discountCode || null,
-        totalAmount: Number(totalAmount) || 0,
+        totalAmount,
         specialNote: specialNote,
         guestName: directPartyName,
         partyName: directPartyName,
@@ -394,8 +388,11 @@ export const POST = withAuth(async (request) => {
       );
     }
 
-    // Session-based Ordering
-    const session = await TableSession.findById(sessionId).populate("primaryTable");
+    // Session-based Ordering — always scope to authenticated restaurant
+    const session = await TableSession.findOne({
+      _id: sessionId,
+      restaurant: request.restaurant,
+    }).populate("primaryTable");
     if (!session || !session.isSessionOpen) {
       return sendError(new Error("Invalid Session"), "Table session is invalid or closed", 400);
     }
@@ -403,6 +400,7 @@ export const POST = withAuth(async (request) => {
     // Check for existing active order in this session
     let order = await Order.findOne({
       tableSession: sessionId,
+      restaurantId: request.restaurant,
       status: { $in: ["PENDING", "CONFIRMED"] }
     });
 
@@ -424,13 +422,13 @@ export const POST = withAuth(async (request) => {
 
       // Continue Order: Update the existing draft
       order.items = finalItems;
-      order.subTotal = Number(subTotal) || 0;
-      order.taxTotal = Number(taxTotal) || 0;
-      order.serviceChargeTotal = Number(serviceChargeTotal) || 0;
+      order.subTotal = subTotal;
+      order.taxTotal = taxTotal;
+      order.serviceChargeTotal = serviceChargeTotal;
       order.serviceChargeName = serviceChargeName || null;
-      order.discountTotal = Number(discountTotal) || 0;
+      order.discountTotal = discountTotal;
       order.discountCode = discountCode || null;
-      order.totalAmount = Number(totalAmount) || 0;
+      order.totalAmount = totalAmount;
       order.specialNote = specialNote;
       if (resolvedPartyName !== null || partyName !== undefined || guestName !== undefined) {
         order.guestName = resolvedPartyName;
@@ -515,13 +513,13 @@ export const POST = withAuth(async (request) => {
         restaurantId: request.restaurant,
         orderNumber,
         items: formattedItems.map(item => ({ ...item, sentQty: item.qty })),
-        subTotal: Number(subTotal) || 0,
-        taxTotal: Number(taxTotal) || 0,
-        serviceChargeTotal: Number(serviceChargeTotal) || 0,
+        subTotal,
+        taxTotal,
+        serviceChargeTotal,
         serviceChargeName: serviceChargeName || null,
-        discountTotal: Number(discountTotal) || 0,
+        discountTotal,
         discountCode: discountCode || null,
-        totalAmount: Number(totalAmount) || 0,
+        totalAmount,
         specialNote: specialNote,
         
         // Session links
@@ -814,4 +812,4 @@ export const PATCH = withAuth(async (request) => {
     logger.error("Failed to waive order", error);
     return sendError(error, "Failed to waive order", 500);
   }
-}, ["EMPLOYEE", "MANAGER", "ADMIN", "SERVER", "BARTENDER"]);
+}, ["EMPLOYEE", "MANAGER", "ADMIN", "SERVER", "BARTENDER", "STAFF"]);

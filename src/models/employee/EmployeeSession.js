@@ -12,7 +12,9 @@ const EmployeeSessionSchema = new mongoose.Schema(
     browserFingerprint: { type: String, required: true },
     platform: { type: String },
     ipAddress: { type: String, required: true },
-    status: { type: String, enum: ['Active', 'Terminated', 'Expired'], default: 'Active' }
+    status: { type: String, enum: ['Active', 'Terminated', 'Expired'], default: 'Active' },
+    /** Bumped on each refresh so old refresh JWTs cannot be reused. */
+    refreshTokenVersion: { type: Number, default: 1 },
   },
   { timestamps: { createdAt: 'createdAt', updatedAt: false } }
 );

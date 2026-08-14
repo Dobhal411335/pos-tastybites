@@ -17,6 +17,7 @@ export function SocketProvider({ children, restaurantId, floorId, employeeId }) 
   useEffect(() => {
     // Only connect on the client side
     const socketInstance = io(window.location.origin, {
+      withCredentials: true,
       reconnectionAttempts: 5,
       reconnectionDelay: 1000,
     });

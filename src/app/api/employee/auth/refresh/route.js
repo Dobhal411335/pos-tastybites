@@ -5,6 +5,7 @@ import { refreshEmployeeAccessToken } from '@/lib/employeeSession';
 import {
   clearEmployeeAuthCookies,
   setEmployeeAccessCookie,
+  setEmployeeRefreshCookie,
 } from '@/lib/employeeAuthCookies';
 
 export async function POST() {
@@ -26,6 +27,9 @@ export async function POST() {
 
     const response = NextResponse.json({ success: true, message: 'Token refreshed successfully' });
     setEmployeeAccessCookie(response, result.accessToken);
+    if (result.refreshToken) {
+      setEmployeeRefreshCookie(response, result.refreshToken);
+    }
     return response;
   } catch (error) {
     console.error('Refresh Token Error:', error);

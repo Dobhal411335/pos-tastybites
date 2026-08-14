@@ -2,6 +2,7 @@ import { withAuth } from "@/utils/auth";
 import TableSession from "@/models/floor/TableSession";
 import Table from "@/models/floor/Table";
 import Order from "@/models/Order";
+import Employee from "@/models/employee/Employee";
 import OperationalAuditLog from "@/models/OperationalAuditLog";
 import { sendSuccess } from "@/utils/apiResponse";
 import { sendError } from "@/utils/errorHandler";
@@ -279,6 +280,19 @@ export const PUT = withAuth(async (request) => {
 
     if (action === "TRANSFER") {
       if (!newEmployeeId) return sendError(new Error("Missing ID"), "newEmployeeId is required for transfer", 400);
+
+      const targetEmployee = await Employee.findOne({
+        _id: newEmployeeId,
+        restaurant: request.restaurant,
+        isActive: true,
+        status: { $in: ["Active", "Approved"] },
+      })
+        .select("_id")
+        .lean();
+
+      if (!targetEmployee) {
+        return sendError(new Error("Not Found"), "Target employee not found in this restaurant", 404);
+      }
 
       session.transferHistory.push({
         fromTable: session.primaryTable,

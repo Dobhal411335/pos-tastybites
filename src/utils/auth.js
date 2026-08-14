@@ -4,10 +4,14 @@ import { sendError } from './errorHandler';
 import { runWithTenant } from '@/tenant/tenantContext';
 import connectDB from '@/lib/db';
 import EmployeeSession from '@/models/employee/EmployeeSession';
+import RegisteredDevice from '@/models/RegisteredDevice';
 
 /**
  * Higher-order function to wrap API routes with Authentication and Tenant Context.
  * Ensures req.user, req.restaurant, and req.role are available.
+ *
+ * Employee JWTs (payload.sessionId) must also present a valid activated device_token.
+ * Admin cookies (`token` without sessionId) are not device-bound.
  */
 export const withAuth = (handler, allowedRoles = []) => {
   return async (request, context) => {
@@ -16,10 +20,12 @@ export const withAuth = (handler, allowedRoles = []) => {
 
       const cookieStore = await cookies();
       let token = cookieStore.get('token')?.value;
+      let usedEmployeeCookie = false;
       
       // Fallback to employee token if admin token is missing
       if (!token) {
         token = cookieStore.get('employee_access_token')?.value;
+        usedEmployeeCookie = Boolean(token);
       }
 
       if (!token) {
@@ -35,6 +41,29 @@ export const withAuth = (handler, allowedRoles = []) => {
         const session = await EmployeeSession.findById(payload.sessionId);
         if (!session || session.status !== 'Active') {
           return sendError(new Error('Unauthorized'), 'Session expired or terminated', 401);
+        }
+
+        // Employee Sales sessions require a valid POS device binding
+        if (usedEmployeeCookie || payload.type === 'access') {
+          const deviceToken = cookieStore.get('device_token')?.value;
+          if (!deviceToken) {
+            return sendError(new Error('Unauthorized'), 'Device token missing', 401);
+          }
+          const devicePayload = await verifyToken(deviceToken);
+          if (!devicePayload || devicePayload.type !== 'device') {
+            return sendError(new Error('Unauthorized'), 'Invalid device token', 401);
+          }
+          const device = await RegisteredDevice.findById(devicePayload.deviceId);
+          if (!device || device.status !== 'Active' || device.activationStatus !== 'Activated') {
+            return sendError(new Error('Forbidden'), 'Device is inactive', 403);
+          }
+          if (device.deviceTokenVersion !== devicePayload.version) {
+            return sendError(new Error('Unauthorized'), 'Device has been reset', 401);
+          }
+          if (String(device.restaurant) !== String(payload.restaurantId)) {
+            return sendError(new Error('Forbidden'), 'Device restaurant mismatch', 403);
+          }
+          request.device = device;
         }
       }
 

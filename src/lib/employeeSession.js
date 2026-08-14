@@ -64,8 +64,7 @@ export async function expireSessionFromRefreshToken(refreshToken) {
 }
 
 /**
- * Validates refresh token and issues a new access token for an active session.
- * Returns null on failure; callers handle HTTP responses and session expiry.
+ * Validates refresh token and issues a new access + rotated refresh token.
  */
 export async function refreshEmployeeAccessToken(refreshToken) {
   if (!refreshToken) {
@@ -83,11 +82,21 @@ export async function refreshEmployeeAccessToken(refreshToken) {
     return { ok: false, status: 401, message: 'Session expired or terminated', expireSession: true };
   }
 
+  const currentVersion = session.refreshTokenVersion || 1;
+  const tokenVersion = payload.version != null ? Number(payload.version) : 1;
+  if (tokenVersion !== Number(currentVersion)) {
+    await markEmployeeSessionExpired(session._id);
+    return { ok: false, status: 401, message: 'Refresh token reused or revoked', expireSession: true };
+  }
+
   const employee = await Employee.findById(payload.employeeId);
   if (!isEmployeeEligibleForSession(employee)) {
     await markEmployeeSessionExpired(session._id);
     return { ok: false, status: 403, message: 'Account suspended or inactive', expireSession: true };
   }
+
+  session.refreshTokenVersion = currentVersion + 1;
+  await session.save();
 
   const accessToken = await signToken(
     {
@@ -100,5 +109,15 @@ export async function refreshEmployeeAccessToken(refreshToken) {
     '1h'
   );
 
-  return { ok: true, accessToken, session, employee };
+  const newRefreshToken = await signToken(
+    {
+      employeeId: employee._id.toString(),
+      sessionId: session._id.toString(),
+      type: 'refresh',
+      version: session.refreshTokenVersion,
+    },
+    '7d'
+  );
+
+  return { ok: true, accessToken, refreshToken: newRefreshToken, session, employee };
 }

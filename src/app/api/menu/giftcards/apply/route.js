@@ -46,7 +46,7 @@ export const POST = withAuth(async (request) => {
     const currentBalance = giftcard.balance !== undefined ? giftcard.balance : giftcard.value;
 
     if (currentBalance <= 0) {
-      return sendError(new Error("Empty balance"), "This giftcard has no remaining balance", 400);
+      return sendError(new Error("Empty balance"), "Gift card balance is exhausted", 400);
     }
 
     const responseData = {

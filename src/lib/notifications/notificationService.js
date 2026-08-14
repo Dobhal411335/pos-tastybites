@@ -11,8 +11,18 @@ const HIGH_PRIORITY_TYPES = new Set([
   "ORDER_CANCELLED",
 ]);
 
+/** Types that should ring the Sales notification bell (subset may be low priority in the UI). */
+const SOUND_TYPES = new Set([
+  ...HIGH_PRIORITY_TYPES,
+  "EMPLOYEE_LOGIN",
+]);
+
 export function isHighPriorityType(type) {
   return HIGH_PRIORITY_TYPES.has(type);
+}
+
+export function shouldPlayNotificationSound(type) {
+  return SOUND_TYPES.has(type);
 }
 
 function toClientNotification(doc, userId) {
@@ -172,7 +182,7 @@ export async function createNotification({
       isRead: false,
       createdAt: doc.createdAt,
       category: categorizeType(doc.type),
-      playSound: isHighPriorityType(doc.type),
+      playSound: shouldPlayNotificationSound(doc.type),
     };
 
     if (!silent) {

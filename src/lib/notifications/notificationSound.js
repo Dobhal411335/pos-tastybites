@@ -304,7 +304,13 @@ export function playNotificationSound(notification) {
   if (typeof window === "undefined") return;
   if (!getNotificationSoundEnabled()) return;
   if (!unlockedThisSession) return;
-  if (!notification?.playSound && notification?.priority !== "high") return;
+
+  const type = notification?.type;
+  const shouldPlay =
+    notification?.playSound === true ||
+    notification?.priority === "high" ||
+    type === "EMPLOYEE_LOGIN";
+  if (!shouldPlay) return;
 
   const id = String(notification.id || notification._id || "");
   if (!id || playedIds.has(id)) return;
