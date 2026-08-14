@@ -2,6 +2,7 @@ import React from "react";
 import "./print.css";
 import moment from "moment";
 import { isOfferItem, getOfferDetailLines } from "@/utils/offerDetails";
+import { shouldShowTable } from "@/utils/orderDisplay";
 
 const money = (n) => `$${(Number(n) || 0).toFixed(2)}`;
 
@@ -161,15 +162,17 @@ const CustomerReceipt = ({
           </span>
         </div>
         <div className="flex justify-between gap-2">
-          <span>
-            <span className="text-zinc-500">Table:</span>{" "}
-            <span className="receipt-bold">{tableNo || "N/A"}</span>
-          </span>
+          {shouldShowTable(order) && (
+            <span>
+              <span className="text-zinc-500">Table:</span>{" "}
+              <span className="receipt-bold">{tableNo}</span>
+            </span>
+          )}
         </div>
-        {partyLabel && (
+        {(partyLabel || !shouldShowTable(order)) && (
           <div>
             <span className="text-zinc-500">Party:</span>{" "}
-            <span className="receipt-bold">{partyLabel}</span>
+            <span className="receipt-bold">{partyLabel || "Walk-in"}</span>
           </div>
         )}
         <div>

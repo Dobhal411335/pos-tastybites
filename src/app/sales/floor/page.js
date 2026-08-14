@@ -429,6 +429,24 @@ export default function SalesFloorPage() {
         <Button
           type="button"
           size="sm"
+          onClick={() => router.push("/sales/orders/walk-in")}
+          className="h-7 shrink-0 px-2.5 rounded-md text-[12px] font-semibold bg-orange-600 text-white hover:bg-orange-700"
+        >
+          <UserPlus className="h-3.5 w-3.5 mr-1 inline" />
+          Walk-in
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          onClick={() => router.push("/sales/orders/staff")}
+          className="h-7 shrink-0 px-2.5 rounded-md text-[12px] font-semibold bg-indigo-600 text-white hover:bg-indigo-700"
+        >
+          <Users className="h-3.5 w-3.5 mr-1 inline" />
+          Staff
+        </Button>
+        <Button
+          type="button"
+          size="sm"
           onClick={() =>
             setGridMode((prev) =>
               prev === "lines"
@@ -619,6 +637,25 @@ export default function SalesFloorPage() {
 
         {/* Legend + grid toggle — under Online, parallel to tables */}
         <aside className="hidden sm:flex w-44 shrink-0 flex-col gap-3 border-l border-zinc-200 bg-white p-3 overflow-y-auto">
+          <div className="flex flex-col gap-2">
+            <Button
+              type="button"
+              onClick={() => router.push("/sales/orders/walk-in")}
+              className="h-9 w-full px-3 rounded-lg text-[13px] font-semibold bg-orange-600 text-white hover:bg-orange-700 shadow-sm"
+            >
+              <UserPlus className="h-4 w-4 mr-1.5 inline" />
+              Walking Customer
+            </Button>
+            <Button
+              type="button"
+              onClick={() => router.push("/sales/orders/staff")}
+              className="h-9 w-full px-3 rounded-lg text-[13px] font-semibold bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm"
+            >
+              <Users className="h-4 w-4 mr-1.5 inline" />
+              Staff Order
+            </Button>
+          </div>
+
           <div className="flex items-center gap-1 bg-stone-50 border border-stone-200 rounded-lg p-1">
             <Button
               type="button"

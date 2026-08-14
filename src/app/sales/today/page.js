@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { 
   Search, Clock, ChevronRight, X, 
   Receipt, ShoppingBag, Loader2, ArrowLeft, RefreshCw,
-  DollarSign, Wallet, CreditCard, Banknote, Gift
+  DollarSign, Wallet, CreditCard, Banknote, Gift, User, Users, UtensilsCrossed
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,6 +13,13 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import PrintPreviewModal from "@/components/receipts/PrintPreviewModal";
 import TodayOrderPaymentModal from "@/components/sales/TodayOrderPaymentModal";
+import {
+  getOrderLocationLabel,
+  getOrderTypeLabel,
+  getOrderTypeBadgeClass,
+  getOrderPartyLabel,
+  shouldShowTable,
+} from "@/utils/orderDisplay";
 
 const STATUSES = ["All", "PENDING", "CONFIRMED", "CANCELLED", "WAIVED", "PAID", "ONLINE"];
 const STATUS_RANK = {
@@ -257,9 +264,24 @@ export default function TodayOrdersPage() {
     }
   };
 
-  const getTypeIcon = (source) => {
+  const getTypeIcon = (order) => {
+    const source = order?.source || "POS";
     if (source === "ONLINE") return <ShoppingBag className="w-6 h-6 text-white" />;
+    if (source === "STAFF") return <Users className="w-6 h-6 text-white" />;
+    if (source === "WALK_IN") return <User className="w-6 h-6 text-white" />;
+    if (order?.tableSession || order?.tableNo) {
+      return <UtensilsCrossed className="w-6 h-6 text-white" />;
+    }
     return <Receipt className="w-6 h-6 text-white" />;
+  };
+
+  const getTypeIconBg = (order) => {
+    const source = order?.source || "POS";
+    if (source === "WALK_IN") return "bg-orange-500";
+    if (source === "STAFF") return "bg-indigo-500";
+    if (source === "ONLINE") return "bg-sky-500";
+    if (order?.tableSession || order?.tableNo) return "bg-emerald-500";
+    return "bg-orange-400";
   };
 
   const filteredOrders = orders
@@ -271,7 +293,8 @@ export default function TodayOrdersPage() {
             ? o.source === "ONLINE"
             : o.status?.toUpperCase() === activeTab;
       const placer = getPlacerName(o) || "";
-      const searchString = `${o.orderNumber || ""} ${o.tableNo || ""} ${o.guestName || ""} ${o.source || ""} ${placer}`.toLowerCase();
+      const typeLabel = getOrderTypeLabel(o);
+      const searchString = `${o.orderNumber || ""} ${o.tableNo || ""} ${o.guestName || ""} ${o.partyName || ""} ${o.source || ""} ${typeLabel} ${placer}`.toLowerCase();
       const matchesSearch = searchString.includes(searchQuery.toLowerCase());
       return matchesTab && matchesSearch;
     })
@@ -506,6 +529,9 @@ export default function TodayOrdersPage() {
                 const tip = Number(order.tipAmount || 0);
                 const paymentType = getPaymentType(order);
                 const PaymentIcon = paymentType.Icon;
+                const orderTypeLabel = getOrderTypeLabel(order);
+                const partyLabel = getOrderPartyLabel(order);
+                const locationLabel = getOrderLocationLabel(order);
                 return (
                   <div 
                     key={order._id}
@@ -517,18 +543,24 @@ export default function TodayOrdersPage() {
                     }`}
                   >
                     <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 rounded-xl bg-orange-400 text-white flex items-center justify-center shrink-0">
-                        {getTypeIcon(order.source)}
+                      <div className={`w-12 h-12 rounded-xl text-white flex items-center justify-center shrink-0 ${getTypeIconBg(order)}`}>
+                        {getTypeIcon(order)}
                       </div>
                       <div>
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-bold text-zinc-900">Order #{order.orderNumber}</span>
-                          <span className="w-1 h-1 rounded-full bg-zinc-300"></span>
-                          <span className="font-bold text-zinc-600">{order.tableNo || "Takeaway"}</span>
-                          {order.guestName && (
+                          <span
+                            className={`inline-flex items-center px-2 py-0.5 rounded-md border text-[10px] font-bold uppercase tracking-wider ${getOrderTypeBadgeClass(order)}`}
+                          >
+                            {orderTypeLabel}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 flex-wrap mt-0.5">
+                          <span className="font-bold text-zinc-600">{locationLabel}</span>
+                          {partyLabel && (
                             <>
                               <span className="w-1 h-1 rounded-full bg-zinc-300"></span>
-                              <span className="font-semibold text-zinc-500">{order.guestName}</span>
+                              <span className="font-semibold text-zinc-500">{partyLabel}</span>
                             </>
                           )}
                         </div>
@@ -537,7 +569,6 @@ export default function TodayOrdersPage() {
                             <Clock className="w-3.5 h-3.5" />{" "}
                             {new Date(order.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                           </span>
-                          <span>{order.source}</span>
                           {placerName && <span className="normal-case tracking-normal">{placerName}</span>}
                           <span>{order.items?.length || 0} Items</span>
                           {tip > 0 && <span className="text-orange-600 normal-case tracking-normal">Tip ${tip.toFixed(2)}</span>}
@@ -586,13 +617,19 @@ export default function TodayOrdersPage() {
               <div className="min-w-0">
                 <div className="flex items-center gap-2 mb-1 flex-wrap">
                   <h2 className="text-xl font-bold text-zinc-900">Order #{selectedOrder.orderNumber}</h2>
+                  <span
+                    className={`inline-flex items-center px-2 py-0.5 rounded-md border text-[10px] font-bold uppercase tracking-wider ${getOrderTypeBadgeClass(selectedOrder)}`}
+                  >
+                    {getOrderTypeLabel(selectedOrder)}
+                  </span>
                   <Badge className={`${getStatusColor(selectedOrder.status)} text-[10px] uppercase font-bold px-2 py-0.5 border-none shadow-none`}>
                     {selectedOrder.status}
                   </Badge>
                 </div>
                 <p className="text-sm font-semibold text-zinc-800">
-                  {selectedOrder.tableNo ? `${selectedOrder.tableNo}` : "Takeaway"} • {selectedOrder.source}
-                  {selectedOrder.guestName && ` • Guest: ${selectedOrder.guestName}`}
+                  {getOrderLocationLabel(selectedOrder)}
+                  {getOrderPartyLabel(selectedOrder) &&
+                    ` · ${getOrderPartyLabel(selectedOrder)}`}
                 </p>
                 {getPlacerName(selectedOrder) && (
                   <p className="text-xs font-bold text-zinc-900 mt-1">
@@ -607,6 +644,48 @@ export default function TodayOrdersPage() {
             </div>
 
             <div className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-8">
+              <div>
+                <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-3">Order Info</h3>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between gap-3 font-medium">
+                    <span className="text-zinc-500 shrink-0">Order Type</span>
+                    <span
+                      className={`inline-flex items-center px-2 py-0.5 rounded-md border text-[10px] font-bold uppercase tracking-wider ${getOrderTypeBadgeClass(selectedOrder)}`}
+                    >
+                      {getOrderTypeLabel(selectedOrder)}
+                    </span>
+                  </div>
+                  {shouldShowTable(selectedOrder) && (
+                    <div className="flex justify-between gap-3 font-medium">
+                      <span className="text-zinc-500">Table</span>
+                      <span className="text-zinc-900 font-bold">{selectedOrder.tableNo}</span>
+                    </div>
+                  )}
+                  {(selectedOrder.partyName || selectedOrder.guestName) && (
+                    <div className="flex justify-between gap-3 font-medium">
+                      <span className="text-zinc-500 shrink-0">
+                        {selectedOrder.source === "STAFF" ? "Staff Member" : "Party"}
+                      </span>
+                      <span className="text-zinc-900 font-bold text-right">
+                        {selectedOrder.partyName || selectedOrder.guestName}
+                      </span>
+                    </div>
+                  )}
+                  {selectedOrder.source === "STAFF" && selectedOrder.staffOrderReason && (
+                    <div className="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3">
+                      <span className="text-xs font-bold text-indigo-600 uppercase tracking-wider block mb-1">
+                        Reason
+                      </span>
+                      <p className="text-sm font-semibold text-indigo-900 whitespace-pre-wrap">
+                        {selectedOrder.staffOrderReason}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="h-px bg-zinc-200"></div>
+
               <div>
                 <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-3">Payment</h3>
                 <div className="space-y-3 text-sm">

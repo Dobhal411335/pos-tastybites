@@ -73,10 +73,15 @@ export async function proxy(request) {
   ) {
     if (isSales && pathname === '/login') {
       targetPath = '/sales/login';
+    } else if (isSales && pathname === '/') {
+      // sales subdomain root → /floor (rewritten to /sales/floor below)
+      response = NextResponse.redirect(new URL('/floor', request.url));
+      response.headers.set('x-request-id', reqId);
+      return response;
     } else if (pathname !== '/login' && isPos && !isAdminPage && !isSalesPage) {
       targetPath = `/admin${pathname === '/' ? '/dashboard' : pathname}`;
     } else if (pathname !== '/login' && isSales && !isSalesPage && !isAdminPage) {
-      targetPath = `/sales${pathname === '/' ? '/floor' : pathname}`;
+      targetPath = `/sales${pathname}`;
     }
   }
 

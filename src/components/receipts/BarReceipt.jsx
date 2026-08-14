@@ -1,6 +1,7 @@
 import React from "react";
 import "./print.css";
 import moment from "moment";
+import { isDirectSaleOrder } from "@/utils/orderDisplay";
 
 function isStyleOption(opt, preparationStyle) {
   const value = String(opt || "").trim();
@@ -30,7 +31,8 @@ const BarReceipt = ({
 
   const { orderNumber, tableNo, guestName, partyName, createdAt } = order;
   const note = specialNote || order.specialNote;
-  const partyLabel = partyName || guestName;
+  const partyLabel = partyName || guestName || (isDirectSaleOrder(order) ? "Walk-in" : "");
+  const directSale = isDirectSaleOrder(order);
   const covers =
     guestCount != null && guestCount !== ""
       ? Number(guestCount)
@@ -64,9 +66,11 @@ const BarReceipt = ({
             {covers != null && partyLabel ? ` (${covers})` : ""}
           </div>
         )}
-        <div className="receipt-bold uppercase">
-          Table: {tableNo || "Takeaway"}
-        </div>
+        {!directSale && (
+          <div className="receipt-bold uppercase">
+            Table: {tableNo || "Takeaway"}
+          </div>
+        )}
       </div>
 
       <div className="receipt-divider border-t border-black border-solid my-2" />
@@ -76,7 +80,7 @@ const BarReceipt = ({
           <span className="receipt-bold">Sent:</span>{" "}
           {moment(createdAt || undefined).format("MMM DD, YYYY [at] hh:mm A")}
         </div>
-        {tableNo && (
+        {!directSale && tableNo && (
           <div>
             <span className="receipt-bold">Table:</span> {tableNo}
             {covers != null ? `, ${covers} Cover${covers === 1 ? "" : "s"}` : ""}

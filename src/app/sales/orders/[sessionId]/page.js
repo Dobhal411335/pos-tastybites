@@ -45,6 +45,7 @@ import {
 } from "@/components/ui/select";
 import PrintPreviewModal from "@/components/receipts/PrintPreviewModal";
 import TodayOrderPaymentModal from "@/components/sales/TodayOrderPaymentModal";
+import StaffOrderPartyModal from "@/components/sales/StaffOrderPartyModal";
 import { useAuth } from "@/components/providers/AuthProvider";
 import {
   OFFER_CATEGORY,
@@ -88,6 +89,12 @@ export default function OrderPage() {
   const router = useRouter();
   const { socket } = useSocket();
   const sessionId = params.sessionId;
+  const isWalkIn = sessionId === "walk-in";
+  const isStaffOrder = sessionId === "staff";
+  const isDirectOrder = isWalkIn || isStaffOrder;
+  const isLegacyNew = sessionId === "new";
+  const isNoSession = isDirectOrder || isLegacyNew;
+  const hasTableSession = !isNoSession;
 
   // Data states
   const [categories, setCategories] = useState(["All"]);
@@ -112,8 +119,12 @@ export default function OrderPage() {
 
   // New states
   const [isKitchenModalOpen, setIsKitchenModalOpen] = useState(false);
+  const [isStaffModalOpen, setIsStaffModalOpen] = useState(false);
   const [guestName, setGuestName] = useState("");
   const [guestTable, setGuestTable] = useState("");
+  const [employees, setEmployees] = useState([]);
+  const [selectedStaffId, setSelectedStaffId] = useState("");
+  const [staffOrderReason, setStaffOrderReason] = useState("");
   const [orderNote, setOrderNote] = useState("");
   const [appliedDiscount, setAppliedDiscount] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -235,8 +246,16 @@ export default function OrderPage() {
           setOffers(Array.isArray(offerJson.data) ? offerJson.data : []);
         }
 
-        // Fetch session and existing order data if not "new"
-        if (sessionId !== "new") {
+        if (isStaffOrder) {
+          const empRes = await fetch("/api/sales/employees");
+          const empJson = await empRes.json();
+          if (empJson.success) {
+            setEmployees(empJson.data || []);
+          }
+        }
+
+        // Fetch session and existing order data for table orders
+        if (hasTableSession) {
           const sessionRes = await fetch(`/api/sales/sessions?sessionId=${sessionId}`);
           const sessionJson = await sessionRes.json();
           if (sessionJson.success && sessionJson.data) {
@@ -335,6 +354,82 @@ export default function OrderPage() {
               });
             }
           }
+        } else if (isDirectOrder) {
+          const savedOrderId = sessionStorage.getItem(`direct-order-${sessionId}`);
+          if (savedOrderId) {
+            const orderRes = await fetch(
+              `/api/orders/employee?orderId=${savedOrderId}`,
+            );
+            const orderJson = await orderRes.json();
+            if (orderJson.success && orderJson.data) {
+              const existingOrder = orderJson.data;
+              setActiveOrder(existingOrder);
+              setOrderStatus(existingOrder.status);
+              setOrderNote(existingOrder.specialNote || "");
+              if (existingOrder.partyName || existingOrder.guestName) {
+                setGuestName(existingOrder.partyName || existingOrder.guestName);
+              }
+              if (existingOrder.staffFor) {
+                setSelectedStaffId(String(existingOrder.staffFor));
+              }
+              if (existingOrder.staffOrderReason) {
+                setStaffOrderReason(existingOrder.staffOrderReason);
+              }
+              const restoredCart = existingOrder.items.map((item) => {
+                const style = item.preparationStyle || null;
+                const extras = (item.options || []).filter(
+                  (o) => !String(o).toLowerCase().startsWith("style:"),
+                );
+                const offer = isOfferItem(item);
+                const inclusions = cleanOfferList(item.inclusions);
+                const choices = cleanOfferList(item.choices);
+                const drinks = cleanOfferList(item.drinks);
+                const parts = [];
+                if (item.size && item.size !== "Standard")
+                  parts.push(`Size: ${item.size}`);
+                if (style) parts.push(`${style}`);
+                if (offer) {
+                  parts.push(
+                    ...getOfferDetailLines({
+                      inclusions,
+                      choices,
+                      drinks,
+                      options: item.options,
+                    }).map((line) => `${line.label}: ${line.value}`),
+                  );
+                } else if (extras.length > 0) {
+                  parts.push(`Extras: ${extras.join(", ")}`);
+                }
+                return {
+                  id: item.menuItemId,
+                  name: item.name,
+                  productCode: item.productCode || "",
+                  category: offer ? OFFER_CATEGORY : item.category || "ITEMS",
+                  price: item.price,
+                  tax: item.tax,
+                  serviceCharge: item.serviceCharge || 0,
+                  qty: item.qty,
+                  size: item.size,
+                  sizes:
+                    item.sizes ||
+                    (item.size && item.size !== "Standard"
+                      ? String(item.size).split(", ").filter(Boolean)
+                      : []),
+                  preparationStyle: style,
+                  options: item.options || [],
+                  productType: item.productType === "BAR" ? "BAR" : "KITCHEN",
+                  isOffer: offer,
+                  inclusions,
+                  choices,
+                  drinks,
+                  modifier: parts.length > 0 ? parts.join(" | ") : undefined,
+                  cartId: item.cartId || Date.now() + Math.random(),
+                };
+              });
+              setCart(restoredCart);
+              setKotCartFingerprint(getCartFingerprint(restoredCart));
+            }
+          }
         }
       } catch (err) {
         toast.error("Failed to load order data");
@@ -356,7 +451,23 @@ export default function OrderPage() {
   }, [currentUser]);
 
   const fetchOrderOnly = useCallback(async () => {
-    if (sessionId === "new") return;
+    if (isNoSession) {
+      const savedOrderId = sessionStorage.getItem(`direct-order-${sessionId}`);
+      if (!savedOrderId) return;
+      try {
+        const orderRes = await fetch(
+          `/api/orders/employee?orderId=${savedOrderId}`,
+        );
+        const orderJson = await orderRes.json();
+        if (orderJson.success && orderJson.data) {
+          setActiveOrder(orderJson.data);
+          setOrderStatus(orderJson.data.status);
+        }
+      } catch (err) {
+        console.error(err);
+      }
+      return;
+    }
     try {
       const orderRes = await fetch(
         `/api/orders/employee?sessionId=${sessionId}`,
@@ -370,7 +481,7 @@ export default function OrderPage() {
     } catch (err) {
       console.error(err);
     }
-  }, [sessionId]);
+  }, [sessionId, isNoSession]);
 
   useEffect(() => {
     const handleReconnect = () => {
@@ -794,6 +905,8 @@ export default function OrderPage() {
     const trimmed = (nameOverride ?? guestName ?? "").trim();
     if (trimmed) return trimmed;
 
+    if (isWalkIn || isLegacyNew) return "Walk-in";
+
     const tableNo = getDisplayTableNo();
     const guestCount = sessionData?.guestCount;
     if (tableNo && guestCount != null) {
@@ -806,18 +919,18 @@ export default function OrderPage() {
     return "Walk-in";
   };
 
-  const handleSendToKitchen = () => {
-    if (cart.length === 0) return;
-    setIsKitchenModalOpen(true);
-  };
-
-  const handleConfirmKitchen = async () => {
-    if (sessionId === "new" && !guestName.trim() && !guestTable.trim()) {
-      toast.error("Enter a party name or table number.");
-      return;
-    }
-
-    const partyName = resolvePartyName();
+  const submitOrder = async ({
+    partyName,
+    staffForId = null,
+    staffReason = null,
+  }) => {
+    const orderSource = isWalkIn
+      ? "WALK_IN"
+      : isStaffOrder
+        ? "STAFF"
+        : isLegacyNew
+          ? "POS"
+          : undefined;
 
     try {
       setIsSubmitting(true);
@@ -831,12 +944,16 @@ export default function OrderPage() {
         discountCode: appliedDiscount ? appliedDiscount.code : null,
         totalAmount: total,
         specialNote: orderNote,
-        sessionId: sessionId !== "new" ? sessionId : null,
-        tableNo: sessionId === "new" ? guestTable : undefined,
+        sessionId: hasTableSession ? sessionId : null,
+        orderId: activeOrder?._id || undefined,
+        tableNo: isLegacyNew ? guestTable : undefined,
         guestName: partyName,
         partyName,
         guestCount: sessionData?.guestCount ?? null,
         orderType: orderType,
+        source: orderSource,
+        staffForId: staffForId || undefined,
+        staffOrderReason: staffReason || undefined,
       };
 
       const res = await fetch("/api/orders/employee", {
@@ -850,24 +967,29 @@ export default function OrderPage() {
         const ticketType = json.data.ticketType || "KOT";
         const isBarTicket = ticketType === "BAR_RECEIPT";
         toast.success(
-          isBarTicket
-            ? "Bar ticket created!"
-            : "Order sent to kitchen!",
+          isBarTicket ? "Bar ticket created!" : "Order sent to kitchen!",
         );
         setIsKitchenModalOpen(false);
+        setIsStaffModalOpen(false);
         setGuestName(partyName);
         setActiveOrder(json.data);
         setOrderStatus("PENDING");
         setKotCartFingerprint(getCartFingerprint(cart));
 
-        // Check if there are items to print for KOT / Bar receipt
+        if (isDirectOrder && json.data._id) {
+          sessionStorage.setItem(`direct-order-${sessionId}`, json.data._id);
+        }
+
         if (json.data.kotPayload && json.data.kotPayload.length > 0) {
-          setPrintOrderData({
+          const printPayload = {
             ...json.data,
             partyName,
             guestName: partyName,
+            source: json.data.source || orderSource,
+            tableNo: isDirectOrder ? undefined : json.data.tableNo,
             guestCount: sessionData?.guestCount ?? json.data.guestCount ?? null,
-          });
+          };
+          setPrintOrderData(printPayload);
           setPrintKotItems(json.data.kotPayload);
           setPrintType(isBarTicket ? "bar" : "kot");
           setRedirectAfterPrint(false);
@@ -881,6 +1003,41 @@ export default function OrderPage() {
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleSendToKitchen = () => {
+    if (cart.length === 0) return;
+    if (isStaffOrder) {
+      setIsStaffModalOpen(true);
+    } else {
+      setIsKitchenModalOpen(true);
+    }
+  };
+
+  const handleConfirmKitchen = async () => {
+    if (isLegacyNew && !guestName.trim() && !guestTable.trim()) {
+      toast.error("Enter a party name or table number.");
+      return;
+    }
+
+    const partyName = resolvePartyName();
+    await submitOrder({ partyName });
+  };
+
+  const handleConfirmStaff = async () => {
+    if (!selectedStaffId) {
+      toast.error("Please select a staff member.");
+      return;
+    }
+    const selectedEmployee = employees.find(
+      (emp) => String(emp.id || emp._id) === String(selectedStaffId),
+    );
+    const partyName = selectedEmployee?.name || "Staff";
+    await submitOrder({
+      partyName,
+      staffForId: selectedStaffId,
+      staffReason: staffOrderReason.trim() || null,
+    });
   };
 
   const subtotal = cart.reduce((sum, item) => sum + item.price * item.qty, 0);
@@ -929,8 +1086,11 @@ export default function OrderPage() {
   };
 
   const handleReleaseTable = async (shouldRelease) => {
-    if (!shouldRelease || sessionId === "new") {
+    if (!shouldRelease || isNoSession) {
       setIsReleaseModalOpen(false);
+      if (isDirectOrder) {
+        sessionStorage.removeItem(`direct-order-${sessionId}`);
+      }
       goToFloor();
       return;
     }
@@ -985,18 +1145,22 @@ export default function OrderPage() {
                 Create Order
               </h2>
               <p className="text-xs font-semibold text-zinc-800 mt-0.5 truncate">
-                {sessionId === "new"
-                  ? guestTable
-                    ? `${guestTable} · Takeaway`
-                    : "Takeaway"
-                  : [
-                      sessionData?.tableNumber
-                        ? `${sessionData.tableNumber}`
-                        : null,
-                      sessionData?.floorName || null,
-                    ]
-                      .filter(Boolean)
-                      .join(" · ") || "Loading table..."}
+                {isWalkIn
+                  ? "Walk-in Customer"
+                  : isStaffOrder
+                    ? "Staff Order"
+                    : isLegacyNew
+                      ? guestTable
+                        ? `${guestTable} · Takeaway`
+                        : "Takeaway"
+                      : [
+                          sessionData?.tableNumber
+                            ? `${sessionData.tableNumber}`
+                            : null,
+                          sessionData?.floorName || null,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ") || "Loading table..."}
               </p>
             </div>
             <div className="flex items-center gap-1 bg-zinc-100 p-1 rounded-lg">
@@ -1429,15 +1593,18 @@ export default function OrderPage() {
       </div>
 
       {/* KITCHEN / PARTY NAME MODAL */}
-      {isKitchenModalOpen && (
+      {isKitchenModalOpen && !isStaffOrder && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-900/50 backdrop-blur-sm">
           <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl flex flex-col">
             <div className="p-5 border-b border-zinc-100 flex items-center justify-between">
               <div>
-                <h2 className="text-lg font-bold text-zinc-900">Party Name</h2>
+                <h2 className="text-lg font-bold text-zinc-900">
+                  {isWalkIn ? "Bill under whose name?" : "Party Name"}
+                </h2>
                 <p className="text-sm font-semibold text-zinc-500 mt-0.5">
-                  Whose bill is this for? Optional — leave blank to use table +
-                  guests.
+                  {isWalkIn
+                    ? "Optional — leave blank to use Walk-in."
+                    : "Whose bill is this for? Optional — leave blank to use table + guests."}
                 </p>
               </div>
               <button
@@ -1470,7 +1637,7 @@ export default function OrderPage() {
                 </p>
               </div>
 
-              {sessionId === "new" && (
+              {isLegacyNew && (
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider flex items-center gap-1.5">
                     <MapPin className="w-3.5 h-3.5" /> Table Number
@@ -1487,7 +1654,7 @@ export default function OrderPage() {
                 </div>
               )}
 
-              {sessionId !== "new" && (
+              {hasTableSession && (
                 <div className="bg-zinc-50 border border-zinc-200 rounded-xl p-3 text-sm font-semibold text-zinc-600 space-y-1">
                   {getDisplayTableNo() && (
                     <div>
@@ -1533,11 +1700,23 @@ export default function OrderPage() {
         </div>
       )}
 
+      <StaffOrderPartyModal
+        open={isStaffModalOpen}
+        onClose={() => setIsStaffModalOpen(false)}
+        employees={employees}
+        selectedStaffId={selectedStaffId}
+        onStaffChange={setSelectedStaffId}
+        staffOrderReason={staffOrderReason}
+        onReasonChange={setStaffOrderReason}
+        onConfirm={handleConfirmStaff}
+        isSubmitting={isSubmitting}
+      />
+
       <TodayOrderPaymentModal
         key={activeOrder?._id || "session-payment"}
         open={isPaymentModalOpen}
         onClose={() => setIsPaymentModalOpen(false)}
-        sessionId={sessionId !== "new" ? sessionId : undefined}
+        sessionId={hasTableSession ? sessionId : undefined}
         guestName={guestName}
         onGuestNameChange={setGuestName}
         redeemNote="POS Payment"
@@ -1563,17 +1742,23 @@ export default function OrderPage() {
                 guestCount:
                   sessionData?.guestCount ?? activeOrder.guestCount ?? null,
                 tableNo:
-                  activeOrder.tableNo ||
-                  sessionData?.tableNumber ||
-                  (sessionId === "new" ? guestTable : "") ||
-                  "",
-                tableSession: sessionId !== "new" ? sessionId : undefined,
+                  isDirectOrder
+                    ? ""
+                    : activeOrder.tableNo ||
+                      sessionData?.tableNumber ||
+                      (isLegacyNew ? guestTable : "") ||
+                      "",
+                source: activeOrder.source,
+                tableSession: hasTableSession ? sessionId : undefined,
               }
             : null
         }
         onPaid={(updatedOrder) => {
           setOrderStatus("PAID");
           setActiveOrder((prev) => ({ ...(prev || {}), ...updatedOrder }));
+          if (isDirectOrder) {
+            sessionStorage.removeItem(`direct-order-${sessionId}`);
+          }
           if (updatedOrder?.discountCode) {
             setAppliedDiscount({
               code: updatedOrder.discountCode,
@@ -2000,9 +2185,12 @@ export default function OrderPage() {
         onClose={() => {
           setIsPrintModalOpen(false);
           if (printType === "customer" && orderStatus === "PAID") {
-            if (sessionId !== "new") {
+            if (hasTableSession) {
               setIsReleaseModalOpen(true);
             } else {
+              if (isDirectOrder) {
+                sessionStorage.removeItem(`direct-order-${sessionId}`);
+              }
               goToFloor();
             }
             return;

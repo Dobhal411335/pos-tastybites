@@ -163,7 +163,7 @@ export default function GiftcardDetailsPage() {
                             View
                           </Button>
                         </DialogTrigger>
-                        <DialogContent className="sm:max-w-[700px] bg-white">
+                        <DialogContent className="sm:max-w-175 bg-white">
                           <DialogHeader>
                             <DialogTitle className="flex items-center gap-2 text-xl">
                               <Gift className="h-5 w-5 text-blue-600" />

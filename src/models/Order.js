@@ -63,7 +63,9 @@ const OrderSchema = new mongoose.Schema(
     waiveReason: { type: String, default: null },
     waivedAt: { type: Date, default: null },
     waivedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee', default: null },
-    source: { type: String, default: 'POS' }, // E.g., 'POS', 'STAFF', 'ONLINE'
+    source: { type: String, enum: ['POS', 'WALK_IN', 'STAFF', 'ONLINE'], default: 'POS' },
+    staffFor: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee', default: null },
+    staffOrderReason: { type: String, default: null },
     processedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee' }, // Who took the order
   },
   { timestamps: true }

@@ -205,13 +205,127 @@ export const POST = withAuth(async (request) => {
 
     const routeToKitchen = cartHasKitchenItem(formattedItems);
 
-    // If no sessionId is provided, fallback to legacy behavior
+    // If no sessionId is provided — direct sale (walk-in, staff, or legacy takeaway)
     if (!sessionId) {
+      const orderSource = ["WALK_IN", "STAFF", "POS", "ONLINE"].includes(data.source)
+        ? data.source
+        : "POS";
+
+      let directPartyName = resolvedPartyName;
+      let staffFor = null;
+      let staffOrderReason = data.staffOrderReason?.trim() || null;
+
+      if (orderSource === "WALK_IN") {
+        directPartyName = (partyName || guestName || "").trim() || "Walk-in";
+      } else if (orderSource === "STAFF") {
+        const staffForId = data.staffForId;
+        if (!staffForId) {
+          return sendError(new Error("Staff ID missing"), "Please select a staff member", 400);
+        }
+        const staffMember = await Employee.findById(staffForId);
+        if (!staffMember) {
+          return sendError(new Error("Invalid Staff"), "Selected staff member not found", 404);
+        }
+        staffFor = staffMember._id;
+        directPartyName = formatPersonName(staffMember);
+      }
+
+      const orderId = data.orderId;
+
+      // Update existing direct order
+      if (orderId) {
+        const order = await Order.findOne({
+          _id: orderId,
+          restaurantId: request.restaurant,
+          source: orderSource,
+          status: { $in: ["PENDING", "CONFIRMED"] },
+        });
+
+        if (!order) {
+          return sendError(new Error("Not Found"), "Active order not found", 404);
+        }
+
+        const kotPayload = [];
+        const finalItems = formattedItems.map((incomingItem) => {
+          const existingItem = order.items.find(
+            (i) =>
+              i.cartId === incomingItem.cartId ||
+              (i.menuItemId === incomingItem.menuItemId &&
+                JSON.stringify(i.options) === JSON.stringify(incomingItem.options) &&
+                i.size === incomingItem.size),
+          );
+          const sentQty = existingItem ? existingItem.sentQty || 0 : 0;
+          const unprintedQty = incomingItem.qty - sentQty;
+
+          if (unprintedQty > 0) {
+            kotPayload.push({ ...incomingItem, qty: unprintedQty });
+          }
+
+          return { ...incomingItem, sentQty: incomingItem.qty };
+        });
+
+        order.items = finalItems;
+        order.subTotal = Number(subTotal) || 0;
+        order.taxTotal = Number(taxTotal) || 0;
+        order.serviceChargeTotal = Number(serviceChargeTotal) || 0;
+        order.serviceChargeName = serviceChargeName || null;
+        order.discountTotal = Number(discountTotal) || 0;
+        order.discountCode = discountCode || null;
+        order.totalAmount = Number(totalAmount) || 0;
+        order.specialNote = specialNote;
+        order.guestName = directPartyName;
+        order.partyName = directPartyName;
+        if (orderSource === "STAFF") {
+          order.staffFor = staffFor;
+          order.staffOrderReason = staffOrderReason;
+        }
+        await order.save();
+
+        const { job: printJob, ticketType } = await enqueueOrderTicketPrintJob({
+          order,
+          ticketItems: kotPayload,
+          employeeId,
+          guestCount: Number.isFinite(resolvedGuestCount) ? resolvedGuestCount : null,
+          routeToKitchen,
+        });
+
+        const serverName = await resolveServerName(employeeId);
+        if (kotPayload.length > 0) {
+          await notifyOrderEvent({
+            type: "ORDER_UPDATED",
+            order,
+            employeeId,
+            serverName,
+          });
+          if (printJob) {
+            await notifyOrderEvent({
+              type: "KOT_CREATED",
+              order,
+              employeeId,
+              serverName,
+            });
+          }
+        }
+
+        logger.info(`Direct ${orderSource} order updated: ${order.orderNumber} by Employee ${employeeId} ticket=${ticketType}`);
+        return sendSuccess(
+          {
+            ...order.toObject(),
+            kotPayload,
+            printJobId: printJob?._id || null,
+            ticketType,
+          },
+          routeToKitchen ? "Order updated successfully" : "Bar ticket updated successfully",
+          200,
+        );
+      }
+
+      // Create new direct order
       const orderNumber = await getNextOrderNumber(request.restaurant);
-      const newOrder = await Order.create({
+      const createPayload = {
         restaurantId: request.restaurant,
         orderNumber,
-        items: formattedItems.map(item => ({ ...item, sentQty: item.qty })),
+        items: formattedItems.map((item) => ({ ...item, sentQty: item.qty })),
         subTotal: Number(subTotal) || 0,
         taxTotal: Number(taxTotal) || 0,
         serviceChargeTotal: Number(serviceChargeTotal) || 0,
@@ -220,14 +334,23 @@ export const POST = withAuth(async (request) => {
         discountCode: discountCode || null,
         totalAmount: Number(totalAmount) || 0,
         specialNote: specialNote,
-        tableNo: data.tableNo, // Legacy table string
-        guestName: resolvedPartyName,
-        partyName: resolvedPartyName,
+        guestName: directPartyName,
+        partyName: directPartyName,
         guestCount: Number.isFinite(resolvedGuestCount) ? resolvedGuestCount : null,
         status: "PENDING",
-        source: "POS",
-        processedBy: employeeId
-      });
+        source: orderSource,
+        processedBy: employeeId,
+      };
+
+      if (orderSource === "POS") {
+        createPayload.tableNo = data.tableNo;
+      }
+      if (orderSource === "STAFF") {
+        createPayload.staffFor = staffFor;
+        createPayload.staffOrderReason = staffOrderReason;
+      }
+
+      const newOrder = await Order.create(createPayload);
 
       const kotPayload = formattedItems;
       const { job: printJob, ticketType } = await enqueueOrderTicketPrintJob({
@@ -243,7 +366,7 @@ export const POST = withAuth(async (request) => {
         type: "NEW_ORDER",
         order: newOrder,
         employeeId,
-        tableNo: data.tableNo,
+        tableNo: orderSource === "POS" ? data.tableNo : null,
         serverName,
       });
       if (printJob && kotPayload.length > 0) {
@@ -251,12 +374,12 @@ export const POST = withAuth(async (request) => {
           type: "KOT_CREATED",
           order: newOrder,
           employeeId,
-          tableNo: data.tableNo,
+          tableNo: orderSource === "POS" ? data.tableNo : null,
           serverName,
         });
       }
 
-      logger.info(`Legacy POS Order created: ${orderNumber} by Employee ${employeeId} ticket=${ticketType}`);
+      logger.info(`Direct ${orderSource} order created: ${orderNumber} by Employee ${employeeId} ticket=${ticketType}`);
       return sendSuccess(
         {
           ...newOrder.toObject(),
@@ -267,7 +390,7 @@ export const POST = withAuth(async (request) => {
         routeToKitchen
           ? "Order sent to kitchen successfully"
           : "Bar ticket created successfully",
-        201
+        201,
       );
     }
 
@@ -496,8 +619,20 @@ export const GET = withAuth(async (request) => {
   try {
     const { searchParams } = new URL(request.url);
     const sessionId = searchParams.get("sessionId");
+    const orderId = searchParams.get("orderId");
     const today = searchParams.get("today");
     
+    if (orderId) {
+      const order = await Order.findOne({
+        _id: orderId,
+        restaurantId: request.restaurant,
+        source: { $in: ["WALK_IN", "STAFF", "POS"] },
+        status: { $in: ["PENDING", "CONFIRMED"] },
+      }).lean();
+
+      return sendSuccess(order, "Direct order retrieved");
+    }
+
     if (sessionId) {
       // Fetch the active order for this session to load the cart
       const order = await Order.findOne({

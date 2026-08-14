@@ -2,6 +2,7 @@ import React from "react";
 import "./print.css";
 import moment from "moment";
 import { isOfferItem, getOfferDetailLines } from "@/utils/offerDetails";
+import { isDirectSaleOrder } from "@/utils/orderDisplay";
 
 function isStyleOption(opt, preparationStyle) {
   const value = String(opt || "").trim();
@@ -29,7 +30,8 @@ const KitchenOrderTicket = ({
 
   const { orderNumber, tableNo, guestName, partyName, createdAt } = order;
   const note = specialNote || order.specialNote;
-  const partyLabel = partyName || guestName;
+  const partyLabel = partyName || guestName || (isDirectSaleOrder(order) ? "Walk-in" : "");
+  const directSale = isDirectSaleOrder(order);
 
   const groupedItems = kotItems.reduce((acc, item) => {
     const groupName = isOfferItem(item) ? "Offers" : item.category || "ITEMS";
@@ -54,7 +56,11 @@ const KitchenOrderTicket = ({
         </h1>
 
         <div className="text-lg receipt-bold mb-1">
-          {tableNo ? `${tableNo}` : "Takeaway / No Table"}
+          {directSale
+            ? partyLabel || "Walk-in"
+            : tableNo
+              ? `${tableNo}`
+              : "Takeaway / No Table"}
         </div>
       </div>
 
