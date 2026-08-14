@@ -20,6 +20,7 @@ const GiftcardSchema = new mongoose.Schema(
         amountUsed: { type: Number, required: true },
         balanceAfter: { type: Number, required: true },
         orderId: { type: String },
+        orderNumber: { type: String },
         note: { type: String },
       }
     ],

@@ -30,6 +30,9 @@ export default function GiftcardDetailsPage() {
   const [receiptOpen, setReceiptOpen] = useState(false);
   const [receiptOrder, setReceiptOrder] = useState(null);
   const [receiptLoadingId, setReceiptLoadingId] = useState(null);
+  /** orderId -> orderNumber resolved for history display */
+  const [orderNumberById, setOrderNumberById] = useState({});
+  const [resolvingOrderIds, setResolvingOrderIds] = useState(false);
 
   const fetchGiftcards = async () => {
     try {
@@ -62,6 +65,62 @@ export default function GiftcardDetailsPage() {
     });
   }, [giftcards, searchTerm]);
 
+  const historyOrderLabel = (h) => {
+    const fromHistory =
+      h?.orderNumber != null && String(h.orderNumber).trim()
+        ? String(h.orderNumber).trim()
+        : null;
+    const fromLookup =
+      h?.orderId && orderNumberById[String(h.orderId)]
+        ? orderNumberById[String(h.orderId)]
+        : null;
+    const orderNumber = fromHistory || fromLookup;
+    if (orderNumber) return `Order #${orderNumber}`;
+    if (h?.orderId) return null; // still resolving or missing — don't show Mongo id
+    return h?.note || "—";
+  };
+
+  const resolveHistoryOrderNumbers = async (history) => {
+    const ids = [
+      ...new Set(
+        (Array.isArray(history) ? history : [])
+          .filter(
+            (h) =>
+              h?.orderId &&
+              !(h.orderNumber != null && String(h.orderNumber).trim()) &&
+              !orderNumberById[String(h.orderId)],
+          )
+          .map((h) => String(h.orderId)),
+      ),
+    ];
+    if (ids.length === 0) return;
+
+    setResolvingOrderIds(true);
+    try {
+      const pairs = await Promise.all(
+        ids.map(async (id) => {
+          try {
+            const res = await fetch(`/api/orders/${encodeURIComponent(id)}`);
+            const json = await res.json();
+            const num = json?.success ? json.data?.orderNumber : null;
+            return [id, num != null ? String(num) : null];
+          } catch {
+            return [id, null];
+          }
+        }),
+      );
+      setOrderNumberById((prev) => {
+        const next = { ...prev };
+        for (const [id, num] of pairs) {
+          if (num) next[id] = num;
+        }
+        return next;
+      });
+    } finally {
+      setResolvingOrderIds(false);
+    }
+  };
+
   const openOrderReceipt = async (orderId, e) => {
     e?.preventDefault();
     e?.stopPropagation();
@@ -74,6 +133,12 @@ export default function GiftcardDetailsPage() {
       if (!json.success || !json.data) {
         toast.error(json.message || "Order not found");
         return;
+      }
+      if (json.data.orderNumber) {
+        setOrderNumberById((prev) => ({
+          ...prev,
+          [String(orderId)]: String(json.data.orderNumber),
+        }));
       }
       setReceiptOrder(json.data);
       setReceiptOpen(true);
@@ -156,7 +221,11 @@ export default function GiftcardDetailsPage() {
                       </span>
                     </TableCell>
                     <TableCell className="text-right">
-                      <Dialog>
+                      <Dialog
+                        onOpenChange={(open) => {
+                          if (open) resolveHistoryOrderNumbers(gc.history);
+                        }}
+                      >
                         <DialogTrigger asChild>
                           <Button variant="outline" size="sm" className="gap-2">
                             <Eye className="h-4 w-4" />
@@ -237,9 +306,27 @@ export default function GiftcardDetailsPage() {
                                             ${h.balanceAfter?.toFixed(2)}
                                           </TableCell>
                                           <TableCell className="text-xs text-gray-500">
-                                            {h.orderId ? (
+                                            {(() => {
+                                              const label = historyOrderLabel(h);
+                                              const showOrderRow =
+                                                Boolean(h.orderId) || Boolean(h.orderNumber);
+                                              if (!showOrderRow) {
+                                                return h.note || "—";
+                                              }
+                                              return (
                                               <div className="flex items-center gap-2 flex-wrap">
-                                                <span className="whitespace-nowrap">Order #{h.orderId}</span>
+                                                <span className="whitespace-nowrap">
+                                                  {label ||
+                                                    (resolvingOrderIds ? (
+                                                      <span className="inline-flex items-center gap-1 text-gray-400">
+                                                        <Loader2 className="h-3 w-3 animate-spin" />
+                                                        Order…
+                                                      </span>
+                                                    ) : (
+                                                      h.note || "Order"
+                                                    ))}
+                                                </span>
+                                                {h.orderId ? (
                                                 <Button
                                                   type="button"
                                                   variant="ghost"
@@ -256,10 +343,10 @@ export default function GiftcardDetailsPage() {
                                                   )}
                                                   View Bill
                                                 </Button>
+                                                ) : null}
                                               </div>
-                                            ) : (
-                                              h.note || "—"
-                                            )}
+                                              );
+                                            })()}
                                           </TableCell>
                                         </TableRow>
                                       ))}

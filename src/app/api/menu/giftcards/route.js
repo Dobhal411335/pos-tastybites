@@ -1,5 +1,6 @@
 import { withAuth } from "@/utils/auth";
 import Giftcard from "@/models/menu/Giftcard";
+import Order from "@/models/Order";
 import { sendSuccess } from "@/utils/apiResponse";
 import { sendError } from "@/utils/errorHandler";
 import { logger } from "@/utils/logger";
@@ -15,6 +16,52 @@ import {
 function isAdminOrManager(role) {
   const upper = String(role || "").toUpperCase();
   return upper === "ADMIN" || upper === "SUPER ADMIN" || upper === "MANAGER";
+}
+
+async function historyWithOrderNumbers(history, restaurantId) {
+  const rows = Array.isArray(history) ? history : [];
+  const missingIds = [
+    ...new Set(
+      rows
+        .filter((h) => h?.orderId && !h?.orderNumber)
+        .map((h) => String(h.orderId)),
+    ),
+  ].filter((id) => mongoose.Types.ObjectId.isValid(id));
+
+  if (missingIds.length === 0) {
+    return rows.map((h) => ({
+      usedAt: h.usedAt,
+      amountUsed: h.amountUsed,
+      balanceAfter: h.balanceAfter,
+      orderId: h.orderId || null,
+      orderNumber: h.orderNumber || null,
+      note: h.note || null,
+    }));
+  }
+
+  const orders = await Order.find({
+    _id: { $in: missingIds },
+    restaurantId,
+  })
+    .select("_id orderNumber")
+    .lean();
+
+  const byId = new Map(orders.map((o) => [String(o._id), o.orderNumber]));
+
+  return rows.map((h) => {
+    const orderNumber =
+      h.orderNumber ||
+      (h.orderId ? byId.get(String(h.orderId)) : null) ||
+      null;
+    return {
+      usedAt: h.usedAt,
+      amountUsed: h.amountUsed,
+      balanceAfter: h.balanceAfter,
+      orderId: h.orderId || null,
+      orderNumber,
+      note: h.note || null,
+    };
+  });
 }
 
 // Helper to generate a random code
@@ -131,7 +178,12 @@ export const GET = withAuth(async (request) => {
         return sendError(new Error("Invalid"), invalidLookupMessage, 404);
       }
 
-      // POS lookup: return only fields needed to apply the card (no recipient PII / full history)
+      // POS lookup for payment modal — include issued-to + history for staff confirmation
+      const history = await historyWithOrderNumbers(
+        giftcard.history,
+        request.restaurant,
+      );
+
       return sendSuccess(
         {
           _id: giftcard._id,
@@ -140,8 +192,15 @@ export const GET = withAuth(async (request) => {
           discountType: giftcard.discountType,
           value: giftcard.value,
           balance: currentBalance,
+          status: giftcard.status,
+          isIssued: giftcard.isIssued,
+          recipientName: giftcard.recipientName || "",
+          recipientEmail: giftcard.recipientEmail || "",
+          recipientPhone: giftcard.recipientPhone || "",
+          issueDate: giftcard.issueDate || null,
           validFrom: giftcard.validFrom,
           validUntil: giftcard.validUntil,
+          history,
         },
         "Giftcard retrieved successfully"
       );
@@ -168,8 +227,15 @@ export const GET = withAuth(async (request) => {
       const metadata = result[0].metadata[0] || { total: 0, page };
       const data = result[0].data;
 
+      const giftcards = await Promise.all(
+        data.map(async (gc) => ({
+          ...gc,
+          history: await historyWithOrderNumbers(gc.history, request.restaurant),
+        })),
+      );
+
       return sendSuccess({
-        giftcards: data,
+        giftcards,
         pagination: {
           total: metadata.total,
           page: metadata.page,

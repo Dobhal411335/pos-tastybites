@@ -168,11 +168,19 @@ export const PUT = withAuth(async (request) => {
     }
 
     if (action === "UPDATE_GUESTS") {
-      if (guestCount !== undefined) session.guestCount = guestCount;
+      if (guestCount === undefined || guestCount === null || guestCount === "") {
+        return sendError(new Error("Missing field"), "guestCount is required", 400);
+      }
+      const nextGuests = Number(guestCount);
+      if (!Number.isFinite(nextGuests) || nextGuests < 1) {
+        return sendError(new Error("Invalid"), "guestCount must be a positive number", 400);
+      }
+
+      session.guestCount = Math.floor(nextGuests);
       if (notes !== undefined) session.notes = notes;
 
       await session.save();
-      logger.info(`Session ${session.sessionId} updated guests to ${guestCount}`);
+      logger.info(`Session ${session.sessionId} updated guests to ${session.guestCount}`);
       
       // Audit Log
       await OperationalAuditLog.create({
@@ -184,10 +192,10 @@ export const PUT = withAuth(async (request) => {
         floorId: session.floor,
         tableId: session.primaryTable,
         tableSessionId: session._id,
-        newValue: { guestCount }
+        newValue: { guestCount: session.guestCount }
       });
 
-      if (global.io) global.io.to(`floor:${session.floor}`).emit('table:updated', { sessionId: session._id, guestCount });
+      if (global.io) global.io.to(`floor:${session.floor}`).emit('table:updated', { sessionId: session._id, guestCount: session.guestCount });
       
       return sendSuccess(session, "Session updated successfully");
     }

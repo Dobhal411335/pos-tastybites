@@ -440,7 +440,11 @@ export default function TodayOrderPaymentModal({
 
       if (giftCardBalance !== null && giftCardUsedAmount > 0) {
         paymentPayload.giftCardCode = giftCardCode.trim().toUpperCase();
-        paymentPayload.splitAmount = remainingAfterGift;
+        // Explicit amount to debit — do not infer solely from remainder (locks break that math)
+        paymentPayload.giftCardUsedAmount = giftCardUsedAmount;
+        paymentPayload.splitAmount = round2(
+          Math.max(0, total - giftCardUsedAmount),
+        );
       }
 
       const res = await fetch("/api/sales/payments", {
@@ -1336,7 +1340,9 @@ export default function TodayOrderPaymentModal({
                               ${Number(h.balanceAfter || 0).toFixed(2)}
                             </td>
                             <td className="px-3 py-2 text-zinc-600 text-xs">
-                              {h.orderId || h.note || "—"}
+                              {h.orderNumber
+                                ? `#${h.orderNumber}`
+                                : h.note || "—"}
                             </td>
                           </tr>
                         ))}

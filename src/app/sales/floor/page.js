@@ -793,7 +793,7 @@ export default function SalesFloorPage() {
               {actionView === "MAIN" && `Table ${selectedTable?.tableNumber}`}
               {actionView === "READONLY" &&
                 `Table ${selectedTable?.tableNumber}`}
-              {actionView === "GUESTS" && "Adjust Guests / Seats"}
+              {actionView === "GUESTS" && "Adjust Guests"}
               {actionView === "TRANSFER" && "Transfer Table"}
               {actionView === "RECONFIGURE" && "Temporary Table Setup"}
             </DialogTitle>
@@ -846,16 +846,11 @@ export default function SalesFloorPage() {
                   className="h-14 justify-start px-6 font-bold text-zinc-700 border-2 border-zinc-200 bg-zinc-50 hover:bg-orange-400 hover:text-white"
                   onClick={() => {
                     setGuestCount(selectedTable?.session?.guestCount || 1);
-                    setEffectiveSeatCount(
-                      selectedTable?.session?.guestCount ||
-                        selectedTable?.seats ||
-                        1,
-                    );
                     setActionView("GUESTS");
                   }}
                 >
                   <Users className="mr-3 h-5 w-5 text-zinc-400" />
-                  Adjust Guests / Seats
+                  Adjust Guests
                 </Button>
 
                 <Button
@@ -943,7 +938,7 @@ export default function SalesFloorPage() {
               <div className="flex flex-col gap-6 py-4">
                 <div className="space-y-2">
                   <label className="text-xs font-bold uppercase tracking-wider text-zinc-500 text-center block">
-                    Actual Guests
+                    Guests
                   </label>
                   <div className="flex items-center gap-4 px-4">
                     <Button
@@ -966,50 +961,23 @@ export default function SalesFloorPage() {
                       +
                     </Button>
                   </div>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-xs font-bold uppercase tracking-wider text-zinc-500 text-center block">
-                    Effective Seats (Current TableSession only)
-                  </label>
-                  <div className="flex items-center gap-4 px-4">
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className="h-12 w-12 rounded-full"
-                      onClick={() =>
-                        setEffectiveSeatCount(
-                          Math.max(1, effectiveSeatCount - 1),
-                        )
-                      }
-                    >
-                      -
-                    </Button>
-                    <div className="flex-1 text-center text-4xl font-black text-zinc-800">
-                      {effectiveSeatCount}
-                    </div>
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className="h-12 w-12 rounded-full"
-                      onClick={() =>
-                        setEffectiveSeatCount(effectiveSeatCount + 1)
-                      }
-                    >
-                      +
-                    </Button>
-                  </div>
+                  <p className="text-center text-xs text-zinc-500 pt-1">
+                    Table capacity: {selectedTable?.seats || "—"} seats
+                    {selectedTable?.session?.effectiveSeatCount
+                      ? ` · session seats: ${selectedTable.session.effectiveSeatCount}`
+                      : ""}
+                  </p>
                 </div>
                 <Button
                   onClick={() =>
                     executeAction("UPDATE_GUESTS", {
-                      guestCount,
-                      effectiveSeatCount,
+                      guestCount: parseInt(guestCount, 10),
                     })
                   }
                   disabled={actionLoading}
                   className="h-12 font-bold w-full mt-4"
                 >
-                  Save Adjustments
+                  Save Guests
                 </Button>
               </div>
             )}

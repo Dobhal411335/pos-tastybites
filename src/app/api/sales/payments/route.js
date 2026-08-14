@@ -27,6 +27,7 @@ export const POST = withAuth(async (request) => {
       tipMethod,
       cardType,
       giftCardCode,
+      giftCardUsedAmount,
       splitAmount,
       discountTotal,
       discountCode,
@@ -164,16 +165,43 @@ export const POST = withAuth(async (request) => {
     }
     order.status = "PAID";
 
-    // Persist gift card usage on the order for receipts (amount capped to order total)
+    // Persist gift card usage on the order for receipts (amount capped to order total).
+    // Prefer explicit giftCardUsedAmount from POS — deriving from splitAmount alone can
+    // over-debit when cash/card locks are involved (due - remainingAfterGift ≠ gift used).
     let giftCardDebitAmount = 0;
     if (giftCardCode) {
       const due = r2(order.totalAmount);
-      const remaining = Number(splitAmount);
-      const used =
-        Number.isFinite(remaining) && remaining >= 0
-          ? Math.max(0, r2(due - remaining))
-          : due;
-      giftCardDebitAmount = Math.min(used, due);
+      const tip = r2(tipAmount);
+      const cash = cashAmount != null && cashAmount !== "" ? r2(cashAmount) : 0;
+      const card = cardAmount != null && cardAmount !== "" ? r2(cardAmount) : 0;
+      const nonGcTowardOrder = r2(Math.max(0, cash + card - tip));
+      const impliedFromTenders = r2(Math.max(0, due - nonGcTowardOrder));
+
+      let requested = null;
+      if (giftCardUsedAmount != null && giftCardUsedAmount !== "") {
+        requested = r2(giftCardUsedAmount);
+      } else if (splitAmount != null && splitAmount !== "") {
+        const remaining = Number(splitAmount);
+        requested =
+          Number.isFinite(remaining) && remaining >= 0
+            ? r2(Math.max(0, due - remaining))
+            : due;
+      } else {
+        requested = due;
+      }
+
+      // Never charge more than due; when cash/card were sent, also cap to what tenders imply
+      // so a small client/server total drift cannot request more than the card balance path allows.
+      giftCardDebitAmount = r2(Math.min(Math.max(0, requested), due));
+      if (
+        (cashAmount != null && cashAmount !== "") ||
+        (cardAmount != null && cardAmount !== "")
+      ) {
+        giftCardDebitAmount = r2(
+          Math.min(giftCardDebitAmount, impliedFromTenders),
+        );
+      }
+
       order.giftcardCode = String(giftCardCode).trim().toUpperCase();
       order.giftcardUsedAmount = giftCardDebitAmount;
     }
@@ -274,8 +302,11 @@ export const POST = withAuth(async (request) => {
         sendEmail: true,
       });
       if (!redeem.ok) {
+        logger.error(
+          `Gift card redeem failed code=${order.giftcardCode} amount=${giftCardDebitAmount}: ${redeem.error}`,
+        );
         return sendError(
-          new Error("Gift Card Redeem Failed"),
+          new Error(redeem.error || "Failed to redeem gift card"),
           redeem.error || "Failed to redeem gift card",
           redeem.status || 400,
         );

@@ -76,6 +76,7 @@ export const GET = withAuth(async (request) => {
           ? `${s.assignedEmployee.firstName} ${s.assignedEmployee.lastName || ''}`.trim()
           : s.assignedEmployee?.name || 'Unknown',
         guestCount: s.guestCount,
+        effectiveSeatCount: s.effectiveSeatCount,
         status: s.status,
         openedAt: s.openedAt,
         hasActiveOrder: sessionsWithOrders.has(s._id.toString()),
