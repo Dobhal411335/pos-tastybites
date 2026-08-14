@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { Plus, Gift, CreditCard, User, Mail, Phone, Calendar, ArrowRight, Loader2, CheckCircle2 } from "lucide-react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
+import { Plus, Gift, CreditCard, User, Mail, Phone, Calendar, ArrowRight, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
 import { format } from "date-fns";
 import { DatePicker } from "@/components/ui/date-picker";
 import { countryCodes } from "@/utils/countryCodes";
@@ -32,6 +32,13 @@ export default function IssueGiftCardPage() {
   const [giftcards, setGiftcards] = useState([]);
   const [successMsg, setSuccessMsg] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
+  const [codeLookup, setCodeLookup] = useState({
+    status: "idle", // idle | checking | valid | invalid
+    message: "",
+    card: null,
+  });
+  const lookupTimerRef = useRef(null);
+  const lastLookupCodeRef = useRef("");
 
   const fetchGiftcards = async () => {
     try {
@@ -54,9 +61,82 @@ export default function IssueGiftCardPage() {
     fetchGiftcards();
   }, []);
 
+  const lookupGiftCard = useCallback(async (rawCode) => {
+    const code = rawCode.trim().toUpperCase();
+    if (!code) {
+      setCodeLookup({ status: "idle", message: "", card: null });
+      setFormData((prev) => ({ ...prev, value: "" }));
+      return;
+    }
+
+    setCodeLookup({ status: "checking", message: "Checking gift card...", card: null });
+
+    try {
+      const res = await fetch(
+        `/api/menu/giftcards?code=${encodeURIComponent(code)}&purpose=issue`,
+      );
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        lastLookupCodeRef.current = code;
+        const card = data.data;
+        setCodeLookup({
+          status: "valid",
+          message: card.name
+            ? `Valid — ${card.name} ($${Number(card.value).toFixed(2)})`
+            : `Valid — $${Number(card.value).toFixed(2)}`,
+          card,
+        });
+        setFormData((prev) => ({
+          ...prev,
+          code,
+          value: String(card.value ?? ""),
+        }));
+      } else {
+        lastLookupCodeRef.current = code;
+        setCodeLookup({
+          status: "invalid",
+          message: data.message || "Invalid or unavailable gift card",
+          card: null,
+        });
+        setFormData((prev) => ({ ...prev, value: "" }));
+      }
+    } catch {
+      setCodeLookup({
+        status: "invalid",
+        message: "Could not verify gift card. Try again.",
+        card: null,
+      });
+    }
+  }, []);
+
+  const scheduleLookup = (code) => {
+    if (lookupTimerRef.current) clearTimeout(lookupTimerRef.current);
+    lookupTimerRef.current = setTimeout(() => lookupGiftCard(code), 500);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (lookupTimerRef.current) clearTimeout(lookupTimerRef.current);
+    };
+  }, []);
+
   const handleChange = (e) => {
     const { name, value } = e.target;
+    if (name === "code") {
+      const nextCode = value.toUpperCase();
+      setFormData((prev) => ({ ...prev, code: nextCode }));
+      setCodeLookup({ status: "idle", message: "", card: null });
+      lastLookupCodeRef.current = "";
+      scheduleLookup(nextCode);
+      return;
+    }
     setFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleCodeBlur = () => {
+    if (lookupTimerRef.current) clearTimeout(lookupTimerRef.current);
+    lookupGiftCard(formData.code);
   };
 
   const handleSubmit = async (e) => {
@@ -65,9 +145,15 @@ export default function IssueGiftCardPage() {
     setSuccessMsg("");
     setErrorMsg("");
 
+    if (codeLookup.status !== "valid") {
+      setErrorMsg("Please enter a valid, unissued gift card number.");
+      setLoading(false);
+      return;
+    }
+
     try {
       const payload = {
-        code: formData.code.trim(),
+        code: formData.code.trim().toUpperCase(),
         value: Number(formData.value),
         recipientName: formData.recipientName,
         recipientPhone: `${formData.countryCode} ${formData.phoneNumber}`,
@@ -84,7 +170,14 @@ export default function IssueGiftCardPage() {
       const data = await res.json();
 
       if (res.ok && data.success) {
-        setSuccessMsg("Gift card issued successfully!");
+        const emailed = data.data?.emailSent;
+        setSuccessMsg(
+          emailed
+            ? "Gift card issued successfully! Details emailed to the recipient."
+            : formData.recipientEmail
+              ? "Gift card issued, but the email could not be sent."
+              : "Gift card issued successfully!",
+        );
         setFormData({
           code: "",
           issueDate: new Date(),
@@ -94,6 +187,8 @@ export default function IssueGiftCardPage() {
           phoneNumber: "",
           recipientEmail: "",
         });
+        setCodeLookup({ status: "idle", message: "", card: null });
+        lastLookupCodeRef.current = "";
         fetchGiftcards();
       } else {
         setErrorMsg(data.message || "Failed to issue gift card");
@@ -146,10 +241,39 @@ export default function IssueGiftCardPage() {
                     required
                     value={formData.code}
                     onChange={handleChange}
+                    onBlur={handleCodeBlur}
                     placeholder="Enter gift card code"
-                    className="pl-10"
+                    className={`pl-10 ${
+                      codeLookup.status === "valid"
+                        ? "border-emerald-500 focus-visible:ring-emerald-500"
+                        : codeLookup.status === "invalid"
+                          ? "border-red-500 focus-visible:ring-red-500"
+                          : ""
+                    }`}
                   />
+                  {codeLookup.status === "checking" && (
+                    <Loader2 className="absolute right-3 top-2.5 h-4 w-4 animate-spin text-blue-500" />
+                  )}
+                  {codeLookup.status === "valid" && (
+                    <CheckCircle2 className="absolute right-3 top-2.5 h-4 w-4 text-emerald-600" />
+                  )}
+                  {codeLookup.status === "invalid" && (
+                    <AlertCircle className="absolute right-3 top-2.5 h-4 w-4 text-red-500" />
+                  )}
                 </div>
+                {codeLookup.message && (
+                  <p
+                    className={`mt-1.5 text-xs font-medium ${
+                      codeLookup.status === "valid"
+                        ? "text-emerald-700"
+                        : codeLookup.status === "invalid"
+                          ? "text-red-600"
+                          : "text-gray-500"
+                    }`}
+                  >
+                    {codeLookup.message}
+                  </p>
+                )}
               </div>
 
               <div>
@@ -163,11 +287,17 @@ export default function IssueGiftCardPage() {
                     min="1"
                     step="0.01"
                     value={formData.value}
+                    readOnly={codeLookup.status === "valid"}
                     onChange={handleChange}
                     placeholder="0.00"
-                    className="pl-8"
+                    className={`pl-8 ${codeLookup.status === "valid" ? "bg-gray-50" : ""}`}
                   />
                 </div>
+                {codeLookup.status === "valid" && (
+                  <p className="mt-1.5 text-xs text-gray-500">
+                    Amount loaded from gift card — cannot be changed.
+                  </p>
+                )}
               </div>
 
               <div>
@@ -255,7 +385,7 @@ export default function IssueGiftCardPage() {
           <div className="pt-4 flex justify-end">
             <Button
               type="submit"
-              disabled={loading}
+              disabled={loading || codeLookup.status !== "valid"}
               className="gap-2 bg-blue-600 hover:bg-blue-700 text-white"
             >
               {loading ? (

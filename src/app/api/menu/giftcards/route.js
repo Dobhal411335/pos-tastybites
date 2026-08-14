@@ -3,6 +3,7 @@ import Giftcard from "@/models/menu/Giftcard";
 import { sendSuccess } from "@/utils/apiResponse";
 import { sendError } from "@/utils/errorHandler";
 import { logger } from "@/utils/logger";
+import { sendGiftCardIssuedEmail } from "@/lib/brevo/sendGiftCardIssuedEmail";
 import mongoose from "mongoose";
 
 // Helper to generate a random code
@@ -26,6 +27,54 @@ export const GET = withAuth(async (request) => {
 
     if (code) {
       const normalizedCode = code.trim().toUpperCase();
+      const purpose = searchParams.get("purpose") || "redeem";
+
+      // Lookup unissued card for admin issue flow
+      if (purpose === "issue") {
+        const giftcard = await Giftcard.findOne({
+          restaurant: request.restaurant,
+          code: normalizedCode,
+        });
+
+        if (!giftcard) {
+          return sendError(
+            new Error("Not Found"),
+            "Gift card with this code was not found",
+            404,
+          );
+        }
+
+        if (giftcard.isIssued) {
+          return sendError(
+            new Error("Already Issued"),
+            "This gift card has already been issued",
+            400,
+          );
+        }
+
+        if (giftcard.status !== "Active") {
+          return sendError(
+            new Error("Inactive"),
+            "This gift card is inactive",
+            400,
+          );
+        }
+
+        return sendSuccess(
+          {
+            _id: giftcard._id,
+            code: giftcard.code,
+            name: giftcard.name,
+            value: giftcard.value,
+            balance: giftcard.balance ?? giftcard.value,
+            validFrom: giftcard.validFrom,
+            validUntil: giftcard.validUntil,
+            discountType: giftcard.discountType,
+          },
+          "Gift card is valid and ready to issue",
+        );
+      }
+
       const giftcard = await Giftcard.findOne({
         restaurant: request.restaurant,
         code: normalizedCode,
@@ -192,9 +241,10 @@ export const PATCH = withAuth(async (request) => {
       return sendError(new Error("Missing fields"), "Giftcard code and recipient name are required", 400);
     }
 
+    const normalizedCode = String(code).trim().toUpperCase();
     const giftcard = await Giftcard.findOne({
       restaurant: request.restaurant,
-      code: code
+      code: normalizedCode,
     });
 
     if (!giftcard) {
@@ -211,7 +261,7 @@ export const PATCH = withAuth(async (request) => {
 
     giftcard.recipientName = recipientName;
     giftcard.recipientPhone = recipientPhone;
-    giftcard.recipientEmail = recipientEmail;
+    giftcard.recipientEmail = recipientEmail?.trim() || "";
     giftcard.issueDate = issueDate || new Date();
     giftcard.isIssued = true;
     if (giftcard.balance == null) {
@@ -220,8 +270,32 @@ export const PATCH = withAuth(async (request) => {
 
     await giftcard.save();
 
-    logger.info(`Issued giftcard ${code} to ${recipientName}`);
-    return sendSuccess(giftcard, `Successfully issued gift card to ${recipientName}`);
+    let emailSent = false;
+    if (recipientEmail?.trim()) {
+      try {
+        await sendGiftCardIssuedEmail({
+          email: recipientEmail.trim(),
+          recipientName,
+          cardName: giftcard.name,
+          code: giftcard.code,
+          value: giftcard.value,
+          issueDate: giftcard.issueDate,
+          validFrom: giftcard.validFrom,
+          validUntil: giftcard.validUntil,
+        });
+        emailSent = true;
+      } catch (emailErr) {
+        logger.error(`Gift card issued but email failed for ${normalizedCode}`, emailErr);
+      }
+    }
+
+    logger.info(`Issued giftcard ${normalizedCode} to ${recipientName}`);
+    return sendSuccess(
+      { ...giftcard.toObject(), emailSent },
+      emailSent
+        ? `Successfully issued gift card to ${recipientName} and sent email`
+        : `Successfully issued gift card to ${recipientName}`,
+    );
   } catch (error) {
     logger.error("Failed to issue giftcard", error);
     return sendError(error, "Failed to issue gift card", 500);
