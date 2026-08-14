@@ -14,13 +14,14 @@ import { toast } from "sonner";
 import PrintPreviewModal from "@/components/receipts/PrintPreviewModal";
 import TodayOrderPaymentModal from "@/components/sales/TodayOrderPaymentModal";
 
-const STATUSES = ["All", "PENDING", "CONFIRMED", "CANCELLED", "PAID", "ONLINE"];
+const STATUSES = ["All", "PENDING", "CONFIRMED", "CANCELLED", "WAIVED", "PAID", "ONLINE"];
 const STATUS_RANK = {
   PENDING: 0,
   CONFIRMED: 1,
   COMPLETED: 2,
   PAID: 2,
-  CANCELLED: 3,
+  WAIVED: 3,
+  CANCELLED: 4,
 };
 
 function getPlacerName(order) {
@@ -41,6 +42,14 @@ function isOrderPaid(order) {
 }
 
 function getPaymentType(order) {
+  if (String(order?.status || "").toUpperCase() === "WAIVED") {
+    return {
+      label: "Waived",
+      Icon: Wallet,
+      className: "bg-slate-50 text-slate-700 border-slate-200",
+    };
+  }
+
   const method = String(order?.paymentMethod || "").trim();
   const usedGiftCard = Number(order?.giftcardUsedAmount || 0) > 0 || Boolean(order?.giftcardCode);
   const lower = method.toLowerCase();
@@ -117,6 +126,9 @@ export default function TodayOrdersPage() {
   const [isReleaseModalOpen, setIsReleaseModalOpen] = useState(false);
   const [isReleasingTable, setIsReleasingTable] = useState(false);
   const [releaseOrder, setReleaseOrder] = useState(null);
+  const [isWaiveModalOpen, setIsWaiveModalOpen] = useState(false);
+  const [waiveReason, setWaiveReason] = useState("");
+  const [isWaiving, setIsWaiving] = useState(false);
 
   const fetchOrders = useCallback(async ({ silent = false } = {}) => {
     if (silent) setRefreshing(true);
@@ -156,7 +168,7 @@ export default function TodayOrdersPage() {
   }, [fetchOrders]);
 
   const stats = useMemo(() => {
-    const valid = orders.filter((o) => o.status !== "CANCELLED");
+    const valid = orders.filter((o) => o.status !== "CANCELLED" && o.status !== "WAIVED");
     const totalOrders = valid.length;
     const totalSales = valid.reduce((sum, o) => sum + Number(o.totalAmount || 0), 0);
     const avgOrderValue = totalOrders > 0 ? totalSales / totalOrders : 0;
@@ -170,7 +182,7 @@ export default function TodayOrdersPage() {
   }, [orders]);
 
   const paymentStats = useMemo(() => {
-    const paid = orders.filter((o) => o.status !== "CANCELLED" && isOrderPaid(o));
+    const paid = orders.filter((o) => o.status !== "CANCELLED" && o.status !== "WAIVED" && isOrderPaid(o));
     const totals = { cash: 0, card: 0, gift: 0 };
     const counts = { cash: 0, card: 0, gift: 0 };
 
@@ -229,6 +241,7 @@ export default function TodayOrdersPage() {
       case "PENDING": return "bg-amber-100 text-amber-700";
       case "CONFIRMED": return "bg-emerald-100 text-emerald-700";
       case "CANCELLED": return "bg-red-100 text-red-700";
+      case "WAIVED": return "bg-slate-100 text-slate-700";
       case "PAID": return "bg-blue-100 text-blue-700";
       case "COMPLETED": return "bg-emerald-100 text-emerald-700";
       default: return "bg-zinc-100 text-zinc-700";
@@ -276,6 +289,8 @@ export default function TodayOrdersPage() {
     setReleaseOrder(null);
     setPendingReleaseAfterPrint(false);
     setIsPrintModalOpen(false);
+    setIsWaiveModalOpen(false);
+    setWaiveReason("");
   };
 
   const getOrderSessionId = (order) => {
@@ -326,8 +341,61 @@ export default function TodayOrdersPage() {
     }
   };
 
+  const openWaiveModal = () => {
+    setWaiveReason("");
+    setIsWaiveModalOpen(true);
+  };
+
+  const handleWaiveBill = async () => {
+    if (!selectedOrder?._id) return;
+    const reason = waiveReason.trim();
+    if (!reason) {
+      toast.error("Please enter a reason for waiving this bill.");
+      return;
+    }
+
+    try {
+      setIsWaiving(true);
+      const res = await fetch("/api/orders/employee", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          orderId: selectedOrder._id,
+          action: "waive",
+          reason,
+        }),
+      });
+      const json = await res.json();
+      if (!json.success) {
+        toast.error(json.message || "Failed to waive bill.");
+        return;
+      }
+
+      const updated = json.data;
+      setSelectedOrder((prev) => ({ ...(prev || {}), ...updated }));
+      setIsWaiveModalOpen(false);
+      setWaiveReason("");
+      toast.success(
+        updated?.sessionReleased
+          ? "Bill waived and table released."
+          : "Bill waived successfully."
+      );
+      await fetchOrders({ silent: true });
+    } catch (err) {
+      toast.error("Failed to waive bill.");
+    } finally {
+      setIsWaiving(false);
+    }
+  };
+
   const isOnlineOrder = selectedOrder?.source === "ONLINE";
-  const showPayNow = selectedOrder && !isOnlineOrder && !isOrderPaid(selectedOrder);
+  const orderStatusUpper = String(selectedOrder?.status || "").toUpperCase();
+  const canWaive =
+    selectedOrder &&
+    !isOnlineOrder &&
+    !isOrderPaid(selectedOrder) &&
+    ["PENDING", "CONFIRMED"].includes(orderStatusUpper);
+  const showPayNow = canWaive;
   const releaseTableLabel =
     releaseOrder?.tableNo ||
     selectedOrder?.tableNo ||
@@ -542,12 +610,28 @@ export default function TodayOrdersPage() {
               <div>
                 <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-3">Payment</h3>
                 <div className="space-y-3 text-sm">
-                  <div className={`rounded-xl border-2 px-4 py-3 flex justify-between items-center ${getPaymentColor(selectedOrder.paymentStatus)}`}>
+                  <div className={`rounded-xl border-2 px-4 py-3 flex justify-between items-center ${
+                    orderStatusUpper === "WAIVED"
+                      ? "bg-slate-100 text-slate-800 border-slate-200"
+                      : getPaymentColor(selectedOrder.paymentStatus)
+                  }`}>
                     <span className="text-sm font-bold uppercase tracking-wide">Status</span>
                     <span className="text-md font-black uppercase tracking-tight">
-                      {selectedOrder.paymentStatus || "UNPAID"}
+                      {orderStatusUpper === "WAIVED"
+                        ? "WAIVED"
+                        : selectedOrder.paymentStatus || "UNPAID"}
                     </span>
                   </div>
+                  {orderStatusUpper === "WAIVED" && selectedOrder.waiveReason && (
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                      <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1">
+                        Waive Reason
+                      </span>
+                      <p className="text-sm font-semibold text-slate-800 whitespace-pre-wrap">
+                        {selectedOrder.waiveReason}
+                      </p>
+                    </div>
+                  )}
                   {selectedOrder.paymentMethod && (
                     <div className="flex justify-between text-zinc-500 font-medium">
                       <span>Method</span>
@@ -671,6 +755,15 @@ export default function TodayOrdersPage() {
                   Pay Now
                 </Button>
               )}
+              {canWaive && (
+                <Button
+                  onClick={openWaiveModal}
+                  variant="outline"
+                  className="w-full h-11 rounded border-slate-400 bg-slate-700 text-white hover:bg-slate-800 hover:text-white font-bold shadow-none"
+                >
+                  Waive Off
+                </Button>
+              )}
               <Button
                 variant="outline"
                 className="w-full h-11 rounded border-zinc-500 bg-orange-500 text-white hover:bg-orange-600 hover:text-white font-bold"
@@ -752,6 +845,57 @@ export default function TodayOrdersPage() {
                   <Loader2 className="w-5 h-5 animate-spin" />
                 ) : (
                   "Yes, Release"
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isWaiveModalOpen && selectedOrder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-900/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl">
+            <div className="p-5 border-b border-zinc-100">
+              <h2 className="text-lg font-bold text-zinc-900">Waive Off Bill?</h2>
+              <p className="text-sm font-semibold text-zinc-500 mt-1">
+                Order #{selectedOrder.orderNumber}
+                {selectedOrder.tableNo ? ` · ${selectedOrder.tableNo}` : ""}. Enter a reason to waive this unpaid bill.
+              </p>
+            </div>
+            <div className="p-5 space-y-3">
+              <label className="block text-xs font-bold text-zinc-500 uppercase tracking-wider">
+                Reason <span className="text-red-500">*</span>
+              </label>
+              <textarea
+                value={waiveReason}
+                onChange={(e) => setWaiveReason(e.target.value)}
+                rows={4}
+                placeholder="e.g. Customer refused to pay after food was served"
+                className="w-full rounded-xl border border-zinc-300 px-3 py-2.5 text-sm font-medium text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-slate-400 resize-none"
+                disabled={isWaiving}
+              />
+            </div>
+            <div className="p-5 pt-0 flex gap-3">
+              <Button
+                variant="outline"
+                disabled={isWaiving}
+                onClick={() => {
+                  setIsWaiveModalOpen(false);
+                  setWaiveReason("");
+                }}
+                className="flex-1 h-12 rounded-xl font-bold border-zinc-200 text-zinc-700 shadow-none"
+              >
+                Cancel
+              </Button>
+              <Button
+                disabled={isWaiving || !waiveReason.trim()}
+                onClick={handleWaiveBill}
+                className="flex-1 h-12 rounded-xl bg-slate-700 hover:bg-slate-800 text-white font-bold shadow-none disabled:opacity-50"
+              >
+                {isWaiving ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  "Confirm Waive"
                 )}
               </Button>
             </div>

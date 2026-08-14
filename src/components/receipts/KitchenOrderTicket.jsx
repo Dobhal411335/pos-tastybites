@@ -1,6 +1,7 @@
 import React from "react";
 import "./print.css";
 import moment from "moment";
+import { isOfferItem, getOfferDetailLines } from "@/utils/offerDetails";
 
 function isStyleOption(opt, preparationStyle) {
   const value = String(opt || "").trim();
@@ -31,7 +32,7 @@ const KitchenOrderTicket = ({
   const partyLabel = partyName || guestName;
 
   const groupedItems = kotItems.reduce((acc, item) => {
-    const groupName = item.category || "ITEMS";
+    const groupName = isOfferItem(item) ? "Offers" : item.category || "ITEMS";
     if (!acc[groupName]) acc[groupName] = [];
     acc[groupName].push(item);
     return acc;
@@ -88,7 +89,17 @@ const KitchenOrderTicket = ({
               {group}
             </div>
             <div className="space-y-3 mt-2">
-              {items.map((item, itemIdx) => (
+              {items.map((item, itemIdx) => {
+                const offerLines = isOfferItem(item)
+                  ? getOfferDetailLines(item)
+                  : [];
+                const extraOptions = isOfferItem(item)
+                  ? []
+                  : item.options?.filter(
+                      (opt) => !isStyleOption(opt, item.preparationStyle),
+                    ) || [];
+
+                return (
                 <div key={itemIdx}>
                   <div className="flex items-start">
                     <span className="receipt-bold mr-2 text-xs whitespace-nowrap">
@@ -112,11 +123,21 @@ const KitchenOrderTicket = ({
                       + {item.preparationStyle}
                     </div>
                   )}
-                  {item.options?.filter((opt) => !isStyleOption(opt, item.preparationStyle)).length > 0 && (
+                  {offerLines.length > 0 && (
                     <div className="pl-7 mt-1 space-y-0.5">
-                      {item.options
-                        .filter((opt) => !isStyleOption(opt, item.preparationStyle))
-                        .map((opt, oIdx) => (
+                      {offerLines.map((line) => (
+                        <div
+                          key={line.label}
+                          className="text-[11px] font-semibold italic"
+                        >
+                          {line.label}: {line.value}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {extraOptions.length > 0 && (
+                    <div className="pl-7 mt-1 space-y-0.5">
+                      {extraOptions.map((opt, oIdx) => (
                           <div
                             key={oIdx}
                             className="text-[11px] font-semibold italic"
@@ -127,7 +148,8 @@ const KitchenOrderTicket = ({
                     </div>
                   )}
                 </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         ))}

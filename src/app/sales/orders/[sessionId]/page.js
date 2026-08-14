@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import Image from "next/image";
 import { useParams, useRouter } from "next/navigation";
 import { useSocket } from "@/components/providers/SocketProvider";
 import {
@@ -47,12 +46,40 @@ import {
 import PrintPreviewModal from "@/components/receipts/PrintPreviewModal";
 import TodayOrderPaymentModal from "@/components/sales/TodayOrderPaymentModal";
 import { useAuth } from "@/components/providers/AuthProvider";
+import {
+  OFFER_CATEGORY,
+  isOfferItem,
+  cleanOfferList,
+  getOfferDetailLines,
+  buildOfferOptions,
+} from "@/utils/offerDetails";
 
 function getCartFingerprint(items) {
   return (items || [])
     .map((item) => `${item.cartId || item.id}:${item.qty}:${item.name}:${item.size || ""}`)
     .sort()
     .join("|");
+}
+
+function OfferChipRow({ label, items }) {
+  if (!items.length) return null;
+  return (
+    <div className="flex gap-2 items-start">
+      <span className="text-[10px] font-bold uppercase tracking-wide text-zinc-400 w-[64px] pt-0.5 shrink-0">
+        {label}
+      </span>
+      <div className="flex flex-wrap gap-1">
+        {items.map((value) => (
+          <span
+            key={`${label}-${value}`}
+            className="text-[11px] font-semibold text-zinc-700 bg-zinc-100 border border-zinc-200 rounded-md px-1.5 py-0.5"
+          >
+            {value}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 export default function OrderPage() {
@@ -66,6 +93,7 @@ export default function OrderPage() {
   const [categories, setCategories] = useState(["All"]);
   const [menuItems, setMenuItems] = useState([]);
   const [globalTaxes, setGlobalTaxes] = useState([]);
+  const [serviceTax, setServiceTax] = useState(null);
   const [sessionData, setSessionData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -151,11 +179,12 @@ export default function OrderPage() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [catRes, prodRes, taxRes, headRes, phRes, offerRes] =
+        const [catRes, prodRes, taxRes, serviceTaxRes, headRes, phRes, offerRes] =
           await Promise.all([
             fetch("/api/menu/categories"),
             fetch("/api/menu/products"),
             fetch("/api/tax"),
+            fetch("/api/tax/servicetax?active=1"),
             fetch("/api/menu/heads"),
             fetch("/api/menu/product-heads"),
             fetch("/api/menu/offers"),
@@ -163,6 +192,7 @@ export default function OrderPage() {
         const catJson = await catRes.json();
         const prodJson = await prodRes.json();
         const taxJson = await taxRes.json();
+        const serviceTaxJson = await serviceTaxRes.json();
         const headJson = await headRes.json();
         const phJson = await phRes.json();
         const offerJson = await offerRes.json();
@@ -176,6 +206,12 @@ export default function OrderPage() {
         }
         if (taxJson.success) {
           setGlobalTaxes(taxJson.data.filter((t) => t.status === "Active"));
+        }
+        if (serviceTaxJson.success) {
+          const list = Array.isArray(serviceTaxJson.data)
+            ? serviceTaxJson.data
+            : [];
+          setServiceTax(list.find((t) => t.status === "Active") || list[0] || null);
         }
         if (headJson.success) {
           const menuHeads = (headJson.data || []).filter(
@@ -241,18 +277,34 @@ export default function OrderPage() {
               const extras = (item.options || []).filter(
                 (o) => !String(o).toLowerCase().startsWith("style:"),
               );
+              const offer = isOfferItem(item);
+              const inclusions = cleanOfferList(item.inclusions);
+              const choices = cleanOfferList(item.choices);
+              const drinks = cleanOfferList(item.drinks);
               const parts = [];
               if (item.size && item.size !== "Standard")
                 parts.push(`Size: ${item.size}`);
               if (style) parts.push(`${style}`);
-              if (extras.length > 0) parts.push(`Extras: ${extras.join(", ")}`);
+              if (offer) {
+                parts.push(
+                  ...getOfferDetailLines({
+                    inclusions,
+                    choices,
+                    drinks,
+                    options: item.options,
+                  }).map((line) => `${line.label}: ${line.value}`),
+                );
+              } else if (extras.length > 0) {
+                parts.push(`Extras: ${extras.join(", ")}`);
+              }
               return {
                 id: item.menuItemId,
                 name: item.name,
                 productCode: item.productCode || "",
-                category: item.category || "ITEMS",
+                category: offer ? OFFER_CATEGORY : item.category || "ITEMS",
                 price: item.price,
                 tax: item.tax,
+                serviceCharge: item.serviceCharge || 0,
                 qty: item.qty,
                 size: item.size,
                 sizes:
@@ -263,6 +315,10 @@ export default function OrderPage() {
                 preparationStyle: style,
                 options: item.options || [],
                 productType: item.productType === "BAR" ? "BAR" : "KITCHEN",
+                isOffer: offer,
+                inclusions,
+                choices,
+                drinks,
                 modifier: parts.length > 0 ? parts.join(" | ") : undefined,
                 cartId: item.cartId || Date.now() + Math.random(),
               };
@@ -363,10 +419,17 @@ export default function OrderPage() {
     if (!isOfferActive(offer)) return false;
     if (!searchQuery.trim()) return true;
     const q = searchQuery.toLowerCase();
-    return (
-      offer.name?.toLowerCase().includes(q) ||
-      offer.description?.toLowerCase().includes(q)
-    );
+    const haystack = [
+      offer.name,
+      ...(offer.inclusions || []),
+      ...(offer.choices || []),
+      ...(offer.drinks || []),
+      ...(offer.taxData?.taxNames || []),
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+    return haystack.includes(q);
   });
 
   const calculateOfferTax = (offer, basePrice) => {
@@ -394,6 +457,19 @@ export default function OrderPage() {
       .reduce((sum, t) => sum + (t.value || 0), 0);
     return (basePrice * pctTaxes) / 100 + fixedTaxes;
   };
+
+  /** Percent service charge on unit price; Amount type is order-level only. */
+  const calculateItemServiceCharge = (basePrice) => {
+    if (!serviceTax || serviceTax.status === "Inactive") return 0;
+    const type = String(serviceTax.type || "").toLowerCase();
+    if (!type.includes("percent")) return 0;
+    return (Number(basePrice) || 0) * (Number(serviceTax.value) || 0) / 100;
+  };
+
+  const serviceChargeLabel = serviceTax?.name || "Server Charge";
+  const hasServiceTax = Boolean(
+    serviceTax && serviceTax.status !== "Inactive",
+  );
 
   const calculateItemDiscount = (item, basePrice) => {
     if (
@@ -490,6 +566,7 @@ export default function OrderPage() {
 
     const price = product.price || 0;
     const itemTax = calculateItemTax(product, price);
+    const itemServiceCharge = calculateItemServiceCharge(price);
 
     setCart((prev) => {
       const existing = prev.find(
@@ -510,6 +587,7 @@ export default function OrderPage() {
           category: product.category?.name || "ITEMS",
           price,
           tax: itemTax,
+          serviceCharge: itemServiceCharge,
           qty: 1,
           size: "Standard",
           sizes: [],
@@ -529,24 +607,19 @@ export default function OrderPage() {
     }
     const price = Number(offer.price) || 0;
     const itemTax = calculateOfferTax(offer, price);
-    const extras = [];
-    if (offer.inclusions?.length) {
-      extras.push(`Includes: ${offer.inclusions.join(", ")}`);
-    }
-    if (offer.choices?.length) {
-      extras.push(`Choices: ${offer.choices.join(", ")}`);
-    }
-    if (offer.drinks?.length) {
-      extras.push(`Drinks: ${offer.drinks.join(", ")}`);
-    }
+    const itemServiceCharge = calculateItemServiceCharge(price);
+    const inclusions = cleanOfferList(offer.inclusions);
+    const choices = cleanOfferList(offer.choices);
+    const drinks = cleanOfferList(offer.drinks);
+    const extras = buildOfferOptions({ inclusions, choices, drinks });
 
     setCart((prev) => {
       const existing = prev.find(
-        (item) => item.id === offer._id && item.category === "Offer",
+        (item) => item.id === offer._id && isOfferItem(item),
       );
       if (existing) {
         return prev.map((item) =>
-          item.id === offer._id && item.category === "Offer"
+          item.id === offer._id && isOfferItem(item)
             ? { ...item, qty: item.qty + 1 }
             : item,
         );
@@ -557,9 +630,10 @@ export default function OrderPage() {
           id: offer._id,
           name: offer.name,
           productCode: "",
-          category: "Offer",
+          category: OFFER_CATEGORY,
           price,
           tax: itemTax,
+          serviceCharge: itemServiceCharge,
           qty: 1,
           size: "Standard",
           sizes: [],
@@ -569,6 +643,9 @@ export default function OrderPage() {
           productType: "KITCHEN",
           cartId: Date.now(),
           isOffer: true,
+          inclusions,
+          choices,
+          drinks,
         },
       ];
     });
@@ -600,6 +677,7 @@ export default function OrderPage() {
         const variant = selectedProduct.variants.find((v) => v.size === size);
         const unitPrice = Number(variant?.price) || 0;
         const unitTax = calculateItemTax(selectedProduct, unitPrice);
+        const unitServiceCharge = calculateItemServiceCharge(unitPrice);
         const options = [];
         if (selectedPreparationStyle) options.push(selectedPreparationStyle);
         const parts = [`Size: ${size}`];
@@ -613,6 +691,7 @@ export default function OrderPage() {
           category: selectedProduct.category?.name || "ITEMS",
           price: unitPrice,
           tax: unitTax,
+          serviceCharge: unitServiceCharge,
           qty,
           size,
           sizes: [size],
@@ -626,6 +705,7 @@ export default function OrderPage() {
     } else {
       const unitPrice = selectedProduct.price || 0;
       const unitTax = calculateItemTax(selectedProduct, unitPrice);
+      const unitServiceCharge = calculateItemServiceCharge(unitPrice);
       const options = [];
       if (selectedPreparationStyle) options.push(selectedPreparationStyle);
       newLines.push({
@@ -636,6 +716,7 @@ export default function OrderPage() {
         category: selectedProduct.category?.name || "ITEMS",
         price: unitPrice,
         tax: unitTax,
+        serviceCharge: unitServiceCharge,
         qty: 1,
         size: "Standard",
         sizes: [],
@@ -650,6 +731,7 @@ export default function OrderPage() {
       const addon = entry.addon;
       const unitPrice = Number(addon.price) || 0;
       const unitTax = calculateItemTax(selectedProduct, unitPrice);
+      const unitServiceCharge = calculateItemServiceCharge(unitPrice);
       newLines.push({
         id: selectedProduct._id,
         cartId: baseTs + 1000 + idx,
@@ -658,6 +740,7 @@ export default function OrderPage() {
         category: selectedProduct.category?.name || "ITEMS",
         price: unitPrice,
         tax: unitTax,
+        serviceCharge: unitServiceCharge,
         qty: entry.qty,
         size: "Extra",
         sizes: [],
@@ -742,6 +825,8 @@ export default function OrderPage() {
         items: cart,
         subTotal: subtotal,
         taxTotal: totalTax,
+        serviceChargeTotal,
+        serviceChargeName: hasServiceTax ? serviceChargeLabel : null,
         discountTotal: discountAmount,
         discountCode: appliedDiscount ? appliedDiscount.code : null,
         totalAmount: total,
@@ -808,7 +893,17 @@ export default function OrderPage() {
       ? (subtotal * appliedDiscount.value) / 100
       : Math.min(appliedDiscount.value, subtotal)
     : 0;
-  const total = subtotal - discountAmount + totalTax;
+  const serviceChargeTotal = !hasServiceTax
+    ? 0
+    : String(serviceTax.type || "")
+          .toLowerCase()
+          .includes("percent")
+      ? cart.reduce(
+          (sum, item) => sum + (item.serviceCharge || 0) * item.qty,
+          0,
+        )
+      : Number(serviceTax.value) || 0;
+  const total = subtotal - discountAmount + totalTax + serviceChargeTotal;
 
   const hasSentKot =
     Boolean(activeOrder) &&
@@ -991,56 +1086,60 @@ export default function OrderPage() {
                   filteredOffers.map((offer) => {
                     const basePrice = Number(offer.price) || 0;
                     const taxAmount = calculateOfferTax(offer, basePrice);
-                    const detailBits = [
-                      ...(offer.inclusions || []).slice(0, 2),
-                      ...(offer.choices || []).slice(0, 1),
-                    ].filter(Boolean);
+                    const totalPrice =
+                      Number(offer.totalPrice) > 0
+                        ? Number(offer.totalPrice)
+                        : basePrice + taxAmount;
+                    const inclusions = cleanOfferList(offer.inclusions);
+                    const choices = cleanOfferList(offer.choices);
+                    const drinks = cleanOfferList(offer.drinks);
 
                     return (
                       <div
                         key={offer._id}
-                        className="flex flex-col sm:flex-row items-stretch bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden transition-all hover:shadow-md min-h-[76px]"
+                        className="flex flex-col sm:flex-row items-stretch bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden transition-all hover:shadow-md"
                       >
-                        <div className="flex-1 flex flex-col justify-center px-4 py-3 border-b sm:border-b-0 sm:border-r border-zinc-200">
-                          <div className="flex items-center gap-2 mb-1">
+                        <div className="flex-1 flex flex-col justify-center px-4 py-3 border-b sm:border-b-0 sm:border-r border-zinc-200 gap-2 min-w-0">
+                          <div className="flex items-center gap-2">
                             <span className="text-[10px] font-bold text-violet-700 bg-violet-50 border border-violet-100 rounded px-1.5 py-0.5 shrink-0">
                               OFFER
                             </span>
-                            <span className="font-bold text-zinc-900 text-xs md:text-sm">
+                            <span className="font-bold text-zinc-900 text-xs md:text-sm leading-tight">
                               {offer.name}
                             </span>
                           </div>
-                          <div className="flex flex-col gap-0.5">
-                            {offer.description ? (
-                              <span className="text-xs font-medium text-zinc-500 line-clamp-2">
-                                {offer.description}
-                              </span>
+
+                          <div className="flex flex-col gap-1.5">
+                            <OfferChipRow label="Includes" items={inclusions} />
+                            <OfferChipRow label="Choices" items={choices} />
+                            <OfferChipRow label="Drinks" items={drinks} />
+                            {taxAmount > 0 ? (
+                              <div className="flex items-center gap-2">
+                                <span className="text-[10px] font-bold uppercase tracking-wide text-zinc-400 w-[64px] shrink-0">
+                                  HST
+                                </span>
+                                <span className="text-xs font-bold text-zinc-800">
+                                  ${taxAmount.toFixed(2)}
+                                </span>
+                              </div>
                             ) : null}
-                            {detailBits.length > 0 ? (
-                              <span className="text-xs font-semibold text-zinc-400 truncate">
-                                {detailBits.join(" · ")}
-                              </span>
-                            ) : (
-                              <span className="text-xs font-semibold text-zinc-500">
-                                Offer
-                              </span>
-                            )}
                           </div>
                         </div>
 
                         <div className="flex items-center">
-                          <div className="w-20 flex flex-col items-center justify-center px-3 py-2 border-r border-zinc-200 h-full">
+                          <div className="w-28 flex flex-col items-center justify-center px-3 py-2 border-r border-zinc-200 h-full">
                             <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
                               Price
                             </span>
                             <span className="text-sm font-black text-zinc-900">
-                              ${basePrice.toFixed(2)}
+                              ${totalPrice.toFixed(2)}
                             </span>
-                            {taxAmount > 0 ? (
-                              <span className="text-[10px] text-zinc-400">
-                                +${taxAmount.toFixed(2)} tax
-                              </span>
-                            ) : null}
+                            <span className="text-[10px] text-zinc-500 font-medium text-center leading-tight">
+                              ${basePrice.toFixed(2)}
+                              {taxAmount > 0
+                                ? ` + $${taxAmount.toFixed(2)} HST`
+                                : ""}
+                            </span>
                           </div>
                         </div>
 
@@ -1166,26 +1265,48 @@ export default function OrderPage() {
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {cart.map((item, idx) => (
+                  {cart.map((item, idx) => {
+                    const offerLines = isOfferItem(item)
+                      ? getOfferDetailLines(item)
+                      : [];
+                    return (
                     <div
                       key={item.cartId || idx}
                       className="bg-white rounded-lg p-3 border border-zinc-200 shadow-sm"
                     >
                       <div className="flex justify-between items-start">
-                        <div className="pr-2">
+                        <div className="pr-2 min-w-0">
                           <h4 className="font-bold text-zinc-900 text-sm leading-tight">
-                            {item.productCode ? (
+                            {isOfferItem(item) ? (
+                              <span className="text-[10px] font-bold text-violet-700 bg-violet-50 border border-violet-100 rounded px-1 py-0.5 mr-1.5 align-middle">
+                                OFFER
+                              </span>
+                            ) : item.productCode ? (
                               <span className="text-orange-600 mr-1.5">
                                 {item.productCode}
                               </span>
                             ) : null}
                             {item.name}
                           </h4>
-                          {item.modifier && (
+                          {offerLines.length > 0 ? (
+                            <div className="mt-1 space-y-0.5">
+                              {offerLines.map((line) => (
+                                <p
+                                  key={line.label}
+                                  className="text-[11px] font-medium text-zinc-500"
+                                >
+                                  <span className="font-bold text-zinc-600">
+                                    {line.label}:
+                                  </span>{" "}
+                                  {line.value}
+                                </p>
+                              ))}
+                            </div>
+                          ) : item.modifier ? (
                             <p className="text-[11px] font-semibold text-zinc-500 mt-0.5">
                               {item.modifier}
                             </p>
-                          )}
+                          ) : null}
                         </div>
                         <span className="font-bold text-sm text-zinc-900 shrink-0">
                           ${(item.price * item.qty).toFixed(2)}
@@ -1223,7 +1344,8 @@ export default function OrderPage() {
                         </div>
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
 
@@ -1263,9 +1385,17 @@ export default function OrderPage() {
                 </div>
               )}
               <div className="flex justify-between text-sm font-semibold text-zinc-500">
-                <span>Tax</span>
+                <span>HST</span>
                 <span className="text-zinc-900">${totalTax.toFixed(2)}</span>
               </div>
+              {hasServiceTax && serviceChargeTotal > 0 && (
+                <div className="flex justify-between text-sm font-semibold text-zinc-500">
+                  <span>{serviceChargeLabel}</span>
+                  <span className="text-zinc-900">
+                    ${serviceChargeTotal.toFixed(2)}
+                  </span>
+                </div>
+              )}
               <div className="flex justify-between items-center pt-1.5 border-t border-zinc-100">
                 <span className="text-base font-bold text-zinc-900">Total</span>
                 <span className="text-2xl font-black text-zinc-900 leading-none">
@@ -1417,6 +1547,8 @@ export default function OrderPage() {
                 ...activeOrder,
                 subTotal: subtotal,
                 taxTotal: totalTax,
+                serviceChargeTotal,
+                serviceChargeName: hasServiceTax ? serviceChargeLabel : null,
                 discountCode:
                   appliedDiscount?.code || activeOrder.discountCode || null,
                 discountTotal:
@@ -1491,6 +1623,9 @@ export default function OrderPage() {
                   <div className="w-14 text-center">Base</div>
                   <div className="w-16 text-center">Discount</div>
                   <div className="w-16 text-center">Tax</div>
+                  {hasServiceTax && (
+                    <div className="w-16 text-center">Svc</div>
+                  )}
                   <div className="w-20 text-right">Total</div>
                 </div>
 
@@ -1516,8 +1651,27 @@ export default function OrderPage() {
                             selectedProduct,
                             discountedPrice,
                           );
-                          const unitFinal = discountedPrice + taxAmount;
+                          const svcUnit = hasServiceTax
+                            ? String(serviceTax.type || "")
+                                .toLowerCase()
+                                .includes("percent")
+                              ? calculateItemServiceCharge(discountedPrice)
+                              : Number(serviceTax.value) || 0
+                            : 0;
+                          const unitFinal =
+                            discountedPrice +
+                            taxAmount +
+                            (String(serviceTax?.type || "")
+                              .toLowerCase()
+                              .includes("percent")
+                              ? svcUnit
+                              : 0);
                           const lineTax = taxAmount * qty;
+                          const lineSvc = String(serviceTax?.type || "")
+                            .toLowerCase()
+                            .includes("percent")
+                            ? svcUnit * qty
+                            : 0;
                           const lineTotal = unitFinal * qty;
 
                           return (
@@ -1570,6 +1724,19 @@ export default function OrderPage() {
                               <div className="w-16 text-center text-zinc-500 font-medium text-[12px]">
                                 +${(qty > 0 ? lineTax : taxAmount).toFixed(2)}
                               </div>
+                              {hasServiceTax && (
+                                <div className="w-16 text-center text-zinc-500 font-medium text-[12px]">
+                                  +$
+                                  {(String(serviceTax.type || "")
+                                    .toLowerCase()
+                                    .includes("percent")
+                                    ? qty > 0
+                                      ? lineSvc
+                                      : svcUnit
+                                    : svcUnit
+                                  ).toFixed(2)}
+                                </div>
+                              )}
                               <div className="w-20 text-right font-bold text-[13px] text-zinc-900">
                                 $
                                 {(qty > 0 ? lineTotal : unitFinal).toFixed(2)}
@@ -1647,8 +1814,27 @@ export default function OrderPage() {
                             selectedProduct,
                             discountedPrice,
                           );
-                          const unitFinal = discountedPrice + taxAmount;
+                          const svcUnit = hasServiceTax
+                            ? String(serviceTax.type || "")
+                                .toLowerCase()
+                                .includes("percent")
+                              ? calculateItemServiceCharge(discountedPrice)
+                              : Number(serviceTax.value) || 0
+                            : 0;
+                          const unitFinal =
+                            discountedPrice +
+                            taxAmount +
+                            (String(serviceTax?.type || "")
+                              .toLowerCase()
+                              .includes("percent")
+                              ? svcUnit
+                              : 0);
                           const lineTax = taxAmount * qty;
+                          const lineSvc = String(serviceTax?.type || "")
+                            .toLowerCase()
+                            .includes("percent")
+                            ? svcUnit * qty
+                            : 0;
                           const lineTotal = unitFinal * qty;
 
                           return (
@@ -1697,6 +1883,19 @@ export default function OrderPage() {
                               <div className="w-16 text-center text-zinc-500 font-medium text-[12px]">
                                 +${(qty > 0 ? lineTax : taxAmount).toFixed(2)}
                               </div>
+                              {hasServiceTax && (
+                                <div className="w-16 text-center text-zinc-500 font-medium text-[12px]">
+                                  +$
+                                  {(String(serviceTax.type || "")
+                                    .toLowerCase()
+                                    .includes("percent")
+                                    ? qty > 0
+                                      ? lineSvc
+                                      : svcUnit
+                                    : svcUnit
+                                  ).toFixed(2)}
+                                </div>
+                              )}
                               <div className="w-20 text-right font-bold text-[13px] text-zinc-900">
                                 +$
                                 {(qty > 0 ? lineTotal : unitFinal).toFixed(2)}

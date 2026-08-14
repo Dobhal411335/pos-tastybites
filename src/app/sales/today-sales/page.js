@@ -68,23 +68,30 @@ export default function EmployeeSalesPage() {
     switch(status) {
       case "CONFIRMED": return "bg-emerald-100 text-emerald-700";
       case "CANCELLED": return "bg-red-100 text-red-700";
+      case "WAIVED": return "bg-slate-100 text-slate-700";
       case "PENDING": return "bg-amber-100 text-amber-700";
+      case "PAID": return "bg-blue-100 text-blue-700";
       default: return "bg-zinc-100 text-zinc-700";
     }
   };
 
-  // Calculations
-  const validOrders = orders.filter(o => o.status !== "CANCELLED");
+  // Calculations — only fully paid orders; exclude waived/cancelled
+  const validOrders = orders.filter(
+    (o) =>
+      o.status !== "CANCELLED" &&
+      o.status !== "WAIVED" &&
+      (o.status === "PAID" || o.paymentStatus === "PAID")
+  );
   const totalOrders = validOrders.length;
   const totalSales = validOrders.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
   const avgOrderValue = totalOrders > 0 ? (totalSales / totalOrders) : 0;
-  const tipsEarned = totalSales * 0.05; // Mock tips logic
+  const tipsEarned = validOrders.reduce((sum, o) => sum + Number(o.tipAmount || 0), 0);
 
   const stats = [
     { label: "Total Sales", value: `$${totalSales.toFixed(2)}`, icon: DollarSign, trend: "+0%", isUp: true },
     { label: "Total Orders", value: totalOrders.toString(), icon: ShoppingBag, trend: "+0%", isUp: true },
     { label: "Avg Order Value", value: `$${avgOrderValue.toFixed(2)}`, icon: Receipt, trend: "+0%", isUp: true },
-    { label: "Tips Earned (Est.)", value: `$${tipsEarned.toFixed(2)}`, icon: Wallet, trend: "+0%", isUp: true },
+    { label: "Tips Earned", value: `$${tipsEarned.toFixed(2)}`, icon: Wallet, trend: "+0%", isUp: true },
   ];
 
   // Pagination logic

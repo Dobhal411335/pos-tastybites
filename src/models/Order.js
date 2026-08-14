@@ -10,9 +10,14 @@ const OrderItemSchema = new mongoose.Schema({
   qty: { type: Number, required: true, default: 1 },
   price: { type: Number, required: true },
   tax: { type: Number, default: 0 },
+  serviceCharge: { type: Number, default: 0 },
   options: [{ type: String }],
   preparationStyle: { type: String, default: null },
   productType: { type: String, enum: ['KITCHEN', 'BAR'], default: 'KITCHEN' },
+  isOffer: { type: Boolean, default: false },
+  inclusions: [{ type: String }],
+  choices: [{ type: String }],
+  drinks: [{ type: String }],
   sentQty: { type: Number, default: 0 },
   cartId: { type: String }, // To match incoming items reliably
 });
@@ -24,6 +29,8 @@ const OrderSchema = new mongoose.Schema(
     items: [OrderItemSchema],
     subTotal: { type: Number, required: true },
     taxTotal: { type: Number, default: 0 },
+    serviceChargeTotal: { type: Number, default: 0 },
+    serviceChargeName: { type: String, default: null },
     discountTotal: { type: Number, default: 0 },
     discountCode: { type: String, default: null },
     giftcardCode: { type: String, default: null },
@@ -50,9 +57,12 @@ const OrderSchema = new mongoose.Schema(
     tableSession: { type: mongoose.Schema.Types.ObjectId, ref: 'TableSession' },
     table: { type: mongoose.Schema.Types.ObjectId, ref: 'Table' },
     floor: { type: mongoose.Schema.Types.ObjectId, ref: 'Floor' },
-    status: { type: String, enum: ['PENDING', 'CONFIRMED', 'COMPLETED', 'PAID', 'CANCELLED'], default: 'PENDING' },
+    status: { type: String, enum: ['PENDING', 'CONFIRMED', 'COMPLETED', 'PAID', 'CANCELLED', 'WAIVED'], default: 'PENDING' },
     paymentStatus: { type: String, enum: ['UNPAID', 'PARTIAL', 'PAID', 'REFUNDED'], default: 'UNPAID' },
     paymentMethod: { type: String },
+    waiveReason: { type: String, default: null },
+    waivedAt: { type: Date, default: null },
+    waivedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee', default: null },
     source: { type: String, default: 'POS' }, // E.g., 'POS', 'STAFF', 'ONLINE'
     processedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee' }, // Who took the order
   },

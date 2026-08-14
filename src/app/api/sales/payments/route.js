@@ -34,6 +34,8 @@ export const POST = withAuth(async (request) => {
       guestCount,
       cashAmount,
       cardAmount,
+      serviceChargeTotal,
+      serviceChargeName,
     } = data;
 
     if (!orderId) {
@@ -90,6 +92,13 @@ export const POST = withAuth(async (request) => {
     }
     if (amount !== undefined && amount !== null) {
       order.totalAmount = Math.round(Number(amount) * 100) / 100;
+    }
+
+    if (serviceChargeTotal !== undefined && serviceChargeTotal !== null) {
+      order.serviceChargeTotal = r2(serviceChargeTotal);
+    }
+    if (serviceChargeName !== undefined) {
+      order.serviceChargeName = serviceChargeName || null;
     }
 
     // Persist gift card usage on the order for receipts

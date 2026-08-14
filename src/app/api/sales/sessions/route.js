@@ -200,7 +200,7 @@ export const PUT = withAuth(async (request) => {
       const unpaidOrdersCount = await Order.countDocuments({
         _id: { $in: session.activeOrders },
         paymentStatus: { $ne: "PAID" },
-        status: { $nin: ["CANCELLED"] }
+        status: { $nin: ["CANCELLED", "WAIVED"] }
       });
 
       if (unpaidOrdersCount > 0) {

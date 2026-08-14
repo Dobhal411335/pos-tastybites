@@ -36,6 +36,7 @@ export default function ProductDetailsConfigPage() {
   const [taxValue, setTaxValue] = useState("0");
   const [availableTaxes, setAvailableTaxes] = useState([]);
   const [selectedTaxes, setSelectedTaxes] = useState([]);
+  const [serviceTax, setServiceTax] = useState(null);
   const [preparationStyles, setPreparationStyles] = useState([""]);
   const [productType, setProductType] = useState("");
 
@@ -87,6 +88,19 @@ export default function ProductDetailsConfigPage() {
     }
   };
 
+  const fetchServiceTax = async () => {
+    try {
+      const res = await fetch("/api/tax/servicetax?active=1");
+      const json = await res.json();
+      if (json.success) {
+        const list = Array.isArray(json.data) ? json.data : [];
+        setServiceTax(list[0] || null);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   const fetchSizes = async () => {
     try {
       const res = await fetch("/api/menu/sizes");
@@ -111,6 +125,7 @@ export default function ProductDetailsConfigPage() {
     if (id) {
       fetchProduct();
       fetchTaxes();
+      fetchServiceTax();
       fetchSizes();
       fetchAddons();
     }
@@ -624,6 +639,25 @@ export default function ProductDetailsConfigPage() {
                         </div>
                       )}
                     </div>
+
+                    {serviceTax && (
+                      <div className="space-y-3">
+                        <label className="text-[14px] font-semibold text-zinc-900">
+                          Server Charge
+                        </label>
+                        <div className="flex items-center justify-between p-3 rounded-md border border-zinc-200 bg-zinc-50">
+                          <span className="text-[14px] font-medium text-zinc-900">
+                            {serviceTax.name || "Server Charge"}
+                          </span>
+                          <span className="text-[13px] font-bold text-zinc-600">
+                            {serviceTax.type === "Percent" ||
+                            serviceTax.type === "percent"
+                              ? `${Number(serviceTax.value)}%`
+                              : `$${Number(serviceTax.value).toFixed(2)}`}
+                          </span>
+                        </div>
+                      </div>
+                    )}
 
                     <div className="space-y-2">
                       <label className="text-[14px] font-semibold text-zinc-900">

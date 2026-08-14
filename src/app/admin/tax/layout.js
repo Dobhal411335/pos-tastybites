@@ -14,6 +14,7 @@ export default function TaxModuleLayout({ children }) {
       color: "bg-[#12A594]",
       items: [
         { label: "Tax Details", href: "/admin/tax/details" },
+        { label: "Service Tax", href: "/admin/tax/servicetax" },
       ],
     },
   ];

@@ -154,7 +154,7 @@ async function enqueueOrderTicketPrintJob({
 export const POST = withAuth(async (request) => {
   try {
     const data = await request.json();
-    const { items, subTotal, taxTotal, discountTotal, discountCode, totalAmount, specialNote, sessionId, guestName, partyName, guestCount, orderType } = data;
+    const { items, subTotal, taxTotal, serviceChargeTotal, serviceChargeName, discountTotal, discountCode, totalAmount, specialNote, sessionId, guestName, partyName, guestCount, orderType } = data;
     const resolvedPartyName = (partyName || guestName || "").trim() || null;
     const resolvedGuestCount =
       guestCount !== undefined && guestCount !== null && guestCount !== ""
@@ -176,19 +176,29 @@ export const POST = withAuth(async (request) => {
           : []);
       const sizeLabel = sizes.length > 0 ? sizes.join(", ") : (item.size || "Standard");
 
+      const isOffer = Boolean(item.isOffer) || /^offers?$/i.test(String(item.category || ""));
+      const inclusions = Array.isArray(item.inclusions) ? item.inclusions.filter(Boolean) : [];
+      const choices = Array.isArray(item.choices) ? item.choices.filter(Boolean) : [];
+      const drinks = Array.isArray(item.drinks) ? item.drinks.filter(Boolean) : [];
+
       return {
         menuItemId: item.id,
         name: item.name,
         productCode: item.productCode || "",
-        category: item.category || "ITEMS",
+        category: isOffer ? "Offers" : (item.category || "ITEMS"),
         size: sizeLabel,
         sizes,
         qty: item.qty,
         price: item.price,
         tax: item.tax || 0,
+        serviceCharge: item.serviceCharge || 0,
         options: item.options || [],
         preparationStyle: item.preparationStyle || null,
         productType: normalizeProductType(item.productType),
+        isOffer,
+        inclusions,
+        choices,
+        drinks,
         cartId: item.cartId || String(Date.now() + Math.random())
       };
     });
@@ -204,6 +214,8 @@ export const POST = withAuth(async (request) => {
         items: formattedItems.map(item => ({ ...item, sentQty: item.qty })),
         subTotal: Number(subTotal) || 0,
         taxTotal: Number(taxTotal) || 0,
+        serviceChargeTotal: Number(serviceChargeTotal) || 0,
+        serviceChargeName: serviceChargeName || null,
         discountTotal: Number(discountTotal) || 0,
         discountCode: discountCode || null,
         totalAmount: Number(totalAmount) || 0,
@@ -291,6 +303,8 @@ export const POST = withAuth(async (request) => {
       order.items = finalItems;
       order.subTotal = Number(subTotal) || 0;
       order.taxTotal = Number(taxTotal) || 0;
+      order.serviceChargeTotal = Number(serviceChargeTotal) || 0;
+      order.serviceChargeName = serviceChargeName || null;
       order.discountTotal = Number(discountTotal) || 0;
       order.discountCode = discountCode || null;
       order.totalAmount = Number(totalAmount) || 0;
@@ -380,6 +394,8 @@ export const POST = withAuth(async (request) => {
         items: formattedItems.map(item => ({ ...item, sentQty: item.qty })),
         subTotal: Number(subTotal) || 0,
         taxTotal: Number(taxTotal) || 0,
+        serviceChargeTotal: Number(serviceChargeTotal) || 0,
+        serviceChargeName: serviceChargeName || null,
         discountTotal: Number(discountTotal) || 0,
         discountCode: discountCode || null,
         totalAmount: Number(totalAmount) || 0,
@@ -518,5 +534,149 @@ export const GET = withAuth(async (request) => {
   } catch (error) {
     logger.error("Failed to fetch employee orders", error);
     return sendError(error, "Failed to fetch orders", 500);
+  }
+}, ["EMPLOYEE", "MANAGER", "ADMIN", "SERVER", "BARTENDER"]);
+
+// PATCH - Waive off an unpaid POS bill (e.g. customer refused payment after KOT)
+export const PATCH = withAuth(async (request) => {
+  try {
+    const employeeId = request.user.id;
+    const restaurantId = request.restaurant;
+    const body = await request.json();
+    const { orderId, action, reason } = body || {};
+
+    if (action !== "waive") {
+      return sendError(new Error("Invalid action"), "Unsupported action", 400);
+    }
+
+    if (!orderId) {
+      return sendError(new Error("Missing orderId"), "orderId is required", 400);
+    }
+
+    const waiveReason = String(reason || "").trim();
+    if (!waiveReason) {
+      return sendError(new Error("Missing reason"), "A waive reason is required", 400);
+    }
+
+    const order = await Order.findOne({ _id: orderId, restaurantId });
+    if (!order) {
+      return sendError(new Error("Not Found"), "Order not found", 404);
+    }
+
+    if (order.paymentStatus === "PAID" || order.status === "PAID") {
+      return sendError(new Error("Already Paid"), "Cannot waive a paid order", 400);
+    }
+
+    if (["WAIVED", "CANCELLED"].includes(order.status)) {
+      return sendError(new Error("Already Closed"), `Order is already ${order.status}`, 400);
+    }
+
+    if (!["PENDING", "CONFIRMED"].includes(order.status)) {
+      return sendError(new Error("Invalid Status"), "Only pending or confirmed orders can be waived", 400);
+    }
+
+    order.status = "WAIVED";
+    order.waiveReason = waiveReason;
+    order.waivedAt = new Date();
+    order.waivedBy = employeeId;
+    await order.save();
+
+    let sessionReleased = false;
+    if (order.tableSession) {
+      const session = await TableSession.findOne({
+        _id: order.tableSession,
+        restaurant: restaurantId,
+      });
+
+      if (session?.isSessionOpen) {
+        const blockingOrders = await Order.countDocuments({
+          _id: { $in: session.activeOrders },
+          paymentStatus: { $ne: "PAID" },
+          status: { $nin: ["CANCELLED", "WAIVED"] },
+        });
+
+        if (blockingOrders === 0) {
+          session.status = "RELEASED";
+          session.isSessionOpen = false;
+          session.closedAt = new Date();
+          await session.save();
+
+          if (session.primaryTable) {
+            await Table.findByIdAndUpdate(session.primaryTable, { status: "Available" });
+          }
+
+          sessionReleased = true;
+
+          try {
+            await OperationalAuditLog.create({
+              restaurantId,
+              actorId: employeeId,
+              actorType: "Employee",
+              actorName: request.user.name || request.user.firstName,
+              action: "TABLE_RELEASED",
+              floorId: session.floor,
+              tableId: session.primaryTable,
+              tableSessionId: session._id,
+              reason: waiveReason,
+            });
+          } catch (auditErr) {
+            logger.error("Failed to write waive table-release audit log", auditErr);
+          }
+
+          if (global.io) {
+            global.io.to(`floor:${session.floor}`).emit("table:released", {
+              sessionId: session._id,
+              tableId: session.primaryTable,
+            });
+          }
+
+          try {
+            const releasedTable = await Table.findById(session.primaryTable).select("tableNumber").lean();
+            await createNotification({
+              restaurantId,
+              type: "TABLE_RELEASED",
+              title: "Table Released",
+              message: `Table ${releasedTable?.tableNumber || ""} was released after bill waive`,
+              tableId: session.primaryTable,
+              tableSessionId: session._id,
+              employeeId,
+              floorId: session.floor,
+              priority: "low",
+              metadata: { tableNo: releasedTable?.tableNumber || null, waivedOrderId: order._id },
+            });
+          } catch (notifErr) {
+            logger.error("Failed to create TABLE_RELEASED notification after waive", notifErr);
+          }
+        }
+      }
+    }
+
+    try {
+      await OperationalAuditLog.create({
+        restaurantId,
+        actorId: employeeId,
+        actorType: "Employee",
+        actorName: request.user.name || request.user.firstName,
+        action: "ORDER_CANCELLED",
+        floorId: order.floor,
+        tableId: order.table,
+        tableSessionId: order.tableSession,
+        reason: waiveReason,
+        newValue: { status: "WAIVED", orderId: order._id, orderNumber: order.orderNumber },
+      });
+    } catch (auditErr) {
+      logger.error("Failed to write waive order audit log", auditErr);
+    }
+
+    logger.info(`Order ${order.orderNumber} waived by Employee ${employeeId}: ${waiveReason}`);
+
+    const [enriched] = await enrichOrdersWithProcessedBy([order.toObject()]);
+    return sendSuccess(
+      { ...enriched, sessionReleased },
+      sessionReleased ? "Bill waived and table released" : "Bill waived successfully"
+    );
+  } catch (error) {
+    logger.error("Failed to waive order", error);
+    return sendError(error, "Failed to waive order", 500);
   }
 }, ["EMPLOYEE", "MANAGER", "ADMIN", "SERVER", "BARTENDER"]);

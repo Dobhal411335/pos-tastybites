@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import { format } from "date-fns";
-import { Loader2, Search, Eye, History, CreditCard, User,Gift } from "lucide-react";
+import { Loader2, Search, Eye, History, CreditCard, User, Gift } from "lucide-react";
+import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -20,11 +21,15 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import PrintPreviewModal from "@/components/receipts/PrintPreviewModal";
 
 export default function GiftcardDetailsPage() {
   const [fetching, setFetching] = useState(true);
   const [giftcards, setGiftcards] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
+  const [receiptOpen, setReceiptOpen] = useState(false);
+  const [receiptOrder, setReceiptOrder] = useState(null);
+  const [receiptLoadingId, setReceiptLoadingId] = useState(null);
 
   const fetchGiftcards = async () => {
     try {
@@ -56,6 +61,29 @@ export default function GiftcardDetailsPage() {
       return codeMatch || nameMatch || emailMatch;
     });
   }, [giftcards, searchTerm]);
+
+  const openOrderReceipt = async (orderId, e) => {
+    e?.preventDefault();
+    e?.stopPropagation();
+    if (!orderId || receiptLoadingId) return;
+
+    try {
+      setReceiptLoadingId(String(orderId));
+      const res = await fetch(`/api/orders/${encodeURIComponent(orderId)}`);
+      const json = await res.json();
+      if (!json.success || !json.data) {
+        toast.error(json.message || "Order not found");
+        return;
+      }
+      setReceiptOrder(json.data);
+      setReceiptOpen(true);
+    } catch (err) {
+      console.error("Failed to fetch order", err);
+      toast.error("Failed to load order receipt");
+    } finally {
+      setReceiptLoadingId(null);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -135,7 +163,7 @@ export default function GiftcardDetailsPage() {
                             View
                           </Button>
                         </DialogTrigger>
-                        <DialogContent className="sm:max-w-[600px] bg-white">
+                        <DialogContent className="sm:max-w-[700px] bg-white">
                           <DialogHeader>
                             <DialogTitle className="flex items-center gap-2 text-xl">
                               <Gift className="h-5 w-5 text-blue-600" />
@@ -209,7 +237,29 @@ export default function GiftcardDetailsPage() {
                                             ${h.balanceAfter?.toFixed(2)}
                                           </TableCell>
                                           <TableCell className="text-xs text-gray-500">
-                                            {h.orderId ? `Order #${h.orderId}` : h.note || "—"}
+                                            {h.orderId ? (
+                                              <div className="flex items-center gap-2 flex-wrap">
+                                                <span className="whitespace-nowrap">Order #{h.orderId}</span>
+                                                <Button
+                                                  type="button"
+                                                  variant="ghost"
+                                                  size="sm"
+                                                  className="h-7 px-2 gap-1 shrink-0 bg-blue-500 text-white hover:bg-blue-600"
+                                                  title="View order bill"
+                                                  disabled={receiptLoadingId === String(h.orderId)}
+                                                  onClick={(e) => openOrderReceipt(h.orderId, e)}
+                                                >
+                                                  {receiptLoadingId === String(h.orderId) ? (
+                                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                                  ) : (
+                                                    <Eye className="h-3.5 w-3.5" />
+                                                  )}
+                                                  View Bill
+                                                </Button>
+                                              </div>
+                                            ) : (
+                                              h.note || "—"
+                                            )}
                                           </TableCell>
                                         </TableRow>
                                       ))}
@@ -229,6 +279,20 @@ export default function GiftcardDetailsPage() {
           </Table>
         </div>
       </div>
+
+      <PrintPreviewModal
+        isOpen={receiptOpen}
+        onClose={() => {
+          setReceiptOpen(false);
+          setReceiptOrder(null);
+        }}
+        printType="customer"
+        order={receiptOrder}
+        taxBreakdown={receiptOrder?.taxBreakdown || []}
+        restaurantDetails={receiptOrder?.restaurantDetails || null}
+        serverName={receiptOrder?.processedByName || "Server"}
+        guestCount={receiptOrder?.guestCount}
+      />
     </div>
   );
 }

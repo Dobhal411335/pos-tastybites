@@ -1,6 +1,7 @@
 import React from "react";
 import "./print.css";
 import moment from "moment";
+import { isOfferItem, getOfferDetailLines } from "@/utils/offerDetails";
 
 const money = (n) => `$${(Number(n) || 0).toFixed(2)}`;
 
@@ -37,6 +38,8 @@ const CustomerReceipt = ({
     totalAmount = 0,
     tipAmount = 0,
     tipMethod,
+    serviceChargeTotal = 0,
+    serviceChargeName,
     paymentMethod,
     cashAmount,
     cardAmount,
@@ -62,6 +65,7 @@ const CustomerReceipt = ({
 
   const tip = Number(tipAmount || 0);
   const discount = Number(discountTotal || 0);
+  const serviceCharge = Number(serviceChargeTotal || 0);
   const giftUsed = Number(giftcardUsedAmount || 0);
   const cash = Number(cashAmount || 0);
   const card = Number(cardAmount || 0);
@@ -93,6 +97,39 @@ const CustomerReceipt = ({
 
   const hasPaymentSplit =
     giftUsed > 0 || cash > 0 || card > 0 || Boolean(paymentMethod);
+
+  const regularItems = items.filter((item) => !isOfferItem(item));
+  const offerItems = items.filter((item) => isOfferItem(item));
+
+  const renderReceiptItem = (item, idx) => {
+    const offerLines = isOfferItem(item) ? getOfferDetailLines(item) : [];
+    return (
+      <div key={idx} className="mb-2 text-[11px]">
+        <div className="flex justify-between items-start gap-2">
+          <div className="flex-1 pr-1">
+            {item.qty > 1 ? `${item.qty} × ` : ""}
+            {item.productCode ? `${item.productCode} ` : ""}
+            {item.name}
+            {item.size && item.size !== "Standard" ? (
+              <span className="text-[9px]"> ({item.size})</span>
+            ) : null}
+          </div>
+          <span className="shrink-0">
+            ${(Number(item.price) * Number(item.qty)).toFixed(2)}
+          </span>
+        </div>
+        {offerLines.length > 0 ? (
+          <div className="pl-3 mt-0.5 space-y-0.5 text-[9px] text-zinc-600">
+            {offerLines.map((line) => (
+              <div key={line.label}>
+                {line.label}: {line.value}
+              </div>
+            ))}
+          </div>
+        ) : null}
+      </div>
+    );
+  };
 
   return (
     <div
@@ -148,23 +185,17 @@ const CustomerReceipt = ({
           <span>ITEM</span>
           <span>AMOUNT</span>
         </div>
-        {items.map((item, idx) => (
-          <div key={idx} className="mb-2 text-[11px]">
-            <div className="flex justify-between items-start gap-2">
-              <div className="flex-1 pr-1">
-                {item.qty > 1 ? `${item.qty} × ` : ""}
-                {item.productCode ? `${item.productCode} ` : ""}
-                {item.name}
-                {item.size && item.size !== "Standard" ? (
-                  <span className="text-[9px]"> ({item.size})</span>
-                ) : null}
-              </div>
-              <span className="shrink-0">
-                ${(Number(item.price) * Number(item.qty)).toFixed(2)}
-              </span>
+        {regularItems.map((item, idx) => renderReceiptItem(item, idx))}
+        {offerItems.length > 0 ? (
+          <div className={regularItems.length > 0 ? "mt-2" : ""}>
+            <div className="receipt-bold uppercase text-[10px] mb-1.5 pb-0.5 border-b border-zinc-300">
+              Offers
             </div>
+            {offerItems.map((item, idx) =>
+              renderReceiptItem(item, `offer-${idx}`),
+            )}
           </div>
-        ))}
+        ) : null}
       </div>
 
       <div className="receipt-divider" />
@@ -180,6 +211,13 @@ const CustomerReceipt = ({
           />
         )}
         {hstAmount > 0 && <Row label="HST" value={money(hstAmount)} muted />}
+        {serviceCharge > 0 && (
+          <Row
+            label={serviceChargeName || "Server Charge"}
+            value={money(serviceCharge)}
+            muted
+          />
+        )}
         {tip > 0 && <Row label={tipLabel} value={money(tip)} muted />}
       </div>
 

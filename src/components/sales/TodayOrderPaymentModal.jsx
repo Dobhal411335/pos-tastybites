@@ -86,12 +86,16 @@ export default function TodayOrderPaymentModal({
 
   const subtotal = Number(order?.subTotal || 0);
   const totalTax = Number(order?.taxTotal || 0);
+  const serviceChargeTotal = Number(order?.serviceChargeTotal || 0);
   const discountAmount = appliedDiscount
     ? appliedDiscount.type === "%"
       ? (subtotal * appliedDiscount.value) / 100
       : Math.min(Number(appliedDiscount.value) || 0, subtotal)
     : 0;
-  const total = Math.max(0, subtotal - discountAmount + totalTax);
+  const total = Math.max(
+    0,
+    subtotal - discountAmount + totalTax + serviceChargeTotal,
+  );
 
   // Amounts already committed when switching via "Rest with …"
   const lockedCard = round2(Math.max(0, lockedCardAmount));
@@ -418,6 +422,8 @@ export default function TodayOrderPaymentModal({
         guestCount: order.guestCount ?? null,
         cashAmount: resolvedCashAmount,
         cardAmount: resolvedCardAmount,
+        serviceChargeTotal,
+        serviceChargeName: order?.serviceChargeName || null,
       };
 
       if (resolvedCardAmount > 0) {
@@ -470,6 +476,10 @@ export default function TodayOrderPaymentModal({
           totalAmount: paidOrder.totalAmount ?? total,
           subTotal: paidOrder.subTotal ?? subtotal,
           taxTotal: paidOrder.taxTotal ?? totalTax,
+          serviceChargeTotal:
+            paidOrder.serviceChargeTotal ?? serviceChargeTotal,
+          serviceChargeName:
+            paidOrder.serviceChargeName ?? order?.serviceChargeName ?? null,
           giftcardCode:
             paidOrder.giftcardCode ??
             (giftCardUsedAmount > 0
@@ -599,6 +609,16 @@ export default function TodayOrderPaymentModal({
                         ${totalTax.toFixed(2)}
                       </span>
                     </div>
+                    {serviceChargeTotal > 0 && (
+                      <div className="flex justify-between text-sm font-semibold text-zinc-500">
+                        <span>
+                          {order?.serviceChargeName || "Server Charge"}
+                        </span>
+                        <span className="text-zinc-900">
+                          ${serviceChargeTotal.toFixed(2)}
+                        </span>
+                      </div>
+                    )}
                     {discountAmount > 0 && (
                       <div className="flex justify-between text-sm font-semibold text-green-600">
                         <span>

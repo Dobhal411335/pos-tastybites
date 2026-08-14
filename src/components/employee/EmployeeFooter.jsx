@@ -7,8 +7,10 @@ import { usePathname } from "next/navigation";
 
 export const EmployeeFooter = () => {
   const pathname = usePathname();
-  const isSalesPos = pathname?.startsWith("/sales");
-  const isFloorPage = pathname === "/sales/floor";
+  const isSalesPos = pathname?.startsWith("/sales") || pathname === "/floor" || pathname === "/today";
+  // sales.localhost/floor rewrites to /sales/floor; pathname stays /floor in the browser
+  const isFloorPage = pathname === "/sales/floor" || pathname === "/floor";
+  const floorHref = pathname?.startsWith("/sales") ? "/sales/floor" : "/floor";
 
   // Floor page already has top nav + floor actions — hide redundant chrome
   if (isFloorPage) {
@@ -35,7 +37,7 @@ export const EmployeeFooter = () => {
             size="sm"
             className="h-9 rounded-lg text-xs hover:bg-orange-500 hover:text-white"
           >
-            <Link href="/sales/floor">
+            <Link href={floorHref}>
               <Grid className="mr-1.5 h-3.5 w-3.5" />
               Back to Floor
             </Link>
