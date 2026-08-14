@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { withAuth } from "@/utils/auth";
 import { expireAllRestaurantSessions } from "@/lib/employeeSession";
 import { createNotification } from "@/lib/notifications/notificationService";
+import { clearEmployeeAuthCookies } from "@/lib/employeeAuthCookies";
 
 const closeRestaurantHandler = async (request) => {
   try {
@@ -47,15 +48,7 @@ const closeRestaurantHandler = async (request) => {
       data: { expiredSessionCount: count },
     });
 
-    const clearOpts = {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
-      path: "/",
-      maxAge: 0,
-    };
-    response.cookies.set("employee_access_token", "", clearOpts);
-    response.cookies.set("employee_refresh_token", "", clearOpts);
+    clearEmployeeAuthCookies(response);
     return response;
   } catch (error) {
     console.error("Close Restaurant Error:", error);

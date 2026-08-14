@@ -107,13 +107,15 @@ export async function proxy(request) {
         : NextResponse.next({ request: { headers: requestHeaders } });
     }
   } else if (isAuthPage || targetPath === '/sales/login') {
+    // Only bounce away from login when the ACCESS token is still valid.
+    // A leftover refresh cookie must not trap staff on /floor after the session dies.
     if (isSales && (adminPayload || employeePayload)) {
       response = NextResponse.redirect(new URL('/floor', request.url));
     } else if (isPos && adminPayload) {
       response = NextResponse.redirect(new URL('/admin/dashboard', request.url));
     } else if (adminPayload) {
       response = NextResponse.redirect(new URL('/admin/dashboard', request.url));
-    } else if (employeePayload || employeeRefreshValid) {
+    } else if (employeePayload) {
       response = NextResponse.redirect(new URL('/sales/floor', request.url));
     } else {
       response = targetPath !== pathname

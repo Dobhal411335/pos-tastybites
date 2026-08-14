@@ -10,6 +10,10 @@ import { comparePassword } from '@/utils/password';
 import { signToken, verifyToken } from '@/utils/jwt';
 import { upsertAttendanceOnClockIn } from '@/lib/attendance';
 import { createNotification } from '@/lib/notifications/notificationService';
+import {
+  setEmployeeAccessCookie,
+  setEmployeeRefreshCookie,
+} from '@/lib/employeeAuthCookies';
 
 export async function POST(request) {
   try {
@@ -231,6 +235,19 @@ export async function POST(request) {
       return NextResponse.json({ success: false, message: 'You are not scheduled to work at this current time.' }, { status: 403 });
     }
 
+    const previousActive = await EmployeeSession.find({
+      employee: employee._id,
+      status: 'Active',
+    });
+    const replacedAt = new Date();
+    for (const prev of previousActive) {
+      const loginMs = prev.loginTime ? new Date(prev.loginTime).getTime() : replacedAt.getTime();
+      prev.logoutTime = replacedAt;
+      prev.duration = Math.max(0, Math.floor((replacedAt.getTime() - loginMs) / 1000));
+      prev.status = 'Expired';
+      await prev.save();
+    }
+
     const session = await EmployeeSession.create({
       employee: employee._id,
       restaurant: employee.restaurant,
@@ -294,21 +311,8 @@ export async function POST(request) {
       }
     });
 
-    response.cookies.set('employee_access_token', accessToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      path: '/',
-      maxAge: 3600
-    });
-
-    response.cookies.set('employee_refresh_token', refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      path: '/',
-      maxAge: 604800
-    });
+    setEmployeeAccessCookie(response, accessToken);
+    setEmployeeRefreshCookie(response, refreshToken);
 
     return response;
   } catch (error) {

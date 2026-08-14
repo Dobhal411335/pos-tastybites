@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { useRouter, usePathname } from "next/navigation";
+import { usePathname } from "next/navigation";
 import EmployeeTopNav from "@/components/employee/EmployeeTopNav";
 import { Loader2 } from "lucide-react";
 import { EmployeeFooter } from "@/components/employee/EmployeeFooter";
@@ -12,7 +12,6 @@ import { useEmployeeSessionRefresh } from "@/hooks/useEmployeeSessionRefresh";
 import NotificationSoundPrompt from "@/components/common/NotificationSoundPrompt";
 
 export default function SalesMainLayout({ children }) {
-  const router = useRouter();
   const pathname = usePathname();
   const isLoginPage = pathname === "/sales/login" || pathname === "/login";
   const isFloorPage = pathname === "/sales/floor" || pathname === "/floor";
@@ -39,13 +38,13 @@ export default function SalesMainLayout({ children }) {
           throw new Error("Unauthorized");
         }
       } catch (err) {
-        router.replace("/login");
+        window.location.assign("/login");
       } finally {
         setLoading(false);
       }
     };
     verifyAuth();
-  }, [router, pathname, isLoginPage]);
+  }, [pathname, isLoginPage]);
 
   if (isLoginPage) {
     return children;

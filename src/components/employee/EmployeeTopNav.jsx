@@ -72,8 +72,9 @@ export default function EmployeeTopNav({
     try {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 8000);
-      const res = await employeeFetch("/api/employee/auth/logout", {
+      const res = await fetch("/api/employee/auth/logout", {
         method: "POST",
+        credentials: "include",
         signal: controller.signal,
       });
       clearTimeout(timeout);

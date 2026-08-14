@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect } from "react";
 import Image from "next/image";
-import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { Lock, Loader2, ArrowRight, Eye, EyeOff, UserCircle } from "lucide-react";
 import LoginNotificationBell from "@/components/auth/LoginNotificationBell";
@@ -22,7 +21,6 @@ import {
 } from "@/components/ui/dialog";
 
 export default function SalesLoginPage() {
-  const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [rememberDevice, setRememberDevice] = useState(() => {
@@ -55,11 +53,8 @@ export default function SalesLoginPage() {
   }, [setValue]);
 
   const redirectAfterLogin = () => {
-    if (window.location.hostname.includes("sales")) {
-      router.push("/floor");
-    } else {
-      router.push("/sales/floor");
-    }
+    const onSalesHost = window.location.hostname.includes("sales");
+    window.location.assign(onSalesHost ? "/floor" : "/sales/floor");
   };
 
   const onEmployeeSubmit = async (data) => {

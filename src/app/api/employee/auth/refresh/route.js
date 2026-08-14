@@ -2,6 +2,10 @@ import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import connectDB from '@/lib/db';
 import { refreshEmployeeAccessToken } from '@/lib/employeeSession';
+import {
+  clearEmployeeAuthCookies,
+  setEmployeeAccessCookie,
+} from '@/lib/employeeAuthCookies';
 
 export async function POST() {
   try {
@@ -16,35 +20,17 @@ export async function POST() {
         { success: false, message: result.message },
         { status: result.status }
       );
-
-      if (result.expireSession) {
-        const clearOpts = {
-          httpOnly: true,
-          secure: process.env.NODE_ENV === 'production',
-          sameSite: 'strict',
-          path: '/',
-          maxAge: 0,
-        };
-        response.cookies.set('employee_access_token', '', clearOpts);
-        response.cookies.set('employee_refresh_token', '', clearOpts);
-      }
-
+      clearEmployeeAuthCookies(response);
       return response;
     }
 
     const response = NextResponse.json({ success: true, message: 'Token refreshed successfully' });
-
-    response.cookies.set('employee_access_token', result.accessToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      path: '/',
-      maxAge: 3600,
-    });
-
+    setEmployeeAccessCookie(response, result.accessToken);
     return response;
   } catch (error) {
     console.error('Refresh Token Error:', error);
-    return NextResponse.json({ success: false, message: 'Internal Server Error' }, { status: 500 });
+    const response = NextResponse.json({ success: false, message: 'Internal Server Error' }, { status: 500 });
+    clearEmployeeAuthCookies(response);
+    return response;
   }
 }

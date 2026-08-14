@@ -4,6 +4,7 @@ import Employee from '@/models/employee/Employee';
 import RegisteredDevice from '@/models/RegisteredDevice';
 import { comparePassword } from '@/utils/password';
 import { signToken } from '@/utils/jwt';
+import { setDeviceTokenCookie } from '@/lib/employeeAuthCookies';
 
 export async function POST(request) {
   try {
@@ -71,12 +72,7 @@ export async function POST(request) {
       message: 'Device activated successfully'
     });
 
-    response.cookies.set('device_token', deviceToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 365 * 24 * 60 * 60 // 1 year
-    });
+    setDeviceTokenCookie(response, deviceToken);
 
     return response;
   } catch (error) {

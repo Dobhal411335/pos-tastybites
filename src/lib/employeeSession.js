@@ -74,13 +74,13 @@ export async function refreshEmployeeAccessToken(refreshToken) {
 
   const payload = await verifyToken(refreshToken);
   if (!payload || payload.type !== 'refresh') {
-    await expireSessionFromRefreshToken(refreshToken);
+    // Do not expire the DB session from an unverified token (e.g. JWT_SECRET mismatch after deploy).
     return { ok: false, status: 401, message: 'Invalid or expired refresh token', expireSession: true };
   }
 
   const session = await EmployeeSession.findById(payload.sessionId);
   if (!session || session.status !== 'Active') {
-    return { ok: false, status: 401, message: 'Session expired or terminated', expireSession: false };
+    return { ok: false, status: 401, message: 'Session expired or terminated', expireSession: true };
   }
 
   const employee = await Employee.findById(payload.employeeId);
