@@ -23,7 +23,9 @@ export const GET = withAuth(async (request) => {
     }
 
     // 2. Determine which floor to load tables for
-    const activeFloorId = floorId || floors[0]._id.toString();
+    const requestedId = floorId ? String(floorId) : "";
+    const matchedFloor = floors.find((f) => f._id.toString() === requestedId);
+    const activeFloorId = (matchedFloor || floors[0])._id.toString();
 
     const tables = await Table.find({ floor: activeFloorId, restaurant: request.restaurant }).lean();
 
@@ -48,7 +50,7 @@ export const GET = withAuth(async (request) => {
 
     const result = {
       floors: floors.map((f) => ({
-        id: f._id,
+        id: f._id.toString(),
         name: f.name,
         width: f.width,
         height: f.height,

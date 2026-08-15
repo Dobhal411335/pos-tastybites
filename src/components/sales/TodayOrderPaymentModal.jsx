@@ -24,6 +24,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
+import { buildStaffDiscountState } from "@/lib/orders/staffDiscount";
 
 const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 
@@ -71,6 +72,10 @@ export default function TodayOrderPaymentModal({
   const [lockedCardAmount, setLockedCardAmount] = useState(0);
   const [lockedCashAmount, setLockedCashAmount] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [staffDiscountEmployee, setStaffDiscountEmployee] = useState(null);
+  const [staffDiscountLoading, setStaffDiscountLoading] = useState(false);
+
+  const isStaffOrder = order?.source === "STAFF";
 
   const isGuestControlled = guestNameProp !== undefined;
   const guestName = isGuestControlled ? guestNameProp : internalGuestName;
@@ -185,7 +190,7 @@ export default function TodayOrderPaymentModal({
   };
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || isStaffOrder) return;
     const loadDiscounts = async () => {
       try {
         const res = await fetch("/api/orders/discount");
@@ -196,22 +201,13 @@ export default function TodayOrderPaymentModal({
       }
     };
     loadDiscounts();
-  }, [open]);
+  }, [open, isStaffOrder]);
 
   useEffect(() => {
     if (!open || !order) return;
 
     setPaymentMethod("Card");
     setDiscountCode("");
-    setAppliedDiscount(
-      order.discountCode && Number(order.discountTotal || 0) > 0
-        ? {
-            code: order.discountCode,
-            value: Number(order.discountTotal),
-            type: "$",
-          }
-        : null,
-    );
     setGiftCardCode("");
     setGiftCardBalance(null);
     setGiftCardDetails(null);
@@ -224,10 +220,56 @@ export default function TodayOrderPaymentModal({
     setLockedCardAmount(0);
     setLockedCashAmount(0);
     setIsSubmitting(false);
+    setStaffDiscountEmployee(null);
+    setStaffDiscountLoading(false);
 
     if (!isGuestControlled) {
       setInternalGuestName(order.partyName || order.guestName || "");
     }
+
+    if (order.source === "STAFF") {
+      const staffId = String(order.staffFor?._id || order.staffFor || "");
+      setAppliedDiscount(
+        Number(order.discountTotal || 0) > 0
+          ? {
+              code: "STAFF",
+              value: Number(order.discountTotal),
+              type: "$",
+            }
+          : null,
+      );
+      setStaffDiscountLoading(true);
+      const applyStaffDiscount = async () => {
+        try {
+          const res = await fetch("/api/sales/employees");
+          const json = await res.json();
+          const employees = json.success ? json.data || [] : [];
+          const emp = employees.find(
+            (e) => String(e.id || e._id) === staffId,
+          );
+          setStaffDiscountEmployee(emp || null);
+          setAppliedDiscount(
+            buildStaffDiscountState(emp?.staffDiscount, emp?.name),
+          );
+        } catch {
+          setStaffDiscountEmployee(null);
+        } finally {
+          setStaffDiscountLoading(false);
+        }
+      };
+      applyStaffDiscount();
+      return;
+    }
+
+    setAppliedDiscount(
+      order.discountCode && Number(order.discountTotal || 0) > 0
+        ? {
+            code: order.discountCode,
+            value: Number(order.discountTotal),
+            type: "$",
+          }
+        : null,
+    );
   }, [open, order?._id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!open || !order) return null;
@@ -523,6 +565,7 @@ export default function TodayOrderPaymentModal({
 
   const completeDisabled =
     isSubmitting ||
+    staffDiscountLoading ||
     (paymentMethod === "GiftCard" && giftCardBalance === null) ||
     (paymentMethod === "GiftCard" && remainingAfterGift > 0) ||
     (paymentMethod === "Cash" && cardSplitFromCash > 0) ||
@@ -618,9 +661,11 @@ export default function TodayOrderPaymentModal({
                       <div className="flex justify-between text-sm font-semibold text-green-600">
                         <span>
                           Discount
-                          {appliedDiscount?.code
-                            ? ` (${appliedDiscount.code})`
-                            : ""}
+                          {appliedDiscount?.label
+                            ? ` (${appliedDiscount.label})`
+                            : appliedDiscount?.code
+                              ? ` (${appliedDiscount.code})`
+                              : ""}
                         </span>
                         <span>-${discountAmount.toFixed(2)}</span>
                       </div>
@@ -639,9 +684,35 @@ export default function TodayOrderPaymentModal({
 
                 <div className="space-y-2">
                   <p className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider">
-                    Apply Discount
+                    {isStaffOrder ? "Staff Discount" : "Apply Discount"}
                   </p>
-                  {appliedDiscount ? (
+                  {isStaffOrder ? (
+                    appliedDiscount ? (
+                      <div className="bg-green-50 border border-green-200 rounded-xl p-4">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <CheckCircle2 className="w-5 h-5 text-green-600 shrink-0" />
+                          <div className="min-w-0">
+                            <p className="text-sm font-black text-green-900 truncate">
+                              {appliedDiscount.label || appliedDiscount.code}
+                            </p>
+                            <p className="text-sm font-bold text-green-700">
+                              {appliedDiscount.type === "%"
+                                ? `${appliedDiscount.value}% off · -$${discountAmount.toFixed(2)}`
+                                : `-$${discountAmount.toFixed(2)}`}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="bg-zinc-50 border border-zinc-200 rounded-xl p-4">
+                        <p className="text-sm font-semibold text-zinc-700">
+                          {staffDiscountEmployee
+                            ? `No staff discount assigned to ${staffDiscountEmployee.name}`
+                            : "Staff discount applies to the employee this order is for"}
+                        </p>
+                      </div>
+                    )
+                  ) : appliedDiscount ? (
                     <div className="bg-green-50 border border-green-200 rounded-xl p-4 space-y-3">
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex items-center gap-2 min-w-0">

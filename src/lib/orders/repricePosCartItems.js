@@ -4,6 +4,11 @@ import Offer from "@/models/menu/Offer";
 import Tax from "@/models/tax/Tax";
 import ServiceTax from "@/models/tax/ServiceTax";
 import Coupon from "@/models/menu/Coupon";
+import {
+  STAFF_DISCOUNT_CODE,
+  calcStaffDiscountAmount,
+  normalizeStaffDiscountPercent,
+} from "@/lib/orders/staffDiscount";
 
 const r2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 
@@ -114,6 +119,7 @@ export async function repricePosCartItems({
   restaurantId,
   items,
   discountCode = null,
+  staffDiscountPercent = null,
 }) {
   if (!Array.isArray(items) || items.length === 0) {
     const err = new Error("Cart cannot be empty");
@@ -324,7 +330,14 @@ export async function repricePosCartItems({
 
   let discountTotal = 0;
   let resolvedDiscountCode = null;
-  if (discountCode) {
+  const staffPercent = normalizeStaffDiscountPercent(staffDiscountPercent);
+  if (staffPercent > 0) {
+    discountTotal = Math.min(
+      calcStaffDiscountAmount(subTotal, staffPercent),
+      subTotal,
+    );
+    resolvedDiscountCode = STAFF_DISCOUNT_CODE;
+  } else if (discountCode) {
     const code = String(discountCode).trim().toUpperCase();
     const coupon = await Coupon.findOne({
       restaurant: restaurantId,

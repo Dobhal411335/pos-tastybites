@@ -1,7 +1,7 @@
 import React from "react";
 import "./print.css";
 import moment from "moment";
-import { isDirectSaleOrder } from "@/utils/orderDisplay";
+import { isDirectSaleOrder, formatTableLocation } from "@/utils/orderDisplay";
 
 function isStyleOption(opt, preparationStyle) {
   const value = String(opt || "").trim();
@@ -30,6 +30,10 @@ const BarReceipt = ({
   if (!order || !items.length) return null;
 
   const { orderNumber, tableNo, guestName, partyName, createdAt } = order;
+  const tableLabel = formatTableLocation(
+    tableNo,
+    order.floorName || order.floor?.name,
+  );
   const note = specialNote || order.specialNote;
   const partyLabel = partyName || guestName || (isDirectSaleOrder(order) ? "Walk-in" : "");
   const directSale = isDirectSaleOrder(order);
@@ -68,7 +72,7 @@ const BarReceipt = ({
         )}
         {!directSale && (
           <div className="receipt-bold uppercase">
-            Table: {tableNo || "Takeaway"}
+            Table: {tableLabel || "Takeaway"}
           </div>
         )}
       </div>
@@ -80,9 +84,9 @@ const BarReceipt = ({
           <span className="receipt-bold">Sent:</span>{" "}
           {moment(createdAt || undefined).format("MMM DD, YYYY [at] hh:mm A")}
         </div>
-        {!directSale && tableNo && (
+        {!directSale && tableLabel && (
           <div>
-            <span className="receipt-bold">Table:</span> {tableNo}
+            <span className="receipt-bold">Table:</span> {tableLabel}
             {covers != null ? `, ${covers} Cover${covers === 1 ? "" : "s"}` : ""}
           </div>
         )}

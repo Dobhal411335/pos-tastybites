@@ -46,7 +46,16 @@ export const GET = withAuth(async (request) => {
       return sendError(new Error("Not Found"), "Session not found", 404);
     }
 
-    return sendSuccess(sessionId ? sessions[0] : sessions, "Sessions retrieved successfully");
+    const withFloorId = sessions.map((session) => ({
+      ...session,
+      floorId: String(session.floor?._id || session.floor || ""),
+      floorName: session.floor?.name || session.floorName || null,
+    }));
+
+    return sendSuccess(
+      sessionId ? withFloorId[0] : withFloorId,
+      "Sessions retrieved successfully",
+    );
   } catch (error) {
     logger.error("Failed to retrieve sessions", error);
     return sendError(error, "Failed to retrieve sessions", 500);

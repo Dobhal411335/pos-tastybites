@@ -1,6 +1,34 @@
+export function resolveDocumentId(value) {
+  if (value == null || value === "") return null;
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed || trimmed === "[object Object]") return null;
+    return trimmed;
+  }
+  if (typeof value === "object") {
+    return (
+      resolveDocumentId(value._id) ||
+      resolveDocumentId(value.id) ||
+      resolveDocumentId(value.$oid)
+    );
+  }
+  const asString = String(value);
+  if (!asString || asString === "[object Object]") return null;
+  return asString;
+}
+
 export function isDirectSaleOrder(order) {
   const source = order?.source;
   return source === "WALK_IN" || source === "STAFF";
+}
+
+export function formatTableLocation(tableNo, floorName) {
+  const table = String(tableNo || "").trim();
+  const floor = String(floorName || "").trim();
+  if (!table) return floor;
+  if (!floor) return table;
+  if (table.toLowerCase().includes(floor.toLowerCase())) return table;
+  return `${table} · ${floor}`;
 }
 
 export function shouldShowTable(order) {
@@ -48,7 +76,9 @@ export function getOrderLocationLabel(order) {
   if (order?.source === "STAFF") {
     return order?.partyName || order?.guestName || "Staff";
   }
-  if (order?.tableNo) return order.tableNo;
+  if (order?.tableNo) {
+    return formatTableLocation(order.tableNo, order.floorName || order.floor?.name);
+  }
   if (order?.tableSession) return "Table";
   return "Takeaway";
 }

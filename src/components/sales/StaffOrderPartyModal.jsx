@@ -63,6 +63,9 @@ export default function StaffOrderPartyModal({
                   <SelectItem key={emp.id || emp._id} value={String(emp.id || emp._id)}>
                     {emp.name}
                     {emp.role ? ` · ${emp.role}` : ""}
+                    {Number(emp.staffDiscount) > 0
+                      ? ` · ${Number(emp.staffDiscount)}% off`
+                      : ""}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -70,8 +73,20 @@ export default function StaffOrderPartyModal({
           </div>
 
           {selectedName && (
-            <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-3 text-sm font-semibold text-indigo-900">
-              Order for: <span className="font-black">{selectedName}</span>
+            <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-3 text-sm font-semibold text-indigo-900 space-y-1">
+              <p>
+                Order for: <span className="font-black">{selectedName}</span>
+              </p>
+              {Number(selectedEmployee?.staffDiscount) > 0 ? (
+                <p className="text-green-800 font-bold">
+                  Staff discount: {Number(selectedEmployee.staffDiscount)}% off
+                  will apply automatically
+                </p>
+              ) : (
+                <p className="text-indigo-700 font-medium">
+                  No staff discount assigned to this employee
+                </p>
+              )}
             </div>
           )}
 

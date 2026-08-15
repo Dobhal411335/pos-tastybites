@@ -11,7 +11,9 @@ import OperationalAuditLog from "@/models/OperationalAuditLog";
 import { createKotPrintJob, createBarReceiptPrintJob } from "@/lib/printing/printJobService";
 import { createNotification } from "@/lib/notifications/notificationService";
 import Table from "@/models/floor/Table";
+import Floor from "@/models/floor/Floor";
 import { repricePosCartItems } from "@/lib/orders/repricePosCartItems";
+import { formatTableLocation } from "@/utils/orderDisplay";
 
 function normalizeProductType(value) {
   return String(value || "").toUpperCase() === "BAR" ? "BAR" : "KITCHEN";
@@ -45,27 +47,42 @@ async function enrichOrdersWithProcessedBy(orders) {
     ),
   ];
 
-  if (ids.length === 0) {
-    return orders.map((order) => ({
-      ...order,
-      processedByName: null,
-      processedByRole: null,
-    }));
-  }
+  const floorIds = [
+    ...new Set(
+      orders
+        .map((o) => o.floor)
+        .filter(Boolean)
+        .map((id) => String(id?._id || id))
+    ),
+  ];
 
-  const employees = await Employee.find({ _id: { $in: ids } })
-    .select("firstName lastName name role")
-    .lean();
+  const [employees, floors] = await Promise.all([
+    ids.length
+      ? Employee.find({ _id: { $in: ids } })
+          .select("firstName lastName name role")
+          .lean()
+      : [],
+    floorIds.length
+      ? Floor.find({ _id: { $in: floorIds } }).select("name").lean()
+      : [],
+  ]);
   const empMap = new Map(employees.map((e) => [String(e._id), e]));
+  const floorMap = new Map(floors.map((f) => [String(f._id), f.name]));
 
   return orders.map((order) => {
     const rawId = order.processedBy ? String(order.processedBy._id || order.processedBy) : null;
     const emp = rawId ? empMap.get(rawId) : null;
+    const floorName =
+      order.floor?.name ||
+      floorMap.get(String(order.floor?._id || order.floor)) ||
+      null;
 
     return {
       ...order,
       processedByName: formatPersonName(emp),
       processedByRole: emp?.role || null,
+      floorName,
+      tableNo: formatTableLocation(order.tableNo, floorName),
     };
   });
 }
@@ -167,13 +184,32 @@ export const POST = withAuth(async (request) => {
     }
 
     const employeeId = request.user.id;
+    const orderSource = ["WALK_IN", "STAFF", "POS", "ONLINE"].includes(data.source)
+      ? data.source
+      : "POS";
+
+    let staffMember = null;
+    if (orderSource === "STAFF") {
+      const staffForId = data.staffForId;
+      if (!staffForId) {
+        return sendError(new Error("Staff ID missing"), "Please select a staff member", 400);
+      }
+      staffMember = await Employee.findOne({
+        _id: staffForId,
+        restaurant: request.restaurant,
+      });
+      if (!staffMember) {
+        return sendError(new Error("Invalid Staff"), "Selected staff member not found", 404);
+      }
+    }
 
     let priced;
     try {
       priced = await repricePosCartItems({
         restaurantId: request.restaurant,
         items,
-        discountCode: data.discountCode || null,
+        discountCode: orderSource === "STAFF" ? null : (data.discountCode || null),
+        staffDiscountPercent: staffMember?.staffDiscount,
       });
     } catch (priceErr) {
       return sendError(
@@ -203,23 +239,12 @@ export const POST = withAuth(async (request) => {
         : "POS";
 
       let directPartyName = resolvedPartyName;
-      let staffFor = null;
+      let staffFor = staffMember?._id || null;
       let staffOrderReason = data.staffOrderReason?.trim() || null;
 
       if (orderSource === "WALK_IN") {
         directPartyName = (partyName || guestName || "").trim() || "Walk-in";
       } else if (orderSource === "STAFF") {
-        const staffForId = data.staffForId;
-        if (!staffForId) {
-          return sendError(new Error("Staff ID missing"), "Please select a staff member", 400);
-        }
-        const staffMember = await Employee.findOne({
-          _id: staffForId,
-          restaurant: request.restaurant,
-        });
-        if (!staffMember) {
-          return sendError(new Error("Invalid Staff"), "Selected staff member not found", 404);
-        }
         staffFor = staffMember._id;
         directPartyName = formatPersonName(staffMember);
       }
@@ -392,7 +417,9 @@ export const POST = withAuth(async (request) => {
     const session = await TableSession.findOne({
       _id: sessionId,
       restaurant: request.restaurant,
-    }).populate("primaryTable");
+    })
+      .populate("primaryTable")
+      .populate("floor", "name");
     if (!session || !session.isSessionOpen) {
       return sendError(new Error("Invalid Session"), "Table session is invalid or closed", 400);
     }
@@ -430,6 +457,11 @@ export const POST = withAuth(async (request) => {
       order.discountCode = discountCode || null;
       order.totalAmount = totalAmount;
       order.specialNote = specialNote;
+      order.floor = session.floor?._id || session.floor || order.floor;
+      order.tableNo = formatTableLocation(
+        session.primaryTable?.tableNumber || order.tableNo,
+        session.floor?.name,
+      );
       if (resolvedPartyName !== null || partyName !== undefined || guestName !== undefined) {
         order.guestName = resolvedPartyName;
         order.partyName = resolvedPartyName;
@@ -467,7 +499,10 @@ export const POST = withAuth(async (request) => {
       });
 
       const serverName = await resolveServerName(employeeId);
-      const tableNo = session.primaryTable?.tableNumber;
+      const tableNo = formatTableLocation(
+        session.primaryTable?.tableNumber,
+        session.floor?.name,
+      );
       if (kotPayload.length > 0) {
         await notifyOrderEvent({
           type: "ORDER_UPDATED",
@@ -525,8 +560,11 @@ export const POST = withAuth(async (request) => {
         // Session links
         tableSession: sessionId,
         table: session.primaryTable._id,
-        floor: session.floor,
-        tableNo: session.primaryTable.tableNumber, // For legacy compatibility
+        floor: session.floor?._id || session.floor,
+        tableNo: formatTableLocation(
+          session.primaryTable.tableNumber,
+          session.floor?.name,
+        ),
         guestName: resolvedPartyName,
         partyName: resolvedPartyName,
         guestCount: Number.isFinite(resolvedGuestCount)
@@ -567,7 +605,10 @@ export const POST = withAuth(async (request) => {
       });
 
       const serverName = await resolveServerName(employeeId);
-      const tableNo = session.primaryTable?.tableNumber;
+      const tableNo = formatTableLocation(
+        session.primaryTable?.tableNumber,
+        session.floor?.name,
+      );
       await notifyOrderEvent({
         type: "NEW_ORDER",
         order: newOrder,
@@ -628,7 +669,8 @@ export const GET = withAuth(async (request) => {
         status: { $in: ["PENDING", "CONFIRMED"] },
       }).lean();
 
-      return sendSuccess(order, "Direct order retrieved");
+      const [enriched] = order ? await enrichOrdersWithProcessedBy([order]) : [null];
+      return sendSuccess(enriched, "Direct order retrieved");
     }
 
     if (sessionId) {
@@ -638,7 +680,8 @@ export const GET = withAuth(async (request) => {
         status: { $in: ["PENDING", "CONFIRMED"] }
       }).lean();
       
-      return sendSuccess(order, "Session order retrieved");
+      const [enriched] = order ? await enrichOrdersWithProcessedBy([order]) : [null];
+      return sendSuccess(enriched, "Session order retrieved");
     }
 
     // Default: Get recent employee orders; today=true returns all restaurant orders for the day

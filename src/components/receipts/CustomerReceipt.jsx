@@ -2,7 +2,7 @@ import React from "react";
 import "./print.css";
 import moment from "moment";
 import { isOfferItem, getOfferDetailLines } from "@/utils/offerDetails";
-import { shouldShowTable } from "@/utils/orderDisplay";
+import { shouldShowTable, formatTableLocation } from "@/utils/orderDisplay";
 
 const money = (n) => `$${(Number(n) || 0).toFixed(2)}`;
 
@@ -49,6 +49,8 @@ const CustomerReceipt = ({
     createdAt,
   } = order;
   const partyLabel = order.partyName || guestName;
+  const floorName = order.floorName || order.floor?.name;
+  const tableLabel = formatTableLocation(tableNo, floorName);
 
   const restName = restaurantDetails?.name || "TASTY BITES";
   const restAddress =
@@ -165,7 +167,7 @@ const CustomerReceipt = ({
           {shouldShowTable(order) && (
             <span>
               <span className="text-zinc-500">Table:</span>{" "}
-              <span className="receipt-bold">{tableNo}</span>
+              <span className="receipt-bold">{tableLabel}</span>
             </span>
           )}
         </div>
@@ -208,7 +210,12 @@ const CustomerReceipt = ({
         <Row label="Subtotal" value={money(subTotal)} muted />
         {discount > 0 && (
           <Row
-            label="Discount"
+            label={
+              order.source === "STAFF" ||
+              String(discountCode || "").toUpperCase() === "STAFF"
+                ? "Staff Discount"
+                : "Discount"
+            }
             value={`-${money(discount).slice(1)}`}
             muted
           />

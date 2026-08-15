@@ -11,6 +11,11 @@ import { createReceiptPrintJob } from "@/lib/printing/printJobService";
 import { createNotification } from "@/lib/notifications/notificationService";
 import { buildTaxBreakdownForOrder } from "@/lib/eod/buildTaxBreakdown";
 import { redeemGiftCardAtomic } from "@/lib/giftcards/redeemGiftCardAtomic";
+import {
+  STAFF_DISCOUNT_CODE,
+  calcStaffDiscountAmount,
+  normalizeStaffDiscountPercent,
+} from "@/lib/orders/staffDiscount";
 
 const r2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 
@@ -100,19 +105,35 @@ export const POST = withAuth(async (request) => {
         (Number(workingServiceCharge) || 0),
     );
 
-    if (discountTotal !== undefined && discountTotal !== null) {
-      const incomingDiscount = r2(discountTotal);
-      if (incomingDiscount < 0 || incomingDiscount > orderCeiling + 0.01) {
-        return sendError(
-          new Error("Invalid Discount"),
-          "Discount amount is invalid for this order",
-          400,
-        );
+    if (order.source === "STAFF" && order.staffFor) {
+      const staff = await Employee.findOne({
+        _id: order.staffFor,
+        restaurant: request.restaurant,
+      }).select("staffDiscount");
+      const staffPercent = normalizeStaffDiscountPercent(staff?.staffDiscount);
+      const staffDiscountTotal = calcStaffDiscountAmount(
+        order.subTotal,
+        staffPercent,
+      );
+      order.discountTotal = staffDiscountTotal;
+      order.discountCode = staffDiscountTotal > 0 ? STAFF_DISCOUNT_CODE : null;
+    } else {
+      if (discountTotal !== undefined && discountTotal !== null) {
+        const incomingDiscount = r2(discountTotal);
+        if (incomingDiscount < 0 || incomingDiscount > orderCeiling + 0.01) {
+          return sendError(
+            new Error("Invalid Discount"),
+            "Discount amount is invalid for this order",
+            400,
+          );
+        }
+        order.discountTotal = incomingDiscount;
       }
-      order.discountTotal = incomingDiscount;
-    }
-    if (discountCode !== undefined) {
-      order.discountCode = discountCode ? String(discountCode).trim().toUpperCase() : null;
+      if (discountCode !== undefined) {
+        order.discountCode = discountCode
+          ? String(discountCode).trim().toUpperCase()
+          : null;
+      }
     }
 
     order.totalAmount = r2(

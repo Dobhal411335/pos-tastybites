@@ -47,6 +47,8 @@ import PrintPreviewModal from "@/components/receipts/PrintPreviewModal";
 import TodayOrderPaymentModal from "@/components/sales/TodayOrderPaymentModal";
 import StaffOrderPartyModal from "@/components/sales/StaffOrderPartyModal";
 import { useAuth } from "@/components/providers/AuthProvider";
+import { buildStaffDiscountState } from "@/lib/orders/staffDiscount";
+import { formatTableLocation, resolveDocumentId } from "@/utils/orderDisplay";
 import {
   OFFER_CATEGORY,
   isOfferItem,
@@ -54,6 +56,18 @@ import {
   getOfferDetailLines,
   buildOfferOptions,
 } from "@/utils/offerDetails";
+
+function persistSalesFloorId(floorId) {
+  const id = resolveDocumentId(floorId);
+  if (!id) return null;
+  try {
+    window.localStorage.setItem("sales-active-floor-id", id);
+    window.sessionStorage.setItem("sales-active-floor-id", id);
+  } catch {
+    /* ignore */
+  }
+  return id;
+}
 
 function getCartFingerprint(items) {
   return (items || [])
@@ -184,6 +198,7 @@ export default function OrderPage() {
   const [kotCartFingerprint, setKotCartFingerprint] = useState(null);
   const [isReleaseModalOpen, setIsReleaseModalOpen] = useState(false);
   const [isReleasingTable, setIsReleasingTable] = useState(false);
+  const sessionFloorIdRef = useRef(null);
 
   // View States
   const [viewMode, setViewMode] = useState("grid"); // 'grid' | 'list'
@@ -309,10 +324,17 @@ export default function OrderPage() {
               currentSession.floor?.name ||
               currentSession.floorName ||
               null;
+            const sessionFloorId = persistSalesFloorId(
+              currentSession.floorId ||
+                currentSession.floor?._id ||
+                currentSession.floor,
+            );
+            if (sessionFloorId) sessionFloorIdRef.current = sessionFloorId;
             setSessionData({
               ...currentSession,
               tableNumber,
               floorName,
+              floorId: sessionFloorId,
             });
             if (tableNumber) setGuestTable(tableNumber);
           }
@@ -325,6 +347,12 @@ export default function OrderPage() {
           if (orderJson.success && orderJson.data) {
             const existingOrder = orderJson.data;
             setActiveOrder(existingOrder);
+            const orderFloorId = persistSalesFloorId(
+              existingOrder.floorId || existingOrder.floor,
+            );
+            if (orderFloorId && !sessionFloorIdRef.current) {
+              sessionFloorIdRef.current = orderFloorId;
+            }
             setOrderStatus(existingOrder.status);
             setOrderNote(existingOrder.specialNote || "");
             if (existingOrder.partyName || existingOrder.guestName) {
@@ -490,6 +518,24 @@ export default function OrderPage() {
       setServerName(fullName);
     }
   }, [currentUser]);
+
+  useEffect(() => {
+    if (!isStaffOrder || selectedStaffId || employees.length === 0) return;
+    const myId = String(currentUser?._id || currentUser?.id || "");
+    if (!myId) return;
+    const me = employees.find((emp) => String(emp.id || emp._id) === myId);
+    if (me) setSelectedStaffId(String(me.id || me._id));
+  }, [isStaffOrder, employees, currentUser, selectedStaffId]);
+
+  useEffect(() => {
+    if (!isStaffOrder) return;
+    const emp = employees.find(
+      (e) => String(e.id || e._id) === String(selectedStaffId),
+    );
+    setAppliedDiscount(
+      buildStaffDiscountState(emp?.staffDiscount, emp?.name),
+    );
+  }, [isStaffOrder, selectedStaffId, employees]);
 
   const fetchOrderOnly = useCallback(async () => {
     if (isNoSession) {
@@ -880,7 +926,7 @@ export default function OrderPage() {
         preparationStyle: null,
         options: [addon.name],
         productType: selectedProduct.productType === "BAR" ? "BAR" : "KITCHEN",
-        modifier: `Extra: ${addon.name}`,
+        modifier: `Addons: ${addon.name}`,
       });
     });
 
@@ -915,11 +961,14 @@ export default function OrderPage() {
   };
 
   const getDisplayTableNo = () => {
-    return (
+    const table =
       activeOrder?.tableNo ||
       sessionData?.tableNumber ||
       (sessionId === "new" ? guestTable : "") ||
-      ""
+      "";
+    return formatTableLocation(
+      table,
+      sessionData?.floorName || activeOrder?.floorName,
     );
   };
 
@@ -1104,10 +1153,27 @@ export default function OrderPage() {
   };
 
   const goToFloor = () => {
+    const floorId =
+      persistSalesFloorId(sessionFloorIdRef.current) ||
+      persistSalesFloorId(sessionData?.floorId) ||
+      persistSalesFloorId(sessionData?.floor) ||
+      persistSalesFloorId(activeOrder?.floor) ||
+      persistSalesFloorId(
+        typeof window !== "undefined"
+          ? window.localStorage.getItem("sales-active-floor-id")
+          : null,
+      );
+    if (floorId) {
+      router.push(`/sales/floor?floor=${encodeURIComponent(floorId)}`);
+      return;
+    }
     router.push("/sales/floor");
   };
 
   const handleReleaseTable = async (shouldRelease) => {
+    persistSalesFloorId(
+      sessionFloorIdRef.current || sessionData?.floorId || sessionData?.floor,
+    );
     if (!shouldRelease || isNoSession) {
       setIsReleaseModalOpen(false);
       if (isDirectOrder) {
@@ -1141,7 +1207,7 @@ export default function OrderPage() {
   const handleClearOrder = () => {
     setCart([]);
     setOrderNote("");
-    setAppliedDiscount(null);
+    if (!isStaffOrder) setAppliedDiscount(null);
     setIsClearOrderModalOpen(false);
   };
 
@@ -1564,8 +1630,13 @@ export default function OrderPage() {
               {discountAmount > 0 && (
                 <div className="flex justify-between text-sm font-semibold text-green-600">
                   <span>
-                    Discount
-                    {appliedDiscount?.code ? ` (${appliedDiscount.code})` : ""}
+                    {isStaffOrder || appliedDiscount?.code === "STAFF"
+                      ? "Staff Discount"
+                      : `Discount${
+                          appliedDiscount?.code
+                            ? ` (${appliedDiscount.code})`
+                            : ""
+                        }`}
                   </span>
                   <span>-${discountAmount.toFixed(2)}</span>
                 </div>
@@ -1768,11 +1839,12 @@ export default function OrderPage() {
                 tableNo:
                   isDirectOrder
                     ? ""
-                    : activeOrder.tableNo ||
-                      sessionData?.tableNumber ||
+                    : getDisplayTableNo() ||
                       (isLegacyNew ? guestTable : "") ||
                       "",
+                floorName: sessionData?.floorName || activeOrder?.floorName,
                 source: activeOrder.source,
+                staffFor: selectedStaffId || activeOrder.staffFor,
                 tableSession: hasTableSession ? sessionId : undefined,
               }
             : null
@@ -2005,7 +2077,7 @@ export default function OrderPage() {
                   selectedProduct.addons.length > 0 && (
                     <div className="pt-4 mt-4 border-t border-zinc-100 space-y-2">
                       <span className="text-[13px] font-bold text-zinc-900 mb-2 block">
-                        Extras
+                        Addons
                       </span>
                       <div className="grid gap-2">
                         {selectedProduct.addons.map((addon) => {

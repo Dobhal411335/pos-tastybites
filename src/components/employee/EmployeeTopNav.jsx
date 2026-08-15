@@ -9,7 +9,7 @@ import {
   ShoppingBag,
   Printer,
   BellRing,
-  Store,
+  Home,
   Loader2,
   FileBarChart2,
   ChevronDown,
@@ -46,21 +46,35 @@ const MENU_LINKS = [
     label: "EOD",
     href: "/sales/reports/end-of-day",
     icon: FileBarChart2,
-    color: "text-black bg-violet-300",
   },
   {
     label: "Print Jobs",
     href: "/sales/print-jobs",
     icon: Printer,
-    color: "text-black bg-sky-300",
   },
   {
     label: "Notifications",
     href: "/sales/notifications",
     icon: BellRing,
-    color: "text-black bg-amber-400",
   },
 ];
+
+const TABLE_STATUS = [
+  { label: "Available", className: "bg-white border border-zinc-500" },
+  { label: "Serving", className: "bg-sky-400 border border-sky-500" },
+  { label: "Payment", className: "bg-emerald-500 border border-emerald-600" },
+  { label: "Ordering", className: "bg-orange-500 border border-orange-600" },
+  { label: "Booked", className: "bg-red-500 border border-red-600" },
+];
+
+const ORDER_LINKS = [
+  { label: "Walking Direct Order", href: "/sales/orders/walk-in" },
+  { label: "Staff Order", href: "/sales/orders/staff" },
+  { label: "Online Order", href: "/sales/today" },
+];
+
+const quickActionClass =
+  "flex h-[58px] w-[58px] items-center justify-center rounded-[18px] bg-white text-stone-800 shadow-[6px_6px_14px_rgba(0,0,0,0.08),-3px_-3px_10px_rgba(255,255,255,0.9)] ring-1 ring-stone-100/80 transition-all duration-200 group-hover:-translate-y-0.5 group-hover:shadow-[8px_8px_18px_rgba(0,0,0,0.1)]";
 
 function navActive(pathname, href) {
   if (href === "/sales/floor") {
@@ -189,7 +203,7 @@ export default function EmployeeTopNav({
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
-                className="flex items-center gap-2 rounded-xl border border-stone-300 bg-white px-2 py-1 hover:bg-stone-50 transition-colors max-w-48 outline-none focus-visible:ring-2 focus-visible:ring-orange-400"
+                className="flex items-center gap-2 rounded-xl border border-stone-800 bg-white px-2 py-2 hover:bg-stone-50 transition-colors max-w-48 outline-none focus-visible:ring-2 focus-visible:ring-orange-400"
               >
                 <div className="relative shrink-0">
                   <div className="flex h-8 w-8 items-center justify-center rounded-full bg-linear-to-br from-orange-500 to-orange-600 text-white text-sm font-bold">
@@ -216,110 +230,105 @@ export default function EmployeeTopNav({
             <DropdownMenuContent
               align="end"
               sideOffset={12}
-              className="w-[390px] rounded-[28px] border border-stone-200/70 bg-white p-5 shadow-[0_20px_50px_rgba(0,0,0,0.12)]"
+              className="w-[min(400px,calc(100vw-1.5rem))] space-y-3 rounded-[24px] border border-stone-200/60 bg-[#EFEFEF] p-3 shadow-[0_20px_50px_rgba(0,0,0,0.12)]"
             >
-              {/* Header */}
-              <div className="mb-5 px-1">
-                <h3 className="text-[21px] font-medium tracking-tight text-stone-900">
-                  Quick links
+              <div>
+                <h3 className="mb-2 px-1 font-serif text-[16px] text-stone-900">
+                  Table Status
                 </h3>
-              </div>
-
-              {/* Quick Actions */}
-              <div className="grid grid-cols-3 gap-x-3 gap-y-4">
-                {MENU_LINKS.map((item) => {
-                  const Icon = item.icon;
-
-                  return (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      onClick={() => setMenuOpen(false)}
-                      className="group flex flex-col items-center text-center"
+                <div className="flex items-center justify-between gap-1 overflow-x-auto rounded-2xl bg-white px-3 py-2.5 shadow-sm no-scrollbar">
+                  {TABLE_STATUS.map((item) => (
+                    <div
+                      key={item.label}
+                      className="flex shrink-0 items-center gap-1.5"
                     >
-                      <div
-                        className={`
-              flex h-[60px] w-[60px]
-              items-center justify-center
-              rounded-[22px]
-              shadow-[0_8px_18px_rgba(0,0,0,0.08)]
-              transition-all duration-200
-              group-hover:-translate-y-1
-              group-hover:shadow-[0_12px_24px_rgba(0,0,0,0.12)]
-              ${item.color}
-            `}
-                      >
-                        <Icon className="h-6 w-6 stroke-[1.8]" />
-                      </div>
-
-                      <span className="mt-3 text-[15px] font-medium leading-tight text-stone-800">
+                      <span
+                        className={`h-2.5 w-2.5 shrink-0 rounded-full ${item.className}`}
+                      />
+                      <span className="whitespace-nowrap text-[11px] font-medium text-stone-800">
                         {item.label}
                       </span>
-                    </Link>
-                  );
-                })}
+                    </div>
+                  ))}
+                </div>
+              </div>
 
-                {/* Day Close */}
-                <button
-                  type="button"
-                  disabled={loggingOut || closingRestaurant}
-                  onClick={() => {
-                    setMenuOpen(false);
-                    setConfirmCloseOpen(true);
-                  }}
-                  className="group flex flex-col items-center text-center disabled:opacity-50"
-                >
-                  <div
-                    className="
-          flex h-[60px] w-[60px]
-          items-center justify-center
-          rounded-[22px]
-          bg-white
-          shadow-[0_8px_18px_rgba(0,0,0,0.08)]
-          ring-1 ring-stone-100
-          transition-all duration-200
-          group-hover:-translate-y-1
-          group-hover:shadow-[0_12px_24px_rgba(0,0,0,0.12)]
-        "
+              <div className="rounded-[22px] bg-white px-4 pb-4 pt-3 shadow-[0_8px_24px_rgba(0,0,0,0.06)]">
+                <h3 className="mb-4 text-[18px] font-semibold tracking-tight text-stone-900">
+                  Quick links
+                </h3>
+
+                <div className="grid grid-cols-3 gap-x-3 gap-y-4">
+                  {MENU_LINKS.map((item) => {
+                    const Icon = item.icon;
+
+                    return (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        onClick={() => setMenuOpen(false)}
+                        className="group flex flex-col items-center text-center"
+                      >
+                        <div className={quickActionClass}>
+                          <Icon className="h-6 w-6 stroke-[1.7]" />
+                        </div>
+                        <span className="mt-2.5 text-[13px] font-medium leading-tight text-stone-800">
+                          {item.label}
+                        </span>
+                      </Link>
+                    );
+                  })}
+
+                  <button
+                    type="button"
+                    disabled={loggingOut || closingRestaurant}
+                    onClick={() => {
+                      setMenuOpen(false);
+                      setConfirmCloseOpen(true);
+                    }}
+                    className="group flex flex-col items-center text-center disabled:opacity-50"
                   >
-                    <Store className="h-6 w-6 stroke-[1.8] text-stone-700" />
-                  </div>
+                    <div className={quickActionClass}>
+                      <Home className="h-6 w-6 stroke-[1.7] text-stone-800" />
+                    </div>
+                    <span className="mt-2.5 text-[13px] font-medium leading-tight text-stone-800">
+                      Day Close
+                    </span>
+                  </button>
 
-                  <span className="mt-3 text-[15px] font-medium leading-tight text-stone-800">
-                    Day Close
-                  </span>
-                </button>
-
-                {/* Logout */}
-                <button
-                  type="button"
-                  disabled={loggingOut || closingRestaurant}
-                  onClick={handleLogout}
-                  className="group flex flex-col items-center text-center disabled:opacity-50"
-                >
-                  <div
-                    className="
-          flex h-[60px] w-[60px]
-          items-center justify-center
-          rounded-[22px]
-          bg-[#F9A3A5]
-          shadow-[0_8px_18px_rgba(0,0,0,0.08)]
-          transition-all duration-200
-          group-hover:-translate-y-1
-          group-hover:shadow-[0_12px_24px_rgba(0,0,0,0.12)]
-        "
+                  <button
+                    type="button"
+                    disabled={loggingOut || closingRestaurant}
+                    onClick={handleLogout}
+                    className="group flex flex-col items-center text-center disabled:opacity-50"
                   >
-                    {loggingOut ? (
-                      <Loader2 className="h-6 w-6 animate-spin text-red-800" />
-                    ) : (
-                      <LogOut className="h-6 w-6 stroke-[1.8] text-red-800" />
-                    )}
-                  </div>
+                    <div className={quickActionClass}>
+                      {loggingOut ? (
+                        <Loader2 className="h-6 w-6 animate-spin text-stone-800" />
+                      ) : (
+                        <LogOut className="h-6 w-6 stroke-[1.7] text-stone-800" />
+                      )}
+                    </div>
+                    <span className="mt-2.5 text-[13px] font-medium leading-tight text-stone-800">
+                      Logout
+                    </span>
+                  </button>
+                </div>
+              </div>
 
-                  <span className="mt-3 text-[15px] font-medium leading-tight text-stone-800">
-                    Logout
-                  </span>
-                </button>
+              <div className="overflow-hidden rounded-2xl bg-white shadow-sm">
+                {ORDER_LINKS.map((item, index) => (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    onClick={() => setMenuOpen(false)}
+                    className={`block py-3.5 text-center font-serif text-[17px] text-stone-900 transition-colors hover:bg-stone-50 ${
+                      index > 0 ? "border-t border-stone-200" : ""
+                    }`}
+                  >
+                    {item.label}
+                  </Link>
+                ))}
               </div>
             </DropdownMenuContent>
           </DropdownMenu>

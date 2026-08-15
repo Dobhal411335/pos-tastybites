@@ -14,6 +14,7 @@ import {
   UserPlus,
   FileEdit,
   Printer,
+  Layers,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -30,9 +31,53 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { employeeFetch } from "@/lib/employeeFetch";
 import { isSalesAdminRole } from "@/utils/roles";
+
+const SALES_FLOOR_STORAGE_KEY = "sales-active-floor-id";
+
+function readUrlFloorId() {
+  if (typeof window === "undefined") return null;
+  try {
+    return new URLSearchParams(window.location.search).get("floor");
+  } catch {
+    return null;
+  }
+}
+
+function readStoredFloorId() {
+  if (typeof window === "undefined") return null;
+  try {
+    const value =
+      window.localStorage.getItem(SALES_FLOOR_STORAGE_KEY) ||
+      window.sessionStorage.getItem(SALES_FLOOR_STORAGE_KEY) ||
+      null;
+    if (!value || value === "[object Object]") return null;
+    return value;
+  } catch {
+    return null;
+  }
+}
+
+function storeFloorId(id) {
+  const value = id && String(id) !== "[object Object]" ? String(id) : "";
+  try {
+    if (value) {
+      window.localStorage.setItem(SALES_FLOOR_STORAGE_KEY, value);
+      window.sessionStorage.setItem(SALES_FLOOR_STORAGE_KEY, value);
+    }
+  } catch {
+    /* ignore */
+  }
+}
 
 export default function SalesFloorPage() {
   const router = useRouter();
@@ -49,6 +94,12 @@ export default function SalesFloorPage() {
   const [onlineStaff, setOnlineStaff] = useState({ count: 0, online: [] });
   const [scale, setScale] = useState(1);
   const floorViewportRef = React.useRef(null);
+  const selectedFloorIdRef = React.useRef(readStoredFloorId());
+  const hasLoadedRef = React.useRef(false);
+  const [selectedFloorId, setSelectedFloorId] = useState(
+    selectedFloorIdRef.current,
+  );
+  const [floorLoading, setFloorLoading] = useState(false);
   const [gridMode, setGridMode] = useState("lines"); // "lines" | "dots" | "none"
 
   // Modals
@@ -81,21 +132,40 @@ export default function SalesFloorPage() {
     }
   }, []);
 
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (floorIdOverride) => {
     try {
-      setLoading(true);
+      if (!hasLoadedRef.current) setLoading(true);
+      else setFloorLoading(true);
       // Fetch user — /api/auth/me returns the Employee or POS Admin document.
       const userRes = await employeeFetch("/api/auth/me");
       const userData = await userRes.json();
+      let user = null;
       if (userRes.ok && userData.success && userData.data) {
-        const u = userData.data.employee || userData.data;
-        setCurrentUser(u);
+        user = userData.data.employee || userData.data;
+        setCurrentUser(user);
       }
 
-      const floorRes = await employeeFetch("/api/sales/floor");
+      const preferredFloor =
+        (floorIdOverride && String(floorIdOverride)) ||
+        readUrlFloorId() ||
+        selectedFloorIdRef.current ||
+        readStoredFloorId() ||
+        user?.defaultFloor?._id ||
+        user?.defaultFloor ||
+        null;
+      const floorQuery = preferredFloor
+        ? `?floorId=${encodeURIComponent(String(preferredFloor))}`
+        : "";
+      const floorRes = await employeeFetch(`/api/sales/floor${floorQuery}`);
       const floorJson = await floorRes.json();
       if (floorRes.ok && floorJson.success && floorJson.data) {
         setFloorData(floorJson.data);
+        if (floorJson.data.activeFloorId) {
+          const nextId = String(floorJson.data.activeFloorId);
+          selectedFloorIdRef.current = nextId;
+          setSelectedFloorId(nextId);
+          storeFloorId(nextId);
+        }
       } else {
         toast.error(floorJson.message || "Failed to load floor data");
         return;
@@ -111,15 +181,22 @@ export default function SalesFloorPage() {
     } catch (err) {
       toast.error("Failed to load floor data");
     } finally {
+      hasLoadedRef.current = true;
       setLoading(false);
+      setFloorLoading(false);
     }
   }, [loadOnlineStaff]);
 
   useEffect(() => {
-    loadData();
+    const stored = readUrlFloorId() || readStoredFloorId();
+    if (stored) {
+      selectedFloorIdRef.current = stored;
+      setSelectedFloorId(stored);
+    }
+    loadData(stored || undefined);
 
     const handleReconnect = () => {
-      loadData();
+      loadData(readStoredFloorId() || selectedFloorIdRef.current || undefined);
     };
 
     window.addEventListener("socket:reconnect", handleReconnect);
@@ -159,10 +236,22 @@ export default function SalesFloorPage() {
   }, [socket, loadData, loadOnlineStaff]);
 
   useEffect(() => {
-    if (socket && floorData.activeFloorId) {
-      socket.emit("join", `floor:${floorData.activeFloorId}`);
+    if (socket && selectedFloorId) {
+      socket.emit("join", `floor:${selectedFloorId}`);
     }
-  }, [socket, floorData.activeFloorId]);
+  }, [socket, selectedFloorId]);
+
+  const handleSelectFloor = (floorId) => {
+    const nextId = String(floorId || "");
+    if (!nextId || nextId === String(selectedFloorIdRef.current || "")) return;
+    selectedFloorIdRef.current = nextId;
+    setSelectedFloorId(nextId);
+    storeFloorId(nextId);
+    router.replace(`/sales/floor?floor=${encodeURIComponent(nextId)}`, {
+      scroll: false,
+    });
+    loadData(nextId);
+  };
 
   // Helper: get the current employee's MongoDB _id as a string for reliable comparison
   const currentUserId =
@@ -277,12 +366,12 @@ export default function SalesFloorPage() {
     }
   };
 
-  const floorWidth =
-    floorData.floors.find((f) => f.id === floorData.activeFloorId)?.width ||
-    1200;
-  const floorHeight =
-    floorData.floors.find((f) => f.id === floorData.activeFloorId)?.height ||
-    800;
+  const activeFloorId = String(selectedFloorId || floorData.activeFloorId || "");
+  const activeFloor = floorData.floors.find(
+    (f) => String(f.id) === activeFloorId,
+  );
+  const floorWidth = activeFloor?.width || 1200;
+  const floorHeight = activeFloor?.height || 800;
   const tableCount = floorData.tables.length;
   const activeSessionCount = floorData.sessions.length;
   const activeOrderCount = floorData.sessions.filter(
@@ -359,13 +448,59 @@ export default function SalesFloorPage() {
               Floor Operations
             </h1>
             <p className="text-xs md:text-sm font-medium text-zinc-500 mt-0.5">
+              {activeFloor?.name ? `${activeFloor.name} · ` : ""}
               {tableCount} Tables • {activeSessionCount} Active
               {activeOrderCount > 0 ? ` • ${activeOrderCount} with orders` : ""}
             </p>
           </div>
 
-          {/* Online staff — count + names */}
-          <Popover>
+          <div className="flex items-center gap-2">
+            {floorData.floors.length > 0 && (
+              <Select
+                value={activeFloorId || undefined}
+                onValueChange={handleSelectFloor}
+              >
+                <SelectTrigger className="h-9 w-[160px] sm:w-[200px] rounded-lg border-stone-200 bg-white text-[13px] font-semibold gap-2">
+                  <Layers className="h-4 w-4 shrink-0 text-orange-600" />
+                  <SelectValue placeholder="Select floor" />
+                </SelectTrigger>
+                <SelectContent>
+                  {floorData.floors.map((floor) => (
+                    <SelectItem key={String(floor.id)} value={String(floor.id)}>
+                      {floor.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+            <Button
+              type="button"
+              variant={gridMode !== "none" ? "secondary" : "ghost"}
+              size="sm"
+              onClick={() =>
+                setGridMode((prev) =>
+                  prev === "lines"
+                    ? "dots"
+                    : prev === "dots"
+                      ? "none"
+                      : "lines",
+                )
+              }
+              className={`h-9 px-3 rounded-lg text-[13px] font-semibold ${
+                gridMode !== "none"
+                  ? "bg-orange-600 shadow-sm text-white hover:bg-orange-600"
+                  : "text-stone-500 hover:text-stone-900"
+              }`}
+            >
+              {gridMode === "lines"
+                ? "Lines"
+                : gridMode === "dots"
+                  ? "Dots"
+                  : "Grid Off"}
+            </Button>
+
+            {/* Online staff — count + names */}
+            <Popover>
             <PopoverTrigger asChild>
               <Button
                 type="button"
@@ -421,64 +556,16 @@ export default function SalesFloorPage() {
               </div>
             </PopoverContent>
           </Popover>
+          </div>
         </div>
       </header>
 
-      {/* Mobile legend strip */}
-      <div className="sm:hidden shrink-0 border-b border-zinc-200 bg-white px-3 py-2 flex items-center gap-3 overflow-x-auto no-scrollbar">
-        <Button
-          type="button"
-          size="sm"
-          onClick={() => router.push("/sales/orders/walk-in")}
-          className="h-7 shrink-0 px-2.5 rounded-md text-[12px] font-semibold bg-orange-600 text-white hover:bg-orange-700"
-        >
-          <UserPlus className="h-3.5 w-3.5 mr-1 inline" />
-          Walk-in
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          onClick={() => router.push("/sales/orders/staff")}
-          className="h-7 shrink-0 px-2.5 rounded-md text-[12px] font-semibold bg-indigo-600 text-white hover:bg-indigo-700"
-        >
-          <Users className="h-3.5 w-3.5 mr-1 inline" />
-          Staff
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          onClick={() =>
-            setGridMode((prev) =>
-              prev === "lines"
-                ? "dots"
-                : prev === "dots"
-                  ? "none"
-                  : "lines",
-            )
-          }
-          className={`h-7 shrink-0 px-2.5 rounded-md text-[12px] font-semibold ${
-            gridMode !== "none"
-              ? "bg-orange-600 text-white hover:bg-orange-600"
-              : "bg-stone-100 text-stone-500 hover:bg-stone-200"
-          }`}
-        >
-          {gridMode === "lines" ? "Lines" : gridMode === "dots" ? "Dots" : "Grid Off"}
-        </Button>
-        {[
-          { label: "Available", className: "bg-white border border-zinc-300" },
-          { label: "Serving", className: "bg-sky-400 border border-sky-500" },
-          { label: "Ordering", className: "bg-orange-500 border border-orange-600" },
-          { label: "Payment", className: "bg-emerald-500 border border-emerald-600" },
-          { label: "Booked", className: "bg-red-900 border border-red-500" },
-        ].map((item) => (
-          <div key={item.label} className="flex items-center gap-1.5 shrink-0">
-            <span className={`h-2 w-2 rounded-full ${item.className}`} />
-            <span className="text-[11px] font-medium text-zinc-500">{item.label}</span>
+      <div className="flex flex-1 min-h-0 overflow-hidden relative">
+        {floorLoading && (
+          <div className="absolute inset-0 z-20 flex items-center justify-center bg-white/60">
+            <Loader2 className="h-7 w-7 animate-spin text-orange-500" />
           </div>
-        ))}
-      </div>
-
-      <div className="flex flex-1 min-h-0 overflow-hidden">
+        )}
         <div
           ref={floorViewportRef}
           className="relative flex flex-1 min-h-0 items-center justify-center overflow-hidden bg-zinc-50/80 p-2 sm:p-3"
@@ -634,79 +721,6 @@ export default function SalesFloorPage() {
           </div>
         </div>
         </div>
-
-        {/* Legend + grid toggle — under Online, parallel to tables */}
-        <aside className="hidden sm:flex w-44 shrink-0 flex-col gap-3 border-l border-zinc-200 bg-white p-3 overflow-y-auto">
-          <div className="flex flex-col gap-2">
-            <Button
-              type="button"
-              onClick={() => router.push("/sales/orders/walk-in")}
-              className="h-9 w-full px-3 rounded-lg text-[13px] font-semibold bg-orange-600 text-white hover:bg-orange-700 shadow-sm"
-            >
-              <UserPlus className="h-4 w-4 mr-1.5 inline" />
-              Walking Customer
-            </Button>
-            <Button
-              type="button"
-              onClick={() => router.push("/sales/orders/staff")}
-              className="h-9 w-full px-3 rounded-lg text-[13px] font-semibold bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm"
-            >
-              <Users className="h-4 w-4 mr-1.5 inline" />
-              Staff Order
-            </Button>
-          </div>
-
-          <div className="flex items-center gap-1 bg-stone-50 border border-stone-200 rounded-lg p-1">
-            <Button
-              type="button"
-              variant={gridMode !== "none" ? "secondary" : "ghost"}
-              size="sm"
-              onClick={() =>
-                setGridMode((prev) =>
-                  prev === "lines"
-                    ? "dots"
-                    : prev === "dots"
-                      ? "none"
-                      : "lines",
-                )
-              }
-              className={`h-8 w-full px-3 rounded-md text-[13px] font-semibold ${
-                gridMode !== "none"
-                  ? "bg-orange-600 shadow-sm text-white hover:bg-orange-600"
-                  : "text-stone-500 hover:text-stone-900"
-              }`}
-            >
-              {gridMode === "lines"
-                ? "Lines"
-                : gridMode === "dots"
-                  ? "Dots"
-                  : "Grid Off"}
-            </Button>
-          </div>
-
-          <div className="flex flex-col gap-2.5">
-            <div className="flex items-center gap-2">
-              <span className="h-3 w-3 shrink-0 rounded-full bg-white border border-zinc-500" />
-              <span className="text-sm font-medium text-zinc-900">Available</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="h-3 w-3 shrink-0 rounded-full bg-sky-400 border border-sky-500" />
-              <span className="text-sm font-medium text-zinc-900">Serving</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="h-3 w-3 shrink-0 rounded-full bg-orange-500 border border-orange-600" />
-              <span className="text-sm font-medium text-zinc-900">Ordering</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="h-3 w-3 shrink-0 rounded-full bg-emerald-500 border border-emerald-600" />
-              <span className="text-sm font-medium text-zinc-900">Payment</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="h-3 w-3 shrink-0 rounded-full bg-red-500 border border-zinc-500" />
-              <span className="text-sm font-medium text-zinc-900">Booked</span>
-            </div>
-          </div>
-        </aside>
       </div>
 
       {/* Start Session Modal */}
@@ -717,6 +731,7 @@ export default function SalesFloorPage() {
               Table {selectedTable?.tableNumber}
             </DialogTitle>
             <p className="text-sm font-medium text-zinc-500">
+              {activeFloor?.name ? `${activeFloor.name} · ` : ""}
               {selectedTable?.seats}-seat table
             </p>
           </DialogHeader>
@@ -804,9 +819,7 @@ export default function SalesFloorPage() {
               <div className="flex flex-col gap-3">
                 <div className="text-center mb-4">
                   <p className="text-sm font-bold text-zinc-900">
-                    {floorData.floors.find(
-                      (f) => f.id === floorData.activeFloorId,
-                    )?.name || "Ground Floor"}
+                    {activeFloor?.name || "Floor"}
                   </p>
                   <p className="text-sm font-bold text-zinc-900 mt-1">
                     {selectedTable?.session?.guestCount} Guests •{" "}
@@ -898,9 +911,7 @@ export default function SalesFloorPage() {
               <div className="flex flex-col gap-3">
                 <div className="text-center mb-4">
                   <p className="text-sm font-semibold text-zinc-500">
-                    {floorData.floors.find(
-                      (f) => f.id === floorData.activeFloorId,
-                    )?.name || "Ground Floor"}
+                    {activeFloor?.name || "Floor"}
                   </p>
                   <p className="text-sm font-bold text-zinc-700 mt-1">
                     {selectedTable?.session?.guestCount} Guests

@@ -2,7 +2,7 @@ import React from "react";
 import "./print.css";
 import moment from "moment";
 import { isOfferItem, getOfferDetailLines } from "@/utils/offerDetails";
-import { isDirectSaleOrder } from "@/utils/orderDisplay";
+import { isDirectSaleOrder, formatTableLocation } from "@/utils/orderDisplay";
 
 function isStyleOption(opt, preparationStyle) {
   const value = String(opt || "").trim();
@@ -29,6 +29,10 @@ const KitchenOrderTicket = ({
   if (!order || !kotItems.length) return null;
 
   const { orderNumber, tableNo, guestName, partyName, createdAt } = order;
+  const tableLabel = formatTableLocation(
+    tableNo,
+    order.floorName || order.floor?.name,
+  );
   const note = specialNote || order.specialNote;
   const partyLabel = partyName || guestName || (isDirectSaleOrder(order) ? "Walk-in" : "");
   const directSale = isDirectSaleOrder(order);
@@ -55,11 +59,11 @@ const KitchenOrderTicket = ({
           KOT
         </h1>
 
-        <div className="text-lg receipt-bold mb-1">
+        <div className="text-sm receipt-bold mb-1">
           {directSale
             ? partyLabel || "Walk-in"
-            : tableNo
-              ? `${tableNo}`
+            : tableLabel
+              ? `${tableLabel}`
               : "Takeaway / No Table"}
         </div>
       </div>

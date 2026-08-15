@@ -14,14 +14,15 @@ export const GET = withAuth(async (request) => {
       status: { $in: ["Active", "Approved"] },  // ← correct field (Employee has no isVerified)
       role: { $in: ["Server", "Bartender", "Manager", "Wait Staff", "Staff", "Employee", "Admin", "Super Admin"] }
     })
-      .select("_id firstName lastName role employeeColor")
+      .select("_id firstName lastName role employeeColor staffDiscount")
       .lean();
 
     const formatted = employees.map(emp => ({
       id: emp._id,
       name: `${emp.firstName} ${emp.lastName || ''}`.trim(),
       role: emp.role,
-      color: emp.employeeColor
+      color: emp.employeeColor,
+      staffDiscount: Number(emp.staffDiscount) || 0,
     }));
 
     return sendSuccess(formatted, "Eligible employees retrieved successfully");
