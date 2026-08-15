@@ -23,6 +23,12 @@ const TableSessionSchema = new mongoose.Schema(
       ref: "Table",
       required: true,
     },
+    linkedTables: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Table",
+      },
+    ],
     assignedEmployee: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Employee",
@@ -102,5 +108,13 @@ TableSessionSchema.index(
   { primaryTable: 1, isSessionOpen: 1 },
   { unique: true, partialFilterExpression: { isSessionOpen: true } }
 );
+TableSessionSchema.index({ linkedTables: 1, isSessionOpen: 1 });
+
+if (
+  mongoose.models.TableSession &&
+  !mongoose.models.TableSession.schema.path("linkedTables")
+) {
+  delete mongoose.models.TableSession;
+}
 
 export default mongoose.models.TableSession || mongoose.model("TableSession", TableSessionSchema);

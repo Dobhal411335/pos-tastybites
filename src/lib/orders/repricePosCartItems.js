@@ -9,6 +9,7 @@ import {
   calcStaffDiscountAmount,
   normalizeStaffDiscountPercent,
 } from "@/lib/orders/staffDiscount";
+import { computeOrderServiceCharge } from "@/lib/orders/serviceCharge";
 
 const r2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 
@@ -120,6 +121,7 @@ export async function repricePosCartItems({
   items,
   discountCode = null,
   staffDiscountPercent = null,
+  applyServiceCharge = false,
 }) {
   if (!Array.isArray(items) || items.length === 0) {
     const err = new Error("Cart cannot be empty");
@@ -156,7 +158,9 @@ export async function repricePosCartItems({
         }).lean()
       : [],
     Tax.find({ restaurant: restaurantId, status: "Active" }).lean(),
-    ServiceTax.findOne({ restaurant: restaurantId, status: "Active" }).lean(),
+    applyServiceCharge
+      ? ServiceTax.findOne({ restaurant: restaurantId, status: "Active" }).lean()
+      : Promise.resolve(null),
   ]);
 
   const productMap = new Map(products.map((p) => [String(p._id), p]));
@@ -166,7 +170,6 @@ export async function repricePosCartItems({
   const formattedItems = [];
   let subTotal = 0;
   let taxTotal = 0;
-  let serviceChargeOnItems = 0;
 
   for (const item of items) {
     const id = item.id || item.menuItemId;
@@ -279,15 +282,8 @@ export async function repricePosCartItems({
       productType = normalizeProductType(product.productType);
     }
 
-    let unitServiceCharge = 0;
-    if (serviceTax && String(serviceTax.type || "").toLowerCase().includes("percent")) {
-      unitServiceCharge =
-        (unitPrice * (Number(serviceTax.value) || 0)) / 100;
-    }
-
     unitPrice = r2(unitPrice);
     unitTax = r2(unitTax);
-    unitServiceCharge = r2(unitServiceCharge);
 
     formattedItems.push({
       menuItemId: id,
@@ -299,7 +295,7 @@ export async function repricePosCartItems({
       qty,
       price: unitPrice,
       tax: unitTax,
-      serviceCharge: unitServiceCharge,
+      serviceCharge: 0,
       options,
       preparationStyle: item.preparationStyle || null,
       productType,
@@ -312,21 +308,10 @@ export async function repricePosCartItems({
 
     subTotal += unitPrice * qty;
     taxTotal += unitTax * qty;
-    serviceChargeOnItems += unitServiceCharge * qty;
   }
 
   subTotal = r2(subTotal);
   taxTotal = r2(taxTotal);
-
-  let serviceChargeTotal = r2(serviceChargeOnItems);
-  let serviceChargeName = null;
-  if (serviceTax) {
-    serviceChargeName = serviceTax.name || "Server Charge";
-    if (!String(serviceTax.type || "").toLowerCase().includes("percent")) {
-      // Amount-type service charge is order-level
-      serviceChargeTotal = r2(Number(serviceTax.value) || 0);
-    }
-  }
 
   let discountTotal = 0;
   let resolvedDiscountCode = null;
@@ -366,6 +351,17 @@ export async function repricePosCartItems({
     }
     discountTotal = Math.min(discountTotal, subTotal);
     resolvedDiscountCode = coupon.code;
+  }
+
+  let serviceChargeTotal = 0;
+  let serviceChargeName = null;
+  if (applyServiceCharge && serviceTax) {
+    serviceChargeTotal = computeOrderServiceCharge({
+      serviceTax,
+      subtotal: subTotal,
+      discountAmount: discountTotal,
+    });
+    serviceChargeName = serviceTax.name || "Server Charge";
   }
 
   const totalAmount = r2(

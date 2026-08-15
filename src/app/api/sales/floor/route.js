@@ -6,6 +6,7 @@ import Order from "@/models/Order";
 import { sendSuccess } from "@/utils/apiResponse";
 import { sendError } from "@/utils/errorHandler";
 import { logger } from "@/utils/logger";
+import { joinTableNumbers } from "@/utils/orderDisplay";
 
 // GET - Unified Floor Data for Sales Operations
 export const GET = withAuth(async (request) => {
@@ -42,11 +43,14 @@ export const GET = withAuth(async (request) => {
     const sessionIds = sessions.map(s => s._id);
     const activeOrders = await Order.find({
       tableSession: { $in: sessionIds },
-      status: { $in: ["Draft", "Sent to Kitchen", "Preparing", "Ready", "Served"] },
-      paymentStatus: { $ne: "Paid" }
+      status: { $in: ["PENDING", "CONFIRMED", "Draft", "Sent to Kitchen", "Preparing", "Ready", "Served"] },
+      paymentStatus: { $nin: ["PAID", "Paid"] }
     }).select("tableSession").lean();
     
     const sessionsWithOrders = new Set(activeOrders.map(o => o.tableSession.toString()));
+    const tableNumberById = new Map(
+      tables.map((t) => [t._id.toString(), t.tableNumber]),
+    );
 
     const result = {
       floors: floors.map((f) => ({
@@ -69,20 +73,29 @@ export const GET = withAuth(async (request) => {
         section: t.section,
         type: t.shape,
       })),
-      sessions: sessions.map((s) => ({
-        id: s._id,
-        sessionId: s.sessionId,
-        tableId: s.primaryTable.toString(),
-        assignedEmployeeId: s.assignedEmployee?._id?.toString(),
-        assignedEmployeeName: s.assignedEmployee?.firstName 
-          ? `${s.assignedEmployee.firstName} ${s.assignedEmployee.lastName || ''}`.trim()
-          : s.assignedEmployee?.name || 'Unknown',
-        guestCount: s.guestCount,
-        effectiveSeatCount: s.effectiveSeatCount,
-        status: s.status,
-        openedAt: s.openedAt,
-        hasActiveOrder: sessionsWithOrders.has(s._id.toString()),
-      })),
+      sessions: sessions.map((s) => {
+        const linkedTableIds = (s.linkedTables || []).map((id) => id.toString());
+        const tableNumbers = joinTableNumbers([
+          tableNumberById.get(s.primaryTable.toString()),
+          ...linkedTableIds.map((id) => tableNumberById.get(id)),
+        ]);
+        return {
+          id: s._id,
+          sessionId: s.sessionId,
+          tableId: s.primaryTable.toString(),
+          linkedTableIds,
+          tableNumbers,
+          assignedEmployeeId: s.assignedEmployee?._id?.toString(),
+          assignedEmployeeName: s.assignedEmployee?.firstName
+            ? `${s.assignedEmployee.firstName} ${s.assignedEmployee.lastName || ""}`.trim()
+            : s.assignedEmployee?.name || "Unknown",
+          guestCount: s.guestCount,
+          effectiveSeatCount: s.effectiveSeatCount,
+          status: s.status,
+          openedAt: s.openedAt,
+          hasActiveOrder: sessionsWithOrders.has(s._id.toString()),
+        };
+      }),
     };
 
     return sendSuccess(result, "Floor data retrieved successfully");

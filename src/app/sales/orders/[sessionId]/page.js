@@ -45,9 +45,14 @@ import {
 } from "@/components/ui/select";
 import PrintPreviewModal from "@/components/receipts/PrintPreviewModal";
 import TodayOrderPaymentModal from "@/components/sales/TodayOrderPaymentModal";
+import ServiceChargePromptModal from "@/components/sales/ServiceChargePromptModal";
 import StaffOrderPartyModal from "@/components/sales/StaffOrderPartyModal";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { buildStaffDiscountState } from "@/lib/orders/staffDiscount";
+import {
+  computeOrderServiceCharge,
+  isActiveServiceTax,
+} from "@/lib/orders/serviceCharge";
 import { formatTableLocation, resolveDocumentId } from "@/utils/orderDisplay";
 import {
   OFFER_CATEGORY,
@@ -185,6 +190,9 @@ export default function OrderPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeOrder, setActiveOrder] = useState(null);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [isServiceChargePromptOpen, setIsServiceChargePromptOpen] =
+    useState(false);
+  const [applyServiceCharge, setApplyServiceCharge] = useState(false);
   const cartIdSeq = useRef(0);
 
   // Print State
@@ -317,8 +325,9 @@ export default function OrderPage() {
           if (sessionJson.success && sessionJson.data) {
             const currentSession = sessionJson.data;
             const tableNumber =
-              currentSession.primaryTable?.tableNumber ||
               currentSession.tableNumber ||
+              currentSession.tableNumbers ||
+              currentSession.primaryTable?.tableNumber ||
               null;
             const floorName =
               currentSession.floor?.name ||
@@ -392,7 +401,7 @@ export default function OrderPage() {
                 category: offer ? OFFER_CATEGORY : item.category || "ITEMS",
                 price: item.price,
                 tax: item.tax,
-                serviceCharge: item.serviceCharge || 0,
+                serviceCharge: 0,
                 qty: item.qty,
                 size: item.size,
                 sizes:
@@ -476,7 +485,7 @@ export default function OrderPage() {
                   category: offer ? OFFER_CATEGORY : item.category || "ITEMS",
                   price: item.price,
                   tax: item.tax,
-                  serviceCharge: item.serviceCharge || 0,
+                  serviceCharge: 0,
                   qty: item.qty,
                   size: item.size,
                   sizes:
@@ -656,18 +665,8 @@ export default function OrderPage() {
     return (basePrice * pctTaxes) / 100 + fixedTaxes;
   };
 
-  /** Percent service charge on unit price; Amount type is order-level only. */
-  const calculateItemServiceCharge = (basePrice) => {
-    if (!serviceTax || serviceTax.status === "Inactive") return 0;
-    const type = String(serviceTax.type || "").toLowerCase();
-    if (!type.includes("percent")) return 0;
-    return (Number(basePrice) || 0) * (Number(serviceTax.value) || 0) / 100;
-  };
-
   const serviceChargeLabel = serviceTax?.name || "Server Charge";
-  const hasServiceTax = Boolean(
-    serviceTax && serviceTax.status !== "Inactive",
-  );
+  const hasServiceTax = isActiveServiceTax(serviceTax);
 
   const calculateItemDiscount = (item, basePrice) => {
     if (
@@ -764,7 +763,6 @@ export default function OrderPage() {
 
     const price = product.price || 0;
     const itemTax = calculateItemTax(product, price);
-    const itemServiceCharge = calculateItemServiceCharge(price);
 
     setCart((prev) =>
       mergeCartLines(
@@ -777,7 +775,7 @@ export default function OrderPage() {
             category: product.category?.name || "ITEMS",
             price,
             tax: itemTax,
-            serviceCharge: itemServiceCharge,
+            serviceCharge: 0,
             qty: 1,
             size: "Standard",
             sizes: [],
@@ -798,7 +796,6 @@ export default function OrderPage() {
     }
     const price = Number(offer.price) || 0;
     const itemTax = calculateOfferTax(offer, price);
-    const itemServiceCharge = calculateItemServiceCharge(price);
     const inclusions = cleanOfferList(offer.inclusions);
     const choices = cleanOfferList(offer.choices);
     const drinks = cleanOfferList(offer.drinks);
@@ -815,7 +812,7 @@ export default function OrderPage() {
             category: OFFER_CATEGORY,
             price,
             tax: itemTax,
-            serviceCharge: itemServiceCharge,
+            serviceCharge: 0,
             qty: 1,
             size: "Standard",
             sizes: [],
@@ -859,7 +856,6 @@ export default function OrderPage() {
         const variant = selectedProduct.variants.find((v) => v.size === size);
         const unitPrice = Number(variant?.price) || 0;
         const unitTax = calculateItemTax(selectedProduct, unitPrice);
-        const unitServiceCharge = calculateItemServiceCharge(unitPrice);
         const options = [];
         if (selectedPreparationStyle) options.push(selectedPreparationStyle);
         const parts = [`Size: ${size}`];
@@ -872,7 +868,7 @@ export default function OrderPage() {
           category: selectedProduct.category?.name || "ITEMS",
           price: unitPrice,
           tax: unitTax,
-          serviceCharge: unitServiceCharge,
+          serviceCharge: 0,
           qty,
           size,
           sizes: [size],
@@ -886,7 +882,6 @@ export default function OrderPage() {
     } else {
       const unitPrice = selectedProduct.price || 0;
       const unitTax = calculateItemTax(selectedProduct, unitPrice);
-      const unitServiceCharge = calculateItemServiceCharge(unitPrice);
       const options = [];
       if (selectedPreparationStyle) options.push(selectedPreparationStyle);
       newLines.push({
@@ -896,7 +891,7 @@ export default function OrderPage() {
         category: selectedProduct.category?.name || "ITEMS",
         price: unitPrice,
         tax: unitTax,
-        serviceCharge: unitServiceCharge,
+        serviceCharge: 0,
         qty: 1,
         size: "Standard",
         sizes: [],
@@ -911,7 +906,6 @@ export default function OrderPage() {
       const addon = entry.addon;
       const unitPrice = Number(addon.price) || 0;
       const unitTax = calculateItemTax(selectedProduct, unitPrice);
-      const unitServiceCharge = calculateItemServiceCharge(unitPrice);
       newLines.push({
         id: selectedProduct._id,
         name: selectedProduct.name,
@@ -919,7 +913,7 @@ export default function OrderPage() {
         category: selectedProduct.category?.name || "ITEMS",
         price: unitPrice,
         tax: unitTax,
-        serviceCharge: unitServiceCharge,
+        serviceCharge: 0,
         qty: entry.qty,
         size: "Extra",
         sizes: [],
@@ -962,8 +956,9 @@ export default function OrderPage() {
 
   const getDisplayTableNo = () => {
     const table =
-      activeOrder?.tableNo ||
       sessionData?.tableNumber ||
+      sessionData?.tableNumbers ||
+      activeOrder?.tableNo ||
       (sessionId === "new" ? guestTable : "") ||
       "";
     return formatTableLocation(
@@ -1009,8 +1004,8 @@ export default function OrderPage() {
         items: cart,
         subTotal: subtotal,
         taxTotal: totalTax,
-        serviceChargeTotal,
-        serviceChargeName: hasServiceTax ? serviceChargeLabel : null,
+        serviceChargeTotal: 0,
+        serviceChargeName: null,
         discountTotal: discountAmount,
         discountCode: appliedDiscount ? appliedDiscount.code : null,
         totalAmount: total,
@@ -1121,17 +1116,12 @@ export default function OrderPage() {
       ? (subtotal * appliedDiscount.value) / 100
       : Math.min(appliedDiscount.value, subtotal)
     : 0;
-  const serviceChargeTotal = !hasServiceTax
-    ? 0
-    : String(serviceTax.type || "")
-          .toLowerCase()
-          .includes("percent")
-      ? cart.reduce(
-          (sum, item) => sum + (item.serviceCharge || 0) * item.qty,
-          0,
-        )
-      : Number(serviceTax.value) || 0;
-  const total = subtotal - discountAmount + totalTax + serviceChargeTotal;
+  const promptServiceChargeTotal = computeOrderServiceCharge({
+    serviceTax,
+    subtotal,
+    discountAmount,
+  });
+  const total = subtotal - discountAmount + totalTax;
 
   const hasSentKot =
     Boolean(activeOrder) &&
@@ -1149,6 +1139,17 @@ export default function OrderPage() {
       toast.error("Send the order to kitchen (KOT) before taking payment.");
       return;
     }
+    if (hasServiceTax) {
+      setIsServiceChargePromptOpen(true);
+      return;
+    }
+    setApplyServiceCharge(false);
+    setIsPaymentModalOpen(true);
+  };
+
+  const startPayment = (withServiceCharge) => {
+    setApplyServiceCharge(Boolean(withServiceCharge));
+    setIsServiceChargePromptOpen(false);
     setIsPaymentModalOpen(true);
   };
 
@@ -1241,14 +1242,7 @@ export default function OrderPage() {
                       ? guestTable
                         ? `${guestTable} · Takeaway`
                         : "Takeaway"
-                      : [
-                          sessionData?.tableNumber
-                            ? `${sessionData.tableNumber}`
-                            : null,
-                          sessionData?.floorName || null,
-                        ]
-                          .filter(Boolean)
-                          .join(" · ") || "Loading table..."}
+                      : getDisplayTableNo() || "Loading table..."}
               </p>
             </div>
             <div className="flex items-center gap-1 bg-zinc-100 p-1 rounded-lg">
@@ -1645,14 +1639,6 @@ export default function OrderPage() {
                 <span>HST</span>
                 <span className="text-zinc-900">${totalTax.toFixed(2)}</span>
               </div>
-              {hasServiceTax && serviceChargeTotal > 0 && (
-                <div className="flex justify-between text-sm font-semibold text-zinc-500">
-                  <span>{serviceChargeLabel}</span>
-                  <span className="text-zinc-900">
-                    ${serviceChargeTotal.toFixed(2)}
-                  </span>
-                </div>
-              )}
               <div className="flex justify-between items-center pt-1.5 border-t border-zinc-100">
                 <span className="text-base font-bold text-zinc-900">Total</span>
                 <span className="text-2xl font-black text-zinc-900 leading-none">
@@ -1815,14 +1801,20 @@ export default function OrderPage() {
         guestName={guestName}
         onGuestNameChange={setGuestName}
         redeemNote="POS Payment"
+        applyServiceCharge={applyServiceCharge}
+        serviceTax={serviceTax}
         order={
           activeOrder
             ? {
                 ...activeOrder,
                 subTotal: subtotal,
                 taxTotal: totalTax,
-                serviceChargeTotal,
-                serviceChargeName: hasServiceTax ? serviceChargeLabel : null,
+                serviceChargeTotal: applyServiceCharge
+                  ? promptServiceChargeTotal
+                  : 0,
+                serviceChargeName: applyServiceCharge
+                  ? serviceChargeLabel
+                  : null,
                 discountCode:
                   appliedDiscount?.code || activeOrder.discountCode || null,
                 discountTotal:
@@ -1870,6 +1862,15 @@ export default function OrderPage() {
         }}
       />
 
+      <ServiceChargePromptModal
+        open={isServiceChargePromptOpen}
+        serviceTax={serviceTax}
+        amount={promptServiceChargeTotal}
+        onYes={() => startPayment(true)}
+        onNo={() => startPayment(false)}
+        onClose={() => setIsServiceChargePromptOpen(false)}
+      />
+
       {/* OPTIONS MODAL */}
       {isOptionsModalOpen && selectedProduct && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-zinc-900/50 backdrop-blur-sm">
@@ -1904,9 +1905,6 @@ export default function OrderPage() {
                   <div className="w-14 text-center">Base</div>
                   <div className="w-16 text-center">Discount</div>
                   <div className="w-16 text-center">Tax</div>
-                  {hasServiceTax && (
-                    <div className="w-16 text-center">Svc</div>
-                  )}
                   <div className="w-20 text-right">Total</div>
                 </div>
 
@@ -1932,27 +1930,8 @@ export default function OrderPage() {
                             selectedProduct,
                             discountedPrice,
                           );
-                          const svcUnit = hasServiceTax
-                            ? String(serviceTax.type || "")
-                                .toLowerCase()
-                                .includes("percent")
-                              ? calculateItemServiceCharge(discountedPrice)
-                              : Number(serviceTax.value) || 0
-                            : 0;
-                          const unitFinal =
-                            discountedPrice +
-                            taxAmount +
-                            (String(serviceTax?.type || "")
-                              .toLowerCase()
-                              .includes("percent")
-                              ? svcUnit
-                              : 0);
+                          const unitFinal = discountedPrice + taxAmount;
                           const lineTax = taxAmount * qty;
-                          const lineSvc = String(serviceTax?.type || "")
-                            .toLowerCase()
-                            .includes("percent")
-                            ? svcUnit * qty
-                            : 0;
                           const lineTotal = unitFinal * qty;
 
                           return (
@@ -2005,19 +1984,6 @@ export default function OrderPage() {
                               <div className="w-16 text-center text-zinc-500 font-medium text-[12px]">
                                 +${(qty > 0 ? lineTax : taxAmount).toFixed(2)}
                               </div>
-                              {hasServiceTax && (
-                                <div className="w-16 text-center text-zinc-500 font-medium text-[12px]">
-                                  +$
-                                  {(String(serviceTax.type || "")
-                                    .toLowerCase()
-                                    .includes("percent")
-                                    ? qty > 0
-                                      ? lineSvc
-                                      : svcUnit
-                                    : svcUnit
-                                  ).toFixed(2)}
-                                </div>
-                              )}
                               <div className="w-20 text-right font-bold text-[13px] text-zinc-900">
                                 $
                                 {(qty > 0 ? lineTotal : unitFinal).toFixed(2)}
@@ -2095,27 +2061,8 @@ export default function OrderPage() {
                             selectedProduct,
                             discountedPrice,
                           );
-                          const svcUnit = hasServiceTax
-                            ? String(serviceTax.type || "")
-                                .toLowerCase()
-                                .includes("percent")
-                              ? calculateItemServiceCharge(discountedPrice)
-                              : Number(serviceTax.value) || 0
-                            : 0;
-                          const unitFinal =
-                            discountedPrice +
-                            taxAmount +
-                            (String(serviceTax?.type || "")
-                              .toLowerCase()
-                              .includes("percent")
-                              ? svcUnit
-                              : 0);
+                          const unitFinal = discountedPrice + taxAmount;
                           const lineTax = taxAmount * qty;
-                          const lineSvc = String(serviceTax?.type || "")
-                            .toLowerCase()
-                            .includes("percent")
-                            ? svcUnit * qty
-                            : 0;
                           const lineTotal = unitFinal * qty;
 
                           return (
@@ -2164,19 +2111,6 @@ export default function OrderPage() {
                               <div className="w-16 text-center text-zinc-500 font-medium text-[12px]">
                                 +${(qty > 0 ? lineTax : taxAmount).toFixed(2)}
                               </div>
-                              {hasServiceTax && (
-                                <div className="w-16 text-center text-zinc-500 font-medium text-[12px]">
-                                  +$
-                                  {(String(serviceTax.type || "")
-                                    .toLowerCase()
-                                    .includes("percent")
-                                    ? qty > 0
-                                      ? lineSvc
-                                      : svcUnit
-                                    : svcUnit
-                                  ).toFixed(2)}
-                                </div>
-                              )}
                               <div className="w-20 text-right font-bold text-[13px] text-zinc-900">
                                 +$
                                 {(qty > 0 ? lineTotal : unitFinal).toFixed(2)}

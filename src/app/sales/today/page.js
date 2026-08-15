@@ -13,6 +13,11 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import PrintPreviewModal from "@/components/receipts/PrintPreviewModal";
 import TodayOrderPaymentModal from "@/components/sales/TodayOrderPaymentModal";
+import ServiceChargePromptModal from "@/components/sales/ServiceChargePromptModal";
+import {
+  computeOrderServiceCharge,
+  isActiveServiceTax,
+} from "@/lib/orders/serviceCharge";
 import {
   getOrderLocationLabel,
   getOrderTypeLabel,
@@ -130,6 +135,10 @@ export default function TodayOrdersPage() {
   const [pendingReleaseAfterPrint, setPendingReleaseAfterPrint] =
     useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [isServiceChargePromptOpen, setIsServiceChargePromptOpen] =
+    useState(false);
+  const [applyServiceCharge, setApplyServiceCharge] = useState(false);
+  const [serviceTax, setServiceTax] = useState(null);
   const [isReleaseModalOpen, setIsReleaseModalOpen] = useState(false);
   const [isReleasingTable, setIsReleasingTable] = useState(false);
   const [releaseOrder, setReleaseOrder] = useState(null);
@@ -163,6 +172,24 @@ export default function TodayOrdersPage() {
   useEffect(() => {
     fetchOrders();
   }, [fetchOrders]);
+
+  useEffect(() => {
+    const loadServiceTax = async () => {
+      try {
+        const res = await fetch("/api/tax/servicetax?active=1");
+        const json = await res.json();
+        if (json.success) {
+          const list = Array.isArray(json.data) ? json.data : [];
+          setServiceTax(
+            list.find((t) => t.status === "Active") || list[0] || null,
+          );
+        }
+      } catch {
+        setServiceTax(null);
+      }
+    };
+    loadServiceTax();
+  }, []);
 
   useEffect(() => {
     const onVisibility = () => {
@@ -308,6 +335,8 @@ export default function TodayOrdersPage() {
   const closePanel = () => {
     setSelectedOrder(null);
     setIsPaymentModalOpen(false);
+    setIsServiceChargePromptOpen(false);
+    setApplyServiceCharge(false);
     setIsReleaseModalOpen(false);
     setReleaseOrder(null);
     setPendingReleaseAfterPrint(false);
@@ -419,6 +448,29 @@ export default function TodayOrdersPage() {
     !isOrderPaid(selectedOrder) &&
     ["PENDING", "CONFIRMED"].includes(orderStatusUpper);
   const showPayNow = canWaive;
+  const hasServiceTax = isActiveServiceTax(serviceTax);
+  const promptServiceChargeTotal = computeOrderServiceCharge({
+    serviceTax,
+    subtotal: selectedOrder?.subTotal,
+    discountAmount: selectedOrder?.discountTotal,
+  });
+  const serviceChargeLabel = serviceTax?.name || "Server Charge";
+
+  const openPaymentModal = () => {
+    if (!selectedOrder) return;
+    if (hasServiceTax) {
+      setIsServiceChargePromptOpen(true);
+      return;
+    }
+    setApplyServiceCharge(false);
+    setIsPaymentModalOpen(true);
+  };
+
+  const startPayment = (withServiceCharge) => {
+    setApplyServiceCharge(Boolean(withServiceCharge));
+    setIsServiceChargePromptOpen(false);
+    setIsPaymentModalOpen(true);
+  };
   const releaseTableLabel =
     releaseOrder?.tableNo ||
     selectedOrder?.tableNo ||
@@ -828,7 +880,7 @@ export default function TodayOrdersPage() {
               )}
               {showPayNow && (
                 <Button
-                  onClick={() => setIsPaymentModalOpen(true)}
+                  onClick={openPaymentModal}
                   className="w-full h-12 bg-red-600 hover:bg-red-700 text-white font-bold rounded shadow-none"
                 >
                   Pay Now
@@ -876,9 +928,23 @@ export default function TodayOrdersPage() {
 
       <TodayOrderPaymentModal
         key={selectedOrder?._id || "payment"}
-        order={selectedOrder}
+        order={
+          selectedOrder
+            ? {
+                ...selectedOrder,
+                serviceChargeTotal: applyServiceCharge
+                  ? promptServiceChargeTotal
+                  : 0,
+                serviceChargeName: applyServiceCharge
+                  ? serviceChargeLabel
+                  : null,
+              }
+            : selectedOrder
+        }
         open={isPaymentModalOpen}
         onClose={() => setIsPaymentModalOpen(false)}
+        applyServiceCharge={applyServiceCharge}
+        serviceTax={serviceTax}
         onPaid={async (updatedOrder) => {
           const paid = updatedOrder || selectedOrder;
           if (paid) {
@@ -893,6 +959,15 @@ export default function TodayOrdersPage() {
           setIsPrintModalOpen(true);
         }}
         redeemNote="Today Orders Payment"
+      />
+
+      <ServiceChargePromptModal
+        open={isServiceChargePromptOpen}
+        serviceTax={serviceTax}
+        amount={promptServiceChargeTotal}
+        onYes={() => startPayment(true)}
+        onNo={() => startPayment(false)}
+        onClose={() => setIsServiceChargePromptOpen(false)}
       />
 
       {isReleaseModalOpen && (

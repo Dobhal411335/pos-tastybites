@@ -10,6 +10,17 @@ import { logger } from "@/utils/logger";
 import { v4 as uuidv4 } from "uuid";
 import { createNotification } from "@/lib/notifications/notificationService";
 import { isSalesAdminRole } from "@/utils/roles";
+import { joinTableNumbers, resolveDocumentId } from "@/utils/orderDisplay";
+import {
+  applyLinkedTablesToSession,
+  collectSessionTableIds,
+  decorateSessionWithTableNumbers,
+  findOpenSessionForTable,
+  freeSessionTables,
+  SessionTableError,
+  sumSeatsForTableIds,
+  syncSessionOrderTableLabels,
+} from "@/lib/orders/sessionTables";
 
 function actorTypeFromRequest(request) {
   const role = request.role || request.user?.role;
@@ -37,6 +48,7 @@ export const GET = withAuth(async (request) => {
 
     const sessions = await TableSession.find(query)
       .populate("primaryTable", "tableNumber shape seats")
+      .populate("linkedTables", "tableNumber seats")
       .populate("floor", "name")
       .populate("assignedEmployee", "firstName lastName name")
       .populate("openedBy", "firstName lastName name")
@@ -46,11 +58,7 @@ export const GET = withAuth(async (request) => {
       return sendError(new Error("Not Found"), "Session not found", 404);
     }
 
-    const withFloorId = sessions.map((session) => ({
-      ...session,
-      floorId: String(session.floor?._id || session.floor || ""),
-      floorName: session.floor?.name || session.floorName || null,
-    }));
+    const withFloorId = sessions.map(decorateSessionWithTableNumbers);
 
     return sendSuccess(
       sessionId ? withFloorId[0] : withFloorId,
@@ -66,7 +74,7 @@ export const GET = withAuth(async (request) => {
 export const POST = withAuth(async (request) => {
   try {
     const data = await request.json();
-    const { tableId, guestCount, notes } = data;
+    const { tableId, guestCount, notes, linkedTableIds } = data;
 
     if (!tableId) {
       return sendError(new Error("Missing fields"), "tableId is required", 400);
@@ -75,6 +83,18 @@ export const POST = withAuth(async (request) => {
     const table = await Table.findOne({ _id: tableId, restaurant: request.restaurant });
     if (!table) {
       return sendError(new Error("Not Found"), "Physical table not found", 404);
+    }
+
+    const existingOwner = await findOpenSessionForTable(
+      request.restaurant,
+      tableId,
+    );
+    if (existingOwner) {
+      return sendError(
+        new Error("Table Unavailable"),
+        "This table is already part of an open session. Please refresh your floor plan.",
+        409,
+      );
     }
 
     // Attempt to create the session. 
@@ -114,11 +134,39 @@ export const POST = withAuth(async (request) => {
       await table.save();
     }
 
+    if (Array.isArray(linkedTableIds) && linkedTableIds.length > 0) {
+      try {
+        await applyLinkedTablesToSession({
+          session,
+          linkedTableIds,
+          restaurantId: request.restaurant,
+          actorId: request.user.id,
+          mergeGuestCount: false,
+        });
+        session.guestCount = guestCount || 1;
+        session.effectiveSeatCount = await sumSeatsForTableIds(
+          collectSessionTableIds(session),
+        );
+        await session.save();
+      } catch (linkError) {
+        await freeSessionTables(session);
+        session.status = "RELEASED";
+        session.isSessionOpen = false;
+        session.closedAt = new Date();
+        await session.save();
+        if (linkError instanceof SessionTableError) {
+          return sendError(linkError, linkError.message, linkError.statusCode);
+        }
+        throw linkError;
+      }
+    }
+
     logger.info(`Table session ${session.sessionId} opened for table ${table.tableNumber} by ${request.user.id}`);
 
     // Populate the newly created session
     const populatedSession = await TableSession.findById(session._id)
       .populate("primaryTable", "tableNumber shape seats")
+      .populate("linkedTables", "tableNumber seats")
       .lean();
 
     // Audit Log
@@ -131,25 +179,40 @@ export const POST = withAuth(async (request) => {
       floorId: table.floor,
       tableId: table._id,
       tableSessionId: session._id,
-      newValue: { guestCount: guestCount || 1 }
+      newValue: {
+        guestCount: guestCount || 1,
+        linkedTableIds: collectSessionTableIds(session),
+      }
     });
 
+    const assignedLabel =
+      populatedSession
+        ? joinTableNumbers([
+            populatedSession.primaryTable?.tableNumber,
+            ...(populatedSession.linkedTables || []).map((t) => t.tableNumber),
+          ])
+        : table.tableNumber;
+
     if (global.io) {
-      global.io.to(`floor:${table.floor}`).emit('table:assigned', { sessionId: session._id, tableId: table._id });
+      global.io.to(`floor:${table.floor}`).emit('table:assigned', {
+        sessionId: session._id,
+        tableId: table._id,
+        tableIds: collectSessionTableIds(session),
+      });
     }
 
     await createNotification({
       restaurantId: request.restaurant,
       type: "TABLE_ASSIGNED",
       title: "Table Assigned",
-      message: `Table ${table.tableNumber} opened${guestCount ? ` • ${guestCount} guests` : ""}`,
+      message: `Table ${assignedLabel} opened${guestCount ? ` • ${guestCount} guests` : ""}`,
       tableId: table._id,
       tableSessionId: session._id,
       employeeId: request.user.id,
       floorId: table.floor,
       priority: "normal",
       metadata: {
-        tableNo: table.tableNumber,
+        tableNo: assignedLabel,
         guestCount: guestCount || 1,
       },
     });
@@ -165,7 +228,7 @@ export const POST = withAuth(async (request) => {
 export const PUT = withAuth(async (request) => {
   try {
     const data = await request.json();
-    const { sessionId, action, guestCount, notes, newEmployeeId, effectiveSeatCount, adminOverride, releaseReason } = data;
+    const { sessionId, action, guestCount, notes, newEmployeeId, effectiveSeatCount, adminOverride, releaseReason, linkedTableIds } = data;
 
     if (!sessionId) {
       return sendError(new Error("Missing ID"), "sessionId is required", 400);
@@ -235,8 +298,7 @@ export const PUT = withAuth(async (request) => {
       session.closedAt = new Date();
       await session.save();
 
-      // Free the physical table
-      await Table.findByIdAndUpdate(session.primaryTable, { status: "Available" });
+      const releasedIds = await freeSessionTables(session);
 
       logger.info(`Session ${session.sessionId} released by ${request.user.id}`);
       
@@ -267,20 +329,21 @@ export const PUT = withAuth(async (request) => {
         });
       }
       
-      if (global.io) global.io.to(`floor:${session.floor}`).emit('table:released', { sessionId: session._id, tableId: session.primaryTable });
+      if (global.io) global.io.to(`floor:${session.floor}`).emit('table:released', { sessionId: session._id, tableId: session.primaryTable, tableIds: releasedIds });
 
-      const releasedTable = await Table.findById(session.primaryTable).select("tableNumber").lean();
+      const releasedTables = await Table.find({ _id: { $in: releasedIds } }).select("tableNumber").lean();
+      const releasedLabel = joinTableNumbers(releasedTables.map((t) => t.tableNumber));
       await createNotification({
         restaurantId: request.restaurant,
         type: "TABLE_RELEASED",
         title: "Table Released",
-        message: `Table ${releasedTable?.tableNumber || ""} was released`,
+        message: `Table ${releasedLabel || ""} was released`,
         tableId: session.primaryTable,
         tableSessionId: session._id,
         employeeId: request.user.id,
         floorId: session.floor,
         priority: "low",
-        metadata: { tableNo: releasedTable?.tableNumber || null },
+        metadata: { tableNo: releasedLabel || null },
       });
 
       return sendSuccess(session, "Table released successfully");
@@ -357,13 +420,43 @@ export const PUT = withAuth(async (request) => {
     }
 
     if (action === "RECONFIGURE") {
-      if (effectiveSeatCount === undefined) return sendError(new Error("Missing field"), "effectiveSeatCount is required", 400);
-      
-      session.effectiveSeatCount = effectiveSeatCount;
+      const primaryId = resolveDocumentId(session.primaryTable);
+      const requestedLinked = Array.isArray(linkedTableIds)
+        ? [...new Set(linkedTableIds.map(resolveDocumentId).filter((id) => id && id !== primaryId))]
+        : null;
+
+      if (requestedLinked) {
+        try {
+          await applyLinkedTablesToSession({
+            session,
+            linkedTableIds: requestedLinked,
+            restaurantId: request.restaurant,
+            actorId: request.user.id,
+            mergeGuestCount: true,
+          });
+        } catch (linkError) {
+          if (linkError instanceof SessionTableError) {
+            return sendError(linkError, linkError.message, linkError.statusCode);
+          }
+          throw linkError;
+        }
+      }
+
+      const combinedSeats = await sumSeatsForTableIds(collectSessionTableIds(session));
+      const nextSeatCount =
+        effectiveSeatCount === undefined || effectiveSeatCount === null || effectiveSeatCount === ""
+          ? combinedSeats
+          : Number(effectiveSeatCount);
+      if (!Number.isFinite(nextSeatCount) || nextSeatCount < 1) {
+        return sendError(new Error("Missing field"), "effectiveSeatCount is required", 400);
+      }
+
+      session.effectiveSeatCount = nextSeatCount;
       await session.save();
-      logger.info(`Session ${session.sessionId} reconfigured to ${effectiveSeatCount} seats`);
-      
-      // Audit Log
+
+      const combinedTableNo = await syncSessionOrderTableLabels(session);
+      logger.info(`Session ${session.sessionId} reconfigured to ${nextSeatCount} seats tables=${combinedTableNo || ""}`);
+
       await OperationalAuditLog.create({
         restaurantId: request.restaurant,
         actorId: request.user.id,
@@ -373,11 +466,20 @@ export const PUT = withAuth(async (request) => {
         floorId: session.floor,
         tableId: session.primaryTable,
         tableSessionId: session._id,
-        newValue: { effectiveSeatCount }
+        newValue: {
+          effectiveSeatCount: nextSeatCount,
+          linkedTableIds: collectSessionTableIds(session),
+        }
       });
 
-      if (global.io) global.io.to(`floor:${session.floor}`).emit('table:updated', { sessionId: session._id, effectiveSeatCount });
-      
+      if (global.io) {
+        global.io.to(`floor:${session.floor}`).emit('table:updated', {
+          sessionId: session._id,
+          effectiveSeatCount: nextSeatCount,
+          linkedTableIds: (session.linkedTables || []).map((id) => String(id)),
+        });
+      }
+
       return sendSuccess(session, "Table reconfigured successfully");
     }
 

@@ -13,7 +13,8 @@ import { createNotification } from "@/lib/notifications/notificationService";
 import Table from "@/models/floor/Table";
 import Floor from "@/models/floor/Floor";
 import { repricePosCartItems } from "@/lib/orders/repricePosCartItems";
-import { formatTableLocation } from "@/utils/orderDisplay";
+import { formatSessionTableLabel, formatTableLocation, joinTableNumbers } from "@/utils/orderDisplay";
+import { freeSessionTables } from "@/lib/orders/sessionTables";
 
 function normalizeProductType(value) {
   return String(value || "").toUpperCase() === "BAR" ? "BAR" : "KITCHEN";
@@ -97,7 +98,11 @@ async function notifyOrderEvent({
   tableNo,
   serverName,
 }) {
-  const label = tableNo ? `Table ${tableNo}` : "no table";
+  const label = tableNo
+    ? (/^tables?\b/i.test(String(tableNo).trim())
+        ? String(tableNo).trim()
+        : `Table ${tableNo}`)
+    : "no table";
   const titles = {
     NEW_ORDER: "New Order",
     ORDER_UPDATED: "Order Updated",
@@ -419,6 +424,7 @@ export const POST = withAuth(async (request) => {
       restaurant: request.restaurant,
     })
       .populate("primaryTable")
+      .populate("linkedTables", "tableNumber seats")
       .populate("floor", "name");
     if (!session || !session.isSessionOpen) {
       return sendError(new Error("Invalid Session"), "Table session is invalid or closed", 400);
@@ -458,10 +464,7 @@ export const POST = withAuth(async (request) => {
       order.totalAmount = totalAmount;
       order.specialNote = specialNote;
       order.floor = session.floor?._id || session.floor || order.floor;
-      order.tableNo = formatTableLocation(
-        session.primaryTable?.tableNumber || order.tableNo,
-        session.floor?.name,
-      );
+      order.tableNo = formatSessionTableLabel(session) || order.tableNo;
       if (resolvedPartyName !== null || partyName !== undefined || guestName !== undefined) {
         order.guestName = resolvedPartyName;
         order.partyName = resolvedPartyName;
@@ -499,10 +502,7 @@ export const POST = withAuth(async (request) => {
       });
 
       const serverName = await resolveServerName(employeeId);
-      const tableNo = formatTableLocation(
-        session.primaryTable?.tableNumber,
-        session.floor?.name,
-      );
+      const tableNo = formatSessionTableLabel(session);
       if (kotPayload.length > 0) {
         await notifyOrderEvent({
           type: "ORDER_UPDATED",
@@ -561,10 +561,7 @@ export const POST = withAuth(async (request) => {
         tableSession: sessionId,
         table: session.primaryTable._id,
         floor: session.floor?._id || session.floor,
-        tableNo: formatTableLocation(
-          session.primaryTable.tableNumber,
-          session.floor?.name,
-        ),
+        tableNo: formatSessionTableLabel(session),
         guestName: resolvedPartyName,
         partyName: resolvedPartyName,
         guestCount: Number.isFinite(resolvedGuestCount)
@@ -605,10 +602,7 @@ export const POST = withAuth(async (request) => {
       });
 
       const serverName = await resolveServerName(employeeId);
-      const tableNo = formatTableLocation(
-        session.primaryTable?.tableNumber,
-        session.floor?.name,
-      );
+      const tableNo = formatSessionTableLabel(session);
       await notifyOrderEvent({
         type: "NEW_ORDER",
         order: newOrder,
@@ -777,9 +771,7 @@ export const PATCH = withAuth(async (request) => {
           session.closedAt = new Date();
           await session.save();
 
-          if (session.primaryTable) {
-            await Table.findByIdAndUpdate(session.primaryTable, { status: "Available" });
-          }
+          const releasedIds = await freeSessionTables(session);
 
           sessionReleased = true;
 
@@ -803,22 +795,28 @@ export const PATCH = withAuth(async (request) => {
             global.io.to(`floor:${session.floor}`).emit("table:released", {
               sessionId: session._id,
               tableId: session.primaryTable,
+              tableIds: releasedIds,
             });
           }
 
           try {
-            const releasedTable = await Table.findById(session.primaryTable).select("tableNumber").lean();
+            const releasedTables = await Table.find({ _id: { $in: releasedIds } })
+              .select("tableNumber")
+              .lean();
+            const releasedLabel = joinTableNumbers(
+              releasedTables.map((t) => t.tableNumber),
+            );
             await createNotification({
               restaurantId,
               type: "TABLE_RELEASED",
               title: "Table Released",
-              message: `Table ${releasedTable?.tableNumber || ""} was released after bill waive`,
+              message: `Table ${releasedLabel || ""} was released after bill waive`,
               tableId: session.primaryTable,
               tableSessionId: session._id,
               employeeId,
               floorId: session.floor,
               priority: "low",
-              metadata: { tableNo: releasedTable?.tableNumber || null, waivedOrderId: order._id },
+              metadata: { tableNo: releasedLabel || null, waivedOrderId: order._id },
             });
           } catch (notifErr) {
             logger.error("Failed to create TABLE_RELEASED notification after waive", notifErr);

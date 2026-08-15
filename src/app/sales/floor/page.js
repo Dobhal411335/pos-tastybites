@@ -8,6 +8,7 @@ import {
   Users,
   AlertCircle,
   CheckCircle2,
+  Check,
   Lock,
   ChevronLeft,
   Settings2,
@@ -41,6 +42,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { employeeFetch } from "@/lib/employeeFetch";
 import { isSalesAdminRole } from "@/utils/roles";
+import { resolveDocumentId, sessionOwnsTable, formatTableLocation } from "@/utils/orderDisplay";
 
 const SALES_FLOOR_STORAGE_KEY = "sales-active-floor-id";
 
@@ -79,6 +81,12 @@ function storeFloorId(id) {
   }
 }
 
+function findSessionForTable(sessions, tableId) {
+  const id = resolveDocumentId(tableId);
+  if (!id) return null;
+  return (sessions || []).find((session) => sessionOwnsTable(session, id)) || null;
+}
+
 export default function SalesFloorPage() {
   const router = useRouter();
   const { socket } = useSocket();
@@ -115,6 +123,7 @@ export default function SalesFloorPage() {
   // Form States
   const [guestCount, setGuestCount] = useState(1);
   const [effectiveSeatCount, setEffectiveSeatCount] = useState(1);
+  const [selectedLinkedTableIds, setSelectedLinkedTableIds] = useState([]);
   const [actionLoading, setActionLoading] = useState(false);
 
   const loadOnlineStaff = useCallback(async () => {
@@ -146,12 +155,11 @@ export default function SalesFloorPage() {
       }
 
       const preferredFloor =
-        (floorIdOverride && String(floorIdOverride)) ||
-        readUrlFloorId() ||
-        selectedFloorIdRef.current ||
-        readStoredFloorId() ||
-        user?.defaultFloor?._id ||
-        user?.defaultFloor ||
+        resolveDocumentId(floorIdOverride) ||
+        resolveDocumentId(readUrlFloorId()) ||
+        resolveDocumentId(selectedFloorIdRef.current) ||
+        resolveDocumentId(readStoredFloorId()) ||
+        resolveDocumentId(user?.defaultFloor) ||
         null;
       const floorQuery = preferredFloor
         ? `?floorId=${encodeURIComponent(String(preferredFloor))}`
@@ -187,6 +195,15 @@ export default function SalesFloorPage() {
     }
   }, [loadOnlineStaff]);
 
+  const reloadCurrentFloor = useCallback(() => {
+    loadData(
+      selectedFloorIdRef.current ||
+        readStoredFloorId() ||
+        readUrlFloorId() ||
+        undefined,
+    );
+  }, [loadData]);
+
   useEffect(() => {
     const stored = readUrlFloorId() || readStoredFloorId();
     if (stored) {
@@ -196,7 +213,7 @@ export default function SalesFloorPage() {
     loadData(stored || undefined);
 
     const handleReconnect = () => {
-      loadData(readStoredFloorId() || selectedFloorIdRef.current || undefined);
+      reloadCurrentFloor();
     };
 
     window.addEventListener("socket:reconnect", handleReconnect);
@@ -205,13 +222,13 @@ export default function SalesFloorPage() {
     const onlineTimer = setInterval(loadOnlineStaff, 30000);
 
     if (socket) {
-      socket.on("table:assigned", loadData);
-      socket.on("table:updated", loadData);
-      socket.on("table:released", loadData);
-      socket.on("table:transferred", loadData);
-      socket.on("order:created", loadData);
-      socket.on("order:updated", loadData);
-      socket.on("payment:completed", loadData);
+      socket.on("table:assigned", reloadCurrentFloor);
+      socket.on("table:updated", reloadCurrentFloor);
+      socket.on("table:released", reloadCurrentFloor);
+      socket.on("table:transferred", reloadCurrentFloor);
+      socket.on("order:created", reloadCurrentFloor);
+      socket.on("order:updated", reloadCurrentFloor);
+      socket.on("payment:completed", reloadCurrentFloor);
       socket.on("NEW_PRINT_JOB", () => {
         toast.message("New print job queued", {
           description: "Open Print Jobs to preview / test.",
@@ -223,17 +240,17 @@ export default function SalesFloorPage() {
       window.removeEventListener("socket:reconnect", handleReconnect);
       clearInterval(onlineTimer);
       if (socket) {
-        socket.off("table:assigned", loadData);
-        socket.off("table:updated", loadData);
-        socket.off("table:released", loadData);
-        socket.off("table:transferred", loadData);
-        socket.off("order:created", loadData);
-        socket.off("order:updated", loadData);
-        socket.off("payment:completed", loadData);
+        socket.off("table:assigned", reloadCurrentFloor);
+        socket.off("table:updated", reloadCurrentFloor);
+        socket.off("table:released", reloadCurrentFloor);
+        socket.off("table:transferred", reloadCurrentFloor);
+        socket.off("order:created", reloadCurrentFloor);
+        socket.off("order:updated", reloadCurrentFloor);
+        socket.off("payment:completed", reloadCurrentFloor);
         socket.off("NEW_PRINT_JOB");
       }
     };
-  }, [socket, loadData, loadOnlineStaff]);
+  }, [socket, loadData, reloadCurrentFloor, loadOnlineStaff]);
 
   useEffect(() => {
     if (socket && selectedFloorId) {
@@ -257,10 +274,169 @@ export default function SalesFloorPage() {
   const currentUserId =
     currentUser?._id?.toString() || currentUser?.id?.toString() || null;
 
-  const handleTableClick = (table) => {
-    const session = floorData.sessions.find(
-      (s) => s.tableId === table.id?.toString(),
+  const primarySessionTableId = resolveDocumentId(
+    selectedTable?.session?.tableId || selectedTable?.session?.primaryTable,
+  );
+  const activePrimaryTableId =
+    primarySessionTableId || resolveDocumentId(selectedTable?.id);
+
+  const sumSeatsForTables = (tableIds) => {
+    const idSet = new Set((tableIds || []).map((id) => String(id)));
+    return (floorData.tables || []).reduce((sum, table) => {
+      if (!idSet.has(String(table.id))) return sum;
+      return sum + (Number(table.seats) || 0);
+    }, 0);
+  };
+
+  const combinedSeatTotal = sumSeatsForTables([
+    activePrimaryTableId,
+    ...selectedLinkedTableIds,
+  ]);
+
+  const openReconfigure = () => {
+    const linked = (selectedTable?.session?.linkedTableIds || []).map(String);
+    setSelectedLinkedTableIds(linked);
+    const seatTotal =
+      sumSeatsForTables([primarySessionTableId, ...linked]) ||
+      selectedTable?.seats ||
+      4;
+    setEffectiveSeatCount(
+      selectedTable?.session?.effectiveSeatCount &&
+        selectedTable.session.effectiveSeatCount > seatTotal
+        ? selectedTable.session.effectiveSeatCount
+        : seatTotal,
     );
+    setActionView("RECONFIGURE");
+  };
+
+  const toggleLinkedTable = (tableId, extraIds = []) => {
+    const idsToToggle = [String(tableId), ...extraIds.map(String)];
+    setSelectedLinkedTableIds((prev) => {
+      const next = new Set(prev.map(String));
+      const shouldSelect = idsToToggle.some((id) => !next.has(id));
+      idsToToggle.forEach((id) => {
+        if (id === String(activePrimaryTableId || "")) return;
+        if (shouldSelect) next.add(id);
+        else next.delete(id);
+      });
+      const selected = [...next];
+      setEffectiveSeatCount(
+        sumSeatsForTables([activePrimaryTableId, ...selected]) || 1,
+      );
+      return selected;
+    });
+  };
+
+  const buildCombineGroups = (primaryId, ownerId) => {
+    const available = [];
+    const mine = [];
+    if (!primaryId) return { available, mine };
+    for (const table of floorData.tables || []) {
+      const tableId = String(table.id);
+      if (tableId === String(primaryId)) continue;
+      const session = findSessionForTable(floorData.sessions, tableId);
+      if (!session) {
+        available.push(table);
+        continue;
+      }
+      const isThisSession =
+        selectedTable?.session &&
+        String(session.id) === String(selectedTable.session.id);
+      const isMine = session.assignedEmployeeId === ownerId;
+      if (isThisSession || isMine) {
+        mine.push(table);
+      }
+    }
+    return { available, mine };
+  };
+
+  const reconfigureGroups = actionView === "RECONFIGURE"
+    ? buildCombineGroups(
+        primarySessionTableId,
+        selectedTable?.session?.assignedEmployeeId || currentUserId,
+      )
+    : { available: [], mine: [] };
+
+  const startSessionGroups = showStartSession
+    ? buildCombineGroups(resolveDocumentId(selectedTable?.id), currentUserId)
+    : { available: [], mine: [] };
+
+  const renderCombineTableRows = (groups) => {
+    const renderRow = (table) => {
+      const tableId = String(table.id);
+      const checked = selectedLinkedTableIds.includes(tableId);
+      const session = findSessionForTable(floorData.sessions, tableId);
+      const isThisSession =
+        selectedTable?.session &&
+        String(session?.id) === String(selectedTable.session.id);
+      const siblingIds = isThisSession
+        ? []
+        : [session?.tableId, ...(session?.linkedTableIds || [])].filter(
+            (id) => id && String(id) !== String(activePrimaryTableId || ""),
+          );
+      return (
+        <button
+          key={tableId}
+          type="button"
+          onClick={() => toggleLinkedTable(tableId, siblingIds)}
+          className={`w-full h-12 px-3 rounded-lg border-2 flex items-center gap-3 text-left ${
+            checked
+              ? "border-orange-400 bg-orange-50"
+              : "border-zinc-200 bg-zinc-50"
+          }`}
+        >
+          <span
+            className={`grid place-content-center h-4 w-4 rounded-sm border shrink-0 ${
+              checked
+                ? "bg-orange-500 border-orange-500 text-white"
+                : "border-zinc-400 bg-white"
+            }`}
+          >
+            {checked ? <Check className="h-3 w-3" /> : null}
+          </span>
+          <span className="font-bold text-zinc-800">
+            Table {table.tableNumber}
+          </span>
+          <span className="ml-auto text-xs font-semibold text-zinc-500">
+            {table.seats} seats
+            {session?.hasActiveOrder ? " · order" : ""}
+          </span>
+        </button>
+      );
+    };
+
+    if (!groups.available.length && !groups.mine.length) {
+      return (
+        <p className="text-center text-sm text-zinc-500 py-3">
+          No other tables on this floor can be combined right now.
+        </p>
+      );
+    }
+
+    return (
+      <div className="max-h-48 overflow-y-auto custom-scrollbar space-y-4 pr-1">
+        {groups.available.length > 0 && (
+          <div className="space-y-2">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">
+              Available
+            </p>
+            {groups.available.map(renderRow)}
+          </div>
+        )}
+        {groups.mine.length > 0 && (
+          <div className="space-y-2">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">
+              Your tables
+            </p>
+            {groups.mine.map(renderRow)}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const handleTableClick = (table) => {
+    const session = findSessionForTable(floorData.sessions, table.id);
     const isAdmin = isSalesAdminRole(currentUser?.role);
     // Reliable comparison: session owner uses MongoDB _id
     const isMineSession =
@@ -268,6 +444,7 @@ export default function SalesFloorPage() {
 
     if (!session) {
       setSelectedTable(table);
+      setSelectedLinkedTableIds([]);
       setGuestCount(table.seats || 2);
       setShowStartSession(true);
     } else if (isMineSession || isAdmin) {
@@ -292,19 +469,21 @@ export default function SalesFloorPage() {
         body: JSON.stringify({
           tableId: selectedTable.id,
           guestCount: parseInt(guestCount, 10),
+          linkedTableIds: selectedLinkedTableIds,
         }),
       });
       const json = await res.json();
       if (res.ok && json.success) {
         toast.success("Table assigned");
         setShowStartSession(false);
+        setSelectedLinkedTableIds([]);
         setSelectedTable(null);
         const sessionId =
           json.data?._id?.toString() || json.data?.id?.toString();
         if (sessionId) {
           router.push(`/sales/orders/${sessionId}`);
         } else {
-          loadData();
+          loadData(selectedFloorIdRef.current);
         }
       } else {
         toast.error(json.message || "Failed to assign table");
@@ -327,6 +506,7 @@ export default function SalesFloorPage() {
           action,
           guestCount: payload?.guestCount,
           effectiveSeatCount: payload?.effectiveSeatCount,
+          linkedTableIds: payload?.linkedTableIds,
           notes: payload?.notes,
           newEmployeeId: payload?.newEmployeeId,
           adminOverride: payload?.adminOverride,
@@ -341,7 +521,7 @@ export default function SalesFloorPage() {
           setAdminOverrideReason("");
         }
         setShowTableActions(false);
-        loadData();
+        loadData(selectedFloorIdRef.current);
       } else {
         if (
           json.message &&
@@ -602,14 +782,13 @@ export default function SalesFloorPage() {
               )}
               {floorData.tables.map((table) => {
                 const tableId = table.id?.toString();
-                const session = floorData.sessions.find(
-                  (s) => s.tableId === tableId,
-                );
+                const session = findSessionForTable(floorData.sessions, tableId);
                 // Live session ownership — TableSession.assignedEmployee is the source of truth
                 const isMine =
                   session && session.assignedEmployeeId === currentUserId;
                 const isOther = session && !isMine;
                 const hasOrder = Boolean(session?.hasActiveOrder);
+                const isCombined = Boolean(session?.linkedTableIds?.length);
 
                 let bgClass =
                   "bg-white border-zinc-200 hover:border-zinc-300 hover:shadow-sm";
@@ -628,6 +807,12 @@ export default function SalesFloorPage() {
                 textClass = "text-zinc-800";
                 statusLabel = "BOOKED";
                 statusClass = "text-zinc-600";
+              } else if (isMine && isCombined) {
+                bgClass =
+                  "bg-violet-100 border-violet-400 hover:border-violet-500";
+                textClass = "text-violet-950";
+                statusLabel = "COMBINED";
+                statusClass = "text-violet-700";
               } else if (isMine && hasOrder) {
                 bgClass =
                   "bg-orange-100 border-orange-400 hover:border-orange-500";
@@ -665,27 +850,27 @@ export default function SalesFloorPage() {
                   }}
                 >
                   <span
-                    className={`text-lg md:text-md font-bold tracking-tight leading-tight ${textClass}`}
+                    className={`text-lg md:text-[14px] font-bold tracking-tight leading-tight ${textClass}`}
                   >
                     {table.tableNumber}
                   </span>
 
                   <span
-                    className={`mt-1.5 text-[11px] md:text-xs font-bold uppercase tracking-wide leading-none ${statusClass}`}
+                    className={`mt-1.5 text-[10px] md:text-md font-bold uppercase tracking-wide leading-none ${statusClass}`}
                   >
                     {statusLabel}
                   </span>
 
                   {session ? (
-                    <div className="mt-2 flex items-center gap-1 min-w-0 px-0.5">
-                      {employeeFirst && (
-                        <span
-                          className={`text-xs font-bold truncate max-w-full ${textClass}`}
-                        >
-                          {employeeFirst}
-                        </span>
-                      )}
+                    <div className="mt-2 flex flex-col items-center gap-0.5 min-w-0 px-0.5">
                       <div className="flex items-center gap-1">
+                        {employeeFirst && (
+                          <span
+                            className={`text-xs font-bold truncate max-w-full ${textClass}`}
+                          >
+                            {employeeFirst}
+                          </span>
+                        )}
                         <Users className={`h-4 w-4 ${statusClass}`} />
                         <span
                           className={`text-sm font-semibold ${statusClass}`}
@@ -693,6 +878,9 @@ export default function SalesFloorPage() {
                           {session.guestCount}
                         </span>
                       </div>
+                      <span className={`text-[10px] font-semibold ${statusClass}`}>
+                        {table.seats} seats
+                      </span>
                     </div>
                   ) : (
                     <span className="mt-2 text-xs font-semibold text-zinc-500">
@@ -710,7 +898,13 @@ export default function SalesFloorPage() {
                   {/* Subtle serving indicator for my own active table */}
                   {isMine && (
                     <div
-                      className={`absolute -top-1 -right-1 h-3 w-3 rounded-full border-2 border-black shadow-sm ${hasOrder ? "bg-orange-500" : "bg-sky-500"}`}
+                      className={`absolute -top-1 -right-1 h-3 w-3 rounded-full border-2 border-black shadow-sm ${
+                        isCombined
+                          ? "bg-violet-500"
+                          : hasOrder
+                            ? "bg-orange-500"
+                            : "bg-sky-500"
+                      }`}
                     />
                   )}
                 </div>
@@ -725,7 +919,7 @@ export default function SalesFloorPage() {
 
       {/* Start Session Modal */}
       <Dialog open={showStartSession} onOpenChange={setShowStartSession}>
-        <DialogContent className="sm:max-w-[400px]">
+        <DialogContent className="sm:max-w-[450px]">
           <DialogHeader>
             <DialogTitle className="text-xl font-bold tracking-tight text-zinc-900">
               Table {selectedTable?.tableNumber}
@@ -735,7 +929,7 @@ export default function SalesFloorPage() {
               {selectedTable?.seats}-seat table
             </p>
           </DialogHeader>
-          <div className="space-y-4 py-4">
+          <div className="space-y-5 py-2">
             <div className="space-y-2">
               <label className="text-xs font-bold uppercase tracking-wider text-zinc-500 block text-center mb-4">
                 Number of Guests
@@ -761,10 +955,25 @@ export default function SalesFloorPage() {
                   +
                 </Button>
               </div>
-              <p className="text-center text-sm font-semibold text-zinc-500 mt-4">
-                {guestCount} of {selectedTable?.seats} seats will be occupied
-              </p>
             </div>
+
+            <div className="space-y-2">
+              <p className="text-xs font-bold uppercase tracking-wider text-zinc-500 text-center">
+                Combine tables
+              </p>
+              <p className="text-xs text-zinc-500 text-center">
+                Optional. Select extra empty tables or your booked tables for
+                this one party.
+              </p>
+              {renderCombineTableRows(startSessionGroups)}
+            </div>
+
+            <p className="text-center text-sm font-semibold text-zinc-600">
+              {guestCount} guest{guestCount === 1 ? "" : "s"} · {combinedSeatTotal || selectedTable?.seats || 0} combined seats
+              {guestCount > (combinedSeatTotal || selectedTable?.seats || 0)
+                ? " · party is larger than seats"
+                : ""}
+            </p>
           </div>
           <DialogFooter>
             <Button
@@ -805,9 +1014,18 @@ export default function SalesFloorPage() {
               </Button>
             )}
             <DialogTitle className="text-xl font-bold tracking-tight text-zinc-900 text-center">
-              {actionView === "MAIN" && `Table ${selectedTable?.tableNumber}`}
+              {actionView === "MAIN" &&
+                formatTableLocation(
+                  selectedTable?.session?.tableNumbers ||
+                    selectedTable?.tableNumber,
+                  activeFloor?.name,
+                )}
               {actionView === "READONLY" &&
-                `Table ${selectedTable?.tableNumber}`}
+                formatTableLocation(
+                  selectedTable?.session?.tableNumbers ||
+                    selectedTable?.tableNumber,
+                  activeFloor?.name,
+                )}
               {actionView === "GUESTS" && "Adjust Guests"}
               {actionView === "TRANSFER" && "Transfer Table"}
               {actionView === "RECONFIGURE" && "Temporary Table Setup"}
@@ -822,10 +1040,10 @@ export default function SalesFloorPage() {
                     {activeFloor?.name || "Floor"}
                   </p>
                   <p className="text-sm font-bold text-zinc-900 mt-1">
-                    {selectedTable?.session?.guestCount} Guests •{" "}
+                    {selectedTable?.session?.guestCount} guests in party •{" "}
                     {selectedTable?.session?.effectiveSeatCount ||
                       selectedTable?.seats}{" "}
-                    Seats
+                    combined seats
                   </p>
                   <p className="text-sm font-bold text-zinc-900 mt-1">
                     Assigned to {selectedTable?.session?.assignedEmployeeName}
@@ -878,14 +1096,7 @@ export default function SalesFloorPage() {
                 <Button
                   variant="outline"
                   className="h-14 justify-start px-6 font-bold text-zinc-700 border-2 border-zinc-200 bg-zinc-50 hover:bg-orange-400 hover:text-white"
-                  onClick={() => {
-                    setEffectiveSeatCount(
-                      selectedTable?.session?.effectiveSeatCount ||
-                        selectedTable?.seats ||
-                        4,
-                    );
-                    setActionView("RECONFIGURE");
-                  }}
+                  onClick={openReconfigure}
                 >
                   <Settings2 className="mr-3 h-5 w-5 text-zinc-400" />
                   Temporary Table Setup
@@ -973,10 +1184,11 @@ export default function SalesFloorPage() {
                     </Button>
                   </div>
                   <p className="text-center text-xs text-zinc-500 pt-1">
-                    Table capacity: {selectedTable?.seats || "—"} seats
-                    {selectedTable?.session?.effectiveSeatCount
-                      ? ` · session seats: ${selectedTable.session.effectiveSeatCount}`
-                      : ""}
+                    Party size for this one check. Combined table seats:{" "}
+                    {selectedTable?.session?.effectiveSeatCount ||
+                      selectedTable?.seats ||
+                      "—"}
+                    . This table has {selectedTable?.seats || "—"} chairs.
                   </p>
                 </div>
                 <Button
@@ -1033,16 +1245,49 @@ export default function SalesFloorPage() {
             )}
 
             {actionView === "RECONFIGURE" && (
-              <div className="flex flex-col gap-6 py-4">
+              <div className="flex flex-col gap-5 py-2">
                 <p className="text-sm text-zinc-500 text-center">
-                  This temporarily changes the seat capacity for the duration of
-                  this session without permanently corrupting the Admin floor
-                  configuration.
+                  Combine empty tables or your booked tables into this session
+                  for one order. Seat count is temporary and does not change the
+                  admin floor plan.
                 </p>
+
+                {primarySessionTableId && (
+                  <div className="rounded-lg border-2 border-orange-200 bg-orange-50 px-4 py-3">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-orange-700">
+                      Primary table
+                    </p>
+                    <p className="text-sm font-bold text-zinc-900 mt-0.5">
+                      Table{" "}
+                      {(floorData.tables || []).find(
+                        (table) => String(table.id) === String(primarySessionTableId),
+                      )?.tableNumber || selectedTable?.tableNumber}{" "}
+                      ·{" "}
+                      {(floorData.tables || []).find(
+                        (table) => String(table.id) === String(primarySessionTableId),
+                      )?.seats || selectedTable?.seats || "—"}{" "}
+                      seats · locked
+                    </p>
+                  </div>
+                )}
+
+                {renderCombineTableRows(reconfigureGroups)}
+
+                <p className="text-center text-xs font-semibold text-zinc-600">
+                  Combined seats: {combinedSeatTotal || selectedTable?.seats || 0}
+                  {selectedTable?.session?.guestCount
+                    ? ` · ${selectedTable.session.guestCount} guests in party`
+                    : ""}
+                </p>
+
                 <div className="space-y-2">
                   <label className="text-xs font-bold uppercase tracking-wider text-zinc-500 text-center block">
-                    Session Seat Count
+                    Extra chairs (optional)
                   </label>
+                  <p className="text-xs text-zinc-500 text-center">
+                    Defaults to combined table seats. Raise only if you add extra
+                    chairs. This is not the guest count.
+                  </p>
                   <div className="flex items-center gap-4 px-4">
                     <Button
                       variant="outline"
@@ -1073,12 +1318,15 @@ export default function SalesFloorPage() {
                 </div>
                 <Button
                   onClick={() =>
-                    executeAction("RECONFIGURE", { effectiveSeatCount })
+                    executeAction("RECONFIGURE", {
+                      effectiveSeatCount,
+                      linkedTableIds: selectedLinkedTableIds,
+                    })
                   }
                   disabled={actionLoading}
-                  className="h-12 font-bold w-full mt-4"
+                  className="h-12 font-bold w-full mt-2"
                 >
-                  Reconfigure Table
+                  Confirm Table Setup
                 </Button>
               </div>
             )}

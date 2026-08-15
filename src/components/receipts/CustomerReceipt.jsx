@@ -2,7 +2,7 @@ import React from "react";
 import "./print.css";
 import moment from "moment";
 import { isOfferItem, getOfferDetailLines } from "@/utils/offerDetails";
-import { shouldShowTable, formatTableLocation } from "@/utils/orderDisplay";
+import { shouldShowTable, formatTableNumbersWithFloor } from "@/utils/orderDisplay";
 
 const money = (n) => `$${(Number(n) || 0).toFixed(2)}`;
 
@@ -50,7 +50,7 @@ const CustomerReceipt = ({
   } = order;
   const partyLabel = order.partyName || guestName;
   const floorName = order.floorName || order.floor?.name;
-  const tableLabel = formatTableLocation(tableNo, floorName);
+  const tableLabel = formatTableNumbersWithFloor(tableNo, floorName);
 
   const restName = restaurantDetails?.name || "TASTY BITES";
   const restAddress =

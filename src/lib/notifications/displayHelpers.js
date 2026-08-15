@@ -15,7 +15,10 @@ export function notificationMetaLine(n) {
     );
   }
   if (n.metadata?.orderNumber) parts.push(`Order #${n.metadata.orderNumber}`);
-  if (n.metadata?.tableNo) parts.push(`Table ${n.metadata.tableNo}`);
+  if (n.metadata?.tableNo) {
+    const table = String(n.metadata.tableNo).trim();
+    parts.push(/^tables?\b/i.test(table) ? table : `Table ${table}`);
+  }
   return parts.join(" • ");
 }
 

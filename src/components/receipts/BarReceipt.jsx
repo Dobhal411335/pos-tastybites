@@ -1,7 +1,7 @@
 import React from "react";
 import "./print.css";
 import moment from "moment";
-import { isDirectSaleOrder, formatTableLocation } from "@/utils/orderDisplay";
+import { isDirectSaleOrder, formatTableNumbersWithFloor } from "@/utils/orderDisplay";
 
 function isStyleOption(opt, preparationStyle) {
   const value = String(opt || "").trim();
@@ -30,7 +30,7 @@ const BarReceipt = ({
   if (!order || !items.length) return null;
 
   const { orderNumber, tableNo, guestName, partyName, createdAt } = order;
-  const tableLabel = formatTableLocation(
+  const tableLabel = formatTableNumbersWithFloor(
     tableNo,
     order.floorName || order.floor?.name,
   );

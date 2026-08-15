@@ -16,6 +16,11 @@ import {
   calcStaffDiscountAmount,
   normalizeStaffDiscountPercent,
 } from "@/lib/orders/staffDiscount";
+import ServiceTax from "@/models/tax/ServiceTax";
+import {
+  computeOrderServiceCharge,
+  SERVICE_CHARGE_NO_TIP_MESSAGE,
+} from "@/lib/orders/serviceCharge";
 
 const r2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 
@@ -41,6 +46,7 @@ export const POST = withAuth(async (request) => {
       guestCount,
       cashAmount,
       cardAmount,
+      applyServiceCharge,
       serviceChargeTotal,
       serviceChargeName,
     } = data;
@@ -77,33 +83,9 @@ export const POST = withAuth(async (request) => {
     // For now, we assume the payment succeeds and just update the DB.
 
     // Never trust client totals for the payable amount — recompute from persisted order lines.
-    let workingServiceCharge = r2(order.serviceChargeTotal);
-    if (serviceChargeTotal !== undefined && serviceChargeTotal !== null) {
-      const sc = r2(serviceChargeTotal);
-      if (sc < 0) {
-        return sendError(new Error("Invalid Charge"), "Service charge cannot be negative", 400);
-      }
-      // Allow setting service charge at checkout when previously unset/zero.
-      if (workingServiceCharge == null || workingServiceCharge === 0 || Math.abs(workingServiceCharge - sc) <= 0.02) {
-        workingServiceCharge = sc;
-        order.serviceChargeTotal = sc;
-      } else {
-        return sendError(
-          new Error("Invalid Charge"),
-          "Service charge does not match the order",
-          400,
-        );
-      }
-    }
-    if (serviceChargeName !== undefined) {
-      order.serviceChargeName = serviceChargeName || null;
-    }
-
-    const orderCeiling = r2(
-      (Number(order.subTotal) || 0) +
-        (Number(order.taxTotal) || 0) +
-        (Number(workingServiceCharge) || 0),
-    );
+    const subTotal = r2(order.subTotal);
+    const taxTotal = r2(order.taxTotal);
+    const discountCeiling = r2(subTotal + taxTotal);
 
     if (order.source === "STAFF" && order.staffFor) {
       const staff = await Employee.findOne({
@@ -120,7 +102,7 @@ export const POST = withAuth(async (request) => {
     } else {
       if (discountTotal !== undefined && discountTotal !== null) {
         const incomingDiscount = r2(discountTotal);
-        if (incomingDiscount < 0 || incomingDiscount > orderCeiling + 0.01) {
+        if (incomingDiscount < 0 || incomingDiscount > discountCeiling + 0.01) {
           return sendError(
             new Error("Invalid Discount"),
             "Discount amount is invalid for this order",
@@ -136,8 +118,57 @@ export const POST = withAuth(async (request) => {
       }
     }
 
+    const resolvedDiscount = r2(order.discountTotal);
+    const wantsServiceCharge =
+      applyServiceCharge === true ||
+      (applyServiceCharge !== false &&
+        serviceChargeTotal != null &&
+        r2(serviceChargeTotal) > 0);
+
+    let workingServiceCharge = 0;
+    if (wantsServiceCharge) {
+      const serviceTax = await ServiceTax.findOne({
+        restaurant: request.restaurant,
+        status: "Active",
+      }).lean();
+      if (!serviceTax) {
+        return sendError(
+          new Error("Invalid Charge"),
+          "No active service charge is configured",
+          400,
+        );
+      }
+      workingServiceCharge = computeOrderServiceCharge({
+        serviceTax,
+        subtotal: subTotal,
+        discountAmount: resolvedDiscount,
+      });
+      if (serviceChargeTotal != null && serviceChargeTotal !== "") {
+        const clientSc = r2(serviceChargeTotal);
+        if (clientSc < 0) {
+          return sendError(
+            new Error("Invalid Charge"),
+            "Service charge cannot be negative",
+            400,
+          );
+        }
+        if (Math.abs(clientSc - workingServiceCharge) > 0.02) {
+          return sendError(
+            new Error("Invalid Charge"),
+            "Service charge does not match the order",
+            400,
+          );
+        }
+      }
+      order.serviceChargeName =
+        serviceTax.name || serviceChargeName || "Server Charge";
+    } else {
+      order.serviceChargeName = null;
+    }
+    order.serviceChargeTotal = workingServiceCharge;
+
     order.totalAmount = r2(
-      Math.max(0, orderCeiling - (Number(order.discountTotal) || 0)),
+      Math.max(0, subTotal - resolvedDiscount + taxTotal + workingServiceCharge),
     );
 
     // Client `amount` may only confirm the server-computed total — never overwrite it.
@@ -245,6 +276,13 @@ export const POST = withAuth(async (request) => {
       const tip = r2(tipAmount);
       if (tip < 0) {
         return sendError(new Error("Invalid Tip"), "Tip cannot be negative", 400);
+      }
+      if (tip > 0 && workingServiceCharge > 0) {
+        return sendError(
+          new Error("Tip Not Allowed"),
+          SERVICE_CHARGE_NO_TIP_MESSAGE,
+          400,
+        );
       }
       if (tip > 0) {
         order.tipAmount = tip;
@@ -408,7 +446,11 @@ export const POST = withAuth(async (request) => {
         restaurantId: order.restaurantId,
         type: "PAYMENT_COMPLETED",
         title: "Payment Completed",
-        message: `Payment received for Order #${order.orderNumber}${order.tableNo ? ` • Table ${order.tableNo}` : ""}`,
+        message: `Payment received for Order #${order.orderNumber}${
+          order.tableNo
+            ? ` • ${/^tables?\b/i.test(String(order.tableNo).trim()) ? order.tableNo : `Table ${order.tableNo}`}`
+            : ""
+        }`,
         orderId: order._id,
         tableId: order.table || null,
         tableSessionId: order.tableSession || sessionId || null,

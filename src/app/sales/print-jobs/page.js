@@ -16,6 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { useSocket } from "@/components/providers/SocketProvider";
 import moment from "moment";
+import { joinTableNumbers } from "@/utils/orderDisplay";
 
 const STATUS_STYLES = {
   QUEUED: "bg-amber-100 text-amber-800",
@@ -257,7 +258,7 @@ export default function PrintJobsPage() {
                       #{orderLabel(job)}
                       {job.metadata?.tableNo && (
                         <span className="ml-2 text-xs font-normal text-zinc-500">
-                          T{job.metadata.tableNo}
+                          T{joinTableNumbers([job.metadata.tableNo])}
                         </span>
                       )}
                     </div>

@@ -25,6 +25,10 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { buildStaffDiscountState } from "@/lib/orders/staffDiscount";
+import {
+  computeOrderServiceCharge,
+  SERVICE_CHARGE_NO_TIP_MESSAGE,
+} from "@/lib/orders/serviceCharge";
 
 const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 
@@ -53,6 +57,8 @@ export default function TodayOrderPaymentModal({
   guestName: guestNameProp,
   onGuestNameChange,
   redeemNote = "POS Payment",
+  applyServiceCharge = false,
+  serviceTax = null,
 }) {
   const [paymentMethod, setPaymentMethod] = useState("Card");
   const [internalGuestName, setInternalGuestName] = useState("");
@@ -91,12 +97,26 @@ export default function TodayOrderPaymentModal({
 
   const subtotal = Number(order?.subTotal || 0);
   const totalTax = Number(order?.taxTotal || 0);
-  const serviceChargeTotal = Number(order?.serviceChargeTotal || 0);
   const discountAmount = appliedDiscount
     ? appliedDiscount.type === "%"
       ? (subtotal * appliedDiscount.value) / 100
       : Math.min(Number(appliedDiscount.value) || 0, subtotal)
     : 0;
+  const serviceChargeTotal = applyServiceCharge
+    ? computeOrderServiceCharge({
+        serviceTax: serviceTax || {
+          name: order?.serviceChargeName,
+          type: "Amount",
+          value: Number(order?.serviceChargeTotal || 0),
+          status: "Active",
+        },
+        subtotal,
+        discountAmount,
+      })
+    : 0;
+  const serviceChargeName = applyServiceCharge
+    ? serviceTax?.name || order?.serviceChargeName || "Server Charge"
+    : null;
   const total = Math.max(
     0,
     subtotal - discountAmount + totalTax + serviceChargeTotal,
@@ -380,12 +400,17 @@ export default function TodayOrderPaymentModal({
 
   const handlePayment = async () => {
     try {
+      if (applyServiceCharge && autoTip > 0) {
+        toast.error(SERVICE_CHARGE_NO_TIP_MESSAGE);
+        return;
+      }
+
       setIsSubmitting(true);
 
       const giftCardUsedAmount =
         giftCardBalance !== null ? round2(giftCardUsedPreview) : 0;
       const partyName = guestName.trim() || null;
-      const tip = autoTip;
+      const tip = applyServiceCharge ? 0 : autoTip;
 
       let resolvedCashAmount = lockedCash;
       let resolvedCardAmount = lockedCard;
@@ -472,8 +497,9 @@ export default function TodayOrderPaymentModal({
         guestCount: order.guestCount ?? null,
         cashAmount: resolvedCashAmount,
         cardAmount: resolvedCardAmount,
-        serviceChargeTotal,
-        serviceChargeName: order?.serviceChargeName || null,
+        applyServiceCharge: Boolean(applyServiceCharge),
+        serviceChargeTotal: applyServiceCharge ? serviceChargeTotal : 0,
+        serviceChargeName: applyServiceCharge ? serviceChargeName : null,
       };
 
       if (resolvedCardAmount > 0) {
@@ -516,7 +542,7 @@ export default function TodayOrderPaymentModal({
           serviceChargeTotal:
             paidOrder.serviceChargeTotal ?? serviceChargeTotal,
           serviceChargeName:
-            paidOrder.serviceChargeName ?? order?.serviceChargeName ?? null,
+            paidOrder.serviceChargeName ?? serviceChargeName ?? null,
           giftcardCode:
             paidOrder.giftcardCode ??
             (giftCardUsedAmount > 0
@@ -566,6 +592,7 @@ export default function TodayOrderPaymentModal({
   const completeDisabled =
     isSubmitting ||
     staffDiscountLoading ||
+    (applyServiceCharge && autoTip > 0) ||
     (paymentMethod === "GiftCard" && giftCardBalance === null) ||
     (paymentMethod === "GiftCard" && remainingAfterGift > 0) ||
     (paymentMethod === "Cash" && cardSplitFromCash > 0) ||
@@ -650,7 +677,7 @@ export default function TodayOrderPaymentModal({
                     {serviceChargeTotal > 0 && (
                       <div className="flex justify-between text-sm font-semibold text-zinc-500">
                         <span>
-                          {order?.serviceChargeName || "Server Charge"}
+                          {serviceChargeName || "Server Charge"}
                         </span>
                         <span className="text-zinc-900">
                           ${serviceChargeTotal.toFixed(2)}
@@ -976,9 +1003,14 @@ export default function TodayOrderPaymentModal({
                               </p>
                             </div>
 
-                            {cardOverpay > 0 && (
-                              <OverpayTip overpay={cardOverpay} method="Card" />
-                            )}
+                            {cardOverpay > 0 &&
+                              (applyServiceCharge ? (
+                                <p className="text-sm font-bold text-red-600">
+                                  {SERVICE_CHARGE_NO_TIP_MESSAGE}
+                                </p>
+                              ) : (
+                                <OverpayTip overpay={cardOverpay} method="Card" />
+                              ))}
 
                             {cashSplitAmount > 0 && (
                               <PayRemainingActions
@@ -1080,9 +1112,14 @@ export default function TodayOrderPaymentModal({
                           </p>
                         </div>
 
-                        {cashOverpay > 0 && (
-                          <OverpayTip overpay={cashOverpay} method="Cash" />
-                        )}
+                        {cashOverpay > 0 &&
+                          (applyServiceCharge ? (
+                            <p className="text-sm font-bold text-red-600">
+                              {SERVICE_CHARGE_NO_TIP_MESSAGE}
+                            </p>
+                          ) : (
+                            <OverpayTip overpay={cashOverpay} method="Cash" />
+                          ))}
 
                         {cardSplitFromCash > 0 && (
                           <PayRemainingActions

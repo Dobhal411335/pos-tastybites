@@ -6,11 +6,20 @@ export function resolveDocumentId(value) {
     return trimmed;
   }
   if (typeof value === "object") {
-    return (
-      resolveDocumentId(value._id) ||
-      resolveDocumentId(value.id) ||
-      resolveDocumentId(value.$oid)
-    );
+    if (typeof value.toHexString === "function") {
+      return value.toHexString();
+    }
+    if (value._bsontype === "ObjectId" || value._bsontype === "ObjectID") {
+      return String(value);
+    }
+    const nested =
+      (value._id && value._id !== value ? resolveDocumentId(value._id) : null) ||
+      (value.id && value.id !== value ? resolveDocumentId(value.id) : null) ||
+      (value.$oid && value.$oid !== value ? resolveDocumentId(value.$oid) : null);
+    if (nested) return nested;
+    const asString = String(value);
+    if (asString && asString !== "[object Object]") return asString;
+    return null;
   }
   const asString = String(value);
   if (!asString || asString === "[object Object]") return null;
@@ -22,13 +31,95 @@ export function isDirectSaleOrder(order) {
   return source === "WALK_IN" || source === "STAFF";
 }
 
+function stripFloorSuffix(value) {
+  const text = String(value ?? "").trim();
+  const separator = text.lastIndexOf(" · ");
+  if (separator === -1) return { tables: text, floor: "" };
+  return {
+    tables: text.slice(0, separator).trim(),
+    floor: text.slice(separator + 3).trim(),
+  };
+}
+
+function normalizeTableToken(value) {
+  return String(value ?? "")
+    .trim()
+    .replace(/^(tables?|tbl)\s+/i, "")
+    .trim();
+}
+
+export function joinTableNumbers(numbers) {
+  const tokens = [];
+  for (const value of numbers || []) {
+    const raw = String(value ?? "").trim();
+    if (!raw) continue;
+    const { tables } = stripFloorSuffix(raw);
+    for (const part of tables.split(/\s*,\s*/)) {
+      const token = normalizeTableToken(part);
+      if (token) tokens.push(token);
+    }
+  }
+  const unique = [...new Set(tokens)];
+  unique.sort((a, b) => {
+    const na = parseInt(String(a).replace(/\D/g, ""), 10);
+    const nb = parseInt(String(b).replace(/\D/g, ""), 10);
+    if (Number.isFinite(na) && Number.isFinite(nb) && na !== nb) return na - nb;
+    return String(a).localeCompare(String(b), undefined, { numeric: true });
+  });
+  return unique.join(", ");
+}
+
+/** Numbers + floor only, e.g. "02, 03, 04 · Main Hall Area" */
+export function formatTableNumbersWithFloor(tableNo, floorName) {
+  const parsed = stripFloorSuffix(tableNo);
+  const numbers = joinTableNumbers([parsed.tables || tableNo]);
+  const floor = String(floorName || parsed.floor || "").trim();
+  if (!numbers) return floor;
+  if (!floor) return numbers;
+  if (numbers.toLowerCase().includes(floor.toLowerCase())) return numbers;
+  return `${numbers} · ${floor}`;
+}
+
+/** One "Table" word, then numbers, then floor: "Table 02, 03, 04 · Main Hall Area" */
 export function formatTableLocation(tableNo, floorName) {
-  const table = String(tableNo || "").trim();
-  const floor = String(floorName || "").trim();
-  if (!table) return floor;
-  if (!floor) return table;
-  if (table.toLowerCase().includes(floor.toLowerCase())) return table;
-  return `${table} · ${floor}`;
+  const body = formatTableNumbersWithFloor(tableNo, floorName);
+  if (!body) return "";
+  if (/^tables?\b/i.test(body)) {
+    return body.replace(/^tables?\b/i, "Table");
+  }
+  const numbers = joinTableNumbers([tableNo]);
+  if (!numbers) return body;
+  return `Table ${body}`;
+}
+
+export function getSessionTableNumbers(session) {
+  if (!session) return "";
+  if (session.tableNumbers) return joinTableNumbers([session.tableNumbers]);
+  const primary =
+    session.primaryTable?.tableNumber ||
+    session.tableNumber ||
+    null;
+  const linked = (session.linkedTables || []).map(
+    (table) => table?.tableNumber || null,
+  );
+  return joinTableNumbers([primary, ...linked]);
+}
+
+export function formatSessionTableLabel(session) {
+  const numbers = getSessionTableNumbers(session);
+  const floorName =
+    session?.floor?.name || session?.floorName || null;
+  return formatTableLocation(numbers, floorName);
+}
+
+export function sessionOwnsTable(session, tableId) {
+  const id = resolveDocumentId(tableId);
+  if (!id || !session) return false;
+  if (resolveDocumentId(session.tableId || session.primaryTable) === id) {
+    return true;
+  }
+  const linked = session.linkedTableIds || session.linkedTables || [];
+  return linked.some((entry) => resolveDocumentId(entry) === id);
 }
 
 export function shouldShowTable(order) {

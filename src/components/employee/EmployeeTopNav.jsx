@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -13,11 +14,13 @@ import {
   Loader2,
   FileBarChart2,
   ChevronDown,
+  AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
 import DateTimeDisplay from "@/components/common/DateTimeDisplay";
 import Image from "next/image";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import NotificationBell from "@/components/common/NotificationBell";
 import { employeeFetch } from "@/lib/employeeFetch";
 import {
@@ -64,6 +67,7 @@ const TABLE_STATUS = [
   { label: "Serving", className: "bg-sky-400 border border-sky-500" },
   { label: "Payment", className: "bg-emerald-500 border border-emerald-600" },
   { label: "Ordering", className: "bg-orange-500 border border-orange-600" },
+  { label: "Combined", className: "bg-violet-500 border border-violet-600" },
   { label: "Booked", className: "bg-red-500 border border-red-600" },
 ];
 
@@ -91,8 +95,17 @@ export default function EmployeeTopNav({
   const pathname = usePathname();
   const [loggingOut, setLoggingOut] = React.useState(false);
   const [confirmCloseOpen, setConfirmCloseOpen] = React.useState(false);
+  const [closeBlockedOpen, setCloseBlockedOpen] = React.useState(false);
+  const [closeBlockers, setCloseBlockers] = React.useState(null);
+  const [checkingClose, setCheckingClose] = React.useState(false);
   const [closingRestaurant, setClosingRestaurant] = React.useState(false);
   const [menuOpen, setMenuOpen] = React.useState(false);
+
+  const showCloseBlockers = (blockers) => {
+    setCloseBlockers(blockers || null);
+    setConfirmCloseOpen(false);
+    setCloseBlockedOpen(true);
+  };
 
   const handleLogout = async () => {
     if (loggingOut || closingRestaurant) return;
@@ -117,8 +130,33 @@ export default function EmployeeTopNav({
     }
   };
 
+  const handleDayCloseClick = async () => {
+    if (loggingOut || closingRestaurant || checkingClose) return;
+    setMenuOpen(false);
+    setCheckingClose(true);
+    try {
+      const res = await employeeFetch("/api/employees/close-restaurant");
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data.message || "Could not verify restaurant status.");
+        return;
+      }
+      const blockers = data.data;
+      if (blockers && !blockers.canClose) {
+        showCloseBlockers(blockers);
+        return;
+      }
+      setCloseBlockers(null);
+      setConfirmCloseOpen(true);
+    } catch {
+      toast.error("Could not verify restaurant status.");
+    } finally {
+      setCheckingClose(false);
+    }
+  };
+
   const handleCloseRestaurant = async () => {
-    if (closingRestaurant || loggingOut) return;
+    if (closingRestaurant || loggingOut || checkingClose) return;
     setConfirmCloseOpen(false);
     setClosingRestaurant(true);
     try {
@@ -135,6 +173,12 @@ export default function EmployeeTopNav({
         return;
       }
       const data = await res.json().catch(() => ({}));
+      if (res.status === 409 || data.code === "CLOSE_BLOCKED") {
+        setClosingRestaurant(false);
+        showCloseBlockers(data.data);
+        toast.error(data.message || "Clear pending orders and booked tables first.");
+        return;
+      }
       toast.error(data.message || "Failed to close restaurant.");
       setClosingRestaurant(false);
     } catch {
@@ -236,11 +280,11 @@ export default function EmployeeTopNav({
                 <h3 className="mb-2 px-1 font-serif text-[16px] text-stone-900">
                   Table Status
                 </h3>
-                <div className="flex items-center justify-between gap-1 overflow-x-auto rounded-2xl bg-white px-3 py-2.5 shadow-sm no-scrollbar">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl bg-white px-3 py-2.5 shadow-sm">
                   {TABLE_STATUS.map((item) => (
                     <div
                       key={item.label}
-                      className="flex shrink-0 items-center gap-1.5"
+                      className="flex items-center gap-1.5"
                     >
                       <span
                         className={`h-2.5 w-2.5 shrink-0 rounded-full ${item.className}`}
@@ -281,15 +325,16 @@ export default function EmployeeTopNav({
 
                   <button
                     type="button"
-                    disabled={loggingOut || closingRestaurant}
-                    onClick={() => {
-                      setMenuOpen(false);
-                      setConfirmCloseOpen(true);
-                    }}
+                    disabled={loggingOut || closingRestaurant || checkingClose}
+                    onClick={handleDayCloseClick}
                     className="group flex flex-col items-center text-center disabled:opacity-50"
                   >
                     <div className={quickActionClass}>
-                      <Home className="h-6 w-6 stroke-[1.7] text-stone-800" />
+                      {checkingClose ? (
+                        <Loader2 className="h-6 w-6 animate-spin text-stone-800" />
+                      ) : (
+                        <Home className="h-6 w-6 stroke-[1.7] text-stone-800" />
+                      )}
                     </div>
                     <span className="mt-2.5 text-[13px] font-medium leading-tight text-stone-800">
                       Day Close
@@ -355,14 +400,113 @@ export default function EmployeeTopNav({
         })}
       </nav>
 
+      <AlertDialog open={closeBlockedOpen} onOpenChange={setCloseBlockedOpen}>
+        <AlertDialogContent className="max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-amber-600" />
+              Cannot close restaurant
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Settle every pending order and release every booked table before
+              day close.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          <div className="max-h-[50vh] space-y-3 overflow-y-auto">
+            {closeBlockers?.pendingOrderCount > 0 ? (
+              <div className="rounded-xl border border-amber-200 bg-amber-50/70 p-3">
+                <p className="text-sm font-semibold text-amber-950">
+                  {closeBlockers.pendingOrderCount} pending order
+                  {closeBlockers.pendingOrderCount === 1 ? "" : "s"}
+                </p>
+                <ul className="mt-2 space-y-1.5">
+                  {(closeBlockers.pendingOrders || []).map((order) => (
+                    <li
+                      key={order.id}
+                      className="text-[13px] text-amber-900"
+                    >
+                      #{order.orderNumber}
+                      {order.tableNo ? ` · ${order.tableNo}` : ""}
+                      {order.status ? ` · ${order.status}` : ""}
+                    </li>
+                  ))}
+                </ul>
+                {closeBlockers.pendingOrderCount >
+                (closeBlockers.pendingOrders || []).length ? (
+                  <p className="mt-1.5 text-xs text-amber-800">
+                    +
+                    {closeBlockers.pendingOrderCount -
+                      closeBlockers.pendingOrders.length}{" "}
+                    more on the Orders page
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+
+            {closeBlockers?.bookedTableCount > 0 ? (
+              <div className="rounded-xl border border-rose-200 bg-rose-50/70 p-3">
+                <p className="text-sm font-semibold text-rose-950">
+                  {closeBlockers.bookedTableCount} booked table
+                  {closeBlockers.bookedTableCount === 1 ? "" : "s"}
+                </p>
+                <ul className="mt-2 space-y-1.5">
+                  {(closeBlockers.bookedTables || []).map((table) => (
+                    <li
+                      key={table.sessionId}
+                      className="text-[13px] text-rose-900"
+                    >
+                      Table {table.tableNumber}
+                      {table.employeeName
+                        ? ` · ${table.employeeName}`
+                        : ""}
+                      {table.guestCount
+                        ? ` · ${table.guestCount} guests`
+                        : ""}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+          </div>
+
+          <AlertDialogFooter className="flex-col sm:flex-row sm:justify-end gap-2">
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            {closeBlockers?.pendingOrderCount > 0 ? (
+              <Button asChild variant="outline">
+                <Link
+                  href="/sales/today"
+                  onClick={() => setCloseBlockedOpen(false)}
+                >
+                  Go to Orders
+                </Link>
+              </Button>
+            ) : null}
+            {closeBlockers?.bookedTableCount > 0 ? (
+              <Button
+                asChild
+                className="bg-orange-500 hover:bg-orange-600 text-white"
+              >
+                <Link
+                  href="/sales/floor"
+                  onClick={() => setCloseBlockedOpen(false)}
+                >
+                  Go to Floor
+                </Link>
+              </Button>
+            ) : null}
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <AlertDialog open={confirmCloseOpen} onOpenChange={setConfirmCloseOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Close restaurant?</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to close the restaurant and log out all
-              employees? Staff can clock back in later from the same registered
-              device.
+              All pending orders are settled and all tables are free. Close the
+              restaurant and log out all employees? Staff can clock back in later
+              from the same registered device.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -383,14 +527,28 @@ export default function EmployeeTopNav({
         </AlertDialogContent>
       </AlertDialog>
 
-      {closingRestaurant ? (
-        <div className="fixed inset-0 z-100 flex flex-col items-center justify-center gap-3 bg-black/60">
-          <Loader2 className="h-8 w-8 animate-spin text-white" />
-          <p className="text-sm font-semibold text-white">
-            Logging out all employees…
-          </p>
-        </div>
-      ) : null}
+      {typeof document !== "undefined" &&
+        (checkingClose || closingRestaurant) &&
+        createPortal(
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-[2px]">
+            <div className="flex flex-col items-center gap-4 rounded-2xl bg-zinc-950/80 px-10 py-8 shadow-2xl ring-1 ring-white/10">
+              <Loader2 className="h-10 w-10 animate-spin text-orange-400" />
+              <div className="text-center">
+                <p className="text-base font-bold text-white">
+                  {closingRestaurant
+                    ? "Closing restaurant"
+                    : "Checking restaurant"}
+                </p>
+                <p className="mt-1 text-sm font-medium text-zinc-300">
+                  {closingRestaurant
+                    ? "Logging out all employees…"
+                    : "Checking orders and tables…"}
+                </p>
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )}
     </header>
   );
 }
