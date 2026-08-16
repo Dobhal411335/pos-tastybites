@@ -66,7 +66,7 @@ const OrderSchema = new mongoose.Schema(
     source: { type: String, enum: ['POS', 'WALK_IN', 'STAFF', 'ONLINE'], default: 'POS' },
     staffFor: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee', default: null },
     staffOrderReason: { type: String, default: null },
-    processedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee' }, // Who took the order
+    processedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee' }, // Original order taker — sales/tip credit. Never reassigned on payment or table transfer.
   },
   { timestamps: true }
 );

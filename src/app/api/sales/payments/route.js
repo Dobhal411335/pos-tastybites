@@ -417,14 +417,17 @@ export const POST = withAuth(async (request) => {
       global.io.to(`restaurant:${order.restaurantId}`).emit('payment:completed', { orderId: order._id });
     }
 
-    // Receipt PrintJob — only after successful payment (not on order create)
+    // Receipt PrintJob — only after successful payment (not on order create).
+    // Server name is the original order taker (processedBy), not whoever collected payment.
     let printJobId = null;
+    let processedByName = null;
     try {
+      const creditEmployeeId = order.processedBy || request.user.id;
       const [emp, restaurant] = await Promise.all([
-        Employee.findById(request.user.id).select("firstName lastName name").lean(),
+        Employee.findById(creditEmployeeId).select("firstName lastName name").lean(),
         Restaurant.findById(order.restaurantId).select("name").lean(),
       ]);
-      const serverName =
+      processedByName =
         emp?.name ||
         [emp?.firstName, emp?.lastName].filter(Boolean).join(" ") ||
         null;
@@ -433,7 +436,7 @@ export const POST = withAuth(async (request) => {
         order,
         requestedBy: request.user.id,
         guestCount: receiptGuestCount,
-        serverName,
+        serverName: processedByName,
         restaurantName: restaurant?.name || null,
       });
       printJobId = job?._id || null;
@@ -470,7 +473,7 @@ export const POST = withAuth(async (request) => {
 
     logger.info(`Payment processed for Order ${order.orderNumber} via ${method}`);
     return sendSuccess(
-      { ...order.toObject(), printJobId },
+      { ...order.toObject(), printJobId, processedByName },
       "Payment processed successfully",
       200
     );

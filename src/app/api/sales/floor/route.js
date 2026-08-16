@@ -45,9 +45,22 @@ export const GET = withAuth(async (request) => {
       tableSession: { $in: sessionIds },
       status: { $in: ["PENDING", "CONFIRMED", "Draft", "Sent to Kitchen", "Preparing", "Ready", "Served"] },
       paymentStatus: { $nin: ["PAID", "Paid"] }
-    }).select("tableSession").lean();
+    })
+      .select("tableSession processedBy")
+      .populate("processedBy", "firstName lastName name")
+      .lean();
     
     const sessionsWithOrders = new Set(activeOrders.map(o => o.tableSession.toString()));
+    const orderTakerBySession = new Map();
+    for (const order of activeOrders) {
+      const sid = order.tableSession?.toString();
+      if (!sid || orderTakerBySession.has(sid)) continue;
+      const emp = order.processedBy;
+      const name = emp
+        ? emp.name || [emp.firstName, emp.lastName].filter(Boolean).join(" ").trim()
+        : "";
+      if (name) orderTakerBySession.set(sid, name);
+    }
     const tableNumberById = new Map(
       tables.map((t) => [t._id.toString(), t.tableNumber]),
     );
@@ -94,6 +107,7 @@ export const GET = withAuth(async (request) => {
           status: s.status,
           openedAt: s.openedAt,
           hasActiveOrder: sessionsWithOrders.has(s._id.toString()),
+          orderTakerName: orderTakerBySession.get(s._id.toString()) || null,
         };
       }),
     };

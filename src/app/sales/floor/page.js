@@ -118,13 +118,14 @@ export default function SalesFloorPage() {
   const [adminOverrideReason, setAdminOverrideReason] = useState("");
 
   // Action Sub-views
-  const [actionView, setActionView] = useState("MAIN"); // MAIN, GUESTS, TRANSFER, RECONFIGURE
+  const [actionView, setActionView] = useState("MAIN"); // MAIN, GUESTS, TRANSFER, TRANSFER_CONFIRM, RECONFIGURE
 
   // Form States
   const [guestCount, setGuestCount] = useState(1);
   const [effectiveSeatCount, setEffectiveSeatCount] = useState(1);
   const [selectedLinkedTableIds, setSelectedLinkedTableIds] = useState([]);
   const [actionLoading, setActionLoading] = useState(false);
+  const [pendingTransferEmployee, setPendingTransferEmployee] = useState(null);
 
   const loadOnlineStaff = useCallback(async () => {
     try {
@@ -516,6 +517,9 @@ export default function SalesFloorPage() {
       const json = await res.json();
       if (json.success) {
         toast.success(json.message);
+        if (action === "TRANSFER") {
+          setPendingTransferEmployee(null);
+        }
         if (action === "RELEASE") {
           setShowAdminOverride(false);
           setAdminOverrideReason("");
@@ -999,7 +1003,13 @@ export default function SalesFloorPage() {
       </Dialog>
 
       {/* Table Actions Modal */}
-      <Dialog open={showTableActions} onOpenChange={setShowTableActions}>
+      <Dialog
+        open={showTableActions}
+        onOpenChange={(open) => {
+          setShowTableActions(open);
+          if (!open) setPendingTransferEmployee(null);
+        }}
+      >
         <DialogContent className="sm:max-w-[450px]">
           <DialogHeader>
             {/* Back button: only for sub-views of MAIN, never for READONLY (would allow escalating to full action menu) */}
@@ -1008,7 +1018,14 @@ export default function SalesFloorPage() {
                 variant="ghost"
                 size="icon"
                 className="absolute left-4 top-4"
-                onClick={() => setActionView("MAIN")}
+                onClick={() => {
+                  if (actionView === "TRANSFER_CONFIRM") {
+                    setPendingTransferEmployee(null);
+                    setActionView("TRANSFER");
+                    return;
+                  }
+                  setActionView("MAIN");
+                }}
               >
                 <ChevronLeft className="h-5 w-5" />
               </Button>
@@ -1028,6 +1045,7 @@ export default function SalesFloorPage() {
                 )}
               {actionView === "GUESTS" && "Adjust Guests"}
               {actionView === "TRANSFER" && "Transfer Table"}
+              {actionView === "TRANSFER_CONFIRM" && "Confirm Transfer"}
               {actionView === "RECONFIGURE" && "Temporary Table Setup"}
             </DialogTitle>
           </DialogHeader>
@@ -1205,6 +1223,73 @@ export default function SalesFloorPage() {
               </div>
             )}
 
+            {actionView === "TRANSFER_CONFIRM" && pendingTransferEmployee && (
+              <div className="flex flex-col gap-4 py-2">
+                <p className="text-sm font-semibold text-zinc-600 text-center">
+                  Transfer{" "}
+                  <span className="text-zinc-900">
+                    {formatTableLocation(
+                      selectedTable?.session?.tableNumbers ||
+                        selectedTable?.tableNumber,
+                      activeFloor?.name,
+                    )}
+                  </span>{" "}
+                  to{" "}
+                  <span className="text-zinc-900">
+                    {pendingTransferEmployee.name}
+                  </span>
+                  ?
+                </p>
+                <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 space-y-2">
+                  <p className="text-sm font-semibold text-zinc-700">
+                    They can continue the order and collect payment.
+                  </p>
+                  {selectedTable?.session?.hasActiveOrder ? (
+                    <p className="text-sm font-bold text-zinc-900">
+                      Order credit and tips stay with{" "}
+                      {selectedTable.session.orderTakerName ||
+                        selectedTable.session.assignedEmployeeName ||
+                        "the employee who took this order"}
+                      .
+                    </p>
+                  ) : (
+                    <p className="text-sm font-bold text-zinc-900">
+                      Credit and tips will go to whoever takes the order at this
+                      table.
+                    </p>
+                  )}
+                </div>
+                <div className="flex gap-3 pt-1">
+                  <Button
+                    variant="outline"
+                    disabled={actionLoading}
+                    onClick={() => {
+                      setPendingTransferEmployee(null);
+                      setActionView("TRANSFER");
+                    }}
+                    className="flex-1 h-12 font-bold border-zinc-200 text-zinc-700"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    disabled={actionLoading}
+                    onClick={() =>
+                      executeAction("TRANSFER", {
+                        newEmployeeId: pendingTransferEmployee.id,
+                      })
+                    }
+                    className="flex-1 h-12 font-bold bg-orange-500 hover:bg-orange-600 text-white"
+                  >
+                    {actionLoading ? (
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                    ) : (
+                      "Transfer table"
+                    )}
+                  </Button>
+                </div>
+              </div>
+            )}
+
             {actionView === "TRANSFER" && (
               <div className="flex flex-col gap-3 py-2 max-h-80 overflow-y-auto custom-scrollbar pr-2">
                 {activeEmployees.filter(
@@ -1221,9 +1306,10 @@ export default function SalesFloorPage() {
                         key={emp.id}
                         variant="outline"
                         className="h-14 justify-start px-4 font-bold text-zinc-700"
-                        onClick={() =>
-                          executeAction("TRANSFER", { newEmployeeId: emp.id })
-                        }
+                        onClick={() => {
+                          setPendingTransferEmployee(emp);
+                          setActionView("TRANSFER_CONFIRM");
+                        }}
                         disabled={actionLoading}
                       >
                         <div className="w-8 h-8 rounded-full bg-zinc-100 flex items-center justify-center mr-3 border border-zinc-200">

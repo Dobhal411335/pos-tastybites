@@ -142,7 +142,7 @@ async function enqueueOrderTicketPrintJob({
   if (!ticketItems?.length) return { job: null, ticketType: routeToKitchen ? "KOT" : "BAR_RECEIPT" };
   try {
     const [serverName, restaurant] = await Promise.all([
-      resolveServerName(employeeId),
+      resolveServerName(order.processedBy || employeeId),
       Restaurant.findById(order.restaurantId).select("name").lean(),
     ]);
     const common = {
@@ -303,6 +303,8 @@ export const POST = withAuth(async (request) => {
           order.staffFor = staffFor;
           order.staffOrderReason = staffOrderReason;
         }
+        // Keep original processedBy so a later employee cannot take sales/tip credit.
+        if (!order.processedBy) order.processedBy = employeeId;
         await order.save();
 
         const { job: printJob, ticketType } = await enqueueOrderTicketPrintJob({
@@ -313,7 +315,7 @@ export const POST = withAuth(async (request) => {
           routeToKitchen,
         });
 
-        const serverName = await resolveServerName(employeeId);
+        const serverName = await resolveServerName(order.processedBy || employeeId);
         if (kotPayload.length > 0) {
           await notifyOrderEvent({
             type: "ORDER_UPDATED",
@@ -338,6 +340,7 @@ export const POST = withAuth(async (request) => {
             kotPayload,
             printJobId: printJob?._id || null,
             ticketType,
+            processedByName: serverName,
           },
           routeToKitchen ? "Order updated successfully" : "Bar ticket updated successfully",
           200,
@@ -410,6 +413,7 @@ export const POST = withAuth(async (request) => {
           kotPayload,
           printJobId: printJob?._id || null,
           ticketType,
+          processedByName: serverName,
         },
         routeToKitchen
           ? "Order sent to kitchen successfully"
@@ -476,6 +480,8 @@ export const POST = withAuth(async (request) => {
       } else if (order.guestCount == null && session.guestCount != null) {
         order.guestCount = session.guestCount;
       }
+      // Keep original processedBy so a later employee cannot take sales/tip credit.
+      if (!order.processedBy) order.processedBy = employeeId;
       await order.save();
       
       if (global.io) global.io.to(`floor:${session.floor}`).emit('order:updated', { orderId: order._id, sessionId });
@@ -501,7 +507,7 @@ export const POST = withAuth(async (request) => {
         routeToKitchen,
       });
 
-      const serverName = await resolveServerName(employeeId);
+      const serverName = await resolveServerName(order.processedBy || employeeId);
       const tableNo = formatSessionTableLabel(session);
       if (kotPayload.length > 0) {
         await notifyOrderEvent({
@@ -535,6 +541,7 @@ export const POST = withAuth(async (request) => {
           kotPayload,
           printJobId: printJob?._id || null,
           ticketType,
+          processedByName: serverName,
         },
         routeToKitchen
           ? "Order updated successfully"
@@ -633,6 +640,7 @@ export const POST = withAuth(async (request) => {
           kotPayload,
           printJobId: printJob?._id || null,
           ticketType,
+          processedByName: serverName,
         },
         routeToKitchen
           ? "Order sent to kitchen successfully"

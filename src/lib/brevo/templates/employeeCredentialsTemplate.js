@@ -17,9 +17,36 @@ export const employeeCredentialsTemplate = ({
   const logo = companyInfo?.mainLogo?.url || null;
   const footerLogo = companyInfo?.footerLogo?.url || logo;
   const brandName = companyInfo?.companyName || restaurantName || 'Our Restaurant';
-  const emailContact = companyInfo?.emails?.[0] || '';
-  const phoneContact = companyInfo?.contactNumbers?.[0] || '';
-  const address = companyInfo?.officeAddresses?.[0] || '';
+  const emailContact = (() => {
+    const e = companyInfo?.emails?.[0];
+    if (!e) return '';
+    return typeof e === 'object' ? (e.email || e.address || '') : String(e);
+  })();
+  const phoneContact = (() => {
+    const p = companyInfo?.contactNumbers?.[0];
+    if (!p) return '';
+    if (typeof p === 'object') {
+      const num = String(p.number || p.phone || '').replace(/\D/g, '');
+      const code = p.code || '';
+      if (!num) return '';
+      const pretty =
+        num.length === 10
+          ? `(${num.slice(0, 3)}) ${num.slice(3, 6)}-${num.slice(6)}`
+          : num;
+      return code ? `${code} ${pretty}` : pretty;
+    }
+    return String(p);
+  })();
+  const address = (() => {
+    const a = companyInfo?.officeAddresses?.[0];
+    if (!a) return '';
+    if (typeof a === 'object') {
+      return [a.street, a.city, a.state, a.postalCode || a.zip]
+        .filter(Boolean)
+        .join(', ');
+    }
+    return String(a);
+  })();
 
   return `
     <!DOCTYPE html>

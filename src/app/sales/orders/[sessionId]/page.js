@@ -58,6 +58,23 @@ import {
   buildOfferCartModifier,
 } from "@/utils/offerDetails";
 
+function formatOrderServerName(order, fallbackUser) {
+  if (order?.processedByName) return order.processedByName;
+  const processed = order?.processedBy;
+  if (processed && typeof processed === "object") {
+    const name =
+      processed.name ||
+      [processed.firstName, processed.lastName].filter(Boolean).join(" ").trim();
+    if (name) return name;
+  }
+  if (fallbackUser) {
+    const fName = fallbackUser.firstName || "";
+    const lName = fallbackUser.lastName || "";
+    return fallbackUser.name || `${fName} ${lName}`.trim() || "Server";
+  }
+  return "Server";
+}
+
 function persistSalesFloorId(floorId) {
   const id = resolveDocumentId(floorId);
   if (!id) return null;
@@ -490,14 +507,8 @@ export default function OrderPage() {
   }, [sessionId]);
 
   useEffect(() => {
-    if (currentUser) {
-      const fName = currentUser.firstName || "";
-      const lName = currentUser.lastName || "";
-      const fullName =
-        currentUser.name || `${fName} ${lName}`.trim() || "Server";
-      setServerName(fullName);
-    }
-  }, [currentUser]);
+    setServerName(formatOrderServerName(activeOrder, currentUser));
+  }, [currentUser, activeOrder]);
 
   useEffect(() => {
     if (!isStaffOrder || selectedStaffId || employees.length === 0) return;
@@ -1061,7 +1072,12 @@ export default function OrderPage() {
         setIsKitchenModalOpen(false);
         setIsStaffModalOpen(false);
         setGuestName(partyName);
-        setActiveOrder(json.data);
+        setActiveOrder((prev) => ({
+          ...(prev || {}),
+          ...json.data,
+          processedByName:
+            json.data.processedByName || prev?.processedByName,
+        }));
         setOrderStatus("PENDING");
         setKotCartFingerprint(getCartFingerprint(cart));
 

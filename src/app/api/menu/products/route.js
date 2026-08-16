@@ -13,7 +13,6 @@ export const GET = withAuth(async (request) => {
       .populate("category", "name")
       .populate("discount")
       .populate("taxes")
-      .sort({ createdAt: -1 })
       .lean();
 
     return sendSuccess(products, "Products retrieved successfully");

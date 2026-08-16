@@ -374,12 +374,14 @@ export const PUT = withAuth(async (request) => {
         return sendError(new Error("Not Found"), "Target employee not found in this restaurant", 404);
       }
 
+      const previousEmployeeId = session.assignedEmployee;
       session.transferHistory.push({
         fromTable: session.primaryTable,
         toTable: session.primaryTable,
         transferredBy: request.user.id,
         transferredAt: new Date()
       });
+      // Reassign who can serve the table. Order.processedBy (sales/tip credit) is unchanged.
       session.assignedEmployee = newEmployeeId;
       await session.save();
       logger.info(`Session ${session.sessionId} transferred to ${newEmployeeId}`);
@@ -394,7 +396,7 @@ export const PUT = withAuth(async (request) => {
         floorId: session.floor,
         tableId: session.primaryTable,
         tableSessionId: session._id,
-        newValue: { newEmployeeId }
+        newValue: { newEmployeeId, previousEmployeeId }
       });
 
       if (global.io) global.io.to(`floor:${session.floor}`).emit('table:transferred', { sessionId: session._id, newEmployeeId });
