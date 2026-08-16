@@ -24,9 +24,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
+import { Checkbox } from "@/components/ui/checkbox";
 import { buildStaffDiscountState } from "@/lib/orders/staffDiscount";
 import {
   computeOrderServiceCharge,
+  formatServiceTaxRate,
+  isActiveServiceTax,
   SERVICE_CHARGE_NO_TIP_MESSAGE,
 } from "@/lib/orders/serviceCharge";
 
@@ -61,6 +64,7 @@ export default function TodayOrderPaymentModal({
   serviceTax = null,
 }) {
   const [paymentMethod, setPaymentMethod] = useState("Card");
+  const [includeServiceCharge, setIncludeServiceCharge] = useState(false);
   const [internalGuestName, setInternalGuestName] = useState("");
   const [discountCode, setDiscountCode] = useState("");
   const [availableDiscounts, setAvailableDiscounts] = useState([]);
@@ -102,19 +106,16 @@ export default function TodayOrderPaymentModal({
       ? (subtotal * appliedDiscount.value) / 100
       : Math.min(Number(appliedDiscount.value) || 0, subtotal)
     : 0;
-  const serviceChargeTotal = applyServiceCharge
+  const canOfferServiceCharge = isActiveServiceTax(serviceTax);
+  const computedServiceCharge = canOfferServiceCharge
     ? computeOrderServiceCharge({
-        serviceTax: serviceTax || {
-          name: order?.serviceChargeName,
-          type: "Amount",
-          value: Number(order?.serviceChargeTotal || 0),
-          status: "Active",
-        },
+        serviceTax,
         subtotal,
         discountAmount,
       })
     : 0;
-  const serviceChargeName = applyServiceCharge
+  const serviceChargeTotal = includeServiceCharge ? computedServiceCharge : 0;
+  const serviceChargeName = includeServiceCharge
     ? serviceTax?.name || order?.serviceChargeName || "Server Charge"
     : null;
   const total = Math.max(
@@ -242,6 +243,7 @@ export default function TodayOrderPaymentModal({
     setIsSubmitting(false);
     setStaffDiscountEmployee(null);
     setStaffDiscountLoading(false);
+    setIncludeServiceCharge(Boolean(applyServiceCharge));
 
     if (!isGuestControlled) {
       setInternalGuestName(order.partyName || order.guestName || "");
@@ -400,7 +402,7 @@ export default function TodayOrderPaymentModal({
 
   const handlePayment = async () => {
     try {
-      if (applyServiceCharge && autoTip > 0) {
+      if (includeServiceCharge && autoTip > 0) {
         toast.error(SERVICE_CHARGE_NO_TIP_MESSAGE);
         return;
       }
@@ -410,7 +412,7 @@ export default function TodayOrderPaymentModal({
       const giftCardUsedAmount =
         giftCardBalance !== null ? round2(giftCardUsedPreview) : 0;
       const partyName = guestName.trim() || null;
-      const tip = applyServiceCharge ? 0 : autoTip;
+      const tip = includeServiceCharge ? 0 : autoTip;
 
       let resolvedCashAmount = lockedCash;
       let resolvedCardAmount = lockedCard;
@@ -497,9 +499,9 @@ export default function TodayOrderPaymentModal({
         guestCount: order.guestCount ?? null,
         cashAmount: resolvedCashAmount,
         cardAmount: resolvedCardAmount,
-        applyServiceCharge: Boolean(applyServiceCharge),
-        serviceChargeTotal: applyServiceCharge ? serviceChargeTotal : 0,
-        serviceChargeName: applyServiceCharge ? serviceChargeName : null,
+        applyServiceCharge: Boolean(includeServiceCharge),
+        serviceChargeTotal: includeServiceCharge ? serviceChargeTotal : 0,
+        serviceChargeName: includeServiceCharge ? serviceChargeName : null,
       };
 
       if (resolvedCardAmount > 0) {
@@ -592,7 +594,7 @@ export default function TodayOrderPaymentModal({
   const completeDisabled =
     isSubmitting ||
     staffDiscountLoading ||
-    (applyServiceCharge && autoTip > 0) ||
+    (includeServiceCharge && autoTip > 0) ||
     (paymentMethod === "GiftCard" && giftCardBalance === null) ||
     (paymentMethod === "GiftCard" && remainingAfterGift > 0) ||
     (paymentMethod === "Cash" && cardSplitFromCash > 0) ||
@@ -660,6 +662,27 @@ export default function TodayOrderPaymentModal({
                       className="h-11 bg-white border-zinc-200 rounded-xl text-sm font-semibold focus-visible:ring-orange-500"
                     />
                   </div>
+
+                  {canOfferServiceCharge && computedServiceCharge > 0 && (
+                    <label className="flex items-start gap-3 rounded-xl border border-zinc-200 bg-white p-4 cursor-pointer shadow-sm my-2">
+                      <Checkbox
+                        checked={includeServiceCharge}
+                        onCheckedChange={(checked) =>
+                          setIncludeServiceCharge(checked === true)
+                        }
+                        className="mt-0.5 h-5 w-5 border-zinc-400 data-[state=checked]:bg-orange-500 data-[state=checked]:border-orange-500"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-bold text-zinc-900">
+                          Add {serviceTax?.name || "Server Charge"}
+                        </p>
+                        <p className="text-xs font-semibold text-zinc-500 mt-0.5">
+                          {formatServiceTaxRate(serviceTax)} · $
+                          {computedServiceCharge.toFixed(2)}
+                        </p>
+                      </div>
+                    </label>
+                  )}
 
                   <div className="bg-white rounded-xl border border-zinc-200 p-4 space-y-2.5 shadow-sm">
                     <div className="flex justify-between text-sm font-semibold text-zinc-500">
@@ -1004,7 +1027,7 @@ export default function TodayOrderPaymentModal({
                             </div>
 
                             {cardOverpay > 0 &&
-                              (applyServiceCharge ? (
+                              (includeServiceCharge ? (
                                 <p className="text-sm font-bold text-red-600">
                                   {SERVICE_CHARGE_NO_TIP_MESSAGE}
                                 </p>
@@ -1113,7 +1136,7 @@ export default function TodayOrderPaymentModal({
                         </div>
 
                         {cashOverpay > 0 &&
-                          (applyServiceCharge ? (
+                          (includeServiceCharge ? (
                             <p className="text-sm font-bold text-red-600">
                               {SERVICE_CHARGE_NO_TIP_MESSAGE}
                             </p>

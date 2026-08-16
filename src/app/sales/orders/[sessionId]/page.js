@@ -45,14 +45,9 @@ import {
 } from "@/components/ui/select";
 import PrintPreviewModal from "@/components/receipts/PrintPreviewModal";
 import TodayOrderPaymentModal from "@/components/sales/TodayOrderPaymentModal";
-import ServiceChargePromptModal from "@/components/sales/ServiceChargePromptModal";
 import StaffOrderPartyModal from "@/components/sales/StaffOrderPartyModal";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { buildStaffDiscountState } from "@/lib/orders/staffDiscount";
-import {
-  computeOrderServiceCharge,
-  isActiveServiceTax,
-} from "@/lib/orders/serviceCharge";
 import { formatTableLocation, resolveDocumentId } from "@/utils/orderDisplay";
 import {
   OFFER_CATEGORY,
@@ -190,9 +185,6 @@ export default function OrderPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeOrder, setActiveOrder] = useState(null);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
-  const [isServiceChargePromptOpen, setIsServiceChargePromptOpen] =
-    useState(false);
-  const [applyServiceCharge, setApplyServiceCharge] = useState(false);
   const cartIdSeq = useRef(0);
 
   // Print State
@@ -665,9 +657,6 @@ export default function OrderPage() {
     return (basePrice * pctTaxes) / 100 + fixedTaxes;
   };
 
-  const serviceChargeLabel = serviceTax?.name || "Server Charge";
-  const hasServiceTax = isActiveServiceTax(serviceTax);
-
   const calculateItemDiscount = (item, basePrice) => {
     if (
       item.discount &&
@@ -1116,11 +1105,6 @@ export default function OrderPage() {
       ? (subtotal * appliedDiscount.value) / 100
       : Math.min(appliedDiscount.value, subtotal)
     : 0;
-  const promptServiceChargeTotal = computeOrderServiceCharge({
-    serviceTax,
-    subtotal,
-    discountAmount,
-  });
   const total = subtotal - discountAmount + totalTax;
 
   const hasSentKot =
@@ -1139,17 +1123,6 @@ export default function OrderPage() {
       toast.error("Send the order to kitchen (KOT) before taking payment.");
       return;
     }
-    if (hasServiceTax) {
-      setIsServiceChargePromptOpen(true);
-      return;
-    }
-    setApplyServiceCharge(false);
-    setIsPaymentModalOpen(true);
-  };
-
-  const startPayment = (withServiceCharge) => {
-    setApplyServiceCharge(Boolean(withServiceCharge));
-    setIsServiceChargePromptOpen(false);
     setIsPaymentModalOpen(true);
   };
 
@@ -1801,7 +1774,6 @@ export default function OrderPage() {
         guestName={guestName}
         onGuestNameChange={setGuestName}
         redeemNote="POS Payment"
-        applyServiceCharge={applyServiceCharge}
         serviceTax={serviceTax}
         order={
           activeOrder
@@ -1809,12 +1781,6 @@ export default function OrderPage() {
                 ...activeOrder,
                 subTotal: subtotal,
                 taxTotal: totalTax,
-                serviceChargeTotal: applyServiceCharge
-                  ? promptServiceChargeTotal
-                  : 0,
-                serviceChargeName: applyServiceCharge
-                  ? serviceChargeLabel
-                  : null,
                 discountCode:
                   appliedDiscount?.code || activeOrder.discountCode || null,
                 discountTotal:
@@ -1860,15 +1826,6 @@ export default function OrderPage() {
           setRedirectAfterPrint(false);
           setIsPrintModalOpen(true);
         }}
-      />
-
-      <ServiceChargePromptModal
-        open={isServiceChargePromptOpen}
-        serviceTax={serviceTax}
-        amount={promptServiceChargeTotal}
-        onYes={() => startPayment(true)}
-        onNo={() => startPayment(false)}
-        onClose={() => setIsServiceChargePromptOpen(false)}
       />
 
       {/* OPTIONS MODAL */}

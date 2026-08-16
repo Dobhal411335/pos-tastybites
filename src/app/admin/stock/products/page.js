@@ -360,21 +360,6 @@ export default function StockProductsPage() {
                       </div>
                     </div>
 
-                    {/* Product Name */}
-                    <div className="space-y-2">
-                      <label className="text-[14px] font-semibold text-zinc-900">
-                        Product Name <span className="text-red-500">*</span>
-                      </label>
-                      <Input
-                        type="text"
-                        name="name"
-                        placeholder="Enter product name"
-                        value={formData.name}
-                        onChange={handleChange}
-                        className="h-11 text-[15px] bg-white border-zinc-200 focus:ring-[#F97316]"
-                      />
-                    </div>
-
                     {/* Product Type */}
                     <div className="space-y-2">
                       <label className="text-[14px] font-semibold text-zinc-900">
@@ -407,6 +392,22 @@ export default function StockProductsPage() {
                         </Button>
                       </div>
                     </div>
+                    
+                    {/* Product Name */}
+                    <div className="space-y-2">
+                      <label className="text-[14px] font-semibold text-zinc-900">
+                        Product Name <span className="text-red-500">*</span>
+                      </label>
+                      <Input
+                        type="text"
+                        name="name"
+                        placeholder="Enter product name"
+                        value={formData.name}
+                        onChange={handleChange}
+                        className="h-11 text-[15px] bg-white border-zinc-200 focus:ring-[#F97316]"
+                      />
+                    </div>
+
 
                     {/* Unit Measure */}
                     <div className="space-y-2">

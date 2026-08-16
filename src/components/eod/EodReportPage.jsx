@@ -59,7 +59,7 @@ export default function EodReportPage({
   const [actualDeposit, setActualDeposit] = useState("");
   const [history, setHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
-  const [preferLive, setPreferLive] = useState(false);
+  const [preferLive, setPreferLive] = useState(true);
   const [reloadToken, setReloadToken] = useState(0);
 
   const loadReport = useCallback(async () => {
@@ -70,7 +70,10 @@ export default function EodReportPage({
         date: businessDate,
         preferSaved: preferLive ? "0" : "1",
       });
-      const res = await fetchFn(`/api/eod?${qs}`, { credentials: "include" });
+      const res = await fetchFn(`/api/eod?${qs}`, {
+        credentials: "include",
+        cache: "no-store",
+      });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.success) {
         throw new Error(data.message || "Failed to load report");
@@ -215,8 +218,9 @@ export default function EodReportPage({
                 type="date"
                 value={businessDate}
                 onChange={(e) => {
-                  setBusinessDate(e.target.value);
-                  setPreferLive(false);
+                  const next = e.target.value;
+                  setBusinessDate(next);
+                  setPreferLive(next === todayLocalISO());
                 }}
                 className="w-[180px]"
               />
