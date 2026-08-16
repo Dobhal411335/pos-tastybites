@@ -11,6 +11,30 @@ export function cleanOfferList(list) {
   return list.map((value) => String(value).trim()).filter(Boolean);
 }
 
+export function offerNeedsOptions(offer) {
+  return (
+    cleanOfferList(offer?.inclusions).length > 0 ||
+    cleanOfferList(offer?.choices).length > 0 ||
+    cleanOfferList(offer?.drinks).length > 0
+  );
+}
+
+export function filterOfferSelections(selected, allowed) {
+  const allow = new Set(cleanOfferList(allowed));
+  return cleanOfferList(selected).filter((value) => allow.has(value));
+}
+
+export function buildOfferCartModifier({ inclusions, choices, drinks } = {}) {
+  const parts = [];
+  const selectedInclusions = cleanOfferList(inclusions);
+  const selectedChoices = cleanOfferList(choices);
+  const selectedDrinks = cleanOfferList(drinks);
+  if (selectedInclusions.length) parts.push(selectedInclusions.join(", "));
+  if (selectedChoices.length) parts.push(selectedChoices.join(", "));
+  if (selectedDrinks.length) parts.push(selectedDrinks.join(", "));
+  return parts.join(" | ") || undefined;
+}
+
 export function getOfferDetailLines(item) {
   const inclusions = cleanOfferList(item?.inclusions);
   const choices = cleanOfferList(item?.choices);

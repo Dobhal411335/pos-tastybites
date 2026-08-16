@@ -381,7 +381,6 @@ export default function CreatePromoOfferPage() {
                         >
                           <Trash2 className="w-5 h-5" />
                         </Button>
-                        {index < choices.length - 1 && <span className="text-[12px] font-bold text-zinc-400 mx-1">OR</span>}
                       </div>
                     ))}
                     <Button type="button" variant="outline" onClick={() => addToArray(choices, setChoices)} className="h-9 px-4 font-semibold text-zinc-700">

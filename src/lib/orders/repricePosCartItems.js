@@ -10,6 +10,7 @@ import {
   normalizeStaffDiscountPercent,
 } from "@/lib/orders/staffDiscount";
 import { computeOrderServiceCharge } from "@/lib/orders/serviceCharge";
+import { filterOfferSelections } from "@/utils/offerDetails";
 
 const r2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 
@@ -232,21 +233,9 @@ export async function repricePosCartItems({
       name = offer.name;
       category = "Offers";
       productType = "KITCHEN";
-      inclusions = Array.isArray(offer.inclusions)
-        ? offer.inclusions.filter(Boolean)
-        : Array.isArray(item.inclusions)
-          ? item.inclusions.filter(Boolean)
-          : [];
-      choices = Array.isArray(offer.choices)
-        ? offer.choices.filter(Boolean)
-        : Array.isArray(item.choices)
-          ? item.choices.filter(Boolean)
-          : [];
-      drinks = Array.isArray(offer.drinks)
-        ? offer.drinks.filter(Boolean)
-        : Array.isArray(item.drinks)
-          ? item.drinks.filter(Boolean)
-          : [];
+      inclusions = filterOfferSelections(item.inclusions, offer.inclusions);
+      choices = filterOfferSelections(item.choices, offer.choices);
+      drinks = filterOfferSelections(item.drinks, offer.drinks);
     } else {
       const product = productMap.get(String(id));
       if (!product) {
