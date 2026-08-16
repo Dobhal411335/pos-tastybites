@@ -28,8 +28,20 @@ export const GET = withAuth(async (request) => {
       })
       .sort({ date: -1, createdAt: -1 })
       .lean();
+
+    const withUnitPrice = (entries || []).map((entry) => {
+      const quantity = Number(entry.quantity) || 0;
+      const value = Number(entry.value) || 0;
+      const unitPrice =
+        entry.unitPrice !== undefined && entry.unitPrice !== null
+          ? Number(entry.unitPrice)
+          : quantity
+            ? value / quantity
+            : 0;
+      return { ...entry, unitPrice };
+    });
       
-    return sendSuccess(entries, "Stock out entries retrieved successfully");
+    return sendSuccess(withUnitPrice, "Stock out entries retrieved successfully");
   } catch (error) {
     logger.error("Failed to list stock out entries", error);
     return sendError(error, "Failed to retrieve stock out entries", 500);
@@ -40,18 +52,26 @@ export const GET = withAuth(async (request) => {
 export const POST = withAuth(async (request) => {
   try {
     const data = await request.json();
-    const { product, date, quantity, value } = data;
+    const { product, date, quantity, unitPrice, value } = data;
 
-    if (!product || !date || quantity === undefined || value === undefined) {
-      return sendError(new Error("Missing fields"), "Product, Date, Quantity, and Value are required", 400);
+    if (!product || !date || quantity === undefined || unitPrice === undefined || value === undefined) {
+      return sendError(new Error("Missing fields"), "Product, Date, Quantity, Per Piece Value, and Total are required", 400);
     }
+
+    const qty = Number(quantity);
+    const piece = Number(unitPrice);
+    const total =
+      value !== undefined && value !== ""
+        ? Number(value)
+        : Number((piece * qty).toFixed(2));
 
     const newEntry = await StockOut.create({
       restaurant: request.restaurant,
       product,
       date: new Date(date),
-      quantity: Number(quantity),
-      value: Number(value),
+      quantity: qty,
+      unitPrice: piece,
+      value: total,
       createdBy: request.user.id
     });
 

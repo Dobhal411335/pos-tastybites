@@ -13,8 +13,8 @@ export default function GuestsModuleLayout({ children }) {
       title: "Guest Record",
       color: "bg-[#0F6B7A]",
       items: [
-        { label: "Guest Detail", href: "/admin/guests/detail" },
-        { label: "Performance Status", href: "/admin/guests/performance" },
+        { label: "Guest Detail", href: "/admin/reports/guests/detail" },
+        { label: "Performance Status", href: "/admin/reports/guests/performance" },
       ],
     },
   ];

@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 export default function GuestsRedirectPage() {
   const router = useRouter();
   useEffect(() => {
-    router.replace("/admin/guests/detail");
+    router.replace("/admin/reports/guests/detail");
   }, [router]);
   return null;
 }

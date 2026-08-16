@@ -1,12 +1,20 @@
 import mongoose from 'mongoose';
 
+const StockInItemSchema = new mongoose.Schema(
+  {
+    product: { type: mongoose.Schema.Types.ObjectId, ref: 'StockProduct', required: true },
+    quantity: { type: Number, required: true },
+    unitPrice: { type: Number, required: true },
+    value: { type: Number, required: true },
+  },
+  { _id: false }
+);
+
 const StockInSchema = new mongoose.Schema(
   {
     restaurant: { type: mongoose.Schema.Types.ObjectId, ref: 'Restaurant', required: true },
-    product: { type: mongoose.Schema.Types.ObjectId, ref: 'StockProduct', required: true },
     date: { type: Date, required: true },
-    quantity: { type: Number, required: true },
-    value: { type: Number, required: true },
+    items: { type: [StockInItemSchema], default: [] },
     invoiceNumber: { type: String, trim: true },
     tax: { type: Number },
     invoiceAmount: { type: Number },

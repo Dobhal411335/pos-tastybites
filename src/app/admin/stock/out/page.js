@@ -1,20 +1,28 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import Link from "next/link";
-import { ArrowLeft, Trash2, Edit, Search, Eye, PlusCircle, PackageMinus, ClipboardList, TrendingDown, MoreHorizontal, Trash, CalendarClock, Loader2 } from "lucide-react";
+import { Edit, Eye, PackageMinus, ClipboardList, TrendingDown, MoreHorizontal, Trash, CalendarClock, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { toast, Toaster } from "sonner";
 import { PALETTE } from "@/utils/paletteeColor";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import DeleteDialog from "@/components/common/DeleteDialog";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Skeleton } from "@/components/ui/skeleton";
+
+const money = (n) =>
+  `$${(Math.round((Number(n) || 0) * 100) / 100).toFixed(2)}`;
 
 export default function StockOutPage() {
   const [categories, setCategories] = useState([]);
@@ -31,12 +39,16 @@ export default function StockOutPage() {
   // Delete Dialog state
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState(null);
+  const [viewOpen, setViewOpen] = useState(false);
+  const [viewEntry, setViewEntry] = useState(null);
+  const [viewBalance, setViewBalance] = useState("0.00");
 
   const [formData, setFormData] = useState({
     menuHead: "",
     productName: "",
     stockDate: new Date(),
     qty: "",
+    unitPrice: "",
     value: "",
   });
 
@@ -93,7 +105,18 @@ export default function StockOutPage() {
       let totalOut = 0;
 
       if (inJson.success) {
-        totalIn = inJson.data.reduce((sum, item) => sum + item.quantity, 0);
+        totalIn = (inJson.data || []).reduce((sum, entry) => {
+          return (
+            sum +
+            (entry.items || []).reduce((lineSum, item) => {
+              const itemPid =
+                item.product?._id?.toString() || item.product?.toString();
+              return itemPid === productId
+                ? lineSum + (Number(item.quantity) || 0)
+                : lineSum;
+            }, 0)
+          );
+        }, 0);
       }
       if (outJson.success) {
         totalOut = outJson.data.reduce((sum, item) => sum + item.quantity, 0);
@@ -121,13 +144,38 @@ export default function StockOutPage() {
   };
 
   const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    setFormData((prev) => {
+      const next = { ...prev, [name]: value };
+      const qty = Number(name === "qty" ? value : next.qty);
+      const unitPrice = Number(name === "unitPrice" ? value : next.unitPrice);
+      const total = Number(name === "value" ? value : next.value);
+
+      if (
+        (name === "qty" || name === "unitPrice") &&
+        value !== "" &&
+        !Number.isNaN(qty) &&
+        !Number.isNaN(unitPrice)
+      ) {
+        next.value = (qty * unitPrice).toFixed(2);
+      }
+      if (
+        name === "value" &&
+        value !== "" &&
+        !Number.isNaN(qty) &&
+        qty &&
+        !Number.isNaN(total)
+      ) {
+        next.unitPrice = (total / qty).toFixed(2);
+      }
+      return next;
+    });
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!formData.productName || !formData.stockDate || !formData.qty || !formData.value) {
-      toast.error("Product, Date, QTY, and Value are required");
+    if (!formData.productName || !formData.stockDate || !formData.qty || !formData.unitPrice || !formData.value) {
+      toast.error("Product, Date, QTY, Per Piece Value, and Total are required");
       return;
     }
 
@@ -140,6 +188,7 @@ export default function StockOutPage() {
         product: formData.productName,
         date: formData.stockDate.toISOString(),
         quantity: formData.qty,
+        unitPrice: formData.unitPrice,
         value: formData.value,
       };
 
@@ -177,12 +226,25 @@ export default function StockOutPage() {
       return pCat === catId;
     }));
 
+    const qty = entry.quantity?.toString() || "";
+    const value =
+      entry.value !== undefined && entry.value !== null
+        ? Number(entry.value).toFixed(2)
+        : "";
+    const unitPrice =
+      entry.unitPrice !== undefined && entry.unitPrice !== null
+        ? Number(entry.unitPrice).toFixed(2)
+        : qty && value
+          ? (Number(value) / Number(qty)).toFixed(2)
+          : "";
+
     setFormData({
       menuHead: catId || "",
       productName: prodId || "",
       stockDate: new Date(entry.date),
-      qty: entry.quantity.toString(),
-      value: entry.value.toString(),
+      qty,
+      unitPrice,
+      value,
     });
 
     const product = allProducts.find(p => p._id === entry.product?._id);
@@ -199,11 +261,54 @@ export default function StockOutPage() {
       productName: "",
       stockDate: new Date(),
       qty: "",
+      unitPrice: "",
       value: "",
     });
     setFilteredProducts([]);
     setSelectedProductDetails(null);
     setOpeningBalance("0.00");
+  };
+
+  const handleViewStockOut = async (entry) => {
+    setViewEntry(entry);
+    setTimeout(() => setViewOpen(true), 100);
+    const prodId = entry.product?._id?.toString() || entry.product?.toString();
+    if (prodId) {
+      try {
+        const [inRes, outRes] = await Promise.all([
+          fetch(`/api/stock/in?productId=${prodId}`),
+          fetch(`/api/stock/out?productId=${prodId}`),
+        ]);
+        const [inJson, outJson] = await Promise.all([inRes.json(), outRes.json()]);
+        let totalIn = 0;
+        let totalOut = 0;
+        if (inJson.success) {
+          totalIn = (inJson.data || []).reduce((sum, inv) => {
+            return (
+              sum +
+              (inv.items || []).reduce((lineSum, item) => {
+                const itemPid =
+                  item.product?._id?.toString() || item.product?.toString();
+                return itemPid === prodId
+                  ? lineSum + (Number(item.quantity) || 0)
+                  : lineSum;
+              }, 0)
+            );
+          }, 0);
+        }
+        if (outJson.success) {
+          totalOut = (outJson.data || []).reduce(
+            (sum, item) => sum + (Number(item.quantity) || 0),
+            0
+          );
+        }
+        setViewBalance((totalIn - totalOut).toFixed(2));
+      } catch {
+        setViewBalance("0.00");
+      }
+    } else {
+      setViewBalance("0.00");
+    }
   };
 
   const openDeleteDialog = (id) => {
@@ -244,6 +349,91 @@ export default function StockOutPage() {
         title="Delete Stock Out Entry"
         description="Are you sure you want to delete this stock out entry? This will restore the inventory balance."
       />
+
+      <Dialog open={viewOpen} onOpenChange={setViewOpen}>
+        <DialogContent className="sm:max-w-lg bg-white">
+          <DialogHeader>
+            <DialogTitle className="text-[20px] font-bold text-zinc-900">
+              Stock Out Details
+            </DialogTitle>
+            <DialogDescription>
+              Outgoing stock record for this product.
+            </DialogDescription>
+          </DialogHeader>
+          {viewEntry && (
+            <div className="space-y-4">
+              <div className="flex items-center gap-3 rounded-lg border border-red-100 bg-red-50 p-4">
+                <div className="w-12 h-12 rounded-lg bg-red-100 flex items-center justify-center border border-red-200">
+                  <PackageMinus className="w-6 h-6 text-red-600" />
+                </div>
+                <div>
+                  <p className="font-bold text-[16px] text-zinc-900">
+                    {viewEntry.product?.name || "Unknown"}
+                  </p>
+                  <p className="text-[13px] text-zinc-500 font-medium">
+                    {viewEntry.product?.category?.name || "Unknown"}
+                  </p>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-3">
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-zinc-500">Type</p>
+                  <p className="mt-1 text-[14px] font-bold text-zinc-900">
+                    {viewEntry.product?.type?.name || "—"}
+                  </p>
+                </div>
+                <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-3">
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-zinc-500">Unit</p>
+                  <p className="mt-1 text-[14px] font-bold text-zinc-900">
+                    {viewEntry.product?.unit?.name || "—"}
+                  </p>
+                </div>
+                <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-3">
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-zinc-500">Date</p>
+                  <p className="mt-1 text-[14px] font-bold text-zinc-900">
+                    {new Date(viewEntry.date).toLocaleDateString()}
+                  </p>
+                </div>
+                <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-3">
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-zinc-500">Quantity</p>
+                  <p className="mt-1 text-[14px] font-bold text-zinc-900">
+                    {viewEntry.quantity} {viewEntry.product?.unit?.name || ""}
+                  </p>
+                </div>
+                <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-3">
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-zinc-500">Per Piece</p>
+                  <p className="mt-1 text-[14px] font-bold text-zinc-900">
+                    {money(
+                      viewEntry.unitPrice ??
+                        (viewEntry.quantity
+                          ? Number(viewEntry.value) / Number(viewEntry.quantity)
+                          : 0)
+                    )}
+                  </p>
+                </div>
+                <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-3">
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-zinc-500">Value</p>
+                  <p className="mt-1 text-[14px] font-bold text-red-700">
+                    {money(
+                      viewEntry.unitPrice ??
+                        (viewEntry.quantity
+                          ? Number(viewEntry.value) / Number(viewEntry.quantity)
+                          : 0)
+                    )}{" "}
+                    × {viewEntry.quantity} = {money(viewEntry.value)}
+                  </p>
+                </div>
+                <div className="rounded-lg border border-blue-100 bg-blue-50 p-3">
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-blue-600">Current Balance</p>
+                  <p className="mt-1 text-[14px] font-bold text-blue-900">
+                    {viewBalance} {viewEntry.product?.unit?.name || ""}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       <div className="flex-1 overflow-y-auto p-8">
         <div className="max-w-300 mx-auto space-y-8 pb-16 font-sans">
@@ -302,7 +492,9 @@ export default function StockOutPage() {
                         </SelectTrigger>
                         <SelectContent className="bg-white max-h-60 overflow-y-auto">
                           {filteredProducts.map((p) => (
-                            <SelectItem key={p._id} value={p._id}>{p.name}</SelectItem>
+                            <SelectItem key={p._id} value={p._id}>
+                              {p.name}{p.type?.name ? ` — ${p.type.name}` : ""}
+                            </SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
@@ -366,6 +558,20 @@ export default function StockOutPage() {
                       />
                     </div>
                     <div className="space-y-2 flex-1">
+                      <label className="text-[14px] font-semibold text-zinc-900">
+                        Per Piece Value ($) <span className="text-red-500">*</span>
+                      </label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        name="unitPrice"
+                        placeholder="25.00"
+                        value={formData.unitPrice}
+                        onChange={handleChange}
+                        className="h-11 text-[15px] bg-white border-zinc-200 focus:ring-[#F97316] font-medium"
+                      />
+                    </div>
+                    <div className="space-y-2 flex-1">
                       <label className="text-[14px] font-semibold text-zinc-900">Total Value ($) <span className="text-red-500">*</span></label>
                       <Input
                         type="number"
@@ -378,6 +584,11 @@ export default function StockOutPage() {
                       />
                     </div>
                   </div>
+                  {formData.qty && formData.unitPrice && (
+                    <p className="mt-3 text-[13px] font-semibold text-red-700">
+                      {money(formData.unitPrice)} × {formData.qty} = {money(formData.value)}
+                    </p>
+                  )}
 
                 </CardContent>
               </Card>
@@ -462,9 +673,14 @@ export default function StockOutPage() {
                         <TableCell className="px-6">
                           <div className="flex flex-col gap-1">
                             <span className="font-bold text-zinc-900 text-[14px]">
-                              {s.quantity} <span className="text-[12px] text-zinc-500 font-medium">{s.product?.unit?.name}</span>
+                              {money(
+                                s.unitPrice ??
+                                  (s.quantity ? Number(s.value) / Number(s.quantity) : 0)
+                              )}{" "}
+                              × {s.quantity}{" "}
+                              <span className="text-[12px] text-zinc-500 font-medium">{s.product?.unit?.name}</span>
                             </span>
-                            <span className="text-[13px] font-semibold text-red-600">${s.value?.toFixed(2)}</span>
+                            <span className="text-[13px] font-semibold text-red-600">{money(s.value)}</span>
                           </div>
                         </TableCell>
                         <TableCell className="px-6 text-center">
@@ -474,12 +690,18 @@ export default function StockOutPage() {
                                 <MoreHorizontal className="h-4 w-4" />
                               </Button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-40 bg-white">
+                            <DropdownMenuContent align="end" className="w-44 bg-white">
                               <DropdownMenuItem
                                 className="text-[14px] font-medium cursor-pointer"
                                 onSelect={() => handleEdit(s)}
                               >
                                 <Edit className="mr-2 h-4 w-4" /> Edit
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                className="text-[14px] font-medium cursor-pointer"
+                                onSelect={() => handleViewStockOut(s)}
+                              >
+                                <Eye className="mr-2 h-4 w-4" /> View Stock Out
                               </DropdownMenuItem>
                               <DropdownMenuItem
                                 className="text-[14px] font-medium text-red-600 focus:bg-red-500 focus:text-white cursor-pointer"

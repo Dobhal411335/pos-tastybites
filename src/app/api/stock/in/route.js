@@ -7,68 +7,106 @@ import "@/models/stock/StockUnit";
 import { sendSuccess } from "@/utils/apiResponse";
 import { sendError } from "@/utils/errorHandler";
 import { logger } from "@/utils/logger";
+import {
+  hydrateLegacyStockInProducts,
+  normalizeStockInEntry,
+  stockInProductPopulate,
+} from "@/lib/stock/normalizeStockIn";
 
-// GET - List all stock in entries
+function mapItems(items) {
+  return items.map((item) => {
+    const quantity = Number(item.quantity);
+    const unitPrice = Number(item.unitPrice);
+    const value =
+      item.value !== undefined && item.value !== ""
+        ? Number(item.value)
+        : Number((unitPrice * quantity).toFixed(2));
+    return {
+      product: item.product,
+      quantity,
+      unitPrice,
+      value,
+    };
+  });
+}
+
+function populateInvoice(query) {
+  return query.populate(stockInProductPopulate);
+}
+
+// GET - List stock in invoices
 export const GET = withAuth(async (request) => {
   try {
     const { searchParams } = new URL(request.url);
     const productId = searchParams.get("productId");
-    
-    let query = { restaurant: request.restaurant };
-    if (productId) query.product = productId;
 
-    const entries = await StockIn.find(query)
-      .populate({
-        path: 'product',
-        populate: [
-          { path: 'category', select: 'name' },
-          { path: 'type', select: 'name' },
-          { path: 'unit', select: 'name' }
-        ]
-      })
-      .sort({ date: -1, createdAt: -1 })
-      .lean();
-      
-    return sendSuccess(entries, "Stock in entries retrieved successfully");
+    const query = { restaurant: request.restaurant };
+    if (productId) {
+      query.$or = [{ "items.product": productId }, { product: productId }];
+    }
+
+    const entries = await populateInvoice(
+      StockIn.find(query).sort({ date: -1, createdAt: -1 })
+    ).lean();
+
+    return sendSuccess(
+      await hydrateLegacyStockInProducts(entries),
+      "Stock in entries retrieved successfully"
+    );
   } catch (error) {
     logger.error("Failed to list stock in entries", error);
     return sendError(error, "Failed to retrieve stock in entries", 500);
   }
 }, ["ADMIN", "MANAGER"]);
 
-// POST - Create a new stock in entry
+// POST - Create a stock in invoice with one or more products
 export const POST = withAuth(async (request) => {
   try {
     const data = await request.json();
-    const { product, date, quantity, value, invoiceNumber, tax, invoiceAmount } = data;
+    const { date, items, invoiceNumber, tax, invoiceAmount } = data;
 
-    if (!product || !date || quantity === undefined || value === undefined) {
-      return sendError(new Error("Missing fields"), "Product, Date, Quantity, and Value are required", 400);
+    if (!date || !Array.isArray(items) || items.length === 0) {
+      return sendError(
+        new Error("Missing fields"),
+        "Date and at least one product line are required",
+        400
+      );
+    }
+
+    const mappedItems = mapItems(items);
+    const invalid = mappedItems.some(
+      (item) =>
+        !item.product ||
+        Number.isNaN(item.quantity) ||
+        Number.isNaN(item.unitPrice) ||
+        Number.isNaN(item.value)
+    );
+    if (invalid) {
+      return sendError(
+        new Error("Invalid items"),
+        "Each line needs product, quantity, per-piece value, and total",
+        400
+      );
     }
 
     const newEntry = await StockIn.create({
       restaurant: request.restaurant,
-      product,
       date: new Date(date),
-      quantity: Number(quantity),
-      value: Number(value),
+      items: mappedItems,
       invoiceNumber,
       tax: tax ? Number(tax) : undefined,
       invoiceAmount: invoiceAmount ? Number(invoiceAmount) : undefined,
-      createdBy: request.user.id
+      createdBy: request.user.id,
     });
 
-    await newEntry.populate({
-      path: 'product',
-      populate: [
-        { path: 'category', select: 'name' },
-        { path: 'type', select: 'name' },
-        { path: 'unit', select: 'name' }
-      ]
-    });
+    await newEntry.populate(stockInProductPopulate);
 
-    logger.info(`Stock In created for product: ${product}`);
-    return sendSuccess(newEntry, "Stock In entry created successfully", 201);
+    logger.info(`Stock In invoice created with ${mappedItems.length} item(s)`);
+    return sendSuccess(
+      normalizeStockInEntry(newEntry.toObject()),
+      "Stock In entry created successfully",
+      201
+    );
   } catch (error) {
     logger.error("Failed to create stock in entry", error);
     return sendError(error, "Failed to create stock in entry", 500);

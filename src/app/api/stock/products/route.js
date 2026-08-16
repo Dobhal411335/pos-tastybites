@@ -29,9 +29,9 @@ export const GET = withAuth(async (request) => {
 export const POST = withAuth(async (request) => {
   try {
     const data = await request.json();
-    const { category, name, type, unit, purchasePrice, salePrice, status } = data;
+    const { category, name, type, unit, purchasePrice, status } = data;
 
-    if (!category || !name || !type || !unit || purchasePrice === undefined || salePrice === undefined) {
+    if (!category || !name || !type || !unit || purchasePrice === undefined) {
       return sendError(new Error("Missing fields"), "All product fields are required", 400);
     }
 
@@ -42,7 +42,6 @@ export const POST = withAuth(async (request) => {
       type,
       unit,
       purchasePrice: Number(purchasePrice),
-      salePrice: Number(salePrice),
       status: status !== undefined ? status : true,
       createdBy: request.user.id
     });

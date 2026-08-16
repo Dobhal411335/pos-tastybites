@@ -17,7 +17,7 @@ export const PUT = withAuth(async (request, { params }) => {
     updateData.updatedBy = request.user.id;
 
     if (updateData.purchasePrice !== undefined) updateData.purchasePrice = Number(updateData.purchasePrice);
-    if (updateData.salePrice !== undefined) updateData.salePrice = Number(updateData.salePrice);
+    delete updateData.salePrice;
 
     const updatedProduct = await StockProduct.findOneAndUpdate(
       { _id: id, restaurant: request.restaurant },

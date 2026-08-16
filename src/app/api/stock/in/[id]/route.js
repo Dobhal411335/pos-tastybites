@@ -7,46 +7,90 @@ import "@/models/stock/StockUnit";
 import { sendSuccess } from "@/utils/apiResponse";
 import { sendError } from "@/utils/errorHandler";
 import { logger } from "@/utils/logger";
+import {
+  normalizeStockInEntry,
+  stockInProductPopulate,
+} from "@/lib/stock/normalizeStockIn";
 
-// PUT - Update a stock in entry
+function mapItems(items) {
+  return items.map((item) => {
+    const quantity = Number(item.quantity);
+    const unitPrice = Number(item.unitPrice);
+    const value =
+      item.value !== undefined && item.value !== ""
+        ? Number(item.value)
+        : Number((unitPrice * quantity).toFixed(2));
+    return {
+      product: item.product,
+      quantity,
+      unitPrice,
+      value,
+    };
+  });
+}
+
+// PUT - Update a stock in invoice
 export const PUT = withAuth(async (request, { params }) => {
   try {
     const { id } = await params;
     if (!id) return sendError(new Error("Missing ID"), "Entry ID is required", 400);
 
-    const updateData = await request.json();
-    updateData.updatedBy = request.user.id;
+    const body = await request.json();
+    const $set = { updatedBy: request.user.id };
 
-    if (updateData.quantity !== undefined) updateData.quantity = Number(updateData.quantity);
-    if (updateData.value !== undefined) updateData.value = Number(updateData.value);
-    if (updateData.date) updateData.date = new Date(updateData.date);
+    if (body.date) $set.date = new Date(body.date);
+    if (body.invoiceNumber !== undefined) $set.invoiceNumber = body.invoiceNumber;
+    if (body.tax !== undefined && body.tax !== "") $set.tax = Number(body.tax);
+    if (body.invoiceAmount !== undefined && body.invoiceAmount !== "") {
+      $set.invoiceAmount = Number(body.invoiceAmount);
+    }
+
+    const update = { $set };
+
+    if (Array.isArray(body.items)) {
+      if (body.items.length === 0) {
+        return sendError(new Error("Invalid items"), "At least one product line is required", 400);
+      }
+      $set.items = mapItems(body.items);
+      const invalid = $set.items.some(
+        (item) =>
+          !item.product ||
+          Number.isNaN(item.quantity) ||
+          Number.isNaN(item.unitPrice) ||
+          Number.isNaN(item.value)
+      );
+      if (invalid) {
+        return sendError(
+          new Error("Invalid items"),
+          "Each line needs product, quantity, per-piece value, and total",
+          400
+        );
+      }
+      update.$unset = { product: 1, quantity: 1, value: 1, unitPrice: 1 };
+    }
 
     const updatedEntry = await StockIn.findOneAndUpdate(
       { _id: id, restaurant: request.restaurant },
-      { $set: updateData },
-      { returnDocument: 'after', runValidators: true }
-    ).populate({
-      path: 'product',
-      populate: [
-        { path: 'category', select: 'name' },
-        { path: 'type', select: 'name' },
-        { path: 'unit', select: 'name' }
-      ]
-    });
+      update,
+      { returnDocument: "after", runValidators: true }
+    ).populate(stockInProductPopulate);
 
     if (!updatedEntry) {
       return sendError(new Error("Not Found"), "Stock entry not found", 404);
     }
 
-    logger.info(`Stock In entry updated: ${id}`);
-    return sendSuccess(updatedEntry, "Entry updated successfully");
+    logger.info(`Stock In invoice updated: ${id}`);
+    return sendSuccess(
+      normalizeStockInEntry(updatedEntry.toObject()),
+      "Entry updated successfully"
+    );
   } catch (error) {
     logger.error(`Failed to update stock in entry ${params?.id}`, error);
     return sendError(error, "Failed to update entry", 500);
   }
 }, ["ADMIN", "MANAGER"]);
 
-// DELETE - Remove a stock in entry
+// DELETE - Remove a stock in invoice
 export const DELETE = withAuth(async (request, { params }) => {
   try {
     const { id } = await params;
@@ -57,7 +101,7 @@ export const DELETE = withAuth(async (request, { params }) => {
       return sendError(new Error("Not Found"), "Stock entry not found", 404);
     }
 
-    logger.info(`Stock In entry deleted: ${id}`);
+    logger.info(`Stock In invoice deleted: ${id}`);
     return sendSuccess(null, "Entry deleted successfully");
   } catch (error) {
     logger.error(`Failed to delete stock in entry ${params?.id}`, error);

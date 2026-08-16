@@ -6,6 +6,7 @@ const StockOutSchema = new mongoose.Schema(
     product: { type: mongoose.Schema.Types.ObjectId, ref: 'StockProduct', required: true },
     date: { type: Date, required: true },
     quantity: { type: Number, required: true },
+    unitPrice: { type: Number, required: true },
     value: { type: Number, required: true },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },

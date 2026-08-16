@@ -42,8 +42,8 @@ export default function StockModuleLayout({ children }) {
           </div>
         )}
 
-        <main className="flex-1 overflow-y-auto p-6 sm:p-8 md:p-12">
-          <div className="mx-auto max-w-5xl bg-white border border-zinc-200 p-6 sm:p-10 rounded-xl shadow-xs min-h-125">
+        <main className="flex-1 overflow-y-auto p-6">
+          <div className="mx-auto max-w-6xl bg-white border border-zinc-200 p-6 rounded-xl shadow-xs min-h-125">
             {children}
           </div>
         </main>

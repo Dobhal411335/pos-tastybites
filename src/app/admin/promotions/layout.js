@@ -26,7 +26,7 @@ export default function MenuModuleLayout({ children }) {
             bgColorClass: "bg-blue-850",
             items: [
                 { label: "Create Festive Offer", href: "/admin/promotions/offers" },
-                { label: "Create Tasty Bites Gift Card", href: "/admin/promotions/giftcards" },
+                { label: "Create Gift Card", href: "/admin/promotions/giftcards" },
             ],
         },
     ];

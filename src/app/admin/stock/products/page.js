@@ -33,7 +33,6 @@ export default function StockProductsPage() {
     type: "",
     unit: "",
     purchaseAmount: "",
-    saleAmount: "",
   });
 
   // Dialog States for adding new Type / Unit
@@ -98,7 +97,6 @@ export default function StockProductsPage() {
       type: product.type._id,
       unit: product.unit._id,
       purchaseAmount: product.purchasePrice.toString(),
-      saleAmount: product.salePrice.toString()
     });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -124,7 +122,7 @@ export default function StockProductsPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!formData.category || !formData.name || !formData.type || !formData.unit || !formData.purchaseAmount || !formData.saleAmount) {
+    if (!formData.category || !formData.name || !formData.type || !formData.unit || !formData.purchaseAmount) {
       toast.error("Please fill all required fields");
       return;
     }
@@ -140,7 +138,6 @@ export default function StockProductsPage() {
         type: formData.type,
         unit: formData.unit,
         purchasePrice: Number(formData.purchaseAmount),
-        salePrice: Number(formData.saleAmount)
       };
 
       const res = await fetch(url, {
@@ -174,7 +171,6 @@ export default function StockProductsPage() {
       type: "",
       unit: "",
       purchaseAmount: "",
-      saleAmount: "",
     });
   };
 
@@ -454,45 +450,22 @@ export default function StockProductsPage() {
                   <CardTitle className="text-[16px] font-bold text-zinc-900">Pricing Matrix</CardTitle>
                 </CardHeader>
                 <CardContent className="p-6">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    {/* Purchase Pricing */}
-                    <div className="space-y-4">
-                      <div className="space-y-1">
-                        <label className="text-[14px] font-semibold text-zinc-900">Purchase Cost Price <span className="text-red-500">*</span></label>
-                        <p className="text-[12px] text-zinc-500 font-medium">Standard purchasing price input.</p>
-                      </div>
-                      <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-zinc-400">$</span>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          name="purchaseAmount"
-                          placeholder="Amount"
-                          value={formData.purchaseAmount}
-                          onChange={handleChange}
-                          className="h-11 pl-8 text-[15px] bg-white border-zinc-200 focus:ring-[#F97316]"
-                        />
-                      </div>
+                  <div className="max-w-md space-y-4">
+                    <div className="space-y-1">
+                      <label className="text-[14px] font-semibold text-zinc-900">Purchase Cost Price <span className="text-red-500">*</span></label>
+                      <p className="text-[12px] text-zinc-500 font-medium">Standard purchasing price input.</p>
                     </div>
-
-                    {/* Sale Pricing */}
-                    <div className="space-y-4">
-                      <div className="space-y-1">
-                        <label className="text-[14px] font-semibold text-zinc-900">Sale Cost Price <span className="text-red-500">*</span></label>
-                        <p className="text-[12px] text-zinc-500 font-medium">Standard selling price configuration.</p>
-                      </div>
-                      <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-zinc-400">$</span>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          name="saleAmount"
-                          placeholder="Amount"
-                          value={formData.saleAmount}
-                          onChange={handleChange}
-                          className="h-11 pl-8 text-[15px] bg-white border-zinc-200 focus:ring-[#F97316]"
-                        />
-                      </div>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-zinc-400">$</span>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        name="purchaseAmount"
+                        placeholder="Amount"
+                        value={formData.purchaseAmount}
+                        onChange={handleChange}
+                        className="h-11 pl-8 text-[15px] bg-white border-zinc-200 focus:ring-[#F97316]"
+                      />
                     </div>
                   </div>
                 </CardContent>
@@ -593,10 +566,7 @@ export default function StockProductsPage() {
                           </div>
                         </TableCell>
                         <TableCell className="px-6 py-4">
-                          <div className="flex flex-col gap-1">
-                            <span className="text-[14px] font-bold text-zinc-900">CP: ${p.purchasePrice?.toFixed(2)}</span>
-                            <span className="text-[14px] font-bold text-emerald-600">SP: ${p.salePrice?.toFixed(2)}</span>
-                          </div>
+                          <span className="text-[14px] font-bold text-zinc-900">CP: ${p.purchasePrice?.toFixed(2)}</span>
                         </TableCell>
                         <TableCell className="px-6 py-4 text-center">
                           <button

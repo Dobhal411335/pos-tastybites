@@ -18,6 +18,7 @@ export const PUT = withAuth(async (request, { params }) => {
     updateData.updatedBy = request.user.id;
 
     if (updateData.quantity !== undefined) updateData.quantity = Number(updateData.quantity);
+    if (updateData.unitPrice !== undefined) updateData.unitPrice = Number(updateData.unitPrice);
     if (updateData.value !== undefined) updateData.value = Number(updateData.value);
     if (updateData.date) updateData.date = new Date(updateData.date);
 

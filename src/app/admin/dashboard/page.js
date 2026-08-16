@@ -47,25 +47,32 @@ import {
   Wallet,
   Coffee,
   Megaphone,
-  ChevronLeft
+  ChevronLeft,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-} from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import Image from "next/image";
-import { AreaChart, Area, ResponsiveContainer, BarChart, Bar, Cell } from "recharts";
+import {
+  AreaChart,
+  Area,
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  Cell,
+} from "recharts";
 import { PALETTE } from "@/utils/paletteeColor";
 import DateTimeDisplay from "@/components/common/DateTimeDisplay";
 import NotificationBell from "@/components/common/NotificationBell";
 
 const EMPTY_CHART = [
-  { time: "8AM", val: 0 }, { time: "10AM", val: 0 },
-  { time: "12PM", val: 0 }, { time: "2PM", val: 0 },
-  { time: "4PM", val: 0 }, { time: "6PM", val: 0 },
+  { time: "8AM", val: 0 },
+  { time: "10AM", val: 0 },
+  { time: "12PM", val: 0 },
+  { time: "2PM", val: 0 },
+  { time: "4PM", val: 0 },
+  { time: "6PM", val: 0 },
 ];
 
 const EMPTY_STATS = {
@@ -94,11 +101,14 @@ function ChangeBadge({ value }) {
   const up = value >= 0;
   const Icon = up ? TrendingUp : TrendingDown;
   return (
-    <div className={`flex items-center gap-2 mt-3 text-sm font-bold w-max px-2.5 py-1 rounded-lg ${
-      up ? "text-emerald-600 bg-emerald-50" : "text-rose-600 bg-rose-50"
-    }`}>
+    <div
+      className={`flex items-center gap-2 mt-3 text-sm font-bold w-max px-2.5 py-1 rounded-lg ${
+        up ? "text-emerald-600 bg-emerald-50" : "text-rose-600 bg-rose-50"
+      }`}
+    >
       <Icon className="w-4 h-4" />
-      {up ? "+" : ""}{value}% from yesterday
+      {up ? "+" : ""}
+      {value}% from yesterday
     </div>
   );
 }
@@ -115,14 +125,20 @@ export default function AdminDashboardPage() {
     const loadStats = async () => {
       try {
         setStatsLoading(true);
-        const res = await fetch("/api/orders/stats", { credentials: "include" });
+        const res = await fetch("/api/orders/stats", {
+          credentials: "include",
+        });
         const json = await res.json();
         if (!cancelled && res.ok && json.success && json.data) {
           setStats({
             ...EMPTY_STATS,
             ...json.data,
-            orderChart: json.data.orderChart?.length ? json.data.orderChart : EMPTY_CHART,
-            revenueChart: json.data.revenueChart?.length ? json.data.revenueChart : EMPTY_CHART,
+            orderChart: json.data.orderChart?.length
+              ? json.data.orderChart
+              : EMPTY_CHART,
+            revenueChart: json.data.revenueChart?.length
+              ? json.data.revenueChart
+              : EMPTY_CHART,
           });
         }
       } catch (err) {
@@ -133,7 +149,9 @@ export default function AdminDashboardPage() {
     };
 
     loadStats();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const handleLogout = async () => {
@@ -150,18 +168,19 @@ export default function AdminDashboardPage() {
 
   const today = new Date();
   const formattedDate = today.toLocaleDateString("en-US", {
-    weekday: "long", year: "numeric", month: "long", day: "numeric",
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
   });
 
   return (
     <div className="min-h-screen flex flex-col bg-[#F8FAFC] text-slate-900 selection:bg-blue-100 antialiased font-sans">
-
       {/* ──────────────────────────────────────────
           HEADER (Glassmorphic)
          ────────────────────────────────────────── */}
       <header className="sticky top-0 z-50 border-b border-stone-200 bg-[#F7F6F3]/95 backdrop-blur-md">
         <div className="mx-auto flex h-18 max-w-360 items-center justify-between px-6 lg:px-8">
-
           {/* Left */}
           <div className="flex items-center gap-4">
             <Link href="/admin/dashboard">
@@ -197,19 +216,15 @@ export default function AdminDashboardPage() {
 
           {/* Right */}
           <div className="flex items-center gap-4">
-
             <NotificationBell />
 
             <div className="hidden lg:flex items-center gap-3 rounded-xl border border-stone-200 bg-white px-3 py-2 shadow-sm">
-
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-orange-100">
                 <UserCircle className="h-5 w-5 text-orange-600" />
               </div>
 
               <div className="leading-tight">
-                <p className="text-xs text-zinc-500">
-                  Administrator
-                </p>
+                <p className="text-xs text-zinc-500">Administrator</p>
 
                 <p className="text-sm font-semibold text-zinc-900">
                   {adminUser?.name || "System Admin"}
@@ -219,7 +234,6 @@ export default function AdminDashboardPage() {
               <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">
                 Online
               </Badge>
-
             </div>
             <Button
               variant="destructive"
@@ -230,7 +244,6 @@ export default function AdminDashboardPage() {
               Logout
             </Button>
           </div>
-
         </div>
       </header>
 
@@ -239,7 +252,6 @@ export default function AdminDashboardPage() {
          ────────────────────────────────────────── */}
       <main className="flex-1 overflow-x-hidden">
         <div className="max-w-360 mx-auto px-8 py-12 space-y-12">
-
           {/* WELCOME BANNER */}
           <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-6">
             <div className="space-y-2">
@@ -249,7 +261,13 @@ export default function AdminDashboardPage() {
                 </Badge>
               </div>
               <h1 className="text-4xl md:text-5xl font-black tracking-tight text-slate-900 drop-shadow-sm">
-                Good {today.getHours() < 12 ? "Morning" : today.getHours() < 17 ? "Afternoon" : "Evening"}, {adminUser?.name?.split(' ')[0] || ""}
+                Good{" "}
+                {today.getHours() < 12
+                  ? "Morning"
+                  : today.getHours() < 17
+                    ? "Afternoon"
+                    : "Evening"}
+                , {adminUser?.name?.split(" ")[0] || ""}
               </h1>
               <div className="flex items-center gap-3 pt-2 text-slate-500 font-medium text-sm">
                 <CalendarDays className="w-4 h-4 text-blue-500" />
@@ -267,17 +285,21 @@ export default function AdminDashboardPage() {
               PREMIUM KPI CARDS WITH CHARTS
              ────────────────────────────────────────── */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-
             {/* Orders KPI */}
             <Card className="bg-white border border-slate-200/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)] rounded-2xl overflow-hidden relative group">
               <CardContent className="p-8 pb-4">
                 <div className="flex justify-between items-start z-10 relative">
                   <div>
                     <div className="flex items-center gap-2 text-slate-500 font-bold tracking-wide uppercase text-xs mb-3">
-                      <ClipboardList className="w-4 h-4 text-orange-500" /> Today&apos;s Volume
+                      <ClipboardList className="w-4 h-4 text-orange-500" />{" "}
+                      Today&apos;s Volume
                     </div>
                     <div className="text-5xl font-black text-slate-900 tracking-tighter min-h-12 flex items-center">
-                      {statsLoading ? <Loader2 className="w-8 h-8 animate-spin text-slate-300" /> : stats.volume}
+                      {statsLoading ? (
+                        <Loader2 className="w-8 h-8 animate-spin text-slate-300" />
+                      ) : (
+                        stats.volume
+                      )}
                     </div>
                     <ChangeBadge value={stats.volumeChange} />
                   </div>
@@ -287,7 +309,14 @@ export default function AdminDashboardPage() {
                       <BarChart data={stats.orderChart}>
                         <Bar dataKey="val" radius={[4, 4, 0, 0]}>
                           {stats.orderChart.map((entry, index) => (
-                            <Cell key={`cell-${entry.time}-${index}`} fill={index === stats.orderChart.length - 1 ? "#F97316" : "#FED7AA"} />
+                            <Cell
+                              key={`cell-${entry.time}-${index}`}
+                              fill={
+                                index === stats.orderChart.length - 1
+                                  ? "#F97316"
+                                  : "#FED7AA"
+                              }
+                            />
                           ))}
                         </Bar>
                       </BarChart>
@@ -297,18 +326,30 @@ export default function AdminDashboardPage() {
 
                 <div className="mt-8 pt-6 border-t border-slate-100 flex gap-4">
                   <div className="flex-1">
-                    <div className="text-slate-400 text-xs font-bold uppercase mb-1">New</div>
-                    <div className="text-slate-900 font-bold">{stats.newCount}</div>
+                    <div className="text-slate-400 text-xs font-bold uppercase mb-1">
+                      New
+                    </div>
+                    <div className="text-slate-900 font-bold">
+                      {stats.newCount}
+                    </div>
                   </div>
                   <div className="w-px h-8 bg-slate-100"></div>
                   <div className="flex-1">
-                    <div className="text-slate-400 text-xs font-bold uppercase mb-1">Pending</div>
-                    <div className="text-orange-600 font-bold">{stats.pending}</div>
+                    <div className="text-slate-400 text-xs font-bold uppercase mb-1">
+                      Pending
+                    </div>
+                    <div className="text-orange-600 font-bold">
+                      {stats.pending}
+                    </div>
                   </div>
                   <div className="w-px h-8 bg-slate-100"></div>
                   <div className="flex-1">
-                    <div className="text-slate-400 text-xs font-bold uppercase mb-1">Confirmed</div>
-                    <div className="text-emerald-600 font-bold">{stats.confirmed}</div>
+                    <div className="text-slate-400 text-xs font-bold uppercase mb-1">
+                      Confirmed
+                    </div>
+                    <div className="text-emerald-600 font-bold">
+                      {stats.confirmed}
+                    </div>
                   </div>
                 </div>
               </CardContent>
@@ -320,10 +361,15 @@ export default function AdminDashboardPage() {
                 <div className="flex justify-between items-start z-10 relative">
                   <div>
                     <div className="flex items-center gap-2 text-slate-500 font-bold tracking-wide uppercase text-xs mb-3">
-                      <DollarSign className="w-4 h-4 text-emerald-500" /> Today&apos;s Revenue
+                      <DollarSign className="w-4 h-4 text-emerald-500" />{" "}
+                      Today&apos;s Revenue
                     </div>
                     <div className="text-5xl font-black text-slate-900 tracking-tighter min-h-12 flex items-center">
-                      {statsLoading ? <Loader2 className="w-8 h-8 animate-spin text-slate-300" /> : formatMoney(stats.revenue)}
+                      {statsLoading ? (
+                        <Loader2 className="w-8 h-8 animate-spin text-slate-300" />
+                      ) : (
+                        formatMoney(stats.revenue)
+                      )}
                     </div>
                     <ChangeBadge value={stats.revenueChange} />
                   </div>
@@ -332,12 +378,33 @@ export default function AdminDashboardPage() {
                     <ResponsiveContainer width="100%" height="100%">
                       <AreaChart data={stats.revenueChart}>
                         <defs>
-                          <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#10B981" stopOpacity={0.3} />
-                            <stop offset="95%" stopColor="#10B981" stopOpacity={0} />
+                          <linearGradient
+                            id="colorRev"
+                            x1="0"
+                            y1="0"
+                            x2="0"
+                            y2="1"
+                          >
+                            <stop
+                              offset="5%"
+                              stopColor="#10B981"
+                              stopOpacity={0.3}
+                            />
+                            <stop
+                              offset="95%"
+                              stopColor="#10B981"
+                              stopOpacity={0}
+                            />
                           </linearGradient>
                         </defs>
-                        <Area type="monotone" dataKey="val" stroke="#10B981" strokeWidth={3} fillOpacity={1} fill="url(#colorRev)" />
+                        <Area
+                          type="monotone"
+                          dataKey="val"
+                          stroke="#10B981"
+                          strokeWidth={3}
+                          fillOpacity={1}
+                          fill="url(#colorRev)"
+                        />
                       </AreaChart>
                     </ResponsiveContainer>
                   </div>
@@ -345,18 +412,30 @@ export default function AdminDashboardPage() {
 
                 <div className="mt-8 pt-6 border-t border-slate-100 flex gap-4">
                   <div className="flex-1">
-                    <div className="text-slate-400 text-xs font-bold uppercase mb-1">Taxes</div>
-                    <div className="text-slate-900 font-bold">{formatMoney(stats.taxes)}</div>
+                    <div className="text-slate-400 text-xs font-bold uppercase mb-1">
+                      Taxes
+                    </div>
+                    <div className="text-slate-900 font-bold">
+                      {formatMoney(stats.taxes)}
+                    </div>
                   </div>
                   <div className="w-px h-8 bg-slate-100"></div>
                   <div className="flex-1">
-                    <div className="text-slate-400 text-xs font-bold uppercase mb-1">Avg Order</div>
-                    <div className="text-blue-600 font-bold">{formatMoney(stats.avgOrder)}</div>
+                    <div className="text-slate-400 text-xs font-bold uppercase mb-1">
+                      Avg Order
+                    </div>
+                    <div className="text-blue-600 font-bold">
+                      {formatMoney(stats.avgOrder)}
+                    </div>
                   </div>
                   <div className="w-px h-8 bg-slate-100"></div>
                   <div className="flex-1">
-                    <div className="text-slate-400 text-xs font-bold uppercase mb-1">Tips</div>
-                    <div className="text-emerald-600 font-bold">{formatMoney(stats.tips)}</div>
+                    <div className="text-slate-400 text-xs font-bold uppercase mb-1">
+                      Tips
+                    </div>
+                    <div className="text-emerald-600 font-bold">
+                      {formatMoney(stats.tips)}
+                    </div>
                   </div>
                 </div>
               </CardContent>
@@ -369,15 +448,56 @@ export default function AdminDashboardPage() {
           {!activeCategory ? (
             <section>
               <div className="flex items-center justify-between mb-6">
-                <h2 className="text-2xl font-black text-slate-900">Dashboard Modules</h2>
+                <h2 className="text-2xl font-black text-slate-900">
+                  Dashboard Modules
+                </h2>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                <ModuleCard onClick={() => setActiveCategory("core")} icon={UtensilsCrossed} color="orange" title="Core Modules" stat="Setup" desc="Configure menu, floor plan, staff, taxes, and settings." actionLabel="View Modules" />
-                <ModuleCard onClick={() => setActiveCategory("quick")} icon={Boxes} color="emerald" title="Quick Actions" stat="Fast" desc="Instant stock, menu, floor, and staff updates." actionLabel="View Modules" />
-                <ModuleCard onClick={() => setActiveCategory("web")} icon={Globe} color="blue" title="Web Portal" stat="Cloud" desc="Secure cloud dashboard and remote reporting." actionLabel="View Modules" />
-                <ModuleCard onClick={() => setActiveCategory("reports")} icon={BarChart3} color="rose" title="Report Module" stat="Data" desc="Guest, inventory, invoices, financial, and stock logs." actionLabel="View Modules" />
-                <ModuleCard onClick={handleLogout} icon={LogOut} color="rose" title="Sign Out" stat="Action" desc="Log out of the admin panel and return to the login screen." actionLabel="Sign Out" />
-
+                <ModuleCard
+                  onClick={() => setActiveCategory("core")}
+                  icon={UtensilsCrossed}
+                  color="orange"
+                  title="Core Modules"
+                  stat="Setup"
+                  desc="Configure menu, floor plan, staff, taxes, and settings."
+                  actionLabel="View Modules"
+                />
+                <ModuleCard
+                  onClick={() => setActiveCategory("quick")}
+                  icon={Boxes}
+                  color="emerald"
+                  title="Quick Actions"
+                  stat="Fast"
+                  desc="Instant stock, menu, floor, and staff updates."
+                  actionLabel="View Modules"
+                />
+                <ModuleCard
+                  onClick={() => setActiveCategory("web")}
+                  icon={Globe}
+                  color="blue"
+                  title="Web Portal"
+                  stat="Cloud"
+                  desc="Secure cloud dashboard and remote reporting."
+                  actionLabel="View Modules"
+                />
+                <ModuleCard
+                  onClick={() => setActiveCategory("reports")}
+                  icon={BarChart3}
+                  color="rose"
+                  title="Report Module"
+                  stat="Data"
+                  desc="Guest, inventory, invoices, financial, and stock logs."
+                  actionLabel="View Modules"
+                />
+                <ModuleCard
+                  onClick={handleLogout}
+                  icon={LogOut}
+                  color="rose"
+                  title="Sign Out"
+                  stat="Action"
+                  desc="Log out of the admin panel and return to the login screen."
+                  actionLabel="Sign Out"
+                />
               </div>
             </section>
           ) : (
@@ -393,56 +513,161 @@ export default function AdminDashboardPage() {
               {activeCategory === "core" && (
                 <section>
                   <div className="flex items-center justify-between mb-6">
-                    <h2 className="text-2xl font-black text-slate-900">Core Modules Menu Series</h2>
+                    <h2 className="text-2xl font-black text-slate-900">
+                      Core Modules Menu Series
+                    </h2>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                    <ModuleCard href="/admin/menu" icon={UtensilsCrossed} color="orange" title="Create Menu" stat="Configure" desc="Configure categories, items, modifiers, pricing, and availability." />
-                    <ModuleCard href="/admin/floor-plan" icon={LayoutGrid} color="amber" title="Floor Management" stat="Tables" desc="Setup dining sections, table layouts, seating capacities, and status tracking." />
-                    <ModuleCard href="/admin/employee" icon={Users} color="indigo" title="Staff Portal" stat="Employees" desc="Manage employee profiles, access permissions, and designation matrices." />
-                    <ModuleCard href="/admin/promotions" icon={Gift} color="rose" title="Season Promotions" stat="Offers" desc="Setup promotional codes, percentage/flat discounts, and happy hour schedules." />
-                    <ModuleCard href="/admin/giftcard" icon={Gift} color="rose" title="Issue GiftCard" stat="Offer" desc="Issue or sell gift cards, track balances, and manage redemptions." />
-                    <ModuleCard href="/admin/tax" icon={Percent} color="emerald" title="Configure Tax And Fees" stat="Tax" desc="Define applicable tax slabs (GST/VAT), service charges, and additional surcharges." />
-                    <ModuleCard href="/admin/users" icon={UserPlus} color="blue" title="Master Admin Users" stat="Admins" desc="Setup super-admin accounts with system-wide configuration rights." />
-                    <ModuleCard href="/admin/settings" icon={Settings} color="amber" title="System Settings & Integrations" stat="Setup" desc="Configure payment gateways, hardware peripherals, and receipt templates." />
+                    <ModuleCard
+                      href="/admin/menu"
+                      icon={UtensilsCrossed}
+                      color="orange"
+                      title="Create Menu"
+                      stat="Configure"
+                      desc="Configure categories, items, modifiers, pricing, and availability."
+                    />
+                    <ModuleCard
+                      href="/admin/floor-plan"
+                      icon={LayoutGrid}
+                      color="amber"
+                      title="Floor Management"
+                      stat="Tables"
+                      desc="Setup dining sections, table layouts, seating capacities, and status tracking."
+                    />
+                    <ModuleCard
+                      href="/admin/employee"
+                      icon={Users}
+                      color="indigo"
+                      title="Staff Portal"
+                      stat="Employees"
+                      desc="Manage employee profiles, access permissions, and designation matrices."
+                    />
+                    <ModuleCard
+                      href="/admin/promotions"
+                      icon={Gift}
+                      color="rose"
+                      title="Season Promotions"
+                      stat="Offers"
+                      desc="Setup promotional codes, percentage/flat discounts, and happy hour schedules."
+                    />
+                    <ModuleCard
+                      href="/admin/giftcard"
+                      icon={Gift}
+                      color="rose"
+                      title="Issue GiftCard"
+                      stat="Offer"
+                      desc="Issue or sell gift cards, track balances, and manage redemptions."
+                    />
+                    <ModuleCard
+                      href="/admin/tax"
+                      icon={Percent}
+                      color="emerald"
+                      title="Configure Tax And Fees"
+                      stat="Tax"
+                      desc="Define applicable tax slabs (GST/VAT), service charges, and additional surcharges."
+                    />
+                    <ModuleCard
+                      href="/admin/users"
+                      icon={UserPlus}
+                      color="blue"
+                      title="Master Admin Users"
+                      stat="Admins"
+                      desc="Setup super-admin accounts with system-wide configuration rights."
+                    />
+                    <ModuleCard
+                      href="/admin/settings"
+                      icon={Settings}
+                      color="amber"
+                      title="System Settings & Integrations"
+                      stat="Setup"
+                      desc="Configure payment gateways, hardware peripherals, and receipt templates."
+                    />
                   </div>
                 </section>
               )}
               {activeCategory === "quick" && (
                 <section>
-                  <h2 className="text-2xl font-black text-slate-900 mb-6">Quick Actions And Useful</h2>
+                  <h2 className="text-2xl font-black text-slate-900 mb-6">
+                    Quick Actions And Useful
+                  </h2>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    <ModuleCard href="/admin/stock" icon={Boxes} color="emerald" title="Stock Control" stat="Inventory" desc="Quick stock adjustments, item additions, and batch tracking." />
+                    <ModuleCard
+                      href="/admin/stock"
+                      icon={Boxes}
+                      color="emerald"
+                      title="Stock Control"
+                      stat="Inventory"
+                      desc="Quick stock adjustments, item additions, and batch tracking."
+                    />
                   </div>
                 </section>
               )}
-
               {activeCategory === "web" && (
                 <section>
-                  <h2 className="text-2xl font-black text-slate-900 mb-6">Web Portal / Useful Link</h2>
+                  <h2 className="text-2xl font-black text-slate-900 mb-6">
+                    Web Portal / Useful Link
+                  </h2>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    <ModuleCard href="/admin/web" icon={Store} color="blue" title="Web Console" stat="Cloud" desc="Direct secure link to the cloud management dashboard and remote reporting suite." />
+                    <ModuleCard
+                      href="/admin/web"
+                      icon={Store}
+                      color="blue"
+                      title="Web Console"
+                      stat="Cloud"
+                      desc="Direct secure link to the cloud management dashboard and remote reporting suite."
+                    />
                   </div>
                 </section>
               )}
-
               {activeCategory === "reports" && (
                 <section>
-                  <h2 className="text-2xl font-black text-slate-900 mb-6">Report Module</h2>
+                  <h2 className="text-2xl font-black text-slate-900 mb-6">
+                    Report Module
+                  </h2>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    <ModuleCard href="/admin/reports/guest" icon={UserSearch} color="rose" title="Guest Directory" stat="Reports" desc="Guest Database and Preferences Log." />
-                    <ModuleCard href="/admin/reports/inventory" icon={Boxes} color="emerald" title="Inventory & Stock Reports" stat="Reports" desc="Current Stock Valuation, Low Stock Alerts, Movement Analysis, Receiving & PO Tracking." />
-                    <ModuleCard href="/admin/reports/invoices" icon={Receipt} color="indigo" title="Day Invoices Record Reports" stat="Reports" desc="Sales Summary, Itemized Sales, Department Sales, Hourly Volume, Payment Breakdown, Voids & Refunds, Promotion Impact." />
-                    <ModuleCard href="/admin/reports/employees" icon={Users} color="blue" title="Employee & Staff Reports Log" stat="Reports" desc="Sales Performance, Time & Attendance, Shift Handover Notes, Staff Order Processing." />
-                    <ModuleCard href="/admin/reports/admin" icon={UserCheck} color="amber" title="Admin Record Log" stat="Reports" desc="Daily Business Summary, Manager's Daily Report, End-of-Day Report, Night Audit Report, Exception Fields." />
-                    <ModuleCard href="/admin/reports/customer" icon={Database} color="rose" title="Customer & POS Reports" stat="Reports" desc="Purchase History, Loyalty Engagement, Retention Ratio, Fulfillment Exceptions." />
-                    <ModuleCard href="/admin/reports/financial" icon={Wallet} color="emerald" title="Financial & Accounting Reports" stat="Reports" desc="Z-Report, X-Report, Tax Summary, Cash-Up Reconciliation, Customer Ledger, P&L, Revenue Breakdown." />
-                    <ModuleCard href="/admin/reports/stock" icon={PieChart} color="orange" title="Stock Log" stat="Reports" desc="Top Sellers List, Reorder Breach Log, Price Override Log, Filtered Stock Audit." />
-                    <ModuleCard href="/admin/reports/promotions" icon={Megaphone} color="blue" title="Promotions Advertisement Log" stat="Reports" desc="Discount Allowances and Campaign Performance." />
-                    <ModuleCard href="/admin/reports/kitchen" icon={Coffee} color="indigo" title="Kitchen Log" stat="Reports" desc="KDS Performance and Kitchen Inventory Alerts." />
+                    <ModuleCard
+                      href="/admin/reports/guests"
+                      icon={UserSearch}
+                      color="rose"
+                      title="Guest Directory"
+                      stat="Reports"
+                      desc="Guest Database and Preferences Log."
+                    />
+                    <ModuleCard
+                      href="/admin/reports/inventory"
+                      icon={Boxes}
+                      color="emerald"
+                      title="Inventory & Stock Reports"
+                      stat="Reports"
+                      desc="Current Stock Valuation, Low Stock Alerts, Movement Analysis, Receiving & PO Tracking."
+                    />
+                    <ModuleCard
+                      href="/admin/reports/financial"
+                      icon={Wallet}
+                      color="emerald"
+                      title="Financial & Accounting Reports"
+                      stat="Reports"
+                      desc="Z-Report, X-Report, Tax Summary, Cash-Up Reconciliation, Customer Ledger, P&L, Revenue Breakdown."
+                    />
+                    <ModuleCard
+                      href="/admin/reports/employees"
+                      icon={Users}
+                      color="blue"
+                      title="Employee & Staff Reports Log"
+                      stat="Reports"
+                      desc="Sales Performance, Time & Attendance, Shift Handover Notes, Staff Order Processing."
+                    />
+                    <ModuleCard
+                      href="/admin/reports/admin"
+                      icon={UserCheck}
+                      color="amber"
+                      title="Admin Record Log"
+                      stat="Reports"
+                      desc="Daily Business Summary, Manager's Daily Report, End-of-Day Report, Night Audit Report, Exception Fields."
+                    />
                   </div>
                 </section>
               )}
-
             </div>
           )}
         </div>
@@ -458,7 +683,16 @@ export default function AdminDashboardPage() {
 /**
  * Module Card — Large Bento Box style
  */
-function ModuleCard({ href, icon: Icon, color, title, stat, desc, onClick, actionLabel = "Access Module" }) {
+function ModuleCard({
+  href,
+  icon: Icon,
+  color,
+  title,
+  stat,
+  desc,
+  onClick,
+  actionLabel = "Access Module",
+}) {
   const colorMap = {
     orange: "text-orange-600 bg-orange-100 group-hover:bg-orange-600",
     blue: "text-blue-600 bg-blue-100 group-hover:bg-blue-600",
@@ -484,10 +718,17 @@ function ModuleCard({ href, icon: Icon, color, title, stat, desc, onClick, actio
 
       <CardContent className="p-8 relative z-10 flex flex-col h-full">
         <div className="flex justify-between items-start mb-6">
-          <div className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-colors duration-300 ${colorMap[color]}`}>
-            <Icon className={`w-7 h-7 transition-colors duration-300 ${textHoverMap[color] || 'group-hover:text-white'}`} />
+          <div
+            className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-colors duration-300 ${colorMap[color]}`}
+          >
+            <Icon
+              className={`w-7 h-7 transition-colors duration-300 ${textHoverMap[color] || "group-hover:text-white"}`}
+            />
           </div>
-          <Badge variant="secondary" className="bg-slate-100 text-slate-600 font-bold tracking-wide uppercase text-[10px] px-2.5 py-1">
+          <Badge
+            variant="secondary"
+            className="bg-slate-100 text-slate-600 font-bold tracking-wide uppercase text-[10px] px-2.5 py-1"
+          >
             {stat}
           </Badge>
         </div>
@@ -507,7 +748,11 @@ function ModuleCard({ href, icon: Icon, color, title, stat, desc, onClick, actio
 
   if (onClick) {
     return (
-      <button type="button" onClick={onClick} className="block group outline-none h-full w-full">
+      <button
+        type="button"
+        onClick={onClick}
+        className="block group outline-none h-full w-full"
+      >
         {Inner}
       </button>
     );
