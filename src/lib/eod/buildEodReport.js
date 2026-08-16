@@ -6,6 +6,7 @@ import Employee from "@/models/employee/Employee";
 import EmployeeLog from "@/models/employee/EmployeeLog";
 import EmployeeShift from "@/models/employee/EmployeeShift";
 import Restaurant from "@/models/Restaurant";
+import Giftcard from "@/models/menu/Giftcard";
 import { buildWorkingHoursSummaryPipeline } from "@/lib/payEstimate";
 import {
   businessCalendarDate,
@@ -41,12 +42,20 @@ export async function buildEodReport({
   const priorDate = priorBusinessDate(businessDate);
   const rid = new mongoose.Types.ObjectId(String(restaurantId));
 
-  const [paidOrders, cancelledOrders, tables, sessions, shifts, laborRows] =
-    await Promise.all([
+  const [
+    paidOrders,
+    cancelledOrders,
+    tables,
+    sessions,
+    shifts,
+    laborRows,
+    statusRows,
+    issuedGiftCards,
+  ] = await Promise.all([
       Order.find({
         restaurantId: rid,
         paymentStatus: "PAID",
-        status: { $ne: "CANCELLED" },
+        status: { $nin: ["CANCELLED", "WAIVED"] },
         updatedAt: { $gte: start, $lt: end },
       })
         .populate("processedBy", "firstName lastName name")
@@ -80,6 +89,36 @@ export async function buildEodReport({
           date: calendarDate,
         })
       ),
+      Order.aggregate([
+        {
+          $match: {
+            restaurantId: rid,
+            updatedAt: { $gte: start, $lt: end },
+          },
+        },
+        {
+          $group: {
+            _id: "$status",
+            count: { $sum: 1 },
+            amount: { $sum: { $ifNull: ["$totalAmount", 0] } },
+          },
+        },
+      ]),
+      Giftcard.find({
+        restaurant: rid,
+        isIssued: true,
+        $or: [
+          { issueDate: { $gte: start, $lt: end } },
+          {
+            $and: [
+              { $or: [{ issueDate: null }, { issueDate: { $exists: false } }] },
+              { createdAt: { $gte: start, $lt: end } },
+            ],
+          },
+        ],
+      })
+        .select("value")
+        .lean(),
     ]);
 
   const tableSectionById = new Map(
@@ -92,6 +131,7 @@ export async function buildEodReport({
   let totalDiscounts = 0;
   let totalSalesTaxes = 0;
   let totalTips = 0;
+  let totalServiceCharges = 0;
   let totalGuestCount = 0;
   let totalCash = 0;
   let totalNonCash = 0;
@@ -145,6 +185,9 @@ export async function buildEodReport({
     totalDiscounts = r2(totalDiscounts + disc);
     totalSalesTaxes = r2(totalSalesTaxes + tax);
     totalTips = r2(totalTips + tip);
+    totalServiceCharges = r2(
+      totalServiceCharges + r2(order.serviceChargeTotal)
+    );
     if (order.guestCount != null && Number.isFinite(Number(order.guestCount))) {
       totalGuestCount += Number(order.guestCount);
     }
@@ -332,6 +375,33 @@ export async function buildEodReport({
     (s) => s.status === "Completed"
   ).length;
 
+  const statusCounts = {
+    total: 0,
+    PENDING: 0,
+    CONFIRMED: 0,
+    COMPLETED: 0,
+    PAID: 0,
+    CANCELLED: 0,
+    WAIVED: 0,
+    open: 0,
+  };
+  const statusAmounts = { CANCELLED: 0, WAIVED: 0 };
+  for (const row of statusRows) {
+    statusCounts.total += row.count;
+    if (Object.prototype.hasOwnProperty.call(statusCounts, row._id)) {
+      statusCounts[row._id] = row.count;
+    }
+    if (row._id === "CANCELLED" || row._id === "WAIVED") {
+      statusAmounts[row._id] = r2(row.amount);
+    }
+  }
+  statusCounts.open = (statusCounts.PENDING || 0) + (statusCounts.CONFIRMED || 0);
+
+  const issuedGiftCardCount = issuedGiftCards.length;
+  const issuedGiftCardAmount = r2(
+    issuedGiftCards.reduce((s, c) => s + (Number(c.value) || 0), 0)
+  );
+
   const menuItemCost = 0;
   const grossMargin = r2(netSales - totalLaborCost - menuItemCost);
   const totalRefundAmount = 0;
@@ -339,10 +409,10 @@ export async function buildEodReport({
   const totalVoids = r2(
     cancelledOrders.reduce((s, o) => s + (Number(o.totalAmount) || 0), 0)
   );
-  const giftCardSales = 0;
+  const giftCardSales = issuedGiftCardAmount;
   const totalSurcharges = 0;
   const totalGratuity = 0;
-  const serviceCharges = 0;
+  const serviceCharges = totalServiceCharges;
   const otherServiceCharges = 0;
   const serviceChargesTaxes = 0;
 
@@ -397,9 +467,24 @@ export async function buildEodReport({
       laborCost: totalLaborCost,
       grossMargin,
       totalSalesTaxes,
+      totalServiceCharges,
       averagePerGuest: avgPerGuest,
       averagePerBill: avgPerBill,
       totalRefundAmount,
+    },
+    orderCounts: {
+      total: statusCounts.total,
+      paid: billCount,
+      pending: statusCounts.PENDING,
+      confirmed: statusCounts.CONFIRMED,
+      open: statusCounts.open,
+      completed: statusCounts.COMPLETED,
+      cancelled: statusCounts.CANCELLED,
+      cancelledAmount: statusAmounts.CANCELLED,
+      waived: statusCounts.WAIVED,
+      waivedAmount: statusAmounts.WAIVED,
+      refunded: 0,
+      refundedNote: "Refunds are not recorded in the POS yet.",
     },
     detailedLaborSummary: {
       totalLaborCost,
@@ -457,8 +542,24 @@ export async function buildEodReport({
       },
     },
     giftCardSales: {
-      rows: [],
-      total: { item: "TOTAL", count: 0, total: 0 },
+      rows: [
+        {
+          item: "Issued (not POS revenue)",
+          count: issuedGiftCardCount,
+          total: issuedGiftCardAmount,
+        },
+        {
+          item: "Redeemed as payment",
+          count: paidOrders.filter((o) => r2(o.giftcardUsedAmount) > 0).length,
+          total: totalGiftCardPayments,
+        },
+      ],
+      total: {
+        item: "ISSUED TOTAL",
+        count: issuedGiftCardCount,
+        total: issuedGiftCardAmount,
+      },
+      note: "Issued cards are admin stored-value. Redemptions are tenders, not new gift-card revenue.",
     },
     tipsByEmployees: {
       rows: tipsByEmployees,
@@ -505,7 +606,9 @@ export async function buildEodReport({
       totalDiscounts,
       totalSalesTaxes,
       totalTips,
-      totalNetSalesTaxesAndTips: r2(netSales + totalSalesTaxes + totalTips),
+      totalNetSalesTaxesAndTips: r2(
+        netSales + totalSalesTaxes + totalTips + serviceCharges
+      ),
       serviceCharges,
       gratuities: totalGratuity,
       surcharges: totalSurcharges,
@@ -525,6 +628,9 @@ export async function buildEodReport({
       actualDeposit: actualDep ?? 0,
       overShort,
       createdBy: generatedByResolved || "",
+      openingCashAvailable: false,
+      physicalTillCountAvailable: false,
+      note: "Opening float and physical till count are not recorded. Expected cash is cash tenders from paid orders. Enter an actual deposit to compute over/short.",
     },
     taxSummary: {
       rows: taxSummaryRows,
@@ -540,6 +646,7 @@ export async function buildEodReport({
       orders: billCount,
       taxes: totalSalesTaxes,
       tips: totalTips,
+      serviceCharges,
       cash: totalCash,
       card: r2(totalNonCash - totalGiftCardPayments),
       giftCard: totalGiftCardPayments,

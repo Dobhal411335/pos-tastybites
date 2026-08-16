@@ -24,4 +24,6 @@ const StockInSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+StockInSchema.index({ restaurant: 1, date: -1 });
+
 export default mongoose.models.StockIn || mongoose.model('StockIn', StockInSchema);

@@ -92,10 +92,29 @@ export default function EodReportPreview({ report }) {
   const ps = report.paymentsSummary || {};
   const ts = report.tipsSummary || {};
   const st = report.salesTaxAndTipSummary || {};
+  const oc = report.orderCounts || {};
   const cd = report.cashDeposit || {};
 
   return (
     <div className="space-y-6">
+      <Section title="Order Summary">
+        <MetricGrid
+          items={[
+            { label: "Total Orders", value: oc.total ?? 0 },
+            { label: "Paid / Completed", value: oc.paid ?? 0 },
+            { label: "Pending / Open", value: oc.open ?? 0 },
+            { label: "Cancelled", value: oc.cancelled ?? 0 },
+            { label: "Cancelled Amount", value: money(oc.cancelledAmount) },
+            { label: "Waived", value: oc.waived ?? 0 },
+            { label: "Waived Amount", value: money(oc.waivedAmount) },
+            { label: "Refunded", value: oc.refunded ?? 0 },
+          ]}
+        />
+        {oc.refundedNote ? (
+          <p className="text-xs text-stone-500">{oc.refundedNote}</p>
+        ) : null}
+      </Section>
+
       <Section title="Detailed Sales Summary">
         <MetricGrid
           items={[
@@ -106,6 +125,7 @@ export default function EodReportPreview({ report }) {
             { label: "Labor Cost", value: money(dss.laborCost) },
             { label: "Gross Margin", value: money(dss.grossMargin) },
             { label: "Total Sales Taxes", value: money(dss.totalSalesTaxes) },
+            { label: "Service Charges", value: money(dss.totalServiceCharges) },
             { label: "Avg Per Guest", value: money(dss.averagePerGuest) },
             { label: "Avg Per Bill", value: money(dss.averagePerBill) },
             { label: "Total Refund Amount", value: money(dss.totalRefundAmount) },
@@ -220,7 +240,7 @@ export default function EodReportPreview({ report }) {
         />
       </Section>
 
-      <Section title="Gift Card Sales">
+      <Section title="Gift Cards">
         <SimpleTable
           headers={["Item", "Count", "Total"]}
           rows={(report.giftCardSales?.rows || []).map((r) => [
@@ -229,6 +249,9 @@ export default function EodReportPreview({ report }) {
             money(r.total),
           ])}
         />
+        {report.giftCardSales?.note ? (
+          <p className="text-xs text-stone-500">{report.giftCardSales.note}</p>
+        ) : null}
       </Section>
 
       <Section title="Tips By Employees">
@@ -336,10 +359,8 @@ export default function EodReportPreview({ report }) {
             { label: "Discounts", value: money(st.totalDiscounts) },
             { label: "Taxes", value: money(st.totalSalesTaxes) },
             { label: "Tips", value: money(st.totalTips) },
-            {
-              label: "Net + Tax + Tips",
-              value: money(st.totalNetSalesTaxesAndTips),
-            },
+            { label: "Net + Tax + Tips + SC", value: money(st.totalNetSalesTaxesAndTips) },
+            { label: "Service Charges", value: money(st.serviceCharges) },
             { label: "Refunds", value: money(st.totalRefundsAmount) },
             { label: "Voids", value: money(st.totalVoids) },
             { label: "Bill Count", value: st.totalBillCount ?? 0 },
@@ -354,12 +375,15 @@ export default function EodReportPreview({ report }) {
         <MetricGrid
           items={[
             { label: "Business Day", value: cd.businessDay || "—" },
-            { label: "Expected Deposit", value: money(cd.expectedDeposit) },
+            { label: "Expected Cash", value: money(cd.expectedDeposit) },
             { label: "Actual Deposit", value: money(cd.actualDeposit) },
             { label: "Over / Short", value: money(cd.overShort) },
             { label: "Created By", value: cd.createdBy || "—" },
           ]}
         />
+        {cd.note ? (
+          <p className="text-xs text-stone-500">{cd.note}</p>
+        ) : null}
       </Section>
 
       <Section title="Tax Summary">

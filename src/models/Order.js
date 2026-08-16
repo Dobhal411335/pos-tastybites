@@ -71,4 +71,8 @@ const OrderSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+OrderSchema.index({ restaurantId: 1, updatedAt: 1, paymentStatus: 1 });
+OrderSchema.index({ restaurantId: 1, updatedAt: 1, status: 1 });
+OrderSchema.index({ restaurantId: 1, processedBy: 1, updatedAt: 1 });
+
 export default mongoose.models.Order || mongoose.model('Order', OrderSchema);

@@ -14,4 +14,7 @@ const StockOutSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+StockOutSchema.index({ restaurant: 1, date: -1 });
+StockOutSchema.index({ restaurant: 1, product: 1, date: -1 });
+
 export default mongoose.models.StockOut || mongoose.model('StockOut', StockOutSchema);

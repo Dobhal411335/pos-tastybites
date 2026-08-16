@@ -8,11 +8,14 @@ const StockProductSchema = new mongoose.Schema(
     type: { type: mongoose.Schema.Types.ObjectId, ref: 'StockType', required: true },
     unit: { type: mongoose.Schema.Types.ObjectId, ref: 'StockUnit', required: true },
     purchasePrice: { type: Number, required: true },
+    minStock: { type: Number, default: null, min: 0 },
     status: { type: Boolean, default: true },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   },
   { timestamps: true }
 );
+
+StockProductSchema.index({ restaurant: 1, category: 1, name: 1 });
 
 export default mongoose.models.StockProduct || mongoose.model('StockProduct', StockProductSchema);

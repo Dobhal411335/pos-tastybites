@@ -41,12 +41,13 @@ function todayLocalISO() {
 
 /**
  * Shared End-of-Day report UI for Sales and Admin.
- * @param {{ fetchFn?: typeof fetch, showHistory?: boolean, title?: string }} props
+ * @param {{ fetchFn?: typeof fetch, showHistory?: boolean, title?: string, onReportMeta?: Function }} props
  */
 export default function EodReportPage({
   fetchFn = fetch,
   showHistory = true,
   title = "End-of-Day Report",
+  onReportMeta,
 }) {
   const [businessDate, setBusinessDate] = useState(todayLocalISO());
   const [report, setReport] = useState(null);
@@ -115,6 +116,10 @@ export default function EodReportPage({
   useEffect(() => {
     loadHistory();
   }, [loadHistory]);
+
+  useEffect(() => {
+    onReportMeta?.({ businessDate, saved });
+  }, [businessDate, saved, onReportMeta]);
 
   const handleDownload = async (kind) => {
     setDownloading(kind);
@@ -327,10 +332,10 @@ export default function EodReportPage({
               ["Orders", summary.orders ?? 0],
               ["Taxes", money(summary.taxes)],
               ["Tips", money(summary.tips)],
+              ["Service Charges", money(summary.serviceCharges)],
               ["Cash", money(summary.cash)],
               ["Card", money(summary.card)],
               ["Gift Card", money(summary.giftCard)],
-              ["Refunds", money(summary.refunds)],
             ].map(([label, value]) => (
               <Card key={label}>
                 <CardHeader className="py-3 px-4 pb-1">

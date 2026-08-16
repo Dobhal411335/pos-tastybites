@@ -9,6 +9,17 @@ import { sendSuccess } from "@/utils/apiResponse";
 import { sendError } from "@/utils/errorHandler";
 import { logger } from "@/utils/logger";
 
+function parseMinStock(value) {
+  if (value === undefined || value === null || value === "") return null;
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < 0) {
+    const error = new Error("Minimum stock must be 0 or greater");
+    error.status = 400;
+    throw error;
+  }
+  return n;
+}
+
 // GET - List all stock products
 export const GET = withAuth(async (request) => {
   try {
@@ -29,7 +40,7 @@ export const GET = withAuth(async (request) => {
 export const POST = withAuth(async (request) => {
   try {
     const data = await request.json();
-    const { category, name, type, unit, purchasePrice, status } = data;
+    const { category, name, type, unit, purchasePrice, minStock, status } = data;
 
     if (!category || !name || !type || !unit || purchasePrice === undefined) {
       return sendError(new Error("Missing fields"), "All product fields are required", 400);
@@ -42,6 +53,7 @@ export const POST = withAuth(async (request) => {
       type,
       unit,
       purchasePrice: Number(purchasePrice),
+      minStock: parseMinStock(minStock),
       status: status !== undefined ? status : true,
       createdBy: request.user.id
     });

@@ -1,17 +1,19 @@
 "use client";
 
-import EodReportPage from "@/components/eod/EodReportPage";
+import { Suspense } from "react";
+import { Loader2 } from "lucide-react";
+import AdminReportsPage from "@/components/reports/admin/AdminReportsPage";
 
-export default function AdminEndOfDayReportsPage() {
+export default function AdminReportsRoutePage() {
   return (
-    <div className="min-h-screen bg-[#F8FAFC]">
-      <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-        <EodReportPage
-          fetchFn={fetch}
-          showHistory
-          title="End-of-Day Report"
-        />
-      </div>
-    </div>
+    <Suspense
+      fallback={
+        <div className="flex justify-center py-16">
+          <Loader2 className="h-7 w-7 animate-spin text-orange-500" />
+        </div>
+      }
+    >
+      <AdminReportsPage />
+    </Suspense>
   );
 }

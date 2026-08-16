@@ -7,6 +7,17 @@ import { sendSuccess } from "@/utils/apiResponse";
 import { sendError } from "@/utils/errorHandler";
 import { logger } from "@/utils/logger";
 
+function parseMinStock(value) {
+  if (value === undefined || value === null || value === "") return null;
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < 0) {
+    const error = new Error("Minimum stock must be 0 or greater");
+    error.status = 400;
+    throw error;
+  }
+  return n;
+}
+
 // PUT - Update a stock product
 export const PUT = withAuth(async (request, { params }) => {
   try {
@@ -17,6 +28,9 @@ export const PUT = withAuth(async (request, { params }) => {
     updateData.updatedBy = request.user.id;
 
     if (updateData.purchasePrice !== undefined) updateData.purchasePrice = Number(updateData.purchasePrice);
+    if (Object.prototype.hasOwnProperty.call(updateData, "minStock")) {
+      updateData.minStock = parseMinStock(updateData.minStock);
+    }
     delete updateData.salePrice;
 
     const updatedProduct = await StockProduct.findOneAndUpdate(

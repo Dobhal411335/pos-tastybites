@@ -33,6 +33,7 @@ export default function StockProductsPage() {
     type: "",
     unit: "",
     purchaseAmount: "",
+    minStock: "",
   });
 
   // Dialog States for adding new Type / Unit
@@ -97,6 +98,10 @@ export default function StockProductsPage() {
       type: product.type._id,
       unit: product.unit._id,
       purchaseAmount: product.purchasePrice.toString(),
+      minStock:
+        product.minStock === null || product.minStock === undefined
+          ? ""
+          : String(product.minStock),
     });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -138,6 +143,7 @@ export default function StockProductsPage() {
         type: formData.type,
         unit: formData.unit,
         purchasePrice: Number(formData.purchaseAmount),
+        minStock: formData.minStock === "" ? null : Number(formData.minStock),
       };
 
       const res = await fetch(url, {
@@ -171,6 +177,7 @@ export default function StockProductsPage() {
       type: "",
       unit: "",
       purchaseAmount: "",
+      minStock: "",
     });
   };
 
@@ -468,6 +475,22 @@ export default function StockProductsPage() {
                         className="h-11 pl-8 text-[15px] bg-white border-zinc-200 focus:ring-[#F97316]"
                       />
                     </div>
+                    <div className="space-y-1 pt-2">
+                      <label className="text-[14px] font-semibold text-zinc-900">Minimum stock</label>
+                      <p className="text-[12px] text-zinc-500 font-medium">
+                        Optional reorder threshold. Leave blank if this product has no low-stock level.
+                      </p>
+                    </div>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      name="minStock"
+                      placeholder="e.g. 10"
+                      value={formData.minStock}
+                      onChange={handleChange}
+                      className="h-11 text-[15px] bg-white border-zinc-200 focus:ring-[#F97316]"
+                    />
                   </div>
                 </CardContent>
               </Card>

@@ -1,12 +1,7 @@
 "use client";
 
-import { useEffect } from "react";
-import { useRouter } from "next/navigation";
+import GuestDirectoryReport from "@/components/reports/GuestDirectoryReport";
 
-export default function GuestsRedirectPage() {
-  const router = useRouter();
-  useEffect(() => {
-    router.replace("/admin/reports/guests/detail");
-  }, [router]);
-  return null;
+export default function GuestDirectoryPage() {
+  return <GuestDirectoryReport />;
 }

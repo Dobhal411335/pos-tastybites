@@ -7,8 +7,6 @@ import { useAdmin } from "@/context/AdminContext";
 import {
   UtensilsCrossed,
   BarChart3,
-  UserCheck,
-  HeartHandshake,
   ShoppingCart,
   UserSearch,
   Receipt,
@@ -31,7 +29,6 @@ import {
   Users,
   Package,
   BookOpen,
-  CreditCard,
   Store,
   CircleDot,
   ArrowRight,
@@ -40,11 +37,9 @@ import {
   Settings,
   UserPlus,
   Gift,
-  FileText,
   Edit,
   Database,
   PieChart,
-  Wallet,
   Coffee,
   Megaphone,
   ChevronLeft,
@@ -486,7 +481,7 @@ export default function AdminDashboardPage() {
                   color="rose"
                   title="Report Module"
                   stat="Data"
-                  desc="Guest, inventory, invoices, financial, and stock logs."
+                  desc="Guest directory, sales, orders, payments, employees, and day closing."
                   actionLabel="View Modules"
                 />
                 <ModuleCard
@@ -631,39 +626,39 @@ export default function AdminDashboardPage() {
                       color="rose"
                       title="Guest Directory"
                       stat="Reports"
-                      desc="Guest Database and Preferences Log."
-                    />
-                    <ModuleCard
-                      href="/admin/reports/inventory"
-                      icon={Boxes}
-                      color="emerald"
-                      title="Inventory & Stock Reports"
-                      stat="Reports"
-                      desc="Current Stock Valuation, Low Stock Alerts, Movement Analysis, Receiving & PO Tracking."
+                      desc="Guest info, purchase history, and revenue from orders."
                     />
                     <ModuleCard
                       href="/admin/reports/financial"
-                      icon={Wallet}
+                      icon={DollarSign}
                       color="emerald"
-                      title="Financial & Accounting Reports"
+                      title="Financial & Accounting"
                       stat="Reports"
-                      desc="Z-Report, X-Report, Tax Summary, Cash-Up Reconciliation, Customer Ledger, P&L, Revenue Breakdown."
+                      desc="Sales, payments, tax, tips, discounts, and day closing."
                     />
                     <ModuleCard
                       href="/admin/reports/employees"
                       icon={Users}
                       color="blue"
-                      title="Employee & Staff Reports Log"
+                      title="Employee & Staff"
                       stat="Reports"
-                      desc="Sales Performance, Time & Attendance, Shift Handover Notes, Staff Order Processing."
+                      desc="Staff performance, attendance, and labor reports."
                     />
                     <ModuleCard
                       href="/admin/reports/admin"
-                      icon={UserCheck}
-                      color="amber"
-                      title="Admin Record Log"
+                      icon={ClipboardList}
+                      color="indigo"
+                      title="Admin Reports"
                       stat="Reports"
-                      desc="Daily Business Summary, Manager's Daily Report, End-of-Day Report, Night Audit Report, Exception Fields."
+                      desc="Activity, revenue, daily summary, day closing, audit, and kitchen log."
+                    />
+                    <ModuleCard
+                      href="/admin/reports/inventory"
+                      icon={Package}
+                      color="amber"
+                      title="Inventory & Stock"
+                      stat="Reports"
+                      desc="Current stock, movements, top outgoing items, and low-stock alerts."
                     />
                   </div>
                 </section>

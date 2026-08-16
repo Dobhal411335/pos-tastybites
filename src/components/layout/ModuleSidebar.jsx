@@ -78,9 +78,10 @@ export default function ModuleSidebar({ groups = [], defaultCollapsed = false })
               {(isOpen || !isSidebarExpanded) && (
                 <div className={`${isSidebarExpanded ? 'border-t border-zinc-100 py-2' : 'flex flex-col gap-2'}`}>
                   {group.items.map((item, index) => {
-                    const active =
-                      pathname === item.href ||
-                      pathname.startsWith(item.href + "/");
+                    const active = item.exact
+                      ? pathname === item.href
+                      : pathname === item.href ||
+                        pathname.startsWith(item.href + "/");
 
                     return (
                       <Link
