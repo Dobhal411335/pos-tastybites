@@ -4,12 +4,13 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 
 export const DEFAULT_INVENTORY_FILTERS = {
-  preset: "TODAY",
+  preset: "THIS_MONTH",
   dateFrom: "",
   dateTo: "",
   categoryId: "ALL",
   productId: "ALL",
   stockStatus: "ALL",
+  movementType: "ALL",
   search: "",
   page: 1,
   pageSize: 25,
@@ -18,7 +19,7 @@ export const DEFAULT_INVENTORY_FILTERS = {
 
 export function inventoryQueryString(filters, { paginate = false } = {}) {
   const params = new URLSearchParams();
-  params.set("preset", filters.preset || "TODAY");
+  params.set("preset", filters.preset || "THIS_MONTH");
   if (filters.preset === "CUSTOM") {
     if (filters.dateFrom) params.set("dateFrom", filters.dateFrom);
     if (filters.dateTo) params.set("dateTo", filters.dateTo);
@@ -31,6 +32,9 @@ export function inventoryQueryString(filters, { paginate = false } = {}) {
   }
   if (filters.stockStatus && filters.stockStatus !== "ALL") {
     params.set("stockStatus", filters.stockStatus);
+  }
+  if (filters.movementType && filters.movementType !== "ALL") {
+    params.set("movementType", filters.movementType);
   }
   if (filters.search) params.set("search", filters.search);
   if (filters.sortBy) params.set("sortBy", filters.sortBy);

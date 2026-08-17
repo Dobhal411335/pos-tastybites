@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { format } from "date-fns";
+import { CalendarDays } from "lucide-react";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Label } from "@/components/ui/label";
 import {
@@ -73,20 +74,14 @@ function dateToYmd(date) {
 
 function Field({ label, children }) {
   return (
-    <div className="space-y-1 min-w-[140px]">
-      <Label className="text-[11px] uppercase tracking-wide text-zinc-500">
-        {label}
-      </Label>
+    <div className="space-y-2 min-w-[140px]">
+      <Label className="text-[13px] font-semibold text-zinc-800">{label}</Label>
       {children}
     </div>
   );
 }
 
-export default function AdminReportFilters({
-  value,
-  onChange,
-  section,
-}) {
+export default function AdminReportFilters({ value, onChange, section }) {
   const [employees, setEmployees] = useState([]);
   const showDate = section !== "eod" && section !== "expenses";
   const showEmployee =
@@ -127,139 +122,138 @@ export default function AdminReportFilters({
   const eventOptions = showActivityEvent ? ACTIVITY_EVENTS : AUDIT_EVENTS;
 
   return (
-    <div className="border border-zinc-200 rounded-lg bg-white p-3">
-      <div className="flex flex-wrap gap-3 items-end">
-        {showDate ? (
-          <Field label="Date range">
-            <Select
-              value={value.preset}
-              onValueChange={(preset) => {
-                if (preset === "CUSTOM") {
-                  const today = format(new Date(), "yyyy-MM-dd");
-                  patch({
-                    preset,
-                    dateFrom: value.dateFrom || today,
-                    dateTo: value.dateTo || today,
-                  });
-                } else {
-                  patch({ preset });
-                }
-              }}
-            >
-              <SelectTrigger className="h-9 w-[160px] bg-white">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {PRESETS.map((p) => (
-                  <SelectItem key={p.value} value={p.value}>
-                    {p.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Field>
-        ) : null}
+    <div className="flex flex-wrap gap-4 items-end">
+      {showDate ? (
+        <div className="flex items-center gap-2 rounded-full bg-zinc-100 px-4 py-2">
+          <CalendarDays className="h-[18px] w-[18px] text-zinc-500 shrink-0" />
+          <Select
+            value={value.preset}
+            onValueChange={(preset) => {
+              if (preset === "CUSTOM") {
+                const today = format(new Date(), "yyyy-MM-dd");
+                patch({
+                  preset,
+                  dateFrom: value.dateFrom || today,
+                  dateTo: value.dateTo || today,
+                });
+              } else {
+                patch({ preset });
+              }
+            }}
+          >
+            <SelectTrigger className="h-8 w-[160px] border-0 bg-transparent shadow-none px-0 font-semibold text-[13px] text-zinc-900 focus:ring-0">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {PRESETS.map((p) => (
+                <SelectItem key={p.value} value={p.value}>
+                  {p.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      ) : null}
 
-        {showDate && value.preset === "CUSTOM" ? (
-          <>
-            <Field label="From">
-              <DatePicker
-                value={ymdToDate(value.dateFrom)}
-                onChange={(d) => patch({ dateFrom: dateToYmd(d) })}
-                className="h-9 w-[170px]"
-              />
-            </Field>
-            <Field label="To">
-              <DatePicker
-                value={ymdToDate(value.dateTo)}
-                onChange={(d) => patch({ dateTo: dateToYmd(d) })}
-                className="h-9 w-[170px]"
-              />
-            </Field>
-          </>
-        ) : null}
-
-        {showEmployee ? (
-          <Field label="Employee">
-            <Select
-              value={value.employeeId || "ALL"}
-              onValueChange={(employeeId) => patch({ employeeId })}
-            >
-              <SelectTrigger className="h-9 w-[180px] bg-white">
-                <SelectValue placeholder="All employees" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ALL">All employees</SelectItem>
-                {employees.map((emp) => (
-                  <SelectItem key={String(emp._id)} value={String(emp._id)}>
-                    {employeeLabel(emp)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+      {showDate && value.preset === "CUSTOM" ? (
+        <>
+          <Field label="From">
+            <DatePicker
+              value={ymdToDate(value.dateFrom)}
+              onChange={(d) => patch({ dateFrom: dateToYmd(d) })}
+              className="h-11 w-[170px]"
+            />
           </Field>
-        ) : null}
-
-        {showPayment ? (
-          <Field label="Payment method">
-            <Select
-              value={value.paymentMethod || "ALL"}
-              onValueChange={(paymentMethod) => patch({ paymentMethod })}
-            >
-              <SelectTrigger className="h-9 w-[150px] bg-white">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {PAYMENT_OPTIONS.map((s) => (
-                  <SelectItem key={s.value} value={s.value}>
-                    {s.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <Field label="To">
+            <DatePicker
+              value={ymdToDate(value.dateTo)}
+              onChange={(d) => patch({ dateTo: dateToYmd(d) })}
+              className="h-11 w-[170px]"
+            />
           </Field>
-        ) : null}
+        </>
+      ) : null}
 
-        {showActivityEvent || showAuditEvent ? (
-          <Field label="Event type">
-            <Select
-              value={value.eventType || "ALL"}
-              onValueChange={(eventType) => patch({ eventType })}
-            >
-              <SelectTrigger className="h-9 w-[210px] bg-white">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {eventOptions.map((s) => (
-                  <SelectItem key={s.value} value={s.value}>
-                    {s.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Field>
-        ) : null}
+      {showEmployee ? (
+        <Field label="Employee">
+          <Select
+            value={value.employeeId || "ALL"}
+            onValueChange={(employeeId) => patch({ employeeId })}
+          >
+            <SelectTrigger className="h-11 w-[180px] bg-white">
+              <SelectValue placeholder="All employees" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">All employees</SelectItem>
+              {employees.map((emp) => (
+                <SelectItem key={String(emp._id)} value={String(emp._id)}>
+                  {employeeLabel(emp)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </Field>
+      ) : null}
 
-        {showKotStatus ? (
-          <Field label="KOT status">
-            <Select
-              value={value.kotStatus || "ALL"}
-              onValueChange={(kotStatus) => patch({ kotStatus })}
-            >
-              <SelectTrigger className="h-9 w-[150px] bg-white">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {KOT_STATUSES.map((s) => (
-                  <SelectItem key={s.value} value={s.value}>
-                    {s.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Field>
-        ) : null}
-      </div>
+      {showPayment ? (
+        <Field label="Payment method">
+          <Select
+            value={value.paymentMethod || "ALL"}
+            onValueChange={(paymentMethod) => patch({ paymentMethod })}
+          >
+            <SelectTrigger className="h-11 w-[150px] bg-white">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {PAYMENT_OPTIONS.map((s) => (
+                <SelectItem key={s.value} value={s.value}>
+                  {s.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </Field>
+      ) : null}
+
+      {showActivityEvent || showAuditEvent ? (
+        <Field label="Event type">
+          <Select
+            value={value.eventType || "ALL"}
+            onValueChange={(eventType) => patch({ eventType })}
+          >
+            <SelectTrigger className="h-11 w-[210px] bg-white">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {eventOptions.map((s) => (
+                <SelectItem key={s.value} value={s.value}>
+                  {s.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </Field>
+      ) : null}
+
+      {showKotStatus ? (
+        <Field label="KOT status">
+          <Select
+            value={value.kotStatus || "ALL"}
+            onValueChange={(kotStatus) => patch({ kotStatus })}
+          >
+            <SelectTrigger className="h-11 w-[150px] bg-white">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {KOT_STATUSES.map((s) => (
+                <SelectItem key={s.value} value={s.value}>
+                  {s.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </Field>
+      ) : null}
     </div>
   );
 }

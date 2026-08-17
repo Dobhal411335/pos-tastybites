@@ -20,7 +20,7 @@ export function StockStatusBadge({ status }) {
   return (
     <Badge
       variant="outline"
-      className={`text-[10px] ${STATUS_BADGE[status] || ""}`}
+      className={`text-xs ${STATUS_BADGE[status] || ""}`}
     >
       {STATUS_LABEL[status] || status}
     </Badge>

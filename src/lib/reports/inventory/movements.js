@@ -2,6 +2,7 @@ import StockIn from "@/models/stock/StockIn";
 import StockOut from "@/models/stock/StockOut";
 import StockProduct from "@/models/stock/StockProduct";
 import "@/models/stock/StockCategory";
+import "@/models/stock/StockUnit";
 import Admin from "@/models/Admin";
 import Employee from "@/models/employee/Employee";
 import { formatEmployeeName } from "@/lib/eod/eodHelpers";
@@ -144,6 +145,11 @@ export async function buildInventoryMovements({
   const rid = toObjectId(restaurantId);
   const dateMatch = { date: { $gte: start, $lt: end } };
   const inColl = StockIn.collection.name;
+  const movementType = String(filters.movementType || "ALL").toUpperCase();
+  const typeMatch =
+    movementType === "STOCK_IN" || movementType === "STOCK_OUT"
+      ? [{ $match: { movementType } }]
+      : [];
 
   const [facet] = await StockOut.aggregate([
     { $match: { restaurant: rid, product: { $in: ids }, ...dateMatch } },
@@ -198,6 +204,7 @@ export async function buildInventoryMovements({
         ],
       },
     },
+    ...typeMatch,
     { $sort: { _sortDate: -1, _sortCreated: -1, sourceId: -1, lineIndex: -1 } },
     {
       $facet: {
@@ -211,19 +218,19 @@ export async function buildInventoryMovements({
   const total = facet?.total?.[0]?.n || 0;
   const pageProductIds = [...new Set(rawRows.map((row) => String(row.productId)))];
 
-  // const [productDocs, names, running] = await Promise.all([
-  //   pageProductIds.length
-  //     ? StockProduct.find({ _id: { $in: pageProductIds.map((id) => toObjectId(id)) } })
-  //         .populate("category", "name")
-  //         .lean()
-  //     : [],
-  //   performerNames(rawRows.map((row) => row.createdBy)),
-  //   runningBalancesForProducts({
-  //     restaurantId,
-  //     productIds: pageProductIds,
-  //   }),
-  //   }),
-  // ]);
+  const [productDocs, names, running] = await Promise.all([
+    pageProductIds.length
+      ? StockProduct.find({ _id: { $in: pageProductIds.map((id) => toObjectId(id)) } })
+          .populate("category", "name")
+          .populate("unit", "name")
+          .lean()
+      : [],
+    performerNames(rawRows.map((row) => row.createdBy)),
+    runningBalancesForProducts({
+      restaurantId,
+      productIds: pageProductIds,
+    }),
+  ]);
 
   const productMap = new Map(
     productDocs.map((p) => [
@@ -231,6 +238,7 @@ export async function buildInventoryMovements({
       {
         name: p.name,
         categoryName: p.category?.name || "Uncategorized",
+        unit: p.unit?.name || "",
       },
     ])
   );
@@ -238,7 +246,11 @@ export async function buildInventoryMovements({
   const tz = filters.timezone;
   const rows = rawRows.map((row) => {
     const productId = String(row.productId);
-    const product = productMap.get(productId) || { name: "Unknown", categoryName: "—" };
+    const product = productMap.get(productId) || {
+      name: "Unknown",
+      categoryName: "—",
+      unit: "",
+    };
     const key = movementKey({
       movementType: row.movementType,
       sourceId: String(row.sourceId),
@@ -248,10 +260,12 @@ export async function buildInventoryMovements({
     const bal = running.get(key) || { previous: null, next: null };
     return {
       id: key,
+      productId,
       date: formatRestaurantDate(row.date, tz),
       time: formatRestaurantTime(row.date, tz),
       product: product.name,
       category: product.categoryName,
+      unit: product.unit,
       movementType: row.movementType,
       movementLabel: row.movementType === "STOCK_IN" ? "Stock In" : "Stock Out",
       quantity: Number(row.quantity) || 0,

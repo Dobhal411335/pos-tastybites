@@ -65,6 +65,37 @@ async function movementByDay({ restaurantId, productIds, start, end, timezone })
   return { inRows, outRows };
 }
 
+async function countMovements({ restaurantId, productIds, start, end }) {
+  const ids = (productIds || []).map((id) => toObjectId(id)).filter(Boolean);
+  if (ids.length === 0) return 0;
+
+  const rid = toObjectId(restaurantId);
+  const dateMatch = { date: { $gte: start, $lt: end } };
+
+  const [inCount, outCount] = await Promise.all([
+    StockIn.aggregate([
+      {
+        $match: {
+          restaurant: rid,
+          ...dateMatch,
+          $or: [{ "items.product": { $in: ids } }, { product: { $in: ids } }],
+        },
+      },
+      { $addFields: { _lines: LINES_EXPR } },
+      { $unwind: "$_lines" },
+      { $match: { "_lines.product": { $in: ids } } },
+      { $count: "n" },
+    ]),
+    StockOut.countDocuments({
+      restaurant: rid,
+      product: { $in: ids },
+      ...dateMatch,
+    }),
+  ]);
+
+  return (inCount[0]?.n || 0) + (Number(outCount) || 0);
+}
+
 export async function buildInventoryOverview({ restaurantId, ...filters }) {
   const lookups = await loadInventoryLookups(restaurantId);
   const products = await loadInventoryProducts({
@@ -82,17 +113,25 @@ export async function buildInventoryOverview({ restaurantId, ...filters }) {
   ]);
 
   const enriched = applyStockStatus(
-    enrichProducts(products, lifetimeMap, periodOutMap),
+    enrichProducts(products, lifetimeMap, periodOutMap, periodInMap),
     filters.stockStatus
   );
   const filteredIds = new Set(enriched.map((row) => row.id));
-  const daySeries = await movementByDay({
-    restaurantId,
-    productIds: [...filteredIds],
-    start,
-    end,
-    timezone: filters.timezone,
-  });
+  const [daySeries, movementCount] = await Promise.all([
+    movementByDay({
+      restaurantId,
+      productIds: [...filteredIds],
+      start,
+      end,
+      timezone: filters.timezone,
+    }),
+    countMovements({
+      restaurantId,
+      productIds: [...filteredIds],
+      start,
+      end,
+    }),
+  ]);
 
   const opening = [...openingMap.entries()].reduce((sum, [id, row]) => {
     return filteredIds.has(id) ? sum + (Number(row.balance) || 0) : sum;
@@ -150,6 +189,7 @@ export async function buildInventoryOverview({ restaurantId, ...filters }) {
       outOfStockCount: enriched.filter((row) => row.stockStatus === "OUT_OF_STOCK").length,
       stockAdded: added,
       stockRemoved: removed,
+      movementCount,
       topOutgoingProduct: topProduct
         ? { name: topProduct.name, quantity: topProduct.quantity }
         : null,

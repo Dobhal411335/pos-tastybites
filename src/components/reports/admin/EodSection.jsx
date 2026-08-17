@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
 import EodReportPage from "@/components/eod/EodReportPage";
+import { AdminNote } from "./adminReportUi";
 
 const STATUS_CLASS = {
   Closed: "bg-emerald-50 text-emerald-800 border-emerald-200",
@@ -44,10 +46,13 @@ export default function EodSection() {
     };
   }, []);
 
-  const handleReportMeta = useCallback(({ businessDate: nextDate, saved: nextSaved }) => {
-    if (nextDate) setBusinessDate(nextDate);
-    setSaved(Boolean(nextSaved));
-  }, []);
+  const handleReportMeta = useCallback(
+    ({ businessDate: nextDate, saved: nextSaved }) => {
+      if (nextDate) setBusinessDate(nextDate);
+      setSaved(Boolean(nextSaved));
+    },
+    []
+  );
 
   const isToday = businessDate === todayLocalISO();
   const status = saved
@@ -57,20 +62,22 @@ export default function EodSection() {
       : "Open";
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
-          EOD status
-        </span>
-        <Badge variant="outline" className={STATUS_CLASS[status]}>
-          {status}
-        </Badge>
-      </div>
-      <p className="text-xs text-zinc-500">
+    <div className="space-y-6">
+      <Card className="rounded-lg border-zinc-200 shadow-sm">
+        <CardContent className="p-6 flex flex-wrap items-center gap-3">
+          <span className="text-[13px] font-semibold uppercase tracking-wide text-zinc-500">
+            EOD status
+          </span>
+          <Badge variant="outline" className={STATUS_CLASS[status]}>
+            {status}
+          </Badge>
+        </CardContent>
+      </Card>
+      <AdminNote>
         Uses the existing day-closing report. Opening float and physical till
         count are not recorded. Expected cash is cash tenders from paid orders.
         Enter an actual deposit when saving to compute over/short.
-      </p>
+      </AdminNote>
       <EodReportPage
         fetchFn={fetch}
         showHistory

@@ -49,7 +49,12 @@ export async function loadInventoryLookups(restaurantId) {
   };
 }
 
-export function enrichProducts(products, lifetimeMap, periodOutMap = new Map()) {
+export function enrichProducts(
+  products,
+  lifetimeMap,
+  periodOutMap = new Map(),
+  periodInMap = new Map()
+) {
   return (products || []).map((product) => {
     const id = String(product._id);
     const life = lifetimeMap.get(id) || { totalIn: 0, totalOut: 0 };
@@ -59,7 +64,8 @@ export function enrichProducts(products, lifetimeMap, periodOutMap = new Map()) 
         ? null
         : Number(product.minStock);
     const purchasePrice = Number(product.purchasePrice) || 0;
-    const period = periodOutMap.get(id) || { totalOut: 0 };
+    const periodOut = periodOutMap.get(id) || { totalOut: 0 };
+    const periodIn = periodInMap.get(id) || { totalIn: 0 };
 
     return {
       id,
@@ -78,7 +84,8 @@ export function enrichProducts(products, lifetimeMap, periodOutMap = new Map()) 
       currentBalance,
       stockStatus: stockStatusOf(currentBalance, minStock),
       stockValue: r2(currentBalance * purchasePrice),
-      unitsOutPeriod: Number(period.totalOut) || 0,
+      unitsInPeriod: Number(periodIn.totalIn) || 0,
+      unitsOutPeriod: Number(periodOut.totalOut) || 0,
       quantityNeeded: quantityNeeded(currentBalance, minStock),
     };
   });

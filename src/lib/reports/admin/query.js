@@ -57,7 +57,7 @@ export function parseAdminReportQuery(searchParams, { paginate = false } = {}) {
     kotStatus === "ALL" || KOT_STATUSES.includes(kotStatus)
       ? kotStatus
       : "ALL";
-  filters.section = ADMIN_SECTIONS.includes(section) ? section : "activity";
+  filters.section = ADMIN_SECTIONS.includes(section) ? section : "daily-summary";
 
   return filters;
 }
@@ -67,6 +67,6 @@ export function adminReportMeta(filters) {
     ...reportMeta(filters),
     eventType: filters.eventType || "ALL",
     kotStatus: filters.kotStatus || "ALL",
-    section: filters.section || "activity",
+    section: filters.section || "daily-summary",
   };
 }

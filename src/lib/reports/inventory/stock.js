@@ -1,5 +1,9 @@
 import { dateRangeBounds } from "@/lib/reports/financial/match";
-import { aggregateStockOutByProduct, mergeInOutMaps } from "./balance";
+import {
+  aggregateStockInByProduct,
+  aggregateStockOutByProduct,
+  mergeInOutMaps,
+} from "./balance";
 import { enrichProducts, loadInventoryProducts } from "./products";
 import { inventoryReportMeta } from "./query";
 import { applyStockStatus } from "./status";
@@ -14,13 +18,14 @@ export async function buildInventoryStock({
   const ids = products.map((p) => String(p._id));
   const { start, end } = dateRangeBounds(filters.dateFrom, filters.dateTo);
 
-  const [lifetimeMap, periodOutMap] = await Promise.all([
+  const [lifetimeMap, periodOutMap, periodInMap] = await Promise.all([
     mergeInOutMaps({ restaurantId, productIds: ids }),
     aggregateStockOutByProduct({ restaurantId, productIds: ids, start, end }),
+    aggregateStockInByProduct({ restaurantId, productIds: ids, start, end }),
   ]);
 
   const rows = applyStockStatus(
-    enrichProducts(products, lifetimeMap, periodOutMap),
+    enrichProducts(products, lifetimeMap, periodOutMap, periodInMap),
     filters.stockStatus
   );
 

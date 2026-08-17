@@ -1,6 +1,12 @@
 "use client";
 
-import { Loader2 } from "lucide-react";
+import {
+  DollarSign,
+  Percent,
+  Receipt,
+  TrendingUp,
+  Wallet,
+} from "lucide-react";
 import {
   Table,
   TableBody,
@@ -9,8 +15,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import FinancialKpiCards from "@/components/reports/financial/FinancialKpiCards";
-import FinancialEmpty from "@/components/reports/financial/FinancialEmpty";
 import {
   BreakdownPie,
   ChartCard,
@@ -18,58 +22,81 @@ import {
   seriesHasValues,
   TimeAreaChart,
 } from "@/components/reports/financial/FinancialCharts";
+import {
+  AdminEmptyState,
+  AdminKpiCard,
+  AdminReportSkeleton,
+  AdminTableCard,
+  TD_CLASS,
+  TH_CLASS,
+} from "./adminReportUi";
 import { money } from "./useAdminReport";
 
 export default function RevenueSection({ data, loading }) {
   if (loading && !data) {
-    return (
-      <div className="flex justify-center py-16">
-        <Loader2 className="h-7 w-7 animate-spin text-orange-500" />
-      </div>
-    );
+    return <AdminReportSkeleton cards={4} />;
   }
 
   if (!data || data.empty) {
-    return <FinancialEmpty message="No paid revenue for the selected period." />;
+    return (
+      <AdminEmptyState
+        icon={TrendingUp}
+        title="No revenue"
+        message="No paid revenue for the selected period."
+      />
+    );
   }
 
   const kpis = data.kpis;
   const charts = data.charts;
 
   return (
-    <div className="space-y-4">
-      <FinancialKpiCards
-        items={[
-          { label: "Gross Sales", value: kpis.grossSales, money: true },
-          { label: "Discounts", value: kpis.discounts, money: true },
-          { label: "Net Sales", value: kpis.netSales, money: true },
-          { label: "Tax", value: kpis.tax, money: true },
-          { label: "Tips", value: kpis.tips, money: true },
-          { label: "Service Charges", value: kpis.serviceCharges, money: true },
-          { label: "Total Collected", value: kpis.collected, money: true },
-        ]}
-      />
+    <div className="space-y-8">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6">
+        <AdminKpiCard
+          label="Gross Sales"
+          value={money(kpis.grossSales)}
+          icon={DollarSign}
+        />
+        <AdminKpiCard
+          label="Net Sales"
+          value={money(kpis.netSales)}
+          icon={TrendingUp}
+        />
+        <AdminKpiCard
+          label="Discounts"
+          value={money(kpis.discounts)}
+          icon={Percent}
+          tone="danger"
+        />
+        <AdminKpiCard
+          label="Total Collected"
+          value={money(kpis.collected)}
+          icon={Wallet}
+        />
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+        <AdminKpiCard label="Tax" value={money(kpis.tax)} icon={Receipt} />
+        <AdminKpiCard label="Tips" value={money(kpis.tips)} icon={DollarSign} />
+        <AdminKpiCard
+          label="Service Charges"
+          value={money(kpis.serviceCharges)}
+          icon={Receipt}
+        />
+      </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
         {(data.paymentBreakdown || []).map((row) => (
-          <div
+          <AdminKpiCard
             key={row.method}
-            className="rounded-md border border-zinc-200 bg-white px-3 py-2"
-          >
-            <p className="text-[11px] font-medium uppercase tracking-wide text-zinc-500">
-              {row.method}
-            </p>
-            <p className="mt-0.5 text-base font-semibold tabular-nums">
-              {money(row.amount)}
-            </p>
-            <p className="text-[11px] text-zinc-500">
-              {row.count} orders · {row.percent}%
-            </p>
-          </div>
+            label={row.method}
+            value={money(row.amount)}
+            hint={`${row.count} orders · ${row.percent}%`}
+          />
         ))}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <ChartCard
           title="Revenue by day"
           empty={!seriesHasValues(charts?.revenueByDay)}
@@ -96,38 +123,66 @@ export default function RevenueSection({ data, loading }) {
         </ChartCard>
       </div>
 
-      <div className="border border-zinc-200 rounded-lg bg-white overflow-x-auto">
+      <AdminTableCard title="Revenue by day">
         <Table>
-          <TableHeader>
+          <TableHeader className="sticky top-0 z-10">
             <TableRow>
-              <TableHead className="text-[11px] uppercase">Date</TableHead>
-              <TableHead className="text-[11px] uppercase text-right">Orders</TableHead>
-              <TableHead className="text-[11px] uppercase text-right">Gross Sales</TableHead>
-              <TableHead className="text-[11px] uppercase text-right">Discount</TableHead>
-              <TableHead className="text-[11px] uppercase text-right">Net Sales</TableHead>
-              <TableHead className="text-[11px] uppercase text-right">Tax</TableHead>
-              <TableHead className="text-[11px] uppercase text-right">Tips</TableHead>
-              <TableHead className="text-[11px] uppercase text-right">Service Charges</TableHead>
-              <TableHead className="text-[11px] uppercase text-right">Total</TableHead>
+              <TableHead className={TH_CLASS}>Date</TableHead>
+              <TableHead className={`${TH_CLASS} text-right`}>Orders</TableHead>
+              <TableHead className={`${TH_CLASS} text-right`}>
+                Gross Sales
+              </TableHead>
+              <TableHead className={`${TH_CLASS} text-right`}>
+                Discount
+              </TableHead>
+              <TableHead className={`${TH_CLASS} text-right`}>
+                Net Sales
+              </TableHead>
+              <TableHead className={`${TH_CLASS} text-right`}>Tax</TableHead>
+              <TableHead className={`${TH_CLASS} text-right`}>Tips</TableHead>
+              <TableHead className={`${TH_CLASS} text-right`}>
+                Service Charges
+              </TableHead>
+              <TableHead className={`${TH_CLASS} text-right`}>Total</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {data.byDay.map((row) => (
-              <TableRow key={row.date}>
-                <TableCell className="text-xs whitespace-nowrap">{row.date}</TableCell>
-                <TableCell className="text-xs text-right tabular-nums">{row.orders}</TableCell>
-                <TableCell className="text-xs text-right tabular-nums">{money(row.grossSales)}</TableCell>
-                <TableCell className="text-xs text-right tabular-nums">{money(row.discounts)}</TableCell>
-                <TableCell className="text-xs text-right tabular-nums">{money(row.netSales)}</TableCell>
-                <TableCell className="text-xs text-right tabular-nums">{money(row.tax)}</TableCell>
-                <TableCell className="text-xs text-right tabular-nums">{money(row.tips)}</TableCell>
-                <TableCell className="text-xs text-right tabular-nums">{money(row.serviceCharges)}</TableCell>
-                <TableCell className="text-xs text-right tabular-nums font-medium">{money(row.total)}</TableCell>
+              <TableRow key={row.date} className="h-14 hover:bg-zinc-50">
+                <TableCell className={`${TD_CLASS} whitespace-nowrap`}>
+                  {row.date}
+                </TableCell>
+                <TableCell className={`${TD_CLASS} text-right tabular-nums`}>
+                  {row.orders}
+                </TableCell>
+                <TableCell className={`${TD_CLASS} text-right tabular-nums`}>
+                  {money(row.grossSales)}
+                </TableCell>
+                <TableCell className={`${TD_CLASS} text-right tabular-nums`}>
+                  {money(row.discounts)}
+                </TableCell>
+                <TableCell className={`${TD_CLASS} text-right tabular-nums`}>
+                  {money(row.netSales)}
+                </TableCell>
+                <TableCell className={`${TD_CLASS} text-right tabular-nums`}>
+                  {money(row.tax)}
+                </TableCell>
+                <TableCell className={`${TD_CLASS} text-right tabular-nums`}>
+                  {money(row.tips)}
+                </TableCell>
+                <TableCell className={`${TD_CLASS} text-right tabular-nums`}>
+                  {money(row.serviceCharges)}
+                </TableCell>
+                <TableCell
+                  className={`${TD_CLASS} text-right tabular-nums font-medium`}
+                >
+                  {money(row.total)}
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>
         </Table>
-      </div>
+      </AdminTableCard>
     </div>
   );
 }

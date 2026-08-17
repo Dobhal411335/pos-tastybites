@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2 } from "lucide-react";
+import { CheckCircle2, ChefHat, Clock, XCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
   Table,
@@ -10,9 +10,16 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import FinancialKpiCards from "@/components/reports/financial/FinancialKpiCards";
-import FinancialEmpty from "@/components/reports/financial/FinancialEmpty";
 import { ReportPager } from "@/components/reports/inventory/reportUi";
+import {
+  AdminEmptyState,
+  AdminKpiCard,
+  AdminNote,
+  AdminReportSkeleton,
+  AdminTableCard,
+  TD_CLASS,
+  TH_CLASS,
+} from "./adminReportUi";
 
 const STATUS_BADGE = {
   QUEUED: "border-amber-200 bg-amber-50 text-amber-800",
@@ -24,22 +31,18 @@ const STATUS_BADGE = {
 
 export default function KitchenSection({ data, loading, onPage }) {
   if (loading && !data) {
-    return (
-      <div className="flex justify-center py-16">
-        <Loader2 className="h-7 w-7 animate-spin text-orange-500" />
-      </div>
-    );
+    return <AdminReportSkeleton cards={4} />;
   }
 
   if (!data || data.empty) {
     return (
-      <div className="space-y-3">
-        {data?.note ? (
-          <p className="text-xs text-zinc-500 border border-zinc-200 rounded-lg bg-white px-3 py-2">
-            {data.note}
-          </p>
-        ) : null}
-        <FinancialEmpty message="No kitchen tickets for the selected period." />
+      <div className="space-y-4">
+        {data?.note ? <AdminNote>{data.note}</AdminNote> : null}
+        <AdminEmptyState
+          icon={ChefHat}
+          title="No kitchen tickets"
+          message="No kitchen tickets for the selected period."
+        />
       </div>
     );
   }
@@ -47,83 +50,114 @@ export default function KitchenSection({ data, loading, onPage }) {
   const counts = data.counts;
 
   return (
-    <div className="space-y-4">
-      <p className="text-xs text-zinc-500 border border-zinc-200 rounded-lg bg-white px-3 py-2">
-        {data.note}
-      </p>
-      <FinancialKpiCards
-        items={[
-          { label: "Total KOTs", value: counts.total },
-          { label: "Completed", value: counts.completed },
-          { label: "Pending", value: counts.pending },
-          { label: "Cancelled", value: counts.cancelled },
-        ]}
-      />
+    <div className="space-y-8">
+      {data.note ? <AdminNote>{data.note}</AdminNote> : null}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6">
+        <AdminKpiCard
+          label="Total KOTs"
+          value={counts.total}
+          icon={ChefHat}
+        />
+        <AdminKpiCard
+          label="Completed"
+          value={counts.completed}
+          icon={CheckCircle2}
+          tone="success"
+        />
+        <AdminKpiCard
+          label="Pending"
+          value={counts.pending}
+          icon={Clock}
+        />
+        <AdminKpiCard
+          label="Cancelled"
+          value={counts.cancelled}
+          icon={XCircle}
+          tone="danger"
+        />
+      </div>
 
-      <div className="border border-zinc-200 rounded-lg bg-white overflow-x-auto">
+      <AdminTableCard footer={<ReportPager data={data} onPage={onPage} />}>
         <Table>
-          <TableHeader>
+          <TableHeader className="sticky top-0 z-10">
             <TableRow>
-              <TableHead className="text-[11px] uppercase">KOT #</TableHead>
-              <TableHead className="text-[11px] uppercase">Order #</TableHead>
-              <TableHead className="text-[11px] uppercase">Date</TableHead>
-              <TableHead className="text-[11px] uppercase">Time</TableHead>
-              <TableHead className="text-[11px] uppercase">Table</TableHead>
-              <TableHead className="text-[11px] uppercase">Server</TableHead>
-              <TableHead className="text-[11px] uppercase">Status</TableHead>
-              <TableHead className="text-[11px] uppercase">Type</TableHead>
+              <TableHead className={TH_CLASS}>KOT #</TableHead>
+              <TableHead className={TH_CLASS}>Order #</TableHead>
+              <TableHead className={TH_CLASS}>Date</TableHead>
+              <TableHead className={TH_CLASS}>Time</TableHead>
+              <TableHead className={TH_CLASS}>Table</TableHead>
+              <TableHead className={TH_CLASS}>Server</TableHead>
+              <TableHead className={TH_CLASS}>Status</TableHead>
+              <TableHead className={TH_CLASS}>Type</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {data.rows.map((row) => (
-              <TableRow key={row.id}>
-                <TableCell className="text-xs whitespace-nowrap">{row.kotNumber}</TableCell>
-                <TableCell className="text-xs">{row.orderNumber}</TableCell>
-                <TableCell className="text-xs whitespace-nowrap">{row.date}</TableCell>
-                <TableCell className="text-xs whitespace-nowrap">{row.time}</TableCell>
-                <TableCell className="text-xs">{row.table}</TableCell>
-                <TableCell className="text-xs">{row.employee}</TableCell>
-                <TableCell>
+              <TableRow key={row.id} className="h-14 hover:bg-zinc-50">
+                <TableCell className={`${TD_CLASS} whitespace-nowrap font-medium`}>
+                  {row.kotNumber}
+                </TableCell>
+                <TableCell className={TD_CLASS}>{row.orderNumber}</TableCell>
+                <TableCell className={`${TD_CLASS} whitespace-nowrap`}>
+                  {row.date}
+                </TableCell>
+                <TableCell className={`${TD_CLASS} whitespace-nowrap`}>
+                  {row.time}
+                </TableCell>
+                <TableCell className={TD_CLASS}>{row.table}</TableCell>
+                <TableCell className={TD_CLASS}>{row.employee}</TableCell>
+                <TableCell className={TD_CLASS}>
                   <Badge
                     variant="outline"
-                    className={`text-[10px] font-normal ${STATUS_BADGE[row.status] || ""}`}
+                    className={`text-[13px] font-normal ${
+                      STATUS_BADGE[row.status] || ""
+                    }`}
                   >
                     {row.status}
                   </Badge>
                 </TableCell>
-                <TableCell className="text-xs">{row.type}</TableCell>
+                <TableCell className={TD_CLASS}>{row.type}</TableCell>
               </TableRow>
             ))}
           </TableBody>
         </Table>
-      </div>
-      <ReportPager data={data} onPage={onPage} />
+      </AdminTableCard>
 
-      <div className="border border-zinc-200 rounded-lg bg-white overflow-x-auto">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500 px-3 pt-3">
-          Top kitchen items
-        </p>
+      <AdminTableCard title="Top kitchen items">
         <Table>
-          <TableHeader>
+          <TableHeader className="sticky top-0 z-10">
             <TableRow>
-              <TableHead className="text-[11px] uppercase">Rank</TableHead>
-              <TableHead className="text-[11px] uppercase">Product</TableHead>
-              <TableHead className="text-[11px] uppercase text-right">Quantity</TableHead>
-              <TableHead className="text-[11px] uppercase text-right">Orders</TableHead>
+              <TableHead className={TH_CLASS}>Rank</TableHead>
+              <TableHead className={TH_CLASS}>Product</TableHead>
+              <TableHead className={`${TH_CLASS} text-right`}>
+                Quantity
+              </TableHead>
+              <TableHead className={`${TH_CLASS} text-right`}>Orders</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {(data.topItems || []).map((row) => (
-              <TableRow key={`${row.rank}-${row.item}`}>
-                <TableCell className="text-xs tabular-nums">{row.rank}</TableCell>
-                <TableCell className="text-xs">{row.item}</TableCell>
-                <TableCell className="text-xs text-right tabular-nums">{row.quantity}</TableCell>
-                <TableCell className="text-xs text-right tabular-nums">{row.orderCount}</TableCell>
+              <TableRow
+                key={`${row.rank}-${row.item}`}
+                className="h-14 hover:bg-zinc-50"
+              >
+                <TableCell className={`${TD_CLASS} tabular-nums`}>
+                  {row.rank}
+                </TableCell>
+                <TableCell className={`${TD_CLASS} font-medium`}>
+                  {row.item}
+                </TableCell>
+                <TableCell className={`${TD_CLASS} text-right tabular-nums`}>
+                  {row.quantity}
+                </TableCell>
+                <TableCell className={`${TD_CLASS} text-right tabular-nums`}>
+                  {row.orderCount}
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>
         </Table>
-      </div>
+      </AdminTableCard>
     </div>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2 } from "lucide-react";
+import { Activity } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
   Table,
@@ -10,71 +10,79 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import FinancialEmpty from "@/components/reports/financial/FinancialEmpty";
 import { ReportPager } from "@/components/reports/inventory/reportUi";
+import {
+  AdminEmptyState,
+  AdminNote,
+  AdminReportSkeleton,
+  AdminTableCard,
+  TD_CLASS,
+  TH_CLASS,
+} from "./adminReportUi";
 
 export default function ActivitySection({ data, loading, onPage }) {
   if (loading && !data) {
-    return (
-      <div className="flex justify-center py-16">
-        <Loader2 className="h-7 w-7 animate-spin text-orange-500" />
-      </div>
-    );
+    return <AdminReportSkeleton cards={0} />;
   }
 
   if (!data || data.empty) {
     return (
-      <div className="space-y-3">
-        {data?.note ? (
-          <p className="text-xs text-zinc-500 border border-zinc-200 rounded-lg bg-white px-3 py-2">
-            {data.note}
-          </p>
-        ) : null}
-        <FinancialEmpty message="No recorded activity for the selected period." />
+      <div className="space-y-4">
+        {data?.note ? <AdminNote>{data.note}</AdminNote> : null}
+        <AdminEmptyState
+          icon={Activity}
+          title="No activity"
+          message="No recorded activity for the selected period."
+        />
       </div>
     );
   }
 
   return (
-    <div className="space-y-3">
-      <p className="text-xs text-zinc-500 border border-zinc-200 rounded-lg bg-white px-3 py-2">
-        {data.note}
-      </p>
-      <div className="border border-zinc-200 rounded-lg bg-white overflow-x-auto">
+    <div className="space-y-4">
+      {data.note ? <AdminNote>{data.note}</AdminNote> : null}
+      <AdminTableCard
+        footer={<ReportPager data={data} onPage={onPage} />}
+      >
         <Table>
-          <TableHeader>
+          <TableHeader className="sticky top-0 z-10">
             <TableRow>
-              <TableHead className="text-[11px] uppercase">Date</TableHead>
-              <TableHead className="text-[11px] uppercase">Time</TableHead>
-              <TableHead className="text-[11px] uppercase">Admin</TableHead>
-              <TableHead className="text-[11px] uppercase">Action</TableHead>
-              <TableHead className="text-[11px] uppercase">Module</TableHead>
-              <TableHead className="text-[11px] uppercase">Target</TableHead>
-              <TableHead className="text-[11px] uppercase">Description</TableHead>
+              <TableHead className={TH_CLASS}>Date</TableHead>
+              <TableHead className={TH_CLASS}>Time</TableHead>
+              <TableHead className={TH_CLASS}>Admin</TableHead>
+              <TableHead className={TH_CLASS}>Action</TableHead>
+              <TableHead className={TH_CLASS}>Module</TableHead>
+              <TableHead className={TH_CLASS}>Target</TableHead>
+              <TableHead className={TH_CLASS}>Description</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {data.rows.map((row) => (
-              <TableRow key={row.id}>
-                <TableCell className="whitespace-nowrap text-xs">{row.date}</TableCell>
-                <TableCell className="whitespace-nowrap text-xs">{row.time}</TableCell>
-                <TableCell className="text-xs">{row.admin}</TableCell>
-                <TableCell>
-                  <Badge variant="outline" className="text-[10px] font-normal">
+              <TableRow key={row.id} className="h-14 hover:bg-zinc-50">
+                <TableCell className={`${TD_CLASS} whitespace-nowrap`}>
+                  {row.date}
+                </TableCell>
+                <TableCell className={`${TD_CLASS} whitespace-nowrap`}>
+                  {row.time}
+                </TableCell>
+                <TableCell className={`${TD_CLASS} font-medium`}>
+                  {row.admin}
+                </TableCell>
+                <TableCell className={TD_CLASS}>
+                  <Badge variant="outline" className="text-[13px] font-normal">
                     {row.action}
                   </Badge>
                 </TableCell>
-                <TableCell className="text-xs">{row.module}</TableCell>
-                <TableCell className="text-xs">{row.target}</TableCell>
-                <TableCell className="text-xs text-zinc-600 max-w-xs">
+                <TableCell className={TD_CLASS}>{row.module}</TableCell>
+                <TableCell className={TD_CLASS}>{row.target}</TableCell>
+                <TableCell className={`${TD_CLASS} text-zinc-600 max-w-xs`}>
                   {row.description}
                 </TableCell>
               </TableRow>
             ))}
           </TableBody>
         </Table>
-      </div>
-      <ReportPager data={data} onPage={onPage} />
+      </AdminTableCard>
     </div>
   );
 }

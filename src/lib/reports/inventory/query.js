@@ -3,6 +3,7 @@ import { toObjectId } from "@/lib/reports/financial/match";
 import { DEFAULT_RESTAURANT_TIMEZONE } from "@/lib/restaurantTime";
 
 export const STOCK_STATUSES = ["ALL", "IN_STOCK", "LOW_STOCK", "OUT_OF_STOCK"];
+export const MOVEMENT_TYPES = ["ALL", "STOCK_IN", "STOCK_OUT"];
 export const TOP_SORT_FIELDS = ["quantity", "value"];
 
 function parseIntSafe(value, fallback) {
@@ -29,6 +30,7 @@ export function parseInventoryQuery(searchParams, { paginate = false } = {}) {
   const categoryRaw = searchParams.get("categoryId") || searchParams.get("category");
   const productRaw = searchParams.get("productId") || searchParams.get("product");
   const statusRaw = String(searchParams.get("stockStatus") || "ALL").toUpperCase();
+  const movementRaw = String(searchParams.get("movementType") || "ALL").toUpperCase();
   const sortByRaw = String(searchParams.get("sortBy") || "quantity").toLowerCase();
 
   const result = {
@@ -38,6 +40,7 @@ export function parseInventoryQuery(searchParams, { paginate = false } = {}) {
     categoryId: toObjectId(categoryRaw) ? String(categoryRaw) : null,
     productId: toObjectId(productRaw) ? String(productRaw) : null,
     stockStatus: STOCK_STATUSES.includes(statusRaw) ? statusRaw : "ALL",
+    movementType: MOVEMENT_TYPES.includes(movementRaw) ? movementRaw : "ALL",
     search: String(searchParams.get("search") || "").trim(),
     sortBy: TOP_SORT_FIELDS.includes(sortByRaw) ? sortByRaw : "quantity",
     timezone: DEFAULT_RESTAURANT_TIMEZONE,
@@ -63,6 +66,7 @@ export function inventoryReportMeta(filters) {
     categoryId: filters.categoryId,
     productId: filters.productId,
     stockStatus: filters.stockStatus,
+    movementType: filters.movementType,
     search: filters.search,
     generatedAt: new Date().toISOString(),
   };

@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2 } from "lucide-react";
+import { Gift, Percent, ShieldCheck, XCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
   Table,
@@ -10,9 +10,16 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import FinancialKpiCards from "@/components/reports/financial/FinancialKpiCards";
-import FinancialEmpty from "@/components/reports/financial/FinancialEmpty";
 import { ReportPager } from "@/components/reports/inventory/reportUi";
+import {
+  AdminEmptyState,
+  AdminKpiCard,
+  AdminNote,
+  AdminReportSkeleton,
+  AdminTableCard,
+  TD_CLASS,
+  TH_CLASS,
+} from "./adminReportUi";
 import { money } from "./useAdminReport";
 
 const EVENT_BADGE = {
@@ -23,22 +30,20 @@ const EVENT_BADGE = {
 
 export default function AuditSection({ data, loading, onPage }) {
   if (loading && !data) {
-    return (
-      <div className="flex justify-center py-16">
-        <Loader2 className="h-7 w-7 animate-spin text-orange-500" />
-      </div>
-    );
+    return <AdminReportSkeleton cards={4} />;
   }
 
   if (!data || data.empty) {
     return (
-      <div className="space-y-3">
+      <div className="space-y-4">
         {data?.notes?.unsupported ? (
-          <p className="text-xs text-zinc-500 border border-zinc-200 rounded-lg bg-white px-3 py-2">
-            {data.notes.unsupported}
-          </p>
+          <AdminNote>{data.notes.unsupported}</AdminNote>
         ) : null}
-        <FinancialEmpty message="No exception events for the selected period." />
+        <AdminEmptyState
+          icon={ShieldCheck}
+          title="No exceptions"
+          message="No exception events for the selected period."
+        />
       </div>
     );
   }
@@ -46,61 +51,83 @@ export default function AuditSection({ data, loading, onPage }) {
   const summary = data.summary;
 
   return (
-    <div className="space-y-4">
-      <FinancialKpiCards
-        items={[
-          { label: "Total Events", value: summary.total },
-          { label: "Cancelled / Waived", value: summary.cancelled },
-          { label: "Discounted Orders", value: summary.discounted },
-          { label: "Gift Card Used", value: summary.giftCard },
-          { label: "Refunds", value: "Not recorded" },
-          { label: "Voids", value: "Not recorded" },
-          { label: "Payment Failures", value: "Not recorded" },
-          { label: "Manual Adjustments", value: "Not recorded" },
-        ]}
-      />
-      <p className="text-xs text-zinc-500">{data.notes?.unsupported}</p>
+    <div className="space-y-8">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6">
+        <AdminKpiCard
+          label="Total Events"
+          value={summary.total}
+          icon={ShieldCheck}
+        />
+        <AdminKpiCard
+          label="Cancelled / Waived"
+          value={summary.cancelled}
+          icon={XCircle}
+          tone="danger"
+        />
+        <AdminKpiCard
+          label="Discounted Orders"
+          value={summary.discounted}
+          icon={Percent}
+        />
+        <AdminKpiCard
+          label="Gift Card Used"
+          value={summary.giftCard}
+          icon={Gift}
+        />
+      </div>
+      {data.notes?.unsupported ? (
+        <AdminNote>{data.notes.unsupported}</AdminNote>
+      ) : null}
 
-      <div className="border border-zinc-200 rounded-lg bg-white overflow-x-auto">
+      <AdminTableCard footer={<ReportPager data={data} onPage={onPage} />}>
         <Table>
-          <TableHeader>
+          <TableHeader className="sticky top-0 z-10">
             <TableRow>
-              <TableHead className="text-[11px] uppercase">Date</TableHead>
-              <TableHead className="text-[11px] uppercase">Time</TableHead>
-              <TableHead className="text-[11px] uppercase">Order #</TableHead>
-              <TableHead className="text-[11px] uppercase">Employee</TableHead>
-              <TableHead className="text-[11px] uppercase">Event Type</TableHead>
-              <TableHead className="text-[11px] uppercase text-right">Amount</TableHead>
-              <TableHead className="text-[11px] uppercase">Reason</TableHead>
-              <TableHead className="text-[11px] uppercase">Status</TableHead>
+              <TableHead className={TH_CLASS}>Date</TableHead>
+              <TableHead className={TH_CLASS}>Time</TableHead>
+              <TableHead className={TH_CLASS}>Order #</TableHead>
+              <TableHead className={TH_CLASS}>Employee</TableHead>
+              <TableHead className={TH_CLASS}>Event Type</TableHead>
+              <TableHead className={`${TH_CLASS} text-right`}>Amount</TableHead>
+              <TableHead className={TH_CLASS}>Reason</TableHead>
+              <TableHead className={TH_CLASS}>Status</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {data.rows.map((row) => (
-              <TableRow key={row.id}>
-                <TableCell className="text-xs whitespace-nowrap">{row.date}</TableCell>
-                <TableCell className="text-xs whitespace-nowrap">{row.time}</TableCell>
-                <TableCell className="text-xs">{row.orderNumber}</TableCell>
-                <TableCell className="text-xs">{row.employee}</TableCell>
-                <TableCell>
+              <TableRow key={row.id} className="h-14 hover:bg-zinc-50">
+                <TableCell className={`${TD_CLASS} whitespace-nowrap`}>
+                  {row.date}
+                </TableCell>
+                <TableCell className={`${TD_CLASS} whitespace-nowrap`}>
+                  {row.time}
+                </TableCell>
+                <TableCell className={`${TD_CLASS} font-medium`}>
+                  {row.orderNumber}
+                </TableCell>
+                <TableCell className={TD_CLASS}>{row.employee}</TableCell>
+                <TableCell className={TD_CLASS}>
                   <Badge
                     variant="outline"
-                    className={`text-[10px] font-normal ${EVENT_BADGE[row.eventType] || ""}`}
+                    className={`text-[13px] font-normal ${
+                      EVENT_BADGE[row.eventType] || ""
+                    }`}
                   >
                     {row.eventType}
                   </Badge>
                 </TableCell>
-                <TableCell className="text-xs text-right tabular-nums">
+                <TableCell className={`${TD_CLASS} text-right tabular-nums`}>
                   {money(row.amount)}
                 </TableCell>
-                <TableCell className="text-xs text-zinc-600">{row.reason}</TableCell>
-                <TableCell className="text-xs">{row.status}</TableCell>
+                <TableCell className={`${TD_CLASS} text-zinc-600`}>
+                  {row.reason}
+                </TableCell>
+                <TableCell className={TD_CLASS}>{row.status}</TableCell>
               </TableRow>
             ))}
           </TableBody>
         </Table>
-      </div>
-      <ReportPager data={data} onPage={onPage} />
+      </AdminTableCard>
     </div>
   );
 }
