@@ -36,6 +36,7 @@ yarn-error.log*
 # vercel
 .vercel
 
+skills-lock.json
 .agents
 
 # typescript

@@ -52,7 +52,9 @@ const OrderSchema = new mongoose.Schema(
     guestName: { type: String }, // legacy; kept in sync with partyName
     partyName: { type: String }, // customer / party name for the bill
     guestCount: { type: Number, default: null }, // guests at the table when order was taken
-    contactNumber: { type: String },
+    contactNumber: { type: String }, // optional guest phone (digits only)
+    guestCountryCode: { type: String, default: null }, // e.g. +1
+    guestEmail: { type: String, default: null }, // optional guest email
     tableNo: { type: String }, // Legacy string reference
     tableSession: { type: mongoose.Schema.Types.ObjectId, ref: 'TableSession' },
     table: { type: mongoose.Schema.Types.ObjectId, ref: 'Table' },

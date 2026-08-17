@@ -1,15 +1,19 @@
 import mongoose from "mongoose";
 import Employee from "@/models/employee/Employee";
 import EmployeeLog from "@/models/employee/EmployeeLog";
+import EmployeeSession from "@/models/employee/EmployeeSession";
 import EmployeeShift from "@/models/employee/EmployeeShift";
 import ShiftTemplate from "@/models/employee/ShiftTemplate";
+import DutyChange from "@/models/employee/DutyChange";
 import Order from "@/models/Order";
 import { buildWorkingHoursSummaryPipeline } from "@/lib/payEstimate";
+import { resolveScheduleFromDocs } from "@/lib/attendance";
 import {
   DEFAULT_RESTAURANT_TIMEZONE,
   restaurantCalendarDate,
 } from "@/lib/restaurantTime";
 import {
+  businessCalendarDate,
   businessDateBounds,
   formatEmployeeName,
   isValidBusinessDate,
@@ -32,7 +36,7 @@ const ORDER_STATUSES = [
   "WAIVED",
 ];
 const PAYMENT_FILTERS = ["CASH", "CARD", "GIFT_CARD"];
-const SECTIONS = ["summary", "attendance", "orders"];
+const SECTIONS = ["summary", "attendance", "orders", "detail"];
 const ORDER_SORTS = [
   "createdAt",
   "orderNumber",
@@ -48,6 +52,7 @@ const ORDER_SELECT = [
   "tableNo",
   "items.name",
   "items.qty",
+  "items.price",
   "subTotal",
   "discountTotal",
   "taxTotal",
@@ -140,10 +145,12 @@ function finalizeMetrics(bucket) {
   const aov = bucket.completedOrders > 0 ? r2(bucket.sales / bucket.completedOrders) : 0;
   const averageTip = bucket.tippedOrders > 0 ? r2(bucket.tips / bucket.tippedOrders) : 0;
   const averageCharge = bucket.chargedOrders > 0 ? r2(bucket.serviceCharges / bucket.chargedOrders) : 0;
+  const cancelCount = (bucket.cancelledOrders || 0) + (bucket.waivedOrders || 0);
   const cancellationRate =
-    bucket.totalOrders > 0 ? r2((bucket.cancelledOrders / bucket.totalOrders) * 100) : 0;
+    bucket.totalOrders > 0 ? r2((cancelCount / bucket.totalOrders) * 100) : 0;
   return {
     ...bucket,
+    cancelCount,
     aov,
     averageTip,
     averageCharge,
@@ -331,13 +338,16 @@ function emptySummaryPayload(dateFrom, dateTo, extras = {}) {
       completedOrders: 0,
       cancelledOrders: 0,
       waivedOrders: 0,
+      cancelCount: 0,
       totalSales: 0,
+      totalStaff: 0,
+      clockedIn: 0,
     },
     performance: [],
     sales: [],
     tips: { employees: [], totals: emptyMetrics() },
     cancellations: {
-      totals: { totalOrders: 0, completed: 0, cancelled: 0, waived: 0 },
+      totals: { totalOrders: 0, completed: 0, cancelled: 0, waived: 0, cancelCount: 0 },
       employees: [],
     },
     charts: {
@@ -411,7 +421,11 @@ export function parseEmployeeReportQuery(searchParams) {
     sort,
     sortDir,
     page: clampPage(searchParams.get("page"), 1),
-    limit: clampLimit(searchParams.get("limit"), section === "attendance" ? 50 : 25),
+    limit: clampLimit(
+      searchParams.get("limit"),
+      section === "detail" ? 200 : section === "attendance" ? 50 : 25,
+      section === "detail" ? 500 : 100
+    ),
   };
 }
 
@@ -467,6 +481,396 @@ function mapHoursRow(row) {
   };
 }
 
+function mapAttendanceLog(log) {
+  const workedMinutes = Number(log.workedMinutes) || 0;
+  const overtimeMinutes = Number(log.overtimeMinutes) || 0;
+  const regularMinutes = Math.max(0, workedMinutes - overtimeMinutes);
+  const template = log.shift?.templateId;
+  return {
+    id: String(log._id),
+    employeeId: log.employee?._id ? String(log.employee._id) : log.employee ? String(log.employee) : null,
+    employeeName: displayName(log.employee),
+    role: log.employee?.role || "Staff",
+    date: log.date,
+    dayKey: restaurantDayKey(log.date || log.loginTime),
+    scheduledShift: template?.name || null,
+    scheduledStart: log.scheduledShiftStart || log.shift?.startTime || null,
+    scheduledEnd: log.scheduledShiftEnd || log.shift?.endTime || null,
+    scheduledMinutes: Number(log.scheduledShiftMinutes) || 0,
+    clockIn: log.loginTime || null,
+    clockOut: log.logoutTime || null,
+    workedMinutes,
+    regularMinutes,
+    overtimeMinutes,
+    lateMinutes: Number(log.lateMinutes) || 0,
+    earlyLeaveMinutes: Number(log.earlyLeaveMinutes) || 0,
+    workedHours: hoursFromMinutes(workedMinutes),
+    regularHours: hoursFromMinutes(regularMinutes),
+    overtimeHours: hoursFromMinutes(overtimeMinutes),
+    attendanceStatus: log.attendanceStatus,
+    shiftStatus: log.shiftStatus,
+    isIncomplete: Boolean(log.isIncomplete),
+    loginDeviceName: log.loginDeviceName || "",
+  };
+}
+
+function eachBusinessDate(dateFrom, dateTo) {
+  const days = [];
+  const cursor = new Date(`${dateFrom}T12:00:00Z`);
+  const last = new Date(`${dateTo}T12:00:00Z`);
+  while (cursor <= last) {
+    days.push(cursor.toISOString().slice(0, 10));
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+  return days;
+}
+
+function syntheticAttendanceRow({ employee, dayKey, shift, dutyChange }) {
+  const resolved = resolveScheduleFromDocs(shift, dutyChange, { clockedIn: false });
+  const template = shift?.templateId;
+  const scheduledMinutes = Number(resolved.scheduledShiftMinutes) || 0;
+  return {
+    id: `cal-${employee?._id || employee?.id || "emp"}-${dayKey}`,
+    employeeId: employee?._id ? String(employee._id) : null,
+    employeeName: displayName(employee),
+    role: employee?.role || "Staff",
+    date: businessCalendarDate(dayKey),
+    dayKey,
+    scheduledShift: template?.name || null,
+    scheduledStart: resolved.scheduledShiftStart || null,
+    scheduledEnd: resolved.scheduledShiftEnd || null,
+    scheduledMinutes,
+    clockIn: null,
+    clockOut: null,
+    workedMinutes: 0,
+    regularMinutes: 0,
+    overtimeMinutes: 0,
+    lateMinutes: 0,
+    earlyLeaveMinutes: 0,
+    workedHours: 0,
+    regularHours: 0,
+    overtimeHours: 0,
+    attendanceStatus: resolved.attendanceStatus,
+    shiftStatus: resolved.shiftStatus,
+    isIncomplete: false,
+    loginDeviceName: "",
+  };
+}
+
+async function buildCalendarAttendance({ rid, empId, dateFrom, dateTo, shiftId, employee }) {
+  const { start } = businessDateBounds(dateFrom);
+  const { end } = businessDateBounds(dateTo);
+  const dateRange = { $gte: start, $lt: end };
+
+  let templateShiftIds = null;
+  if (shiftId) {
+    templateShiftIds = await shiftIdsForTemplate(rid, shiftId);
+    if (!templateShiftIds.length) {
+      return eachBusinessDate(dateFrom, dateTo).map((dayKey) =>
+        syntheticAttendanceRow({ employee, dayKey, shift: null, dutyChange: null })
+      );
+    }
+  }
+
+  const shiftQuery = { restaurant: rid, employee: empId, date: dateRange };
+  if (templateShiftIds) shiftQuery._id = { $in: templateShiftIds };
+
+  const [shifts, dutyChanges, logs] = await Promise.all([
+    EmployeeShift.find(shiftQuery)
+      .populate("templateId", "name startTime endTime")
+      .lean(),
+    DutyChange.find({
+      restaurant: rid,
+      employee: empId,
+      date: dateRange,
+      status: "Approved",
+    }).lean(),
+    EmployeeLog.find({
+      restaurant: rid,
+      employee: empId,
+      $or: [{ date: dateRange }, { loginTime: dateRange }],
+    })
+      .populate("employee", "firstName lastName role employeeId")
+      .populate({
+        path: "shift",
+        select: "startTime endTime templateId",
+        populate: { path: "templateId", select: "name startTime endTime" },
+      })
+      .lean(),
+  ]);
+
+  const shiftByDay = new Map();
+  for (const shift of shifts) {
+    const key = restaurantDayKey(shift.date || shift.startTime);
+    if (key) shiftByDay.set(key, shift);
+  }
+  const dutyByDay = new Map();
+  for (const duty of dutyChanges) {
+    const key = restaurantDayKey(duty.date);
+    if (key) dutyByDay.set(key, duty);
+  }
+  const logByDay = new Map();
+  for (const log of logs) {
+    const key = restaurantDayKey(log.date || log.loginTime);
+    if (key) logByDay.set(key, log);
+  }
+
+  const rows = [];
+  for (const dayKey of eachBusinessDate(dateFrom, dateTo)) {
+    const shift = shiftByDay.get(dayKey) || null;
+    const dutyChange = dutyByDay.get(dayKey) || null;
+    const log = logByDay.get(dayKey) || null;
+    if (shiftId && !shift && !log) {
+      rows.push(syntheticAttendanceRow({ employee, dayKey, shift: null, dutyChange: null }));
+      continue;
+    }
+    if (log) {
+      const mapped = mapAttendanceLog(log);
+      if (!mapped.scheduledStart && shift) {
+        mapped.scheduledStart = dutyChange?.newStartTime || shift.startTime || null;
+        mapped.scheduledEnd = dutyChange?.newEndTime || shift.endTime || null;
+        mapped.scheduledShift = shift.templateId?.name || mapped.scheduledShift;
+      }
+      rows.push(mapped);
+      continue;
+    }
+    rows.push(syntheticAttendanceRow({ employee, dayKey, shift, dutyChange }));
+  }
+
+  return rows.sort((a, b) => String(b.dayKey).localeCompare(String(a.dayKey)));
+}
+
+function mapSession(session) {
+  const durationSeconds = Number(session.duration) || 0;
+  return {
+    id: String(session._id),
+    loginTime: session.loginTime || null,
+    logoutTime: session.logoutTime || null,
+    durationSeconds,
+    platform: session.platform || "—",
+    deviceName: session.device?.deviceName || "—",
+    deviceType: session.device?.deviceType || null,
+    status: session.status || null,
+    dayKey: restaurantDayKey(session.loginTime),
+  };
+}
+
+function mapOrderRow(order, nameById) {
+  const items = itemSummary(order.items);
+  return {
+    orderId: String(order._id),
+    orderNumber: order.orderNumber,
+    createdAt: order.createdAt,
+    dayKey: restaurantDayKey(order.createdAt),
+    employeeId: order.processedBy ? String(order.processedBy) : null,
+    employeeName: order.processedBy
+      ? nameById.get(String(order.processedBy)) || "Unknown"
+      : "Unassigned",
+    tableNo: order.tableNo || "—",
+    guest: order.partyName || order.guestName || "Walk-in",
+    itemCount: items.itemCount,
+    itemSummary: items.itemSummary,
+    subTotal: r2(order.subTotal),
+    discountTotal: r2(order.discountTotal),
+    taxTotal: r2(order.taxTotal),
+    serviceChargeTotal: r2(order.serviceChargeTotal),
+    tipAmount: r2(order.tipAmount),
+    totalAmount: r2(order.totalAmount),
+    paymentMethod: order.paymentMethod || null,
+    paymentLabel: paymentLabel(order),
+    status: order.status,
+    paymentStatus: order.paymentStatus,
+    waiveReason: order.waiveReason || null,
+  };
+}
+
+function cancelledItemsFromOrders(orders) {
+  const rows = [];
+  for (const order of orders) {
+    if (order.status !== "CANCELLED" && order.status !== "WAIVED") continue;
+    const items = Array.isArray(order.items) ? order.items : [];
+    if (!items.length) {
+      rows.push({
+        orderId: String(order._id),
+        orderNumber: order.orderNumber,
+        item: order.status === "WAIVED" ? "Waived order" : "Cancelled order",
+        qty: 1,
+        value: r2(order.totalAmount),
+        status: order.status,
+        createdAt: order.createdAt,
+        dayKey: restaurantDayKey(order.createdAt),
+      });
+      continue;
+    }
+    for (const item of items) {
+      rows.push({
+        orderId: String(order._id),
+        orderNumber: order.orderNumber,
+        item: item.name || "Item",
+        qty: Number(item.qty) || 1,
+        value: r2((Number(item.price) || 0) * (Number(item.qty) || 1)),
+        status: order.status,
+        createdAt: order.createdAt,
+        dayKey: restaurantDayKey(order.createdAt),
+      });
+    }
+  }
+  return rows;
+}
+
+function buildHoursSeries(logs, dateFrom, dateTo) {
+  const days = dayCountInclusive(dateFrom, dateTo);
+  const buckets = new Map();
+  for (const log of logs) {
+    const key = log.dayKey || restaurantDayKey(log.date || log.loginTime || log.clockIn);
+    if (!key) continue;
+    const minutes =
+      Number(log.workedMinutes) || Math.round((Number(log.workedHours) || 0) * MINUTES_PER_HOUR);
+    buckets.set(key, r2((buckets.get(key) || 0) + hoursFromMinutes(minutes)));
+  }
+
+  if (days <= 60) {
+    const series = [];
+    const cursor = new Date(`${dateFrom}T12:00:00Z`);
+    const last = new Date(`${dateTo}T12:00:00Z`);
+    while (cursor <= last) {
+      const key = cursor.toISOString().slice(0, 10);
+      series.push({ label: key.slice(5), dayKey: key, hours: buckets.get(key) || 0 });
+      cursor.setUTCDate(cursor.getUTCDate() + 1);
+    }
+    return series;
+  }
+
+  return [...buckets.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([dayKey, hours]) => ({ label: dayKey.slice(0, 7), dayKey, hours }));
+}
+
+function buildAttendanceStats(logs) {
+  let scheduledDays = 0;
+  let workedDays = 0;
+  let absentDays = 0;
+  let offDays = 0;
+  let lateDays = 0;
+  let scheduledMinutes = 0;
+  let workedMinutes = 0;
+  let overtimeMinutes = 0;
+  let earliestClockIn = null;
+  let latestClockOut = null;
+
+  for (const log of logs) {
+    const status = log.attendanceStatus;
+    const shiftStatus = log.shiftStatus;
+    scheduledMinutes += Number(log.scheduledShiftMinutes || log.scheduledMinutes) || 0;
+    workedMinutes += Number(log.workedMinutes) || 0;
+    overtimeMinutes += Number(log.overtimeMinutes) || 0;
+    if (status === "Late") lateDays += 1;
+    if (
+      shiftStatus === "Off" ||
+      status === "Holiday" ||
+      status === "Leave" ||
+      status === "Off"
+    ) {
+      offDays += 1;
+    } else if (status === "Absent") {
+      absentDays += 1;
+      scheduledDays += 1;
+    } else {
+      scheduledDays += 1;
+      if ((Number(log.workedMinutes) || 0) > 0 || log.isIncomplete) workedDays += 1;
+    }
+    if (log.loginTime && (!earliestClockIn || new Date(log.loginTime) < new Date(earliestClockIn))) {
+      earliestClockIn = log.loginTime;
+    } else if (log.clockIn && (!earliestClockIn || new Date(log.clockIn) < new Date(earliestClockIn))) {
+      earliestClockIn = log.clockIn;
+    }
+    const out = log.logoutTime || log.clockOut || (log.isIncomplete ? new Date() : null);
+    if (out && (!latestClockOut || new Date(out) > new Date(latestClockOut))) {
+      latestClockOut = out;
+    }
+  }
+
+  return {
+    scheduledDays,
+    workedDays,
+    absentDays,
+    offDays,
+    lateDays,
+    scheduledHours: hoursFromMinutes(scheduledMinutes),
+    workedHours: hoursFromMinutes(workedMinutes),
+    overtimeHours: hoursFromMinutes(overtimeMinutes),
+    avgHoursPerDay: workedDays > 0 ? r2(hoursFromMinutes(workedMinutes) / workedDays) : 0,
+    earliestClockIn,
+    latestClockOut,
+  };
+}
+
+async function loadClockSnapshots(rid, logMatch) {
+  const [openLogs, latestInRange] = await Promise.all([
+    EmployeeLog.find({ restaurant: rid, isIncomplete: true })
+      .select("employee loginTime logoutTime attendanceStatus loginDeviceName")
+      .lean(),
+    EmployeeLog.aggregate([
+      { $match: logMatch },
+      { $sort: { loginTime: -1 } },
+      {
+        $group: {
+          _id: "$employee",
+          clockIn: { $first: "$loginTime" },
+          clockOut: { $first: "$logoutTime" },
+          isIncomplete: { $first: "$isIncomplete" },
+          attendanceStatus: { $first: "$attendanceStatus" },
+          loginDeviceName: { $first: "$loginDeviceName" },
+        },
+      },
+    ]),
+  ]);
+
+  const openByEmployee = new Map(
+    openLogs.map((log) => [
+      String(log.employee),
+      {
+        clockedIn: true,
+        clockIn: log.loginTime || null,
+        clockOut: null,
+        isIncomplete: true,
+        attendanceStatus: log.attendanceStatus || "Present",
+        loginDeviceName: log.loginDeviceName || "",
+      },
+    ])
+  );
+  const latestByEmployee = new Map(
+    latestInRange.map((row) => [
+      String(row._id),
+      {
+        clockedIn: Boolean(row.isIncomplete),
+        clockIn: row.clockIn || null,
+        clockOut: row.isIncomplete ? null : row.clockOut || null,
+        isIncomplete: Boolean(row.isIncomplete),
+        attendanceStatus: row.attendanceStatus || null,
+        loginDeviceName: row.loginDeviceName || "",
+      },
+    ])
+  );
+
+  return { openByEmployee, latestByEmployee };
+}
+
+function clockFieldsForEmployee(id, openByEmployee, latestByEmployee) {
+  const open = openByEmployee.get(id);
+  if (open) return open;
+  return (
+    latestByEmployee.get(id) || {
+      clockedIn: false,
+      clockIn: null,
+      clockOut: null,
+      isIncomplete: false,
+      attendanceStatus: null,
+      loginDeviceName: "",
+    }
+  );
+}
+
 export async function buildEmployeeReport({
   restaurantId,
   dateFrom,
@@ -510,6 +914,18 @@ export async function buildEmployeeReport({
       sortDir,
       page,
       limit,
+    });
+  }
+
+  if (section === "detail") {
+    return buildDetailSection({
+      rid,
+      dateFrom,
+      dateTo,
+      empId,
+      shiftId,
+      orderStatus,
+      paymentMethod,
     });
   }
 
@@ -564,11 +980,14 @@ async function buildSummarySection({
     if (shiftIds.length) logMatch.shift = { $in: shiftIds };
   }
 
-  const [hourRows, orderDocs] = await Promise.all([
+  const [hourRows, orderDocs, clockSnapshots] = await Promise.all([
     shiftId && !shiftIds.length
       ? Promise.resolve([])
       : EmployeeLog.aggregate(buildWorkingHoursSummaryPipeline(logMatch)),
     Order.find(orderMatch).select(SUMMARY_ORDER_SELECT).lean(),
+    shiftId && !shiftIds.length
+      ? Promise.resolve({ openByEmployee: new Map(), latestByEmployee: new Map() })
+      : loadClockSnapshots(rid, logMatch),
   ]);
 
   const hoursByEmployee = new Map(hourRows.map((row) => [String(row._id), mapHoursRow(row)]));
@@ -586,13 +1005,21 @@ async function buildSummarySection({
 
   const employeeIds = new Set([...hoursByEmployee.keys(), ...salesByEmployee.keys()]);
   if (selected) employeeIds.add(String(selected._id));
+  if (!empId) {
+    for (const emp of filters.employees) {
+      if (emp.status !== "Suspended") employeeIds.add(emp.id);
+    }
+  }
 
   const missingIds = [...employeeIds].filter((id) => {
     const hours = hoursByEmployee.get(id);
     return !hours;
   });
   const extraEmployees = missingIds.length
-    ? await Employee.find({ _id: { $in: missingIds.map((id) => toObjectId(id)) }, restaurant: rid })
+    ? await Employee.find({
+        _id: { $in: missingIds.map((id) => toObjectId(id)).filter(Boolean) },
+        restaurant: rid,
+      })
         .select("firstName lastName role employeeId hourlyPaid")
         .lean()
     : [];
@@ -603,9 +1030,12 @@ async function buildSummarySection({
     .map((id) => {
       const hours = hoursByEmployee.get(id);
       const sales = finalizeMetrics(salesByEmployee.get(id) || emptyMetrics());
-      const emp = hours
-        ? null
-        : extraById.get(id);
+      const emp = hours ? null : extraById.get(id);
+      const clock = clockFieldsForEmployee(
+        id,
+        clockSnapshots.openByEmployee,
+        clockSnapshots.latestByEmployee
+      );
       return {
         employeeId: id,
         name: hours?.name || displayName(emp),
@@ -631,9 +1061,15 @@ async function buildSummarySection({
         serviceCharges: sales.serviceCharges,
         averageCharge: sales.averageCharge,
         totalTipsAndCharges: sales.totalTipsAndCharges,
-        cancellations: sales.cancelledOrders,
+        cancellations: sales.cancelCount,
         waived: sales.waivedOrders,
         cancellationRate: sales.cancellationRate,
+        clockedIn: clock.clockedIn,
+        clockIn: clock.clockIn,
+        clockOut: clock.clockOut,
+        isIncomplete: clock.isIncomplete,
+        attendanceStatus: clock.attendanceStatus,
+        loginDeviceName: clock.loginDeviceName,
       };
     })
     .sort((a, b) => b.sales - a.sales || b.hours - a.hours || a.name.localeCompare(b.name));
@@ -684,7 +1120,14 @@ async function buildSummarySection({
       completedOrders: salesTotals.completedOrders,
       cancelledOrders: salesTotals.cancelledOrders,
       waivedOrders: salesTotals.waivedOrders,
+      cancelCount: salesTotals.cancelCount,
       totalSales: salesTotals.sales,
+      totalStaff: selected ? 1 : performance.length,
+      clockedIn: selected
+        ? performance[0]?.clockedIn
+          ? 1
+          : 0
+        : [...clockSnapshots.openByEmployee.keys()].filter((id) => employeeIds.has(id)).length,
     },
     performance,
     sales: performance.map((row) => ({
@@ -726,6 +1169,7 @@ async function buildSummarySection({
         completed: salesTotals.completedOrders,
         cancelled: salesTotals.cancelledOrders,
         waived: salesTotals.waivedOrders,
+        cancelCount: salesTotals.cancelCount,
       },
       employees: performance.map((row) => ({
         employeeId: row.employeeId,
@@ -814,34 +1258,7 @@ async function buildAttendanceSection({ rid, dateFrom, dateTo, empId, shiftId, p
   ]);
 
   return {
-    rows: rows.map((log) => {
-      const workedMinutes = Number(log.workedMinutes) || 0;
-      const overtimeMinutes = Number(log.overtimeMinutes) || 0;
-      const regularMinutes = Math.max(0, workedMinutes - overtimeMinutes);
-      const template = log.shift?.templateId;
-      return {
-        id: String(log._id),
-        employeeId: log.employee?._id ? String(log.employee._id) : null,
-        employeeName: displayName(log.employee),
-        role: log.employee?.role || "Staff",
-        date: log.date,
-        scheduledShift: template?.name || null,
-        scheduledStart: log.scheduledShiftStart || log.shift?.startTime || null,
-        scheduledEnd: log.scheduledShiftEnd || log.shift?.endTime || null,
-        scheduledMinutes: Number(log.scheduledShiftMinutes) || 0,
-        clockIn: log.loginTime || null,
-        clockOut: log.logoutTime || null,
-        workedMinutes,
-        regularMinutes,
-        overtimeMinutes,
-        workedHours: hoursFromMinutes(workedMinutes),
-        regularHours: hoursFromMinutes(regularMinutes),
-        overtimeHours: hoursFromMinutes(overtimeMinutes),
-        attendanceStatus: log.attendanceStatus,
-        shiftStatus: log.shiftStatus,
-        isIncomplete: Boolean(log.isIncomplete),
-      };
-    }),
+    rows: rows.map((log) => mapAttendanceLog(log)),
     pagination: {
       page,
       limit,
@@ -917,31 +1334,7 @@ async function buildOrdersSection({
   const pageRows = sorted.slice(skip, skip + limit);
 
   return {
-    rows: pageRows.map((order) => {
-      const items = itemSummary(order.items);
-      return {
-        orderId: String(order._id),
-        orderNumber: order.orderNumber,
-        createdAt: order.createdAt,
-        employeeId: order.processedBy ? String(order.processedBy) : null,
-        employeeName: order.processedBy ? nameById.get(String(order.processedBy)) || "Unknown" : "Unassigned",
-        tableNo: order.tableNo || "—",
-        guest: order.partyName || order.guestName || "Walk-in",
-        itemCount: items.itemCount,
-        itemSummary: items.itemSummary,
-        subTotal: r2(order.subTotal),
-        discountTotal: r2(order.discountTotal),
-        taxTotal: r2(order.taxTotal),
-        serviceChargeTotal: r2(order.serviceChargeTotal),
-        tipAmount: r2(order.tipAmount),
-        totalAmount: r2(order.totalAmount),
-        paymentMethod: order.paymentMethod || null,
-        paymentLabel: paymentLabel(order),
-        status: order.status,
-        paymentStatus: order.paymentStatus,
-        waiveReason: order.waiveReason || null,
-      };
-    }),
+    rows: pageRows.map((order) => mapOrderRow(order, nameById)),
     pagination: {
       page,
       limit,
@@ -952,6 +1345,126 @@ async function buildOrdersSection({
       dateFrom,
       dateTo,
       timezone: DEFAULT_RESTAURANT_TIMEZONE,
+    },
+  };
+}
+
+async function buildDetailSection({
+  rid,
+  dateFrom,
+  dateTo,
+  empId,
+  shiftId,
+  orderStatus,
+  paymentMethod,
+}) {
+  if (!empId) {
+    throw Object.assign(new Error("employeeId is required"), { status: 400 });
+  }
+
+  const employee = await Employee.findOne({ _id: empId, restaurant: rid })
+    .select("firstName lastName role employeeId hourlyPaid status lastLoginIP lastLoginAt lastLoginPlatform")
+    .lean();
+
+  if (!employee) {
+    throw Object.assign(new Error("Employee not found"), { status: 404 });
+  }
+
+  const orderMatch = orderDateMatch(rid, dateFrom, dateTo);
+  orderMatch.processedBy = empId;
+  if (orderStatus !== "ALL") orderMatch.status = orderStatus;
+
+  const { start } = businessDateBounds(dateFrom);
+  const { end } = businessDateBounds(dateTo);
+
+  const [attendance, orderDocs, sessions, openLog] = await Promise.all([
+    buildCalendarAttendance({ rid, empId, dateFrom, dateTo, shiftId, employee }),
+    Order.find(orderMatch).select(ORDER_SELECT).sort({ createdAt: -1 }).limit(500).lean(),
+    EmployeeSession.find({
+      restaurant: rid,
+      employee: empId,
+      loginTime: { $gte: start, $lt: end },
+    })
+      .populate("device", "deviceName deviceType")
+      .sort({ loginTime: -1 })
+      .limit(500)
+      .lean(),
+    EmployeeLog.findOne({ restaurant: rid, employee: empId, isIncomplete: true })
+      .select("loginTime attendanceStatus loginDeviceName")
+      .lean(),
+  ]);
+
+  const filteredOrders = orderDocs.filter((order) => matchesPaymentMethod(order, paymentMethod));
+  const nameById = new Map([[String(employee._id), displayName(employee)]]);
+  const sessionRows = sessions.map((session) => mapSession(session));
+  const orders = filteredOrders.map((order) => mapOrderRow(order, nameById));
+  const sales = finalizeMetrics(
+    filteredOrders.reduce((acc, order) => {
+      addOrderMetrics(acc, order);
+      return acc;
+    }, emptyMetrics())
+  );
+  const hours = attendance.reduce(
+    (acc, row) => ({
+      hours: acc.hours + (Number(row.workedHours) || 0),
+      regularHours: acc.regularHours + (Number(row.regularHours) || 0),
+      overtimeHours: acc.overtimeHours + (Number(row.overtimeHours) || 0),
+    }),
+    { hours: 0, regularHours: 0, overtimeHours: 0 }
+  );
+  const hourlyRate = r2(employee.hourlyPaid?.amountPerHour);
+  const overtimeRate = r2(
+    employee.hourlyPaid?.overtimeAmountPerHour ?? employee.hourlyPaid?.amountPerHour
+  );
+  const regularPay = r2(hours.regularHours * hourlyRate);
+  const overtimePay = r2(hours.overtimeHours * overtimeRate);
+
+  return {
+    employee: {
+      id: String(employee._id),
+      name: displayName(employee),
+      role: employee.role || "Staff",
+      employeeCode: employee.employeeId || null,
+      hourlyRate,
+      overtimeRate,
+      clockedIn: Boolean(openLog),
+      clockIn: openLog?.loginTime || attendance.find((row) => row.clockIn)?.clockIn || null,
+      clockOut: openLog ? null : attendance.find((row) => row.clockOut)?.clockOut || null,
+      lastLoginIP: employee.lastLoginIP || null,
+      lastLoginAt: employee.lastLoginAt || null,
+      lastLoginPlatform: employee.lastLoginPlatform || null,
+    },
+    overview: {
+      hours: r2(hours.hours),
+      regularHours: r2(hours.regularHours),
+      overtimeHours: r2(hours.overtimeHours),
+      regularPay,
+      overtimePay,
+      estimatedPay: r2(regularPay + overtimePay),
+      sales: sales.sales,
+      tips: sales.tips,
+      serviceCharges: sales.serviceCharges,
+      totalOrders: sales.totalOrders,
+      completedOrders: sales.completedOrders,
+      cancelledOrders: sales.cancelledOrders,
+      waivedOrders: sales.waivedOrders,
+      cancelCount: sales.cancelCount,
+      aov: sales.aov,
+    },
+    attendance,
+    sessions: sessionRows,
+    orders,
+    cancelledItems: cancelledItemsFromOrders(filteredOrders),
+    attendanceStats: buildAttendanceStats(attendance),
+    charts: {
+      salesOverTime: buildOverTimeSeries(filteredOrders, dateFrom, dateTo),
+      hoursOverTime: buildHoursSeries(attendance, dateFrom, dateTo),
+    },
+    meta: {
+      dateFrom,
+      dateTo,
+      timezone: DEFAULT_RESTAURANT_TIMEZONE,
+      employeeId: String(empId),
     },
   };
 }

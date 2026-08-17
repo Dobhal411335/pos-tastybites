@@ -69,3 +69,54 @@ body {
 .no-native-password-reveal::-ms-clear {
   display: none;
 }
+
+@keyframes sheet-in-right {
+  from { transform: translate3d(100%, 0, 0); }
+  to { transform: translate3d(0, 0, 0); }
+}
+
+@keyframes sheet-out-right {
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(100%, 0, 0); }
+}
+
+@keyframes sheet-overlay-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes sheet-overlay-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes sheet-body-in {
+  from {
+    opacity: 0;
+    transform: translate3d(12px, 0, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.sheet-overlay[data-state="open"] {
+  animation: sheet-overlay-in 280ms ease-out both;
+}
+
+.sheet-overlay[data-state="closed"] {
+  animation: sheet-overlay-out 220ms ease-in both;
+}
+
+.sheet-panel-right[data-state="open"] {
+  animation: sheet-in-right 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.sheet-panel-right[data-state="closed"] {
+  animation: sheet-out-right 280ms ease-in both;
+}
+
+.sheet-body-in {
+  animation: sheet-body-in 380ms ease-out both;
+}

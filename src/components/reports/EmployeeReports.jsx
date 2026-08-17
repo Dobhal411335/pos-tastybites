@@ -2,34 +2,46 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  endOfMonth,
-  endOfWeek,
-  format,
   startOfMonth,
   startOfWeek,
-  subDays,
-  subMonths,
-  subWeeks,
 } from "date-fns";
-import { ArrowUpDown, ChevronLeft, ChevronRight, Loader2, Search, X } from "lucide-react";
 import {
+  CalendarDays,
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  Filter,
+  RefreshCw,
+  Search,
+  Users,
+  Clock,
+  Timer,
+  Wallet,
+  HeartHandshake,
+  Receipt,
+  Banknote,
+} from "lucide-react";
+import { toast } from "sonner";
+import Link from "next/link";
+import {
+  Area,
+  AreaChart,
   Bar,
   BarChart,
-  CartesianGrid,
-  Line,
-  LineChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from "recharts";
-import { toast } from "sonner";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -37,13 +49,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
@@ -53,21 +58,23 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import OrderDetailBody, {
-  STATUS_BADGE,
+import EmployeeProfileSheet from "@/components/reports/employees/EmployeeProfileSheet";
+import {
+  employeeInitials,
+  formatHoursLabel,
+  formatTimeTz,
   money,
-} from "@/components/reports/OrderDetailBody";
+  staffGroup,
+  startOfDay,
+  toYmd,
+} from "@/components/reports/employees/employeeFormat";
 import { PALETTE } from "@/utils/paletteeColor";
 
 const DATE_PRESETS = [
   { value: "today", label: "Today" },
-  { value: "yesterday", label: "Yesterday" },
-  { value: "this_week", label: "This Week" },
-  { value: "last_week", label: "Last Week" },
-  { value: "this_month", label: "This Month" },
-  { value: "last_month", label: "Last Month" },
-  { value: "custom", label: "Custom Range" },
+  { value: "this_week", label: "Week" },
+  { value: "this_month", label: "Month" },
+  { value: "custom", label: "Custom" },
 ];
 
 const STATUS_OPTIONS = [
@@ -87,57 +94,18 @@ const PAYMENT_OPTIONS = [
   { value: "GIFT_CARD", label: "Gift Card" },
 ];
 
-const ATTENDANCE_BADGE = {
-  Present: "bg-emerald-50 text-emerald-700 border-emerald-200",
-  Late: "bg-amber-50 text-amber-700 border-amber-200",
-  Absent: "bg-red-50 text-red-700 border-red-200",
-  "Half Day": "bg-orange-50 text-orange-700 border-orange-200",
-  Leave: "bg-zinc-100 text-zinc-600 border-zinc-200",
-  Holiday: "bg-blue-50 text-blue-700 border-blue-200",
-  "Emergency Duty": "bg-violet-50 text-violet-700 border-violet-200",
-};
-
-const PERFORMANCE_SORTS = [
-  { value: "sales", label: "Sales" },
-  { value: "orders", label: "Orders" },
-  { value: "hours", label: "Hours" },
-  { value: "overtimeHours", label: "Overtime" },
-  { value: "tips", label: "Tips" },
-  { value: "estimatedPay", label: "Estimated Pay" },
-  { value: "cancellations", label: "Cancellations" },
+const STAFF_TABS = [
+  { value: "all", label: "All Staff" },
+  { value: "servers", label: "Servers" },
+  { value: "kitchen", label: "Kitchen" },
 ];
 
-function startOfDay(date = new Date()) {
-  const next = new Date(date);
-  next.setHours(0, 0, 0, 0);
-  return next;
-}
-
-function toYmd(date) {
-  return date ? format(date, "yyyy-MM-dd") : "";
-}
-
 function presetRange(preset, today = startOfDay()) {
-  if (preset === "yesterday") {
-    const yesterday = subDays(today, 1);
-    return { from: yesterday, to: yesterday };
-  }
   if (preset === "this_week") {
     return { from: startOfWeek(today, { weekStartsOn: 1 }), to: today };
   }
-  if (preset === "last_week") {
-    const last = subWeeks(today, 1);
-    return {
-      from: startOfWeek(last, { weekStartsOn: 1 }),
-      to: endOfWeek(last, { weekStartsOn: 1 }),
-    };
-  }
   if (preset === "this_month") {
     return { from: startOfMonth(today), to: today };
-  }
-  if (preset === "last_month") {
-    const last = subMonths(today, 1);
-    return { from: startOfMonth(last), to: endOfMonth(last) };
   }
   return { from: today, to: today };
 }
@@ -145,7 +113,6 @@ function presetRange(preset, today = startOfDay()) {
 function defaultFilters() {
   const today = startOfDay();
   return {
-    employeeId: "ALL",
     preset: "today",
     dateFrom: today,
     dateTo: today,
@@ -155,74 +122,37 @@ function defaultFilters() {
   };
 }
 
-function formatInTz(value, timeZone, options) {
-  if (!value) return "—";
-  return new Intl.DateTimeFormat("en-IN", { timeZone, ...options }).format(new Date(value));
-}
-
-function formatTimeTz(value, timeZone) {
-  return formatInTz(value, timeZone, { hour: "numeric", minute: "2-digit", hour12: true });
-}
-
-function formatDateTz(value, timeZone) {
-  return formatInTz(value, timeZone, { day: "numeric", month: "short", year: "numeric" });
-}
-
-function formatDuration(minutes) {
-  const total = Math.max(0, Math.round(Number(minutes) || 0));
-  const hours = Math.floor(total / 60);
-  const rest = total % 60;
-  if (hours === 0 && rest === 0) return "0h";
-  if (rest === 0) return `${hours}h`;
-  if (hours === 0) return `${rest}m`;
-  return `${hours}h ${rest}m`;
-}
-
-function hoursLabel(value) {
-  return `${Number(value || 0).toLocaleString("en-US", {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
-  })} hrs`;
-}
-
-function filterKey(filters) {
-  return [
-    filters.employeeId,
-    toYmd(filters.dateFrom),
-    toYmd(filters.dateTo),
-    filters.shiftId,
-    filters.orderStatus,
-    filters.paymentMethod,
-  ].join("|");
-}
-
 function syncEmployeeQuery(id) {
   if (typeof window === "undefined") return;
   const url = new URL(window.location.href);
-  if (id && id !== "ALL") url.searchParams.set("employeeId", id);
+  if (id) url.searchParams.set("employeeId", id);
   else url.searchParams.delete("employeeId");
   window.history.replaceState(null, "", `${url.pathname}${url.search}`);
 }
 
-function ChartCard({ title, children, empty }) {
+function KpiCard({ label, value, hint, icon: Icon, accent = false }) {
   return (
-    <div className="border border-zinc-200 rounded-lg bg-white p-3 min-h-52">
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500 mb-2">
-        {title}
-      </p>
-      {empty ? (
-        <div className="h-40 flex items-center justify-center text-sm text-zinc-400">
-          No data available for the selected period.
+    <div className="bg-white border border-zinc-200 shadow-sm rounded-xl p-4 flex flex-col justify-between h-28 relative overflow-hidden">
+      <div className="flex justify-between items-start z-10">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{label}</p>
+        <div
+          className={`w-8 h-8 rounded-full flex items-center justify-center ${
+            accent ? "bg-orange-500 text-white" : "bg-zinc-100 text-zinc-600"
+          }`}
+        >
+          <Icon className="h-4 w-4" />
         </div>
-      ) : (
-        <div className="h-40">{children}</div>
-      )}
+      </div>
+      <div className="z-10">
+        <p className="text-2xl font-semibold text-zinc-900 tabular-nums tracking-tight">{value}</p>
+        {hint ? <p className="text-xs text-zinc-500 mt-0.5">{hint}</p> : null}
+      </div>
     </div>
   );
 }
 
 function ChartTooltip({ active, payload, label, moneyValue = false }) {
-  if (!active || !payload?.length) return null;
+  if (!active || payload?.length === 0) return null;
   const value = payload[0].value;
   return (
     <div className="bg-white border border-zinc-200 rounded-md px-2 py-1 text-xs shadow-sm">
@@ -234,76 +164,99 @@ function ChartTooltip({ active, payload, label, moneyValue = false }) {
   );
 }
 
-function KpiCard({ label, value }) {
+function ClockBadge({ clockedIn }) {
+  if (clockedIn) {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-orange-50 text-orange-700 font-semibold text-[10px] uppercase">
+        <span className="w-1.5 h-1.5 rounded-full bg-orange-600" />
+        Clocked In
+      </span>
+    );
+  }
   return (
-    <div className="bg-white border border-zinc-200 rounded-lg px-3 py-2">
-      <p className="text-[11px] uppercase tracking-wide text-zinc-500">{label}</p>
-      <p className="text-xl font-semibold text-zinc-900 tabular-nums leading-tight mt-0.5">
-        {value}
-      </p>
-    </div>
+    <span className="inline-flex items-center px-2 py-1 rounded-full bg-zinc-100 text-zinc-500 font-semibold text-[10px] uppercase">
+      Clocked Out
+    </span>
   );
 }
 
-function SortHeader({ label, active, onClick, align = "right" }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`inline-flex items-center gap-1 ${align === "right" ? "ml-auto" : ""}`}
-    >
-      {label}
-      <ArrowUpDown className={`w-3 h-3 ${active ? "text-orange-500" : "text-zinc-400"}`} />
-    </button>
+function exportStaffCsv(rows) {
+  const headers = [
+    "Employee",
+    "Role",
+    "Status",
+    "Clock In",
+    "Clock Out",
+    "Hours",
+    "Sales",
+    "Tips",
+    "Service Charges",
+    "Cancels",
+    "Estimated Pay",
+  ];
+  const lines = rows.map((row) =>
+    [
+      row.name,
+      row.role,
+      row.clockedIn ? "Clocked In" : "Clocked Out",
+      row.clockIn || "",
+      row.clockOut || "",
+      row.hours,
+      row.sales,
+      row.tips,
+      row.serviceCharges,
+      row.cancellations,
+      row.estimatedPay,
+    ]
+      .map((value) => `"${String(value ?? "").replace(/"/g, '""')}"`)
+      .join(",")
   );
+  const blob = new Blob([[headers.join(","), ...lines].join("\n")], {
+    type: "text/csv;charset=utf-8;",
+  });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "employee-staff-report.csv";
+  link.click();
+  URL.revokeObjectURL(url);
 }
 
 export default function EmployeeReports() {
   const [draft, setDraft] = useState(defaultFilters);
   const [applied, setApplied] = useState(defaultFilters);
   const [ready, setReady] = useState(false);
-  const [tab, setTab] = useState("overview");
-  const [perfSort, setPerfSort] = useState("sales");
+  const [staffTab, setStaffTab] = useState("all");
+  const [searchInput, setSearchInput] = useState("");
+  const [search, setSearch] = useState("");
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [report, setReport] = useState(null);
 
-  const [attendance, setAttendance] = useState(null);
-  const [attendanceLoading, setAttendanceLoading] = useState(false);
-  const [attendancePage, setAttendancePage] = useState(1);
-
-  const [orders, setOrders] = useState(null);
-  const [ordersLoading, setOrdersLoading] = useState(false);
-  const [ordersPage, setOrdersPage] = useState(1);
-  const [orderSearchInput, setOrderSearchInput] = useState("");
-  const [orderSearch, setOrderSearch] = useState("");
-  const [orderSort, setOrderSort] = useState("createdAt");
-  const [orderSortDir, setOrderSortDir] = useState("desc");
-
-  const [selectedOrderId, setSelectedOrderId] = useState(null);
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState(null);
+  const [selectedEmployee, setSelectedEmployee] = useState(null);
+  const [detail, setDetail] = useState(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [selectedDay, setSelectedDay] = useState(null);
   const [orderDetail, setOrderDetail] = useState(null);
-  const [orderDetailLoading, setOrderDetailLoading] = useState(false);
-  const attendanceCacheKey = useRef("");
-  const ordersCacheKey = useRef("");
+  const [orderLoading, setOrderLoading] = useState(false);
 
-  const appliedKey = filterKey(applied);
+  const performersRef = useRef(null);
+  const pendingEmployeeId = useRef(null);
+
   const timezone = report?.meta?.timezone || "Asia/Kolkata";
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const employeeId = params.get("employeeId");
-    if (employeeId) {
-      setDraft((prev) => ({ ...prev, employeeId }));
-      setApplied((prev) => ({ ...prev, employeeId }));
-    }
+    pendingEmployeeId.current = params.get("employeeId");
     setReady(true);
   }, []);
 
   useEffect(() => {
-    const timer = setTimeout(() => setOrderSearch(orderSearchInput.trim()), 400);
+    const timer = setTimeout(() => setSearch(searchInput.trim().toLowerCase()), 300);
     return () => clearTimeout(timer);
-  }, [orderSearchInput]);
+  }, [searchInput]);
 
   const summaryParams = useCallback(() => {
     const params = new URLSearchParams({
@@ -313,12 +266,7 @@ export default function EmployeeReports() {
       paymentMethod: applied.paymentMethod,
       section: "summary",
     });
-    if (applied.employeeId && applied.employeeId !== "ALL") {
-      params.set("employeeId", applied.employeeId);
-    }
-    if (applied.shiftId && applied.shiftId !== "ALL") {
-      params.set("shiftId", applied.shiftId);
-    }
+    if (applied.shiftId && applied.shiftId !== "ALL") params.set("shiftId", applied.shiftId);
     return params;
   }, [applied]);
 
@@ -333,12 +281,6 @@ export default function EmployeeReports() {
       const json = await res.json();
       if (!json.success) throw new Error(json.message || "Unable to load employee report.");
       setReport(json.data);
-      setAttendance(null);
-      setOrders(null);
-      setAttendancePage(1);
-      setOrdersPage(1);
-      attendanceCacheKey.current = "";
-      ordersCacheKey.current = "";
     } catch (err) {
       setError(err.message || "Unable to load employee report.");
       setReport(null);
@@ -353,113 +295,67 @@ export default function EmployeeReports() {
     fetchSummary();
   }, [ready, fetchSummary]);
 
-  const fetchAttendance = useCallback(
-    async (page = 1) => {
-      setAttendanceLoading(true);
+  const openEmployee = useCallback(
+    async (employeeId, snapshot = null) => {
+      if (!employeeId) return;
+      setSelectedEmployeeId(employeeId);
+      setSelectedEmployee(snapshot);
+      setSelectedDay(null);
+      setOrderDetail(null);
+      setDetail(null);
+      setDetailLoading(true);
+      syncEmployeeQuery(employeeId);
       try {
         const params = summaryParams();
-        params.set("section", "attendance");
-        params.set("page", String(page));
-        params.set("limit", "50");
+        params.set("section", "detail");
+        params.set("employeeId", employeeId);
         const res = await fetch(`/api/admin/reports/employees?${params}`, {
           credentials: "include",
           cache: "no-store",
         });
         const json = await res.json();
-        if (!json.success) throw new Error(json.message || "Unable to load attendance.");
-        setAttendance(json.data);
+        if (!json.success) throw new Error(json.message || "Unable to load employee.");
+        setDetail(json.data);
+        setSelectedEmployee(json.data.employee);
       } catch (err) {
-        toast.error(err.message || "Unable to load attendance.");
+        toast.error(err.message || "Unable to load employee.");
       } finally {
-        setAttendanceLoading(false);
+        setDetailLoading(false);
       }
     },
     [summaryParams]
   );
 
-  const fetchOrders = useCallback(
-    async (page = 1) => {
-      setOrdersLoading(true);
-      try {
-        const params = summaryParams();
-        params.set("section", "orders");
-        params.set("page", String(page));
-        params.set("limit", "25");
-        params.set("sort", orderSort);
-        params.set("sortDir", orderSortDir);
-        if (orderSearch) params.set("search", orderSearch);
-        const res = await fetch(`/api/admin/reports/employees?${params}`, {
-          credentials: "include",
-          cache: "no-store",
-        });
-        const json = await res.json();
-        if (!json.success) throw new Error(json.message || "Unable to load orders.");
-        setOrders(json.data);
-      } catch (err) {
-        toast.error(err.message || "Unable to load orders.");
-      } finally {
-        setOrdersLoading(false);
-      }
-    },
-    [summaryParams, orderSearch, orderSort, orderSortDir]
-  );
-
   useEffect(() => {
-    if (!ready || loading || error) return;
-    if (tab !== "attendance") return;
-    const key = `${appliedKey}|${attendancePage}`;
-    if (attendance && attendanceCacheKey.current === key) return;
-    attendanceCacheKey.current = key;
-    fetchAttendance(attendancePage);
-  }, [tab, appliedKey, attendancePage, attendance, ready, loading, error, fetchAttendance]);
+    if (loading || !report || !pendingEmployeeId.current) return;
+    const id = pendingEmployeeId.current;
+    pendingEmployeeId.current = null;
+    const row = (report.performance || []).find((item) => item.employeeId === id);
+    openEmployee(id, row || null);
+  }, [loading, report, openEmployee]);
 
-  useEffect(() => {
-    if (!ready || loading || error) return;
-    if (tab !== "orders") return;
-    const key = `${appliedKey}|${ordersPage}|${orderSearch}|${orderSort}|${orderSortDir}`;
-    if (orders && ordersCacheKey.current === key) return;
-    ordersCacheKey.current = key;
-    fetchOrders(ordersPage);
-  }, [tab, appliedKey, ordersPage, orderSearch, orderSort, orderSortDir, orders, ready, loading, error, fetchOrders]);
-
-  const applyFilters = () => {
-    setApplied({ ...draft });
-    syncEmployeeQuery(draft.employeeId);
-  };
-
-  const clearFilters = () => {
-    const next = defaultFilters();
+  const applyDraft = (next) => {
     setDraft(next);
     setApplied(next);
-    setOrderSearchInput("");
-    setOrderSearch("");
-    setPerfSort("sales");
-    syncEmployeeQuery("ALL");
   };
-
-  const selectEmployee = (employeeId) => {
-    const nextId = employeeId || "ALL";
-    setDraft((prev) => ({ ...prev, employeeId: nextId }));
-    setApplied((prev) => ({ ...prev, employeeId: nextId }));
-    setTab("overview");
-    syncEmployeeQuery(nextId);
-  };
-
-  const updateDraft = (patch) => setDraft((prev) => ({ ...prev, ...patch }));
 
   const onPresetChange = (preset) => {
     if (preset === "custom") {
-      updateDraft({ preset });
+      setDraft((prev) => ({ ...prev, preset }));
       return;
     }
     const range = presetRange(preset);
-    updateDraft({ preset, dateFrom: startOfDay(range.from), dateTo: startOfDay(range.to) });
+    applyDraft({
+      ...draft,
+      preset,
+      dateFrom: startOfDay(range.from),
+      dateTo: startOfDay(range.to),
+    });
   };
 
   const openOrder = async (orderId) => {
-    setSelectedOrderId(orderId);
     setOrderDetail(null);
-    setOrderDetailLoading(true);
+    setOrderLoading(true);
     try {
       const res = await fetch(`/api/orders/${orderId}`, {
         credentials: "include",
@@ -470,891 +366,572 @@ export default function EmployeeReports() {
       setOrderDetail(json.data);
     } catch (err) {
       toast.error(err.message || "Failed to load order");
-      setSelectedOrderId(null);
     } finally {
-      setOrderDetailLoading(false);
+      setOrderLoading(false);
     }
+  };
+
+  const closeSheet = (open) => {
+    if (open) return;
+    setSelectedEmployeeId(null);
+    setSelectedEmployee(null);
+    setDetail(null);
+    setSelectedDay(null);
+    setOrderDetail(null);
+    syncEmployeeQuery(null);
   };
 
   const overview = report?.overview;
   const performance = report?.performance || [];
-  const charts = report?.charts || {};
-  const employees = report?.filters?.employees || [];
   const shifts = report?.filters?.shifts || [];
-  const selected = report?.selectedEmployee;
-  const hasActivity =
-    Number(overview?.totalHours) > 0 ||
-    Number(overview?.totalOrders) > 0 ||
-    performance.some((row) => row.hours > 0 || row.totalOrders > 0);
 
-  const sortedPerformance = useMemo(() => {
-    const copy = [...performance];
-    copy.sort((a, b) => {
-      const diff = (Number(b[perfSort]) || 0) - (Number(a[perfSort]) || 0);
-      return diff || a.name.localeCompare(b.name);
+  const visibleStaff = useMemo(() => {
+    return performance.filter((row) => {
+      if (staffTab !== "all" && staffGroup(row.role) !== staffTab) return false;
+      if (!search) return true;
+      const haystack = `${row.name} ${row.role} ${row.employeeCode || ""}`.toLowerCase();
+      return haystack.includes(search);
     });
-    return copy;
-  }, [performance, perfSort]);
+  }, [performance, staffTab, search]);
 
-  const rangeLabel = `${format(applied.dateFrom, "d MMM yyyy")} – ${format(applied.dateTo, "d MMM yyyy")}`;
+  const topPerformers = useMemo(() => {
+    return [...performance]
+      .filter((row) => Number(row.sales) > 0 || Number(row.orders) > 0 || Number(row.hours) > 0)
+      .sort((a, b) => b.sales - a.sales || b.hours - a.hours)
+      .slice(0, 8);
+  }, [performance]);
 
-  const toggleOrderSort = (key) => {
-    setOrdersPage(1);
-    if (orderSort === key) {
-      setOrderSortDir((prev) => (prev === "asc" ? "desc" : "asc"));
-      return;
-    }
-    setOrderSort(key);
-    setOrderSortDir(key === "createdAt" ? "desc" : "asc");
+  const maxPerformerSales = Math.max(...topPerformers.map((row) => Number(row.sales) || 0), 1);
+  const clockedIn = Number(overview?.clockedIn) || 0;
+  const totalStaff = Number(overview?.totalStaff || overview?.employees) || 0;
+  const clockedPct = totalStaff > 0 ? Math.round((clockedIn / totalStaff) * 100) : 0;
+  const staffWithTips = performance.filter((row) => Number(row.tips) > 0).length || 1;
+  const charts = report?.charts || {};
+  const salesOverTime = charts.salesOverTime || [];
+  const tipsOverTime = charts.tipsOverTime || [];
+  const salesByEmployee = (charts.salesByEmployee || []).slice(0, 8);
+  const showSalesChart = salesOverTime.some((row) => Number(row.sales) > 0);
+  const showTipsChart = tipsOverTime.some((row) => Number(row.tips) > 0);
+  const showByEmployee = salesByEmployee.some((row) => Number(row.sales) > 0);
+
+  const scrollPerformers = (dir) => {
+    performersRef.current?.scrollBy({ left: dir * 280, behavior: "smooth" });
   };
 
   return (
-    <div className="space-y-4">
-      <div>
-        <h1 className="text-lg font-semibold text-zinc-900">Employee & Staff Reports</h1>
-        <p className="text-sm text-zinc-500">
-          Attendance, pay estimates, sales, tips, and orders from existing clock-in and POS data.
-        </p>
-      </div>
-
-      <div className="bg-white border border-zinc-200 rounded-lg p-3">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8 gap-3 items-end">
-          <div className="space-y-1">
-            <Label className="text-[11px] uppercase tracking-wide text-zinc-500">Employee</Label>
-            <Select
-              value={draft.employeeId}
-              onValueChange={(value) => updateDraft({ employeeId: value })}
-            >
-              <SelectTrigger className="h-9 text-sm">
-                <SelectValue placeholder="All employees" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ALL">All Employees</SelectItem>
-                {employees.map((emp) => (
-                  <SelectItem key={emp.id} value={emp.id}>
-                    {emp.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-1">
-            <Label className="text-[11px] uppercase tracking-wide text-zinc-500">Date Range</Label>
-            <Select value={draft.preset} onValueChange={onPresetChange}>
-              <SelectTrigger className="h-9 text-sm">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {DATE_PRESETS.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-1">
-            <Label className="text-[11px] uppercase tracking-wide text-zinc-500">From</Label>
-            <DatePicker
-              value={draft.dateFrom}
-              onChange={(value) =>
-                value && updateDraft({ preset: "custom", dateFrom: startOfDay(value) })
-              }
-              placeholder="Start date"
-              className="h-9 text-sm"
-            />
-          </div>
-
-          <div className="space-y-1">
-            <Label className="text-[11px] uppercase tracking-wide text-zinc-500">To</Label>
-            <DatePicker
-              value={draft.dateTo}
-              onChange={(value) =>
-                value && updateDraft({ preset: "custom", dateTo: startOfDay(value) })
-              }
-              placeholder="End date"
-              className="h-9 text-sm"
-            />
-          </div>
-
-          <div className="space-y-1">
-            <Label className="text-[11px] uppercase tracking-wide text-zinc-500">Shift</Label>
-            <Select
-              value={draft.shiftId}
-              onValueChange={(value) => updateDraft({ shiftId: value })}
-            >
-              <SelectTrigger className="h-9 text-sm">
-                <SelectValue placeholder="All shifts" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ALL">All shifts</SelectItem>
-                {shifts.map((shift) => (
-                  <SelectItem key={shift.id} value={shift.id}>
-                    {shift.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-1">
-            <Label className="text-[11px] uppercase tracking-wide text-zinc-500">Order Status</Label>
-            <Select
-              value={draft.orderStatus}
-              onValueChange={(value) => updateDraft({ orderStatus: value })}
-            >
-              <SelectTrigger className="h-9 text-sm">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {STATUS_OPTIONS.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-1">
-            <Label className="text-[11px] uppercase tracking-wide text-zinc-500">Payment</Label>
-            <Select
-              value={draft.paymentMethod}
-              onValueChange={(value) => updateDraft({ paymentMethod: value })}
-            >
-              <SelectTrigger className="h-9 text-sm">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {PAYMENT_OPTIONS.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="flex gap-2">
-            <Button type="button" className="h-9 text-xs flex-1" onClick={applyFilters}>
-              Apply Filters
-            </Button>
-            <Button type="button" variant="outline" className="h-9 text-xs" onClick={clearFilters}>
-              <X className="w-3.5 h-3.5 mr-1" />
-              Clear
-            </Button>
-          </div>
+    <div className="flex flex-col w-full gap-6">
+      <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold text-zinc-900 tracking-tight">
+            Employee & Staff Reports
+          </h1>
+          <p className="text-sm text-zinc-500">
+            Employee performance, attendance & sales analytics
+          </p>
         </div>
-      </div>
-
-      {selected ? (
-        <div className="bg-white border border-zinc-200 rounded-lg px-3 py-2 flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <p className="text-sm font-semibold text-zinc-900">{selected.name}</p>
-            <p className="text-xs text-zinc-500">
-              {selected.role}
-              {selected.employeeCode ? ` · ${selected.employeeCode}` : ""} · {rangeLabel}
-            </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex bg-zinc-100 rounded-lg p-1">
+            {DATE_PRESETS.map((option) => (
+              <Button
+                key={option.value}
+                type="button"
+                variant="ghost"
+                size="sm"
+                className={`h-8 px-3 text-xs ${
+                  draft.preset === option.value
+                    ? "bg-white text-zinc-900 shadow-sm"
+                    : "text-zinc-500 hover:text-zinc-900"
+                }`}
+                onClick={() => onPresetChange(option.value)}
+              >
+                {option.label === "Custom" ? (
+                  <span className="inline-flex items-center gap-1">
+                    <CalendarDays className="h-3.5 w-3.5" />
+                    Custom
+                  </span>
+                ) : (
+                  option.label
+                )}
+              </Button>
+            ))}
           </div>
-          <Button
-            type="button"
-            variant="outline"
-            className="h-8 text-xs"
-            onClick={() => selectEmployee("ALL")}
-          >
-            All employees
-          </Button>
-        </div>
-      ) : null}
-
-      {loading ? (
-        <ReportSkeleton />
-      ) : error ? (
-        <div className="bg-white border border-zinc-200 rounded-lg h-48 flex flex-col items-center justify-center gap-3 text-sm text-zinc-500">
-          <p>Unable to load employee report.</p>
-          <Button type="button" variant="outline" className="h-8 text-xs" onClick={fetchSummary}>
-            Retry
-          </Button>
-        </div>
-      ) : !hasActivity && !selected ? (
-        <div className="bg-white border border-zinc-200 rounded-lg h-48 flex items-center justify-center text-sm text-zinc-500">
-          No employee activity found for the selected period.
-        </div>
-      ) : (
-        <Tabs value={tab} onValueChange={setTab} className="space-y-3">
-          <div className="bg-white border border-zinc-200 rounded-lg px-3 pt-3 overflow-x-auto">
-            <TabsList className="h-8">
-              <TabsTrigger value="overview" className="text-xs">Overview</TabsTrigger>
-              <TabsTrigger value="attendance" className="text-xs">Attendance</TabsTrigger>
-              <TabsTrigger value="sales" className="text-xs">Sales Performance</TabsTrigger>
-              <TabsTrigger value="tips" className="text-xs">Tips & Charges</TabsTrigger>
-              <TabsTrigger value="orders" className="text-xs">Orders</TabsTrigger>
-            </TabsList>
-          </div>
-
-          <TabsContent value="overview" className="mt-0 space-y-3">
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
-              <KpiCard label="Employees" value={overview.employees} />
-              <KpiCard label="Total Hours" value={hoursLabel(overview.totalHours)} />
-              <KpiCard label="Regular" value={hoursLabel(overview.regularHours)} />
-              <KpiCard label="Overtime" value={hoursLabel(overview.overtimeHours)} />
-              <KpiCard label="Regular Pay" value={money(overview.regularPay)} />
-              <KpiCard label="Overtime Pay" value={money(overview.overtimePay)} />
-              <KpiCard label="Estimated Pay" value={money(overview.estimatedPay)} />
-              <KpiCard label="Total Sales" value={money(overview.totalSales)} />
-              <KpiCard label="Tips" value={money(overview.totalTips)} />
-              <KpiCard label="Service Charges" value={money(overview.serviceCharges)} />
-              <KpiCard label="Orders" value={overview.totalOrders} />
-              <KpiCard
-                label="Completed / Cancelled"
-                value={`${overview.completedOrders} / ${overview.cancelledOrders}`}
+          {draft.preset === "custom" ? (
+            <div className="flex items-center gap-2 bg-white border border-zinc-200 shadow-sm px-2 py-1.5 rounded-lg">
+              <DatePicker
+                value={draft.dateFrom}
+                onChange={(value) =>
+                  value &&
+                  applyDraft({ ...draft, preset: "custom", dateFrom: startOfDay(value) })
+                }
+                placeholder="From"
+                className="h-8 w-32 border-0 shadow-none px-1 text-sm"
+              />
+              <span className="text-zinc-400 text-xs">–</span>
+              <DatePicker
+                value={draft.dateTo}
+                onChange={(value) =>
+                  value && applyDraft({ ...draft, preset: "custom", dateTo: startOfDay(value) })
+                }
+                placeholder="To"
+                className="h-8 w-32 border-0 shadow-none px-1 text-sm"
               />
             </div>
+          ) : null}
 
-            <div className="bg-white border border-zinc-200 rounded-lg">
-              <div className="px-3 py-2 flex flex-wrap items-center justify-between gap-2 border-b border-zinc-100">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
-                  Employee performance
-                </p>
-                <Select value={perfSort} onValueChange={setPerfSort}>
-                  <SelectTrigger className="h-8 w-44 text-xs">
-                    <SelectValue />
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button type="button" variant="outline" className="h-10 bg-white">
+                <Filter className="h-4 w-4 mr-1.5" />
+                Filter
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-72 space-y-3">
+              <div className="space-y-1">
+                <p className="text-[11px] uppercase tracking-wide text-zinc-500">Shift</p>
+                <Select
+                  value={draft.shiftId}
+                  onValueChange={(value) => setDraft((prev) => ({ ...prev, shiftId: value }))}
+                >
+                  <SelectTrigger className="h-9 text-sm">
+                    <SelectValue placeholder="All shifts" />
                   </SelectTrigger>
                   <SelectContent>
-                    {PERFORMANCE_SORTS.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        Sort by {option.label}
+                    <SelectItem value="ALL">All shifts</SelectItem>
+                    {shifts.map((shift) => (
+                      <SelectItem key={shift.id} value={shift.id}>
+                        {shift.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
-              <PerformanceTable
-                rows={sortedPerformance}
-                sortKey={perfSort}
-                onSort={setPerfSort}
-                onSelect={selectEmployee}
-              />
-            </div>
-          </TabsContent>
+              <div className="space-y-1">
+                <p className="text-[11px] uppercase tracking-wide text-zinc-500">Order status</p>
+                <Select
+                  value={draft.orderStatus}
+                  onValueChange={(value) => setDraft((prev) => ({ ...prev, orderStatus: value }))}
+                >
+                  <SelectTrigger className="h-9 text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {STATUS_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <p className="text-[11px] uppercase tracking-wide text-zinc-500">Payment</p>
+                <Select
+                  value={draft.paymentMethod}
+                  onValueChange={(value) => setDraft((prev) => ({ ...prev, paymentMethod: value }))}
+                >
+                  <SelectTrigger className="h-9 text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PAYMENT_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button type="button" className="w-full h-9 text-xs" onClick={() => setApplied({ ...draft })}>
+                Apply filters
+              </Button>
+            </PopoverContent>
+          </Popover>
 
-          <TabsContent value="attendance" className="mt-0">
-            <div className="bg-white border border-zinc-200 rounded-lg">
-              {attendanceLoading && !attendance ? (
-                <div className="h-48 flex items-center justify-center text-sm text-zinc-500">
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Loading attendance…
-                </div>
-              ) : !attendance?.rows?.length ? (
-                <div className="h-40 flex items-center justify-center text-sm text-zinc-500">
-                  No employee activity found for the selected period.
-                </div>
-              ) : (
+          <Button
+            type="button"
+            variant="outline"
+            className="h-10 bg-white"
+            onClick={() => exportStaffCsv(visibleStaff)}
+            disabled={visibleStaff.length === 0}
+          >
+            <Download className="h-4 w-4 mr-1.5" />
+            Export
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            className="h-10 w-10 p-0 bg-white"
+            onClick={fetchSummary}
+            aria-label="Refresh report"
+          >
+            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+          </Button>
+        </div>
+      </div>
+
+      {loading ? (
+        <ReportSkeleton />
+      ) : error ? (
+        <div className="bg-white border border-zinc-200 rounded-xl h-48 flex flex-col items-center justify-center gap-3 text-sm text-zinc-500">
+          <p>Unable to load employee report.</p>
+          <Button type="button" variant="outline" className="h-8 text-xs" onClick={fetchSummary}>
+            Retry
+          </Button>
+        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-4">
+            <KpiCard label="Total Staff" value={totalStaff} hint="Active" icon={Users} />
+            <KpiCard
+              label="Clocked In"
+              value={
                 <>
-                  <div className="overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow className="hover:bg-transparent">
-                          <TableHead className="text-[11px] uppercase tracking-wide">Employee</TableHead>
-                          <TableHead className="text-[11px] uppercase tracking-wide">Date</TableHead>
-                          <TableHead className="text-[11px] uppercase tracking-wide">Scheduled Shift</TableHead>
-                          <TableHead className="text-[11px] uppercase tracking-wide">Clock In</TableHead>
-                          <TableHead className="text-[11px] uppercase tracking-wide">Clock Out</TableHead>
-                          <TableHead className="text-[11px] uppercase tracking-wide text-right">Worked</TableHead>
-                          <TableHead className="text-[11px] uppercase tracking-wide text-right">Regular</TableHead>
-                          <TableHead className="text-[11px] uppercase tracking-wide text-right">Overtime</TableHead>
-                          <TableHead className="text-[11px] uppercase tracking-wide">Status</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {attendance.rows.map((row) => (
-                          <TableRow
-                            key={row.id}
-                            className="cursor-pointer"
-                            onClick={() => row.employeeId && selectEmployee(row.employeeId)}
-                          >
-                            <TableCell className="text-sm font-medium whitespace-nowrap">
-                              {row.employeeName}
-                            </TableCell>
-                            <TableCell className="text-sm whitespace-nowrap">
-                              {formatDateTz(row.date || row.clockIn, timezone)}
-                            </TableCell>
-                            <TableCell className="text-sm whitespace-nowrap">
-                              {row.scheduledShift ? `${row.scheduledShift} · ` : ""}
-                              {row.scheduledStart
-                                ? `${formatTimeTz(row.scheduledStart, timezone)} – ${formatTimeTz(row.scheduledEnd, timezone)}`
-                                : "—"}
-                            </TableCell>
-                            <TableCell className="text-sm whitespace-nowrap">
-                              {formatTimeTz(row.clockIn, timezone)}
-                            </TableCell>
-                            <TableCell className="text-sm whitespace-nowrap">
-                              {row.isIncomplete ? "—" : formatTimeTz(row.clockOut, timezone)}
-                            </TableCell>
-                            <TableCell className="text-sm text-right whitespace-nowrap">
-                              {row.isIncomplete ? "—" : formatDuration(row.workedMinutes)}
-                            </TableCell>
-                            <TableCell className="text-sm text-right whitespace-nowrap">
-                              {row.isIncomplete ? "—" : formatDuration(row.regularMinutes)}
-                            </TableCell>
-                            <TableCell className="text-sm text-right whitespace-nowrap">
-                              {row.isIncomplete ? "—" : formatDuration(row.overtimeMinutes)}
-                            </TableCell>
-                            <TableCell>
-                              <Badge
-                                variant="outline"
-                                className={`text-[10px] ${ATTENDANCE_BADGE[row.attendanceStatus] || "bg-zinc-50 text-zinc-600"}`}
-                              >
-                                {row.isIncomplete ? `${row.attendanceStatus} · Open` : row.attendanceStatus}
-                              </Badge>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                  <PaginationBar
-                    pagination={attendance.pagination}
-                    loading={attendanceLoading}
-                    onPage={setAttendancePage}
-                  />
+                  {clockedIn}
+                  <span className="text-base font-normal text-zinc-400">/{totalStaff}</span>
                 </>
-              )}
-            </div>
-          </TabsContent>
+              }
+              hint={`${clockedPct}%`}
+              icon={Clock}
+            />
+            <KpiCard
+              label="Working Hrs"
+              value={formatHoursLabel(overview?.totalHours)}
+              hint={`OT ${formatHoursLabel(overview?.overtimeHours)}`}
+              icon={Timer}
+            />
+            <KpiCard
+              label="Est. Pay"
+              value={money(overview?.estimatedPay)}
+              hint={`Reg ${money(overview?.regularPay)} · OT ${money(overview?.overtimePay)}`}
+              icon={Banknote}
+            />
+            <KpiCard
+              label="Total Sales"
+              value={money(overview?.totalSales)}
+              hint={`${overview?.completedOrders || 0} orders`}
+              icon={Wallet}
+              accent
+            />
+            <KpiCard
+              label="Total Tips"
+              value={money(overview?.totalTips)}
+              hint={`Avg ${money((Number(overview?.totalTips) || 0) / staffWithTips)}/staff`}
+              icon={HeartHandshake}
+            />
+            <KpiCard
+              label="Svc Charges"
+              value={money(overview?.serviceCharges)}
+              hint="On paid orders"
+              icon={Receipt}
+            />
+          </div>
 
-          <TabsContent value="sales" className="mt-0 space-y-3">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <ChartCard
-                title="Sales by Employee"
-                empty={!charts.salesByEmployee?.some((row) => Number(row.sales) > 0)}
-              >
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={charts.salesByEmployee} layout="vertical" margin={{ left: 8 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f4f4f5" />
-                    <XAxis type="number" tick={{ fontSize: 10, fill: "#71717a" }} />
-                    <YAxis type="category" dataKey="label" width={88} tick={{ fontSize: 10, fill: "#71717a" }} />
-                    <Tooltip content={<ChartTooltip moneyValue />} />
-                    <Bar dataKey="sales" fill={PALETTE.accent} radius={[0, 4, 4, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </ChartCard>
-              <ChartCard
-                title="Sales Over Time"
-                empty={!charts.salesOverTime?.some((row) => Number(row.sales) > 0)}
-              >
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={charts.salesOverTime}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f4f4f5" />
-                    <XAxis dataKey="label" tick={{ fontSize: 10, fill: "#71717a" }} />
-                    <YAxis tick={{ fontSize: 10, fill: "#71717a" }} width={42} />
-                    <Tooltip content={<ChartTooltip moneyValue />} />
-                    <Line type="monotone" dataKey="sales" stroke={PALETTE.accent} strokeWidth={2} dot={false} />
-                  </LineChart>
-                </ResponsiveContainer>
-              </ChartCard>
-              <ChartCard
-                title="Orders by Employee"
-                empty={!charts.ordersByEmployee?.some((row) => Number(row.orders) > 0)}
-              >
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={charts.ordersByEmployee} layout="vertical" margin={{ left: 8 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f4f4f5" />
-                    <XAxis type="number" allowDecimals={false} tick={{ fontSize: 10, fill: "#71717a" }} />
-                    <YAxis type="category" dataKey="label" width={88} tick={{ fontSize: 10, fill: "#71717a" }} />
-                    <Tooltip content={<ChartTooltip />} />
-                    <Bar dataKey="orders" fill="#3b82f6" radius={[0, 4, 4, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </ChartCard>
-              <ChartCard
-                title="Average Order Value by Employee"
-                empty={!charts.aovByEmployee?.some((row) => Number(row.aov) > 0)}
-              >
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={charts.aovByEmployee} layout="vertical" margin={{ left: 8 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f4f4f5" />
-                    <XAxis type="number" tick={{ fontSize: 10, fill: "#71717a" }} />
-                    <YAxis type="category" dataKey="label" width={88} tick={{ fontSize: 10, fill: "#71717a" }} />
-                    <Tooltip content={<ChartTooltip moneyValue />} />
-                    <Bar dataKey="aov" fill="#10b981" radius={[0, 4, 4, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </ChartCard>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <div className="bg-white border border-zinc-200 shadow-sm rounded-xl p-4">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500 mb-2">
+                Sales over time
+              </p>
+              <div className="h-40">
+                {showSalesChart ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={salesOverTime}>
+                      <XAxis dataKey="label" tick={{ fontSize: 10, fill: "#71717a" }} />
+                      <YAxis tick={{ fontSize: 10, fill: "#71717a" }} width={40} />
+                      <Tooltip content={<ChartTooltip moneyValue />} />
+                      <Area
+                        type="monotone"
+                        dataKey="sales"
+                        stroke={PALETTE.accent}
+                        fill="#FFEDD5"
+                        strokeWidth={2}
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="h-full flex items-center justify-center text-sm text-zinc-400">
+                    No sales in this period.
+                  </div>
+                )}
+              </div>
             </div>
+            <div className="bg-white border border-zinc-200 shadow-sm rounded-xl p-4">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500 mb-2">
+                Tips over time
+              </p>
+              <div className="h-40">
+                {showTipsChart ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={tipsOverTime}>
+                      <XAxis dataKey="label" tick={{ fontSize: 10, fill: "#71717a" }} />
+                      <YAxis tick={{ fontSize: 10, fill: "#71717a" }} width={40} />
+                      <Tooltip content={<ChartTooltip moneyValue />} />
+                      <Area
+                        type="monotone"
+                        dataKey="tips"
+                        stroke="#3b82f6"
+                        fill="#DBEAFE"
+                        strokeWidth={2}
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="h-full flex items-center justify-center text-sm text-zinc-400">
+                    No tips in this period.
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="bg-white border border-zinc-200 shadow-sm rounded-xl p-4">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500 mb-2">
+                Sales by employee
+              </p>
+              <div className="h-40">
+                {showByEmployee ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={salesByEmployee} layout="vertical" margin={{ left: 8 }}>
+                      <XAxis type="number" hide />
+                      <YAxis
+                        type="category"
+                        dataKey="label"
+                        tick={{ fontSize: 10, fill: "#71717a" }}
+                        width={72}
+                      />
+                      <Tooltip content={<ChartTooltip moneyValue />} />
+                      <Bar dataKey="sales" fill={PALETTE.accent} radius={[0, 4, 4, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="h-full flex items-center justify-center text-sm text-zinc-400">
+                    No employee sales in this period.
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
 
-            <div className="bg-white border border-zinc-200 rounded-lg overflow-x-auto">
+          {topPerformers.length > 0 ? (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold text-zinc-900">Top Performers</h2>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-8 w-8 p-0 rounded-full bg-white"
+                    onClick={() => scrollPerformers(-1)}
+                    aria-label="Previous performers"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-8 w-8 p-0 rounded-full bg-white"
+                    onClick={() => scrollPerformers(1)}
+                    aria-label="Next performers"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+              <div
+                ref={performersRef}
+                className="flex gap-4 overflow-x-auto pb-1 snap-x"
+              >
+                {topPerformers.map((row, index) => {
+                  const kitchen = staffGroup(row.role) === "kitchen";
+                  const width = Math.max(8, Math.round(((Number(row.sales) || 0) / maxPerformerSales) * 100));
+                  return (
+                    <button
+                      key={row.employeeId}
+                      type="button"
+                      onClick={() => openEmployee(row.employeeId, row)}
+                      className={`bg-white rounded-xl shadow-sm border p-4 w-64 shrink-0 snap-start text-left hover:-translate-y-0.5 transition-transform relative ${
+                        index === 0 ? "border-orange-500" : "border-zinc-200"
+                      }`}
+                    >
+                      <div
+                        className={`absolute -top-2.5 -right-2.5 w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-semibold shadow-sm ${
+                          index === 0 ? "bg-orange-500 text-white" : "bg-zinc-200 text-zinc-700"
+                        }`}
+                      >
+                        {index + 1}
+                      </div>
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className="w-12 h-12 rounded-full bg-orange-100 text-orange-800 flex items-center justify-center font-semibold shrink-0">
+                          {employeeInitials(row.name)}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="font-semibold text-zinc-900 truncate">{row.name}</p>
+                          <p className="text-xs text-zinc-500 truncate">{row.role}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between text-sm mb-1">
+                        <span className="text-zinc-500">{kitchen ? "Orders" : "Sales"}</span>
+                        <span className="font-semibold tabular-nums">
+                          {kitchen ? row.orders : money(row.sales)}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-sm mb-3">
+                        <span className="text-zinc-500">{kitchen ? "Hours" : "Tips"}</span>
+                        <span className="font-semibold tabular-nums">
+                          {kitchen ? formatHoursLabel(row.hours) : money(row.tips)}
+                        </span>
+                      </div>
+                      <div className="w-full bg-zinc-100 h-2 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full ${index === 0 ? "bg-orange-500" : "bg-zinc-400"}`}
+                          style={{ width: `${width}%` }}
+                        />
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
+
+          <div className="bg-white border border-zinc-200 shadow-sm rounded-xl overflow-hidden">
+            <div className="p-3 flex flex-wrap items-center justify-between gap-3 bg-zinc-50/80">
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex bg-zinc-100 rounded-lg p-1">
+                  {STAFF_TABS.map((tab) => (
+                    <Button
+                      key={tab.value}
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className={`h-8 px-3 text-xs ${
+                        staffTab === tab.value
+                          ? "bg-white text-zinc-900 shadow-sm"
+                          : "text-zinc-500"
+                      }`}
+                      onClick={() => setStaffTab(tab.value)}
+                    >
+                      {tab.label}
+                    </Button>
+                  ))}
+                </div>
+                <div className="relative w-64">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+                  <Input
+                    value={searchInput}
+                    onChange={(event) => setSearchInput(event.target.value)}
+                    placeholder="Search employee..."
+                    className="h-9 pl-8 text-sm bg-white"
+                  />
+                </div>
+              </div>
+              <Button type="button" variant="link" className="h-8 px-0 text-orange-700" asChild>
+                <Link href="/admin/employee/shifts">
+                  View Full Schedule
+                  <ChevronRight className="h-4 w-4 ml-1" />
+                </Link>
+              </Button>
+            </div>
+            <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
-                  <TableRow className="hover:bg-transparent">
+                  <TableRow className="hover:bg-transparent bg-zinc-50">
                     <TableHead className="text-[11px] uppercase tracking-wide">Employee</TableHead>
-                    <TableHead className="text-[11px] uppercase tracking-wide text-right">Orders</TableHead>
-                    <TableHead className="text-[11px] uppercase tracking-wide text-right">Completed</TableHead>
+                    <TableHead className="text-[11px] uppercase tracking-wide">Status</TableHead>
+                    <TableHead className="text-[11px] uppercase tracking-wide">Clock In/Out</TableHead>
+                    <TableHead className="text-[11px] uppercase tracking-wide text-right">Hrs</TableHead>
                     <TableHead className="text-[11px] uppercase tracking-wide text-right">Sales</TableHead>
-                    <TableHead className="text-[11px] uppercase tracking-wide text-right">Avg Order</TableHead>
-                    <TableHead className="text-[11px] uppercase tracking-wide text-right">Discount</TableHead>
-                    <TableHead className="text-[11px] uppercase tracking-wide text-right">Cancelled</TableHead>
-                    <TableHead className="text-[11px] uppercase tracking-wide text-right">Waived</TableHead>
+                    <TableHead className="text-[11px] uppercase tracking-wide text-right">Tips</TableHead>
+                    <TableHead className="text-[11px] uppercase tracking-wide text-right">Svc</TableHead>
+                    <TableHead className="text-[11px] uppercase tracking-wide text-right">Cancels</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {(report.sales || []).length === 0 ? (
+                  {visibleStaff.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={8} className="text-sm text-zinc-500 text-center py-8">
-                        No data available for the selected period.
+                      <TableCell colSpan={8} className="text-sm text-zinc-500 text-center py-10">
+                        No employees match the current filters.
                       </TableCell>
                     </TableRow>
                   ) : (
-                    report.sales.map((row) => (
+                    visibleStaff.map((row) => (
                       <TableRow
                         key={row.employeeId}
-                        className="cursor-pointer"
-                        onClick={() => selectEmployee(row.employeeId)}
+                        className={`cursor-pointer ${row.clockedIn ? "" : "opacity-70"}`}
+                        onClick={() => openEmployee(row.employeeId, row)}
                       >
-                        <TableCell className="text-sm font-medium whitespace-nowrap">
-                          {row.name}
-                          <span className="ml-2 text-[11px] font-normal text-zinc-400">{row.role}</span>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 rounded-full bg-zinc-100 text-zinc-700 flex items-center justify-center text-xs font-semibold shrink-0">
+                              {employeeInitials(row.name)}
+                            </div>
+                            <div>
+                              <p className="text-sm font-semibold text-zinc-900">{row.name}</p>
+                              <p className="text-xs text-zinc-500">{row.role}</p>
+                            </div>
+                          </div>
                         </TableCell>
-                        <TableCell className="text-sm text-right">{row.totalOrders}</TableCell>
-                        <TableCell className="text-sm text-right">{row.completedOrders}</TableCell>
-                        <TableCell className="text-sm text-right whitespace-nowrap">{money(row.sales)}</TableCell>
-                        <TableCell className="text-sm text-right whitespace-nowrap">{money(row.aov)}</TableCell>
-                        <TableCell className="text-sm text-right whitespace-nowrap">{money(row.discounts)}</TableCell>
-                        <TableCell className="text-sm text-right">{row.cancelledOrders}</TableCell>
-                        <TableCell className="text-sm text-right">{row.waivedOrders}</TableCell>
+                        <TableCell>
+                          <ClockBadge clockedIn={row.clockedIn} />
+                        </TableCell>
+                        <TableCell>
+                          <p className="text-sm tabular-nums">{formatTimeTz(row.clockIn, timezone)}</p>
+                          <p className="text-xs text-zinc-400 tabular-nums">
+                            {row.clockedIn ? "—" : formatTimeTz(row.clockOut, timezone)}
+                          </p>
+                        </TableCell>
+                        <TableCell className="text-right text-sm tabular-nums">
+                          {formatHoursLabel(row.hours)}
+                        </TableCell>
+                        <TableCell className="text-right text-sm tabular-nums">{money(row.sales)}</TableCell>
+                        <TableCell className="text-right text-sm tabular-nums">{money(row.tips)}</TableCell>
+                        <TableCell className="text-right text-sm tabular-nums">{money(row.serviceCharges)}</TableCell>
+                        <TableCell className="text-right text-sm tabular-nums">{row.cancellations}</TableCell>
                       </TableRow>
                     ))
                   )}
                 </TableBody>
               </Table>
             </div>
-          </TabsContent>
-
-          <TabsContent value="tips" className="mt-0 space-y-3">
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              <KpiCard label="Total Tips" value={money(report.tips?.totals?.tips)} />
-              <KpiCard label="Average Tip" value={money(report.tips?.totals?.averageTip)} />
-              <KpiCard label="Service Charges" value={money(report.tips?.totals?.serviceCharges)} />
-              <KpiCard label="Tips + Charges" value={money(report.tips?.totals?.totalTipsAndCharges)} />
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <ChartCard
-                title="Tips by Employee"
-                empty={!charts.tipsByEmployee?.some((row) => Number(row.tips) > 0)}
-              >
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={charts.tipsByEmployee} layout="vertical" margin={{ left: 8 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f4f4f5" />
-                    <XAxis type="number" tick={{ fontSize: 10, fill: "#71717a" }} />
-                    <YAxis type="category" dataKey="label" width={88} tick={{ fontSize: 10, fill: "#71717a" }} />
-                    <Tooltip content={<ChartTooltip moneyValue />} />
-                    <Bar dataKey="tips" fill={PALETTE.accent} radius={[0, 4, 4, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </ChartCard>
-              <ChartCard
-                title="Tips Over Time"
-                empty={!charts.tipsOverTime?.some((row) => Number(row.tips) > 0)}
-              >
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={charts.tipsOverTime}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f4f4f5" />
-                    <XAxis dataKey="label" tick={{ fontSize: 10, fill: "#71717a" }} />
-                    <YAxis tick={{ fontSize: 10, fill: "#71717a" }} width={42} />
-                    <Tooltip content={<ChartTooltip moneyValue />} />
-                    <Line type="monotone" dataKey="tips" stroke={PALETTE.accent} strokeWidth={2} dot={false} />
-                  </LineChart>
-                </ResponsiveContainer>
-              </ChartCard>
-              <ChartCard
-                title="Service Charges by Employee"
-                empty={!charts.serviceChargesByEmployee?.some((row) => Number(row.serviceCharges) > 0)}
-              >
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={charts.serviceChargesByEmployee} layout="vertical" margin={{ left: 8 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f4f4f5" />
-                    <XAxis type="number" tick={{ fontSize: 10, fill: "#71717a" }} />
-                    <YAxis type="category" dataKey="label" width={88} tick={{ fontSize: 10, fill: "#71717a" }} />
-                    <Tooltip content={<ChartTooltip moneyValue />} />
-                    <Bar dataKey="serviceCharges" fill="#8b5cf6" radius={[0, 4, 4, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </ChartCard>
-              <ChartCard
-                title="Service Charges Over Time"
-                empty={!charts.serviceChargesOverTime?.some((row) => Number(row.serviceCharges) > 0)}
-              >
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={charts.serviceChargesOverTime}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f4f4f5" />
-                    <XAxis dataKey="label" tick={{ fontSize: 10, fill: "#71717a" }} />
-                    <YAxis tick={{ fontSize: 10, fill: "#71717a" }} width={42} />
-                    <Tooltip content={<ChartTooltip moneyValue />} />
-                    <Line type="monotone" dataKey="serviceCharges" stroke="#8b5cf6" strokeWidth={2} dot={false} />
-                  </LineChart>
-                </ResponsiveContainer>
-              </ChartCard>
-            </div>
-            <div className="bg-white border border-zinc-200 rounded-lg overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow className="hover:bg-transparent">
-                    <TableHead className="text-[11px] uppercase tracking-wide">Employee</TableHead>
-                    <TableHead className="text-[11px] uppercase tracking-wide text-right">Orders</TableHead>
-                    <TableHead className="text-[11px] uppercase tracking-wide text-right">Tips</TableHead>
-                    <TableHead className="text-[11px] uppercase tracking-wide text-right">Average Tip</TableHead>
-                    <TableHead className="text-[11px] uppercase tracking-wide text-right">Service Charges</TableHead>
-                    <TableHead className="text-[11px] uppercase tracking-wide text-right">Average Charge</TableHead>
-                    <TableHead className="text-[11px] uppercase tracking-wide text-right">Tips + Charges</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {(report.tips?.employees || []).map((row) => (
-                    <TableRow
-                      key={row.employeeId}
-                      className="cursor-pointer"
-                      onClick={() => selectEmployee(row.employeeId)}
-                    >
-                      <TableCell className="text-sm font-medium whitespace-nowrap">{row.name}</TableCell>
-                      <TableCell className="text-sm text-right">{row.orders}</TableCell>
-                      <TableCell className="text-sm text-right whitespace-nowrap">{money(row.tips)}</TableCell>
-                      <TableCell className="text-sm text-right whitespace-nowrap">{money(row.averageTip)}</TableCell>
-                      <TableCell className="text-sm text-right whitespace-nowrap">{money(row.serviceCharges)}</TableCell>
-                      <TableCell className="text-sm text-right whitespace-nowrap">{money(row.averageCharge)}</TableCell>
-                      <TableCell className="text-sm text-right font-semibold whitespace-nowrap">
-                        {money(row.totalTipsAndCharges)}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          </TabsContent>
-
-          <TabsContent value="orders" className="mt-0 space-y-3">
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              <KpiCard label="Total Orders" value={report.cancellations?.totals?.totalOrders || 0} />
-              <KpiCard label="Completed" value={report.cancellations?.totals?.completed || 0} />
-              <KpiCard label="Cancelled" value={report.cancellations?.totals?.cancelled || 0} />
-              <KpiCard label="Waived" value={report.cancellations?.totals?.waived || 0} />
-            </div>
-
-            <div className="bg-white border border-zinc-200 rounded-lg overflow-x-auto">
-              <div className="px-3 py-2 border-b border-zinc-100">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
-                  Cancellation breakdown
-                </p>
-              </div>
-              <Table>
-                <TableHeader>
-                  <TableRow className="hover:bg-transparent">
-                    <TableHead className="text-[11px] uppercase tracking-wide">Employee</TableHead>
-                    <TableHead className="text-[11px] uppercase tracking-wide text-right">Total Orders</TableHead>
-                    <TableHead className="text-[11px] uppercase tracking-wide text-right">Cancelled</TableHead>
-                    <TableHead className="text-[11px] uppercase tracking-wide text-right">Waived</TableHead>
-                    <TableHead className="text-[11px] uppercase tracking-wide text-right">Cancellation Rate</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {(report.cancellations?.employees || []).map((row) => (
-                    <TableRow
-                      key={row.employeeId}
-                      className="cursor-pointer"
-                      onClick={() => selectEmployee(row.employeeId)}
-                    >
-                      <TableCell className="text-sm font-medium whitespace-nowrap">{row.name}</TableCell>
-                      <TableCell className="text-sm text-right">{row.totalOrders}</TableCell>
-                      <TableCell className="text-sm text-right">{row.cancelled}</TableCell>
-                      <TableCell className="text-sm text-right">{row.waived}</TableCell>
-                      <TableCell className="text-sm text-right">{row.cancellationRate}%</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-
-            <div className="bg-white border border-zinc-200 rounded-lg">
-              <div className="px-3 py-2 flex flex-wrap items-center gap-2 border-b border-zinc-100">
-                <div className="relative flex-1 min-w-48">
-                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-400" />
-                  <Input
-                    value={orderSearchInput}
-                    onChange={(event) => {
-                      setOrderSearchInput(event.target.value);
-                      setOrdersPage(1);
-                    }}
-                    placeholder="Search order number"
-                    className="h-8 pl-8 text-sm"
-                  />
-                </div>
-              </div>
-              {ordersLoading && !orders ? (
-                <div className="h-48 flex items-center justify-center text-sm text-zinc-500">
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Loading orders…
-                </div>
-              ) : !orders?.rows?.length ? (
-                <div className="h-40 flex items-center justify-center text-sm text-zinc-500">
-                  No employee activity found for the selected period.
-                </div>
-              ) : (
-                <>
-                  <div className="overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow className="hover:bg-transparent">
-                          <TableHead className="text-[11px] uppercase tracking-wide">
-                            <button type="button" onClick={() => toggleOrderSort("orderNumber")}>
-                              Order #
-                            </button>
-                          </TableHead>
-                          <TableHead className="text-[11px] uppercase tracking-wide">
-                            <button type="button" onClick={() => toggleOrderSort("createdAt")}>
-                              Date
-                            </button>
-                          </TableHead>
-                          <TableHead className="text-[11px] uppercase tracking-wide">Time</TableHead>
-                          <TableHead className="text-[11px] uppercase tracking-wide">
-                            <button type="button" onClick={() => toggleOrderSort("employee")}>
-                              Employee
-                            </button>
-                          </TableHead>
-                          <TableHead className="text-[11px] uppercase tracking-wide">Table</TableHead>
-                          <TableHead className="text-[11px] uppercase tracking-wide">Guest</TableHead>
-                          <TableHead className="text-[11px] uppercase tracking-wide">Items</TableHead>
-                          <TableHead className="text-[11px] uppercase tracking-wide text-right">Subtotal</TableHead>
-                          <TableHead className="text-[11px] uppercase tracking-wide text-right">Discount</TableHead>
-                          <TableHead className="text-[11px] uppercase tracking-wide text-right">Tax</TableHead>
-                          <TableHead className="text-[11px] uppercase tracking-wide text-right">
-                            <button type="button" onClick={() => toggleOrderSort("totalAmount")}>
-                              Total
-                            </button>
-                          </TableHead>
-                          <TableHead className="text-[11px] uppercase tracking-wide">Payment</TableHead>
-                          <TableHead className="text-[11px] uppercase tracking-wide">
-                            <button type="button" onClick={() => toggleOrderSort("status")}>
-                              Status
-                            </button>
-                          </TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {orders.rows.map((row) => (
-                          <TableRow
-                            key={row.orderId}
-                            className="cursor-pointer"
-                            onClick={() => openOrder(row.orderId)}
-                          >
-                            <TableCell className="text-sm font-medium whitespace-nowrap">
-                              {row.orderNumber}
-                            </TableCell>
-                            <TableCell className="text-sm whitespace-nowrap">
-                              {formatDateTz(row.createdAt, timezone)}
-                            </TableCell>
-                            <TableCell className="text-sm whitespace-nowrap">
-                              {formatTimeTz(row.createdAt, timezone)}
-                            </TableCell>
-                            <TableCell className="text-sm whitespace-nowrap">{row.employeeName}</TableCell>
-                            <TableCell className="text-sm">{row.tableNo}</TableCell>
-                            <TableCell className="text-sm whitespace-nowrap">{row.guest}</TableCell>
-                            <TableCell className="text-sm min-w-40">
-                              <span className="text-zinc-500 mr-1">{row.itemCount}</span>
-                              {row.itemSummary || "—"}
-                            </TableCell>
-                            <TableCell className="text-sm text-right whitespace-nowrap">{money(row.subTotal)}</TableCell>
-                            <TableCell className="text-sm text-right whitespace-nowrap">{money(row.discountTotal)}</TableCell>
-                            <TableCell className="text-sm text-right whitespace-nowrap">{money(row.taxTotal)}</TableCell>
-                            <TableCell className="text-sm text-right font-semibold whitespace-nowrap">
-                              {money(row.totalAmount)}
-                            </TableCell>
-                            <TableCell className="text-sm whitespace-nowrap">{row.paymentLabel || "—"}</TableCell>
-                            <TableCell>
-                              <div className="space-y-1">
-                                <Badge
-                                  variant="outline"
-                                  className={`text-[10px] ${STATUS_BADGE[row.status] || "bg-zinc-50 text-zinc-600"}`}
-                                >
-                                  {row.status}
-                                </Badge>
-                                {row.waiveReason ? (
-                                  <p className="text-[10px] text-zinc-500 max-w-36 truncate" title={row.waiveReason}>
-                                    {row.waiveReason}
-                                  </p>
-                                ) : null}
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                  <PaginationBar
-                    pagination={orders.pagination}
-                    loading={ordersLoading}
-                    onPage={(page) => setOrdersPage(page)}
-                  />
-                </>
-              )}
-            </div>
-          </TabsContent>
-        </Tabs>
+          </div>
+        </>
       )}
 
-      <Sheet
-        open={Boolean(selectedOrderId)}
-        onOpenChange={(open) => {
-          if (!open) {
-            setSelectedOrderId(null);
-            setOrderDetail(null);
-          }
+      <EmployeeProfileSheet
+        open={Boolean(selectedEmployeeId)}
+        onOpenChange={closeSheet}
+        employee={selectedEmployee}
+        detail={detail}
+        loading={detailLoading}
+        timezone={timezone}
+        selectedDay={selectedDay}
+        onSelectDay={setSelectedDay}
+        onBackToEmployee={() => {
+          setSelectedDay(null);
+          setOrderDetail(null);
         }}
-      >
-        <SheetContent className="sm:max-w-lg w-full overflow-y-auto">
-          <SheetHeader>
-            <SheetTitle className="text-base">
-              {orderDetail?.orderNumber || "Order"}
-            </SheetTitle>
-            <SheetDescription>Existing order details</SheetDescription>
-          </SheetHeader>
-          {orderDetailLoading ? (
-            <div className="py-10 flex justify-center text-sm text-zinc-500">
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              Loading order…
-            </div>
-          ) : orderDetail ? (
-            <OrderDetailBody order={orderDetail} />
-          ) : null}
-        </SheetContent>
-      </Sheet>
-    </div>
-  );
-}
-
-function PerformanceTable({ rows, sortKey, onSort, onSelect }) {
-  if (!rows.length) {
-    return (
-      <div className="h-32 flex items-center justify-center text-sm text-zinc-500">
-        No employee activity found for the selected period.
-      </div>
-    );
-  }
-
-  return (
-    <div className="overflow-x-auto">
-      <Table>
-        <TableHeader>
-          <TableRow className="hover:bg-transparent">
-            <TableHead className="text-[11px] uppercase tracking-wide">Employee</TableHead>
-            <TableHead className="text-[11px] uppercase tracking-wide">Role</TableHead>
-            <TableHead className="text-[11px] uppercase tracking-wide text-right">
-              <SortHeader label="Hours" active={sortKey === "hours"} onClick={() => onSort("hours")} />
-            </TableHead>
-            <TableHead className="text-[11px] uppercase tracking-wide text-right">
-              <SortHeader label="OT" active={sortKey === "overtimeHours"} onClick={() => onSort("overtimeHours")} />
-            </TableHead>
-            <TableHead className="text-[11px] uppercase tracking-wide text-right">
-              <SortHeader label="Sales" active={sortKey === "sales"} onClick={() => onSort("sales")} />
-            </TableHead>
-            <TableHead className="text-[11px] uppercase tracking-wide text-right">
-              <SortHeader label="Orders" active={sortKey === "orders"} onClick={() => onSort("orders")} />
-            </TableHead>
-            <TableHead className="text-[11px] uppercase tracking-wide text-right">
-              <SortHeader label="Tips" active={sortKey === "tips"} onClick={() => onSort("tips")} />
-            </TableHead>
-            <TableHead className="text-[11px] uppercase tracking-wide text-right">Charges</TableHead>
-            <TableHead className="text-[11px] uppercase tracking-wide text-right">
-              <SortHeader
-                label="Cancelled"
-                active={sortKey === "cancellations"}
-                onClick={() => onSort("cancellations")}
-              />
-            </TableHead>
-            <TableHead className="text-[11px] uppercase tracking-wide text-right">
-              <SortHeader
-                label="Pay"
-                active={sortKey === "estimatedPay"}
-                onClick={() => onSort("estimatedPay")}
-              />
-            </TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {rows.map((row) => (
-            <TableRow
-              key={row.employeeId}
-              className="cursor-pointer"
-              onClick={() => onSelect(row.employeeId)}
-            >
-              <TableCell className="text-sm font-medium whitespace-nowrap">{row.name}</TableCell>
-              <TableCell className="text-sm text-zinc-500 whitespace-nowrap">{row.role}</TableCell>
-              <TableCell className="text-sm text-right tabular-nums">{Number(row.hours || 0).toFixed(2)}</TableCell>
-              <TableCell className="text-sm text-right tabular-nums">{Number(row.overtimeHours || 0).toFixed(2)}</TableCell>
-              <TableCell className="text-sm text-right whitespace-nowrap">{money(row.sales)}</TableCell>
-              <TableCell className="text-sm text-right">{row.orders}</TableCell>
-              <TableCell className="text-sm text-right whitespace-nowrap">{money(row.tips)}</TableCell>
-              <TableCell className="text-sm text-right whitespace-nowrap">{money(row.serviceCharges)}</TableCell>
-              <TableCell className="text-sm text-right">{row.cancellations}</TableCell>
-              <TableCell className="text-sm text-right font-semibold whitespace-nowrap">
-                {money(row.estimatedPay)}
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </div>
-  );
-}
-
-function PaginationBar({ pagination, loading, onPage }) {
-  if (!pagination || pagination.pages <= 1) return null;
-  return (
-    <div className="flex items-center justify-between px-3 py-2 border-t border-zinc-100 text-xs text-zinc-500">
-      <span>
-        Page {pagination.page} of {pagination.pages}
-        {loading ? " · Updating…" : ""}
-      </span>
-      <div className="flex gap-1">
-        <Button
-          type="button"
-          variant="outline"
-          className="h-7 w-7 p-0"
-          disabled={pagination.page <= 1}
-          onClick={() => onPage(pagination.page - 1)}
-        >
-          <ChevronLeft className="w-3.5 h-3.5" />
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          className="h-7 w-7 p-0"
-          disabled={pagination.page >= pagination.pages}
-          onClick={() => onPage(pagination.page + 1)}
-        >
-          <ChevronRight className="w-3.5 h-3.5" />
-        </Button>
-      </div>
+        orderDetail={orderDetail}
+        orderLoading={orderLoading}
+        onSelectOrder={openOrder}
+        onBackToDay={() => setOrderDetail(null)}
+      />
     </div>
   );
 }
 
 function ReportSkeleton() {
   return (
-    <div className="space-y-3">
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
-        {Array.from({ length: 12 }).map((_, index) => (
-          <div key={index} className="bg-white border border-zinc-200 rounded-lg px-3 py-2 space-y-2">
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+        {Array.from({ length: 7 }).map((_, index) => (
+          <div key={index} className="bg-white border border-zinc-200 rounded-xl p-4 space-y-3 h-28">
             <Skeleton className="h-3 w-16" />
-            <Skeleton className="h-6 w-20" />
+            <Skeleton className="h-7 w-20" />
           </div>
         ))}
       </div>
-      <div className="bg-white border border-zinc-200 rounded-lg p-3 space-y-2">
+      <div className="bg-white border border-zinc-200 rounded-xl p-4 space-y-2">
         <Skeleton className="h-4 w-40" />
-        <Skeleton className="h-8 w-full" />
-        <Skeleton className="h-8 w-full" />
-        <Skeleton className="h-8 w-full" />
+        <Skeleton className="h-10 w-full" />
+        <Skeleton className="h-10 w-full" />
+        <Skeleton className="h-10 w-full" />
       </div>
     </div>
   );

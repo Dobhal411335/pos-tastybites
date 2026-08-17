@@ -15,6 +15,7 @@ import {
   Tag,
   User,
   Phone,
+  Mail,
   MapPin,
   Trash2,
   Loader2,
@@ -49,6 +50,7 @@ import StaffOrderPartyModal from "@/components/sales/StaffOrderPartyModal";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { buildStaffDiscountState } from "@/lib/orders/staffDiscount";
 import { formatTableLocation, resolveDocumentId } from "@/utils/orderDisplay";
+import { countryCodes } from "@/utils/countryCodes";
 import {
   OFFER_CATEGORY,
   isOfferItem,
@@ -176,6 +178,9 @@ export default function OrderPage() {
   const [isKitchenModalOpen, setIsKitchenModalOpen] = useState(false);
   const [isStaffModalOpen, setIsStaffModalOpen] = useState(false);
   const [guestName, setGuestName] = useState("");
+  const [guestPhone, setGuestPhone] = useState("");
+  const [guestCountryCode, setGuestCountryCode] = useState("+1");
+  const [guestEmail, setGuestEmail] = useState("");
   const [guestTable, setGuestTable] = useState("");
   const [employees, setEmployees] = useState([]);
   const [selectedStaffId, setSelectedStaffId] = useState("");
@@ -359,6 +364,15 @@ export default function OrderPage() {
             if (existingOrder.partyName || existingOrder.guestName) {
               setGuestName(existingOrder.partyName || existingOrder.guestName);
             }
+            if (existingOrder.contactNumber) {
+              setGuestPhone(existingOrder.contactNumber);
+            }
+            if (existingOrder.guestCountryCode) {
+              setGuestCountryCode(existingOrder.guestCountryCode);
+            }
+            if (existingOrder.guestEmail) {
+              setGuestEmail(existingOrder.guestEmail);
+            }
 
             // Reconstruct cart
             const restoredCart = existingOrder.items.map((item, idx) => {
@@ -436,6 +450,15 @@ export default function OrderPage() {
               setOrderNote(existingOrder.specialNote || "");
               if (existingOrder.partyName || existingOrder.guestName) {
                 setGuestName(existingOrder.partyName || existingOrder.guestName);
+              }
+              if (existingOrder.contactNumber) {
+                setGuestPhone(existingOrder.contactNumber);
+              }
+              if (existingOrder.guestCountryCode) {
+                setGuestCountryCode(existingOrder.guestCountryCode);
+              }
+              if (existingOrder.guestEmail) {
+                setGuestEmail(existingOrder.guestEmail);
               }
               if (existingOrder.staffFor) {
                 setSelectedStaffId(String(existingOrder.staffFor));
@@ -1049,6 +1072,9 @@ export default function OrderPage() {
         tableNo: isLegacyNew ? guestTable : undefined,
         guestName: partyName,
         partyName,
+        contactNumber: guestPhone.trim() || null,
+        guestCountryCode: guestPhone.trim() ? guestCountryCode : null,
+        guestEmail: guestEmail.trim() || null,
         guestCount: sessionData?.guestCount ?? null,
         orderType: orderType,
         source: orderSource,
@@ -1122,6 +1148,18 @@ export default function OrderPage() {
   const handleConfirmKitchen = async () => {
     if (isLegacyNew && !guestName.trim() && !guestTable.trim()) {
       toast.error("Enter a party name or table number.");
+      return;
+    }
+
+    const email = guestEmail.trim();
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      toast.error("Enter a valid email or leave it blank.");
+      return;
+    }
+
+    const phoneDigits = guestPhone.replace(/\D/g, "");
+    if (guestPhone.trim() && phoneDigits.length < 7) {
+      toast.error("Enter a valid phone number or leave it blank.");
       return;
     }
 
@@ -1663,7 +1701,7 @@ export default function OrderPage() {
       {/* KITCHEN / PARTY NAME MODAL */}
       {isKitchenModalOpen && !isStaffOrder && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-900/50 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl flex flex-col">
+          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl flex flex-col max-h-[90vh]">
             <div className="p-5 border-b border-zinc-100 flex items-center justify-between">
               <div>
                 <h2 className="text-lg font-bold text-zinc-900">
@@ -1683,7 +1721,7 @@ export default function OrderPage() {
               </button>
             </div>
 
-            <div className="p-5 space-y-4">
+            <div className="p-5 space-y-4 overflow-y-auto">
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider flex items-center gap-1.5">
                   <User className="w-3.5 h-3.5" /> Customer / Party Name
@@ -1703,6 +1741,53 @@ export default function OrderPage() {
                     {resolvePartyName("")}
                   </span>
                 </p>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider flex items-center gap-1.5">
+                  <Phone className="w-3.5 h-3.5" /> Phone
+                  <span className="text-zinc-400 font-semibold normal-case">
+                    (optional)
+                  </span>
+                </label>
+                <div className="flex">
+                  <Select value={guestCountryCode} onValueChange={setGuestCountryCode}>
+                    <SelectTrigger className="w-28 h-12 text-xs rounded-r-none border-r-0 border-zinc-200 bg-zinc-50 font-medium">
+                      <SelectValue placeholder="+1" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-white max-h-60">
+                      {countryCodes.map((entry) => (
+                        <SelectItem key={entry.code} value={entry.code}>
+                          {entry.code} {entry.country}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Input
+                    type="tel"
+                    inputMode="tel"
+                    placeholder="e.g. 5551234567"
+                    value={guestPhone}
+                    onChange={(e) => setGuestPhone(e.target.value)}
+                    className="h-12 border-zinc-200 rounded-l-none text-sm font-semibold focus-visible:ring-blue-500 flex-1"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider flex items-center gap-1.5">
+                  <Mail className="w-3.5 h-3.5" /> Email
+                  <span className="text-zinc-400 font-semibold normal-case">
+                    (optional)
+                  </span>
+                </label>
+                <Input
+                  type="email"
+                  placeholder="e.g. guest@email.com"
+                  value={guestEmail}
+                  onChange={(e) => setGuestEmail(e.target.value)}
+                  className="h-12 border-zinc-200 rounded-lg text-sm font-semibold focus-visible:ring-blue-500"
+                />
               </div>
 
               {isLegacyNew && (

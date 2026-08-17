@@ -12,13 +12,24 @@ export function isEmployeeEligibleForSession(employee) {
   );
 }
 
+export async function expireAndFinalizeSession(session, logoutTime = new Date(), status = 'Expired') {
+  if (!session || session.status !== 'Active') return session;
+  const loginMs = session.loginTime
+    ? new Date(session.loginTime).getTime()
+    : logoutTime.getTime();
+  session.logoutTime = logoutTime;
+  session.duration = Math.max(0, Math.floor((logoutTime.getTime() - loginMs) / 1000));
+  session.status = status;
+  await session.save();
+  await finalizeAttendanceOnClockOut({ session, logoutTime });
+  return session;
+}
+
 export async function markEmployeeSessionExpired(sessionId) {
   if (!sessionId) return null;
-  return EmployeeSession.findOneAndUpdate(
-    { _id: sessionId, status: 'Active' },
-    { $set: { status: 'Expired' } },
-    { returnDocument: 'after' }
-  );
+  const session = await EmployeeSession.findOne({ _id: sessionId, status: 'Active' });
+  if (!session) return null;
+  return expireAndFinalizeSession(session, new Date(), 'Expired');
 }
 
 /**
@@ -37,14 +48,7 @@ export async function expireAllRestaurantSessions(restaurantId) {
   const expired = [];
 
   for (const session of sessions) {
-    const loginMs = session.loginTime
-      ? new Date(session.loginTime).getTime()
-      : logoutTime.getTime();
-    session.logoutTime = logoutTime;
-    session.duration = Math.max(0, Math.floor((logoutTime.getTime() - loginMs) / 1000));
-    session.status = 'Expired';
-    await session.save();
-    await finalizeAttendanceOnClockOut({ session, logoutTime });
+    await expireAndFinalizeSession(session, logoutTime, 'Expired');
     expired.push(session);
   }
 

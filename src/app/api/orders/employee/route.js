@@ -15,6 +15,7 @@ import Floor from "@/models/floor/Floor";
 import { repricePosCartItems } from "@/lib/orders/repricePosCartItems";
 import { formatSessionTableLabel, formatTableLocation, joinTableNumbers } from "@/utils/orderDisplay";
 import { freeSessionTables } from "@/lib/orders/sessionTables";
+import { countryCodes } from "@/utils/countryCodes";
 
 function normalizeProductType(value) {
   return String(value || "").toUpperCase() === "BAR" ? "BAR" : "KITCHEN";
@@ -27,6 +28,38 @@ function cartHasKitchenItem(items = []) {
 function formatPersonName(person) {
   if (!person) return null;
   return person.name || [person.firstName, person.lastName].filter(Boolean).join(" ") || null;
+}
+
+function normalizeGuestEmail(value) {
+  const email = String(value || "").trim().toLowerCase();
+  if (!email) return null;
+  return email.slice(0, 120);
+}
+
+function normalizeGuestPhone(value) {
+  const digits = String(value || "").replace(/\D/g, "");
+  if (digits.length < 7) return null;
+  return digits.slice(0, 15);
+}
+
+function normalizeGuestCountryCode(value) {
+  const code = String(value || "").trim();
+  if (!code) return null;
+  return countryCodes.some((entry) => entry.code === code) ? code : null;
+}
+
+function resolveGuestContact(data) {
+  const phoneSource =
+    data?.contactNumber !== undefined ? data.contactNumber : data?.guestPhone;
+  const contactNumber = normalizeGuestPhone(phoneSource);
+  const guestCountryCode = contactNumber
+    ? normalizeGuestCountryCode(data?.guestCountryCode) || "+1"
+    : null;
+  return {
+    contactNumber,
+    guestCountryCode,
+    guestEmail: normalizeGuestEmail(data?.guestEmail),
+  };
 }
 
 async function resolveServerName(employeeId) {
@@ -179,6 +212,7 @@ export const POST = withAuth(async (request) => {
     const data = await request.json();
     const { items, specialNote, sessionId, guestName, partyName, guestCount, orderType } = data;
     const resolvedPartyName = (partyName || guestName || "").trim() || null;
+    const { contactNumber, guestCountryCode, guestEmail } = resolveGuestContact(data);
     const resolvedGuestCount =
       guestCount !== undefined && guestCount !== null && guestCount !== ""
         ? Number(guestCount)
@@ -299,6 +333,9 @@ export const POST = withAuth(async (request) => {
         order.specialNote = specialNote;
         order.guestName = directPartyName;
         order.partyName = directPartyName;
+        order.contactNumber = contactNumber;
+        order.guestCountryCode = guestCountryCode;
+        order.guestEmail = guestEmail;
         if (orderSource === "STAFF") {
           order.staffFor = staffFor;
           order.staffOrderReason = staffOrderReason;
@@ -363,6 +400,9 @@ export const POST = withAuth(async (request) => {
         specialNote: specialNote,
         guestName: directPartyName,
         partyName: directPartyName,
+        contactNumber,
+        guestCountryCode,
+        guestEmail,
         guestCount: Number.isFinite(resolvedGuestCount) ? resolvedGuestCount : null,
         status: "PENDING",
         source: orderSource,
@@ -473,6 +513,16 @@ export const POST = withAuth(async (request) => {
         order.guestName = resolvedPartyName;
         order.partyName = resolvedPartyName;
       }
+      if (data.contactNumber !== undefined || data.guestPhone !== undefined) {
+        order.contactNumber = contactNumber;
+        order.guestCountryCode = guestCountryCode;
+      }
+      if (data.guestCountryCode !== undefined && data.contactNumber === undefined && data.guestPhone === undefined) {
+        order.guestCountryCode = guestCountryCode;
+      }
+      if (data.guestEmail !== undefined) {
+        order.guestEmail = guestEmail;
+      }
       if (guestCount !== undefined) {
         order.guestCount = Number.isFinite(resolvedGuestCount)
           ? resolvedGuestCount
@@ -571,6 +621,9 @@ export const POST = withAuth(async (request) => {
         tableNo: formatSessionTableLabel(session),
         guestName: resolvedPartyName,
         partyName: resolvedPartyName,
+        contactNumber,
+        guestCountryCode,
+        guestEmail,
         guestCount: Number.isFinite(resolvedGuestCount)
           ? resolvedGuestCount
           : (session.guestCount ?? null),

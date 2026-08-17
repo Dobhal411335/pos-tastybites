@@ -8,7 +8,8 @@ import EmployeeSession from '@/models/employee/EmployeeSession';
 import DutyChange from '@/models/employee/DutyChange';
 import { comparePassword } from '@/utils/password';
 import { signToken, verifyToken } from '@/utils/jwt';
-import { upsertAttendanceOnClockIn } from '@/lib/attendance';
+import { getAttendanceDayBounds, upsertAttendanceOnClockIn } from '@/lib/attendance';
+import { expireAndFinalizeSession } from '@/lib/employeeSession';
 import { createNotification } from '@/lib/notifications/notificationService';
 import {
   setEmployeeAccessCookie,
@@ -19,6 +20,7 @@ import {
   clientIpFromRequest,
   rateLimitResponse,
 } from '@/lib/rateLimit';
+import { getUserAgent, platformFromUserAgent } from '@/utils/getUserAgent';
 
 export async function POST(request) {
   try {
@@ -37,7 +39,9 @@ export async function POST(request) {
     const body = await request.json();
     const employeeIdRaw = body?.employeeId;
     const password = typeof body?.password === 'string' ? body.password : null;
-    const { browserFingerprint, ipAddress, platform } = body;
+    const { browserFingerprint } = body;
+    const userAgent = getUserAgent(request);
+    const platform = platformFromUserAgent(userAgent);
 
     const employeeId =
       typeof employeeIdRaw === 'string'
@@ -128,24 +132,23 @@ export async function POST(request) {
 
     // Update login tracking on Employee
     employee.lastLoginAt = new Date();
-    employee.lastLoginIP = ipAddress || 'unknown';
-    employee.lastLoginPlatform = platform || 'unknown';
-    employee.lastLoginBrowser = browserFingerprint || 'unknown';
+    employee.lastLoginIP = ip;
+    employee.lastLoginPlatform = platform;
+    employee.lastLoginBrowser = userAgent;
     await employee.save();
 
     device.lastLoginAt = new Date();
-    device.lastIPAddress = ipAddress || 'unknown';
-    device.lastPlatform = platform || 'unknown';
-    device.lastBrowser = browserFingerprint || 'unknown';
+    device.lastIPAddress = ip;
+    device.lastPlatform = platform;
+    device.lastBrowser = userAgent;
     await device.save();
 
     const now = new Date();
-    const todayStart = new Date(now); todayStart.setHours(0, 0, 0, 0);
-    const todayEnd   = new Date(now); todayEnd.setHours(23, 59, 59, 999);
+    const { start: todayStart, end: todayEnd } = getAttendanceDayBounds(now);
 
     const todayDutyChange = await DutyChange.findOne({
       employee: employee._id,
-      date: { $gte: todayStart, $lte: todayEnd },
+      date: { $gte: todayStart, $lt: todayEnd },
       status: 'Approved',
     });
 
@@ -282,11 +285,7 @@ export async function POST(request) {
     });
     const replacedAt = new Date();
     for (const prev of previousActive) {
-      const loginMs = prev.loginTime ? new Date(prev.loginTime).getTime() : replacedAt.getTime();
-      prev.logoutTime = replacedAt;
-      prev.duration = Math.max(0, Math.floor((replacedAt.getTime() - loginMs) / 1000));
-      prev.status = 'Expired';
-      await prev.save();
+      await expireAndFinalizeSession(prev, replacedAt, 'Expired');
     }
 
     const session = await EmployeeSession.create({
@@ -295,8 +294,8 @@ export async function POST(request) {
       shift: currentValidShift._id,
       device: device._id,
       browserFingerprint: browserFingerprint || 'unknown',
-      platform: platform || 'unknown',
-      ipAddress: ipAddress || 'unknown',
+      platform,
+      ipAddress: ip,
       status: 'Active'
     });
 
@@ -321,7 +320,7 @@ export async function POST(request) {
         employeeRole: employee.role,
         employeeCode: employee.employeeId || '',
         loginTime: now.toISOString(),
-        platform: platform || 'unknown',
+        platform,
       },
     });
 

@@ -11,7 +11,6 @@ import {
   normalizePaymentTypeLabel,
   r2,
   resolveTenders,
-  todayBusinessDate,
 } from "@/lib/eod/eodHelpers";
 
 const GENERIC_NAMES = new Set([
@@ -34,16 +33,17 @@ const ORDER_STATUSES = [
 
 const PAYMENT_FILTERS = ["CASH", "CARD", "GIFT_CARD"];
 const SORT_OPTIONS = ["revenue", "visits", "orders", "recent"];
+const ORDER_SCAN_LIMIT = 10000;
 
-const ORDER_SELECT = [
+const LIST_SELECT = [
   "orderNumber",
   "createdAt",
   "partyName",
   "guestName",
   "contactNumber",
+  "guestCountryCode",
+  "guestEmail",
   "tableNo",
-  "items.name",
-  "items.qty",
   "subTotal",
   "discountTotal",
   "taxTotal",
@@ -51,12 +51,15 @@ const ORDER_SELECT = [
   "paymentMethod",
   "cashAmount",
   "cardAmount",
+  "giftcardCode",
   "giftcardUsedAmount",
   "tipAmount",
   "status",
   "paymentStatus",
   "guestCount",
 ].join(" ");
+
+const DETAIL_SELECT = `${LIST_SELECT} items.name items.qty`;
 
 function escapeRegex(value) {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -77,8 +80,15 @@ function isGenericName(name) {
   return GENERIC_NAMES.has(normalizeName(name).toLowerCase());
 }
 
+function normalizeEmail(email) {
+  const value = String(email || "").trim().toLowerCase();
+  if (!value || !value.includes("@")) return null;
+  return value;
+}
+
 export function guestIdentity(order) {
   const phone = normalizePhone(order.contactNumber);
+  const email = normalizeEmail(order.guestEmail);
   const name = normalizeName(order.partyName || order.guestName);
 
   if (phone) {
@@ -86,6 +96,20 @@ export function guestIdentity(order) {
       guestKey: `phone:${phone}`,
       method: "phone",
       phone,
+      countryCode: order.guestCountryCode || null,
+      email,
+      name: name || null,
+      identified: true,
+    };
+  }
+
+  if (email) {
+    return {
+      guestKey: `email:${email}`,
+      method: "email",
+      phone: null,
+      countryCode: order.guestCountryCode || null,
+      email,
       name: name || null,
       identified: true,
     };
@@ -96,6 +120,8 @@ export function guestIdentity(order) {
       guestKey: `name:${name.toLowerCase()}`,
       method: "name",
       phone: null,
+      countryCode: order.guestCountryCode || null,
+      email,
       name,
       identified: true,
     };
@@ -105,6 +131,8 @@ export function guestIdentity(order) {
     guestKey: `order:${String(order._id)}`,
     method: "unidentified",
     phone: null,
+    countryCode: order.guestCountryCode || null,
+    email,
     name: name || "Walk-in",
     identified: false,
   };
@@ -147,30 +175,6 @@ function restaurantDayKey(date, timeZone = DEFAULT_RESTAURANT_TIMEZONE) {
     .slice(0, 10);
 }
 
-function restaurantHour(date, timeZone = DEFAULT_RESTAURANT_TIMEZONE) {
-  const hour = Number(
-    new Intl.DateTimeFormat("en-US", {
-      timeZone,
-      hour: "numeric",
-      hour12: false,
-    }).format(new Date(date))
-  );
-  return hour === 24 ? 0 : hour;
-}
-
-function restaurantMonthKey(date, timeZone = DEFAULT_RESTAURANT_TIMEZONE) {
-  const parts = Object.fromEntries(
-    new Intl.DateTimeFormat("en-US", {
-      timeZone,
-      year: "numeric",
-      month: "2-digit",
-    })
-      .formatToParts(new Date(date))
-      .map((part) => [part.type, part.value])
-  );
-  return `${parts.year}-${parts.month}`;
-}
-
 function itemSummary(items) {
   const list = Array.isArray(items) ? items : [];
   const names = list.map((item) => item?.name).filter(Boolean);
@@ -192,8 +196,16 @@ function paymentLabel(order) {
   );
 }
 
+function orderTenders(order) {
+  if (order.paymentStatus !== "PAID") {
+    return { cash: 0, card: 0, giftCard: 0, tip: 0 };
+  }
+  return resolveTenders(order);
+}
+
 function toHistoryRow(order, identity) {
   const items = itemSummary(order.items);
+  const tenders = orderTenders(order);
   return {
     orderId: String(order._id),
     orderNumber: order.orderNumber,
@@ -211,6 +223,10 @@ function toHistoryRow(order, identity) {
     totalAmount: r2(order.totalAmount),
     paymentMethod: order.paymentMethod || null,
     paymentLabel: paymentLabel(order),
+    cash: tenders.cash,
+    card: tenders.card,
+    giftCard: tenders.giftCard,
+    giftcardCode: order.giftcardCode || null,
     status: order.status,
     paymentStatus: order.paymentStatus,
     countsTowardRevenue: isRevenueOrder(order),
@@ -222,7 +238,8 @@ function emptyGuest(identity) {
     guestKey: identity.guestKey,
     name: identity.name || "Walk-in",
     phone: identity.phone,
-    email: null,
+    countryCode: identity.countryCode || null,
+    email: identity.email || null,
     identified: identity.identified,
     visitDays: new Set(),
     orders: 0,
@@ -234,7 +251,21 @@ function emptyGuest(identity) {
     tax: 0,
     totalSpent: 0,
     discountUsed: 0,
+    paymentMix: { cash: 0, card: 0, giftCard: 0 },
+    giftCardsUsed: [],
   };
+}
+
+function laterIso(a, b) {
+  if (!a) return b;
+  if (!b) return a;
+  return new Date(a) >= new Date(b) ? a : b;
+}
+
+function earlierIso(a, b) {
+  if (!a) return b;
+  if (!b) return a;
+  return new Date(a) <= new Date(b) ? a : b;
 }
 
 function finalizeGuest(guest) {
@@ -244,7 +275,8 @@ function finalizeGuest(guest) {
     guestKey: guest.guestKey,
     name: guest.name,
     phone: guest.phone,
-    email: null,
+    countryCode: guest.countryCode || null,
+    email: guest.email || null,
     identified: guest.identified,
     visits,
     orders: guest.orders,
@@ -257,6 +289,12 @@ function finalizeGuest(guest) {
     totalSpent: r2(guest.totalSpent),
     aov,
     discountUsed: r2(guest.discountUsed),
+    paymentMix: {
+      cash: r2(guest.paymentMix.cash),
+      card: r2(guest.paymentMix.card),
+      giftCard: r2(guest.paymentMix.giftCard),
+    },
+    giftCardsUsed: guest.giftCardsUsed,
   };
 }
 
@@ -284,64 +322,28 @@ function sortGuests(guests, sort) {
   return copy;
 }
 
-function dayCountInclusive(dateFrom, dateTo) {
-  const start = new Date(`${dateFrom}T00:00:00Z`);
-  const end = new Date(`${dateTo}T00:00:00Z`);
-  return Math.round((end.getTime() - start.getTime()) / 86400000) + 1;
-}
-
-function buildRevenueOverTime(orders, dateFrom, dateTo) {
-  const paid = orders.filter(isRevenueOrder);
-  const days = dayCountInclusive(dateFrom, dateTo);
-
-  if (days <= 1) {
-    const buckets = new Map();
-    for (const order of paid) {
-      const hour = restaurantHour(order.createdAt);
-      const prev = buckets.get(hour) || 0;
-      buckets.set(hour, r2(prev + (Number(order.totalAmount) || 0)));
-    }
-    const hours = [...buckets.keys()].sort((a, b) => a - b);
-    const startHour = hours.length ? Math.min(hours[0], 8) : 8;
-    const endHour = hours.length ? Math.max(hours[hours.length - 1], 20) : 20;
-    const series = [];
-    for (let hour = startHour; hour <= endHour; hour += 1) {
-      const suffix = hour >= 12 ? "PM" : "AM";
-      const display = hour % 12 === 0 ? 12 : hour % 12;
-      series.push({
-        label: `${display}${suffix}`,
-        revenue: buckets.get(hour) || 0,
-      });
-    }
-    return series;
+function summarizeUnidentified(guests) {
+  if (guests.length === 0) {
+    return {
+      count: 0,
+      orders: 0,
+      paidOrders: 0,
+      visits: 0,
+      totalSpent: 0,
+      lastVisit: null,
+      guests: [],
+    };
   }
 
-  if (days <= 60) {
-    const buckets = new Map();
-    for (const order of paid) {
-      const key = restaurantDayKey(order.createdAt);
-      if (!key) continue;
-      buckets.set(key, r2((buckets.get(key) || 0) + (Number(order.totalAmount) || 0)));
-    }
-    const series = [];
-    const cursor = new Date(`${dateFrom}T12:00:00Z`);
-    const last = new Date(`${dateTo}T12:00:00Z`);
-    while (cursor <= last) {
-      const key = cursor.toISOString().slice(0, 10);
-      series.push({ label: key.slice(5), revenue: buckets.get(key) || 0 });
-      cursor.setUTCDate(cursor.getUTCDate() + 1);
-    }
-    return series;
-  }
-
-  const buckets = new Map();
-  for (const order of paid) {
-    const key = restaurantMonthKey(order.createdAt);
-    buckets.set(key, r2((buckets.get(key) || 0) + (Number(order.totalAmount) || 0)));
-  }
-  return [...buckets.entries()]
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([label, revenue]) => ({ label, revenue }));
+  return {
+    count: guests.length,
+    orders: guests.reduce((sum, guest) => sum + guest.orders, 0),
+    paidOrders: guests.reduce((sum, guest) => sum + guest.paidOrders, 0),
+    visits: guests.reduce((sum, guest) => sum + guest.visits, 0),
+    totalSpent: r2(guests.reduce((sum, guest) => sum + guest.totalSpent, 0)),
+    lastVisit: guests.reduce((latest, guest) => laterIso(latest, guest.lastVisit), null),
+    guests,
+  };
 }
 
 function buildGuestTimeSeries(orders) {
@@ -367,27 +369,13 @@ function buildGuestTimeSeries(orders) {
     }));
 }
 
-function spendingBuckets(guests) {
-  const identified = guests.filter((guest) => guest.identified && guest.totalSpent > 0);
-  const ranges = [
-    { label: "Under $25", min: 0, max: 25 },
-    { label: "$25–50", min: 25, max: 50 },
-    { label: "$50–100", min: 50, max: 100 },
-    { label: "$100–250", min: 100, max: 250 },
-    { label: "$250+", min: 250, max: Infinity },
-  ];
-  return ranges.map((range) => ({
-    label: range.label,
-    guests: identified.filter(
-      (guest) => guest.totalSpent >= range.min && guest.totalSpent < range.max
-    ).length,
-  }));
-}
-
 function parseGuestKeyQuery(guestKey) {
   if (!guestKey || typeof guestKey !== "string") return null;
   if (guestKey.startsWith("phone:")) {
     return { type: "phone", value: guestKey.slice(6) };
+  }
+  if (guestKey.startsWith("email:")) {
+    return { type: "email", value: guestKey.slice(6) };
   }
   if (guestKey.startsWith("name:")) {
     return { type: "name", value: guestKey.slice(5) };
@@ -409,6 +397,10 @@ function guestKeyMongoFilter(parsed, restaurantId) {
     match.contactNumber = { $regex: loose };
     return match;
   }
+  if (parsed.type === "email") {
+    match.guestEmail = new RegExp(`^${escapeRegex(parsed.value)}$`, "i");
+    return match;
+  }
   if (parsed.type === "name") {
     const exact = new RegExp(`^${escapeRegex(parsed.value)}$`, "i");
     match.$or = [{ partyName: exact }, { guestName: exact }];
@@ -418,21 +410,19 @@ function guestKeyMongoFilter(parsed, restaurantId) {
 }
 
 export function parseGuestReportQuery(searchParams) {
-  const today = todayBusinessDate();
-  const dateFrom = isValidBusinessDate(searchParams.get("dateFrom"))
-    ? searchParams.get("dateFrom")
-    : today;
-  const dateToRaw = isValidBusinessDate(searchParams.get("dateTo"))
-    ? searchParams.get("dateTo")
-    : today;
-  const dateTo = dateToRaw < dateFrom ? dateFrom : dateToRaw;
+  const dateFromRaw = searchParams.get("dateFrom");
+  const dateToRaw = searchParams.get("dateTo");
+  const dateFrom = isValidBusinessDate(dateFromRaw) ? dateFromRaw : null;
+  const dateToValue = isValidBusinessDate(dateToRaw) ? dateToRaw : null;
+  const dateTo =
+    dateFrom && dateToValue && dateToValue < dateFrom ? dateFrom : dateToValue;
 
-  const status = String(searchParams.get("orderStatus") || "PAID").toUpperCase();
+  const status = String(searchParams.get("orderStatus") || "ALL").toUpperCase();
   const orderStatus = status === "ALL" || !status
     ? "ALL"
     : ORDER_STATUSES.includes(status)
       ? status
-      : "PAID";
+      : "ALL";
 
   const paymentRaw = String(searchParams.get("paymentMethod") || "ALL").toUpperCase();
   const paymentMethod = PAYMENT_FILTERS.includes(paymentRaw) ? paymentRaw : "ALL";
@@ -451,13 +441,57 @@ export function parseGuestReportQuery(searchParams) {
   };
 }
 
+function accumulateGuest(guestMap, order, identity) {
+  if (!guestMap.has(identity.guestKey)) {
+    guestMap.set(identity.guestKey, emptyGuest(identity));
+  }
+  const guest = guestMap.get(identity.guestKey);
+  if (identity.name && identity.name !== "Walk-in") guest.name = identity.name;
+  if (identity.phone) guest.phone = identity.phone;
+  if (identity.countryCode) guest.countryCode = identity.countryCode;
+  if (identity.email) guest.email = identity.email;
+
+  guest.orders += 1;
+  const createdAt = order.createdAt ? new Date(order.createdAt) : null;
+  if (createdAt) {
+    const iso = createdAt.toISOString();
+    guest.firstVisit = earlierIso(guest.firstVisit, iso);
+    guest.lastVisit = laterIso(guest.lastVisit, iso);
+    const dayKey = restaurantDayKey(createdAt);
+    if (dayKey) guest.visitDays.add(dayKey);
+  }
+
+  if (!isRevenueOrder(order)) return;
+
+  const tenders = resolveTenders(order);
+  guest.paidOrders += 1;
+  guest.subtotal += Number(order.subTotal) || 0;
+  guest.discount += Number(order.discountTotal) || 0;
+  guest.tax += Number(order.taxTotal) || 0;
+  guest.totalSpent += Number(order.totalAmount) || 0;
+  guest.discountUsed += Number(order.discountTotal) || 0;
+  guest.paymentMix.cash += tenders.cash;
+  guest.paymentMix.card += tenders.card;
+  guest.paymentMix.giftCard += tenders.giftCard;
+
+  if (tenders.giftCard > 0 || order.giftcardCode) {
+    guest.giftCardsUsed.push({
+      code: order.giftcardCode || null,
+      amount: r2(tenders.giftCard),
+      orderId: String(order._id),
+      orderNumber: order.orderNumber,
+      createdAt: order.createdAt,
+    });
+  }
+}
+
 export async function buildGuestDirectoryReport({
   restaurantId,
-  dateFrom,
-  dateTo,
+  dateFrom = null,
+  dateTo = null,
   search = "",
   paymentMethod = "ALL",
-  orderStatus = "PAID",
+  orderStatus = "ALL",
   guestKey = null,
   sort = "revenue",
 }) {
@@ -475,19 +509,23 @@ export async function buildGuestDirectoryReport({
     }
     match = keyMatch;
   } else {
-    const { start } = businessDateBounds(dateFrom);
-    const { end } = businessDateBounds(dateTo);
-    match.createdAt = { $gte: start, $lt: end };
+    if (dateFrom && dateTo) {
+      const { start } = businessDateBounds(dateFrom);
+      const { end } = businessDateBounds(dateTo);
+      match.createdAt = { $gte: start, $lt: end };
+    }
     if (orderStatus !== "ALL") {
       match.status = orderStatus;
     }
   }
 
   const docs = await Order.find(match)
-    .select(ORDER_SELECT)
+    .select(parsedKey ? DETAIL_SELECT : LIST_SELECT)
     .sort({ createdAt: -1 })
-    .limit(10000)
+    .limit(ORDER_SCAN_LIMIT)
     .lean();
+
+  const truncated = docs.length >= ORDER_SCAN_LIMIT;
 
   const filtered = docs.filter((order) => {
     const identity = guestIdentity(order);
@@ -498,8 +536,10 @@ export async function buildGuestDirectoryReport({
     const digits = q.replace(/\D/g, "");
     return (
       String(identity.name || "").toLowerCase().includes(q) ||
+      String(identity.email || "").toLowerCase().includes(q) ||
       (digits.length >= 3 && String(identity.phone || "").includes(digits)) ||
       String(order.contactNumber || "").toLowerCase().includes(q) ||
+      String(order.guestEmail || "").toLowerCase().includes(q) ||
       String(order.orderNumber || "").toLowerCase().includes(q)
     );
   });
@@ -509,86 +549,67 @@ export async function buildGuestDirectoryReport({
 
   for (const order of filtered) {
     const identity = guestIdentity(order);
-    history.push(toHistoryRow(order, identity));
-
-    if (!guestMap.has(identity.guestKey)) {
-      guestMap.set(identity.guestKey, emptyGuest(identity));
+    if (parsedKey) {
+      history.push(toHistoryRow(order, identity));
     }
-    const guest = guestMap.get(identity.guestKey);
-    if (identity.name && identity.name !== "Walk-in") guest.name = identity.name;
-    if (identity.phone) guest.phone = identity.phone;
-
-    guest.orders += 1;
-    const createdAt = order.createdAt ? new Date(order.createdAt) : null;
-    if (createdAt) {
-      if (!guest.firstVisit || createdAt < new Date(guest.firstVisit)) {
-        guest.firstVisit = createdAt.toISOString();
-      }
-      if (!guest.lastVisit || createdAt > new Date(guest.lastVisit)) {
-        guest.lastVisit = createdAt.toISOString();
-      }
-      const dayKey = restaurantDayKey(createdAt);
-      if (dayKey) guest.visitDays.add(dayKey);
-    }
-
-    if (isRevenueOrder(order)) {
-      guest.paidOrders += 1;
-      guest.subtotal += Number(order.subTotal) || 0;
-      guest.discount += Number(order.discountTotal) || 0;
-      guest.tax += Number(order.taxTotal) || 0;
-      guest.totalSpent += Number(order.totalAmount) || 0;
-      guest.discountUsed += Number(order.discountTotal) || 0;
-    }
+    accumulateGuest(guestMap, order, identity);
   }
 
-  const guests = sortGuests(
+  const allGuests = sortGuests(
     [...guestMap.values()].map(finalizeGuest),
     sort
   );
+  const identified = allGuests.filter((guest) => guest.identified);
+  const unidentifiedGuests = allGuests.filter((guest) => !guest.identified);
+  const unidentified = summarizeUnidentified(unidentifiedGuests);
 
-  const identifiedGuests = guests.filter((guest) => guest.identified).length;
-  const unidentifiedOrders = history.filter((row) =>
-    row.guestKey.startsWith("order:")
-  ).length;
-  const paidOrders = history.filter((row) => row.countsTowardRevenue).length;
+  const paidOrders = filtered.filter(isRevenueOrder).length;
+  const totalRevenue = r2(
+    allGuests.reduce((sum, guest) => sum + guest.totalSpent, 0)
+  );
+  const repeat = repeatSplit(identified);
+
+  const avgGuestSpend =
+    identified.length > 0 ? r2(totalRevenue / identified.length) : 0;
+  const returningPercent =
+    identified.length > 0
+      ? Math.round((repeat.repeat / identified.length) * 100)
+      : 0;
 
   const charts = parsedKey
     ? guestChartsFromSeries(buildGuestTimeSeries(filtered))
-    : {
-        revenueOverTime: buildRevenueOverTime(filtered, dateFrom, dateTo),
-        topGuests: guests
-          .filter((guest) => guest.totalSpent > 0)
-          .slice(0, 10)
-          .map((guest) => ({
-            label: guest.name,
-            guestKey: guest.guestKey,
-            revenue: guest.totalSpent,
-            orders: guest.paidOrders,
-          })),
-        spendingDistribution: spendingBuckets(guests),
-        repeatVsOneTime: repeatSplit(guests),
-      };
+    : { topGuests: [] };
 
   return {
-    guests,
+    guests: parsedKey ? allGuests : identified,
+    unidentified: parsedKey ? summarizeUnidentified([]) : unidentified,
     history,
+    mostOrderedItems: parsedKey ? buildMostOrderedItems(filtered) : [],
     charts,
     meta: {
-      identifiedGuests,
-      unidentifiedOrders,
+      identifiedGuests: identified.length,
+      unidentifiedGuests: unidentified.count,
+      unidentifiedOrders: unidentified.orders,
       paidOrders,
-      dateFrom,
-      dateTo,
+      totalOrders: filtered.length,
+      totalRevenue,
+      avgGuestSpend,
+      repeatGuests: repeat.repeat,
+      oneTimeGuests: repeat.oneTime,
+      returningPercent,
+      dateFrom: dateFrom || null,
+      dateTo: dateTo || null,
       guestKey: guestKey || null,
+      truncated,
+      scannedOrders: docs.length,
     },
   };
 }
 
 function repeatSplit(guests) {
-  const identified = guests.filter((guest) => guest.identified);
   return {
-    oneTime: identified.filter((guest) => guest.paidOrders <= 1).length,
-    repeat: identified.filter((guest) => guest.paidOrders >= 2).length,
+    oneTime: guests.filter((guest) => guest.paidOrders <= 1).length,
+    repeat: guests.filter((guest) => guest.paidOrders >= 2).length,
   };
 }
 
@@ -609,23 +630,52 @@ function guestChartsFromSeries(series) {
   };
 }
 
+function buildMostOrderedItems(orders, limit = 5) {
+  const counts = new Map();
+  for (const order of orders) {
+    for (const item of order.items || []) {
+      const name = String(item?.name || "").trim();
+      if (!name) continue;
+      counts.set(name, (counts.get(name) || 0) + (Number(item.qty) || 0));
+    }
+  }
+  return [...counts.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .slice(0, limit)
+    .map(([name, qty]) => ({ name, qty }));
+}
+
 function emptyPayload(dateFrom, dateTo) {
   return {
     guests: [],
-    history: [],
-    charts: {
-      revenueOverTime: [],
-      topGuests: [],
-      spendingDistribution: [],
-      repeatVsOneTime: { oneTime: 0, repeat: 0 },
+    unidentified: {
+      count: 0,
+      orders: 0,
+      paidOrders: 0,
+      visits: 0,
+      totalSpent: 0,
+      lastVisit: null,
+      guests: [],
     },
+    history: [],
+    mostOrderedItems: [],
+    charts: { topGuests: [] },
     meta: {
       identifiedGuests: 0,
+      unidentifiedGuests: 0,
       unidentifiedOrders: 0,
       paidOrders: 0,
-      dateFrom,
-      dateTo,
+      totalOrders: 0,
+      totalRevenue: 0,
+      avgGuestSpend: 0,
+      repeatGuests: 0,
+      oneTimeGuests: 0,
+      returningPercent: 0,
+      dateFrom: dateFrom || null,
+      dateTo: dateTo || null,
       guestKey: null,
+      truncated: false,
+      scannedOrders: 0,
     },
   };
 }

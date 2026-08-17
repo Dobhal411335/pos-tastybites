@@ -1,45 +1,25 @@
 import EmployeeLog from "@/models/employee/EmployeeLog";
 import EmployeeShift from "@/models/employee/EmployeeShift";
+import EmployeeSession from "@/models/employee/EmployeeSession";
 import DutyChange from "@/models/employee/DutyChange";
 import OvertimeRecord from "@/models/employee/OvertimeRecord";
 import ShiftHistory from "@/models/employee/ShiftHistory";
+import {
+  restaurantCalendarDate,
+  restaurantDayBounds,
+} from "@/lib/restaurantTime";
 
 const MINUTES_PER_HOUR = 60;
 
-export const getAttendanceDayBounds = (value) => {
-  const start = new Date(value);
-  start.setHours(0, 0, 0, 0);
-  const end = new Date(value);
-  end.setHours(23, 59, 59, 999);
-  return { start, end };
-};
+/** Restaurant-local day window. `end` is exclusive. */
+export const getAttendanceDayBounds = (value) => restaurantDayBounds(value);
 
 const diffMinutes = (later, earlier) => {
   if (!later || !earlier) return 0;
   return Math.max(0, Math.round((new Date(later) - new Date(earlier)) / 60000));
 };
 
-export async function resolveAttendanceSchedule({ employeeId, restaurantId, shiftId = null, date = new Date() }) {
-  const { start, end } = getAttendanceDayBounds(date);
-  const dutyChange = await DutyChange.findOne({
-    employee: employeeId,
-    restaurant: restaurantId,
-    date: { $gte: start, $lte: end },
-    status: "Approved",
-  }).lean();
-
-  let shift = null;
-  if (shiftId) {
-    shift = await EmployeeShift.findOne({ _id: shiftId, restaurant: restaurantId }).lean();
-  }
-  if (!shift) {
-    shift = await EmployeeShift.findOne({
-      employee: employeeId,
-      restaurant: restaurantId,
-      date: { $gte: start, $lte: end },
-    }).lean();
-  }
-
+export function resolveScheduleFromDocs(shift, dutyChange, { clockedIn = true } = {}) {
   if (dutyChange?.changeType === "MarkAbsent") {
     return { shift, dutyChange, attendanceStatus: "Absent", shiftStatus: "Cancelled", scheduledShiftStart: null, scheduledShiftEnd: null, scheduledShiftMinutes: 0, isTemporaryDuty: false };
   }
@@ -56,6 +36,37 @@ export async function resolveAttendanceSchedule({ employeeId, restaurantId, shif
   const isTemporaryDuty = dutyChange?.changeType === "AssignDuty";
   const scheduledShiftStart = dutyChange?.newStartTime || shift?.startTime || null;
   const scheduledShiftEnd = dutyChange?.newEndTime || shift?.endTime || null;
+  const scheduledShiftMinutes = diffMinutes(scheduledShiftEnd, scheduledShiftStart);
+  const hasDuty = Boolean(shift || isTemporaryDuty || dutyChange?.changeType === "ChangeShift");
+
+  if (!clockedIn) {
+    if (!hasDuty) {
+      return {
+        shift,
+        dutyChange,
+        attendanceStatus: "Off",
+        shiftStatus: "Off",
+        scheduledShiftStart: null,
+        scheduledShiftEnd: null,
+        scheduledShiftMinutes: 0,
+        isTemporaryDuty: false,
+        floor: null,
+        tablesAssigned: [],
+      };
+    }
+    return {
+      shift,
+      dutyChange,
+      attendanceStatus: "Absent",
+      shiftStatus: "Scheduled",
+      scheduledShiftStart,
+      scheduledShiftEnd,
+      scheduledShiftMinutes,
+      isTemporaryDuty,
+      floor: dutyChange?.assignedFloor || shift?.assignedFloor || null,
+      tablesAssigned: dutyChange?.assignedTables?.length ? dutyChange.assignedTables : (shift?.assignedTables || []),
+    };
+  }
 
   return {
     shift,
@@ -64,15 +75,78 @@ export async function resolveAttendanceSchedule({ employeeId, restaurantId, shif
     shiftStatus: shift?.status === "Cancelled" ? "Cancelled" : (shift ? "Scheduled" : "Off"),
     scheduledShiftStart,
     scheduledShiftEnd,
-    scheduledShiftMinutes: diffMinutes(scheduledShiftEnd, scheduledShiftStart),
+    scheduledShiftMinutes,
     isTemporaryDuty,
     floor: dutyChange?.assignedFloor || shift?.assignedFloor || null,
     tablesAssigned: dutyChange?.assignedTables?.length ? dutyChange.assignedTables : (shift?.assignedTables || []),
   };
 }
 
-export function computeAttendanceMetrics(log) {
-  const workedMinutes = log.logoutTime ? diffMinutes(log.logoutTime, log.loginTime) : 0;
+export async function resolveAttendanceSchedule({ employeeId, restaurantId, shiftId = null, date = new Date() }) {
+  const { start, end } = getAttendanceDayBounds(date);
+  const dutyChange = await DutyChange.findOne({
+    employee: employeeId,
+    restaurant: restaurantId,
+    date: { $gte: start, $lt: end },
+    status: "Approved",
+  }).lean();
+
+  let shift = null;
+  if (shiftId) {
+    shift = await EmployeeShift.findOne({ _id: shiftId, restaurant: restaurantId }).lean();
+  }
+  if (!shift) {
+    shift = await EmployeeShift.findOne({
+      employee: employeeId,
+      restaurant: restaurantId,
+      date: { $gte: start, $lt: end },
+    }).lean();
+  }
+
+  return resolveScheduleFromDocs(shift, dutyChange, { clockedIn: true });
+}
+
+export async function sumSessionWorkedMinutes({
+  employeeId,
+  restaurantId,
+  start,
+  end,
+  now = new Date(),
+}) {
+  const sessions = await EmployeeSession.find({
+    employee: employeeId,
+    restaurant: restaurantId,
+    loginTime: { $gte: start, $lt: end },
+  })
+    .select("loginTime logoutTime duration status")
+    .lean();
+
+  let seconds = 0;
+  for (const session of sessions) {
+    const stored = Number(session.duration);
+    if (Number.isFinite(stored) && stored > 0 && session.status !== "Active") {
+      seconds += stored;
+      continue;
+    }
+    const loginMs = session.loginTime ? new Date(session.loginTime).getTime() : null;
+    if (!loginMs) continue;
+    const endMs = session.logoutTime
+      ? new Date(session.logoutTime).getTime()
+      : session.status === "Active"
+        ? now.getTime()
+        : loginMs;
+    seconds += Math.max(0, Math.floor((endMs - loginMs) / 1000));
+  }
+  return Math.round(seconds / 60);
+}
+
+export function computeAttendanceMetrics(log, { workedMinutes: overrideMinutes } = {}) {
+  const workedMinutes =
+    overrideMinutes != null
+      ? Math.max(0, Math.round(Number(overrideMinutes) || 0))
+      : log.logoutTime
+        ? diffMinutes(log.logoutTime, log.loginTime)
+        : 0;
   const lateMinutes = log.scheduledShiftStart ? diffMinutes(log.loginTime, log.scheduledShiftStart) : 0;
   const earlyLeaveMinutes = log.logoutTime && log.scheduledShiftEnd ? diffMinutes(log.scheduledShiftEnd, log.logoutTime) : 0;
 
@@ -88,8 +162,8 @@ export function computeAttendanceMetrics(log) {
   }
 
   let attendanceStatus = log.attendanceStatus;
-  if (!log.logoutTime) {
-    return { workedMinutes: 0, lateMinutes, earlyLeaveMinutes: 0, overtimeMinutes: 0, attendanceStatus };
+  if (log.isIncomplete || !log.logoutTime) {
+    return { workedMinutes, lateMinutes, earlyLeaveMinutes: 0, overtimeMinutes: 0, attendanceStatus };
   }
   if (log.isTemporaryDuty) {
     attendanceStatus = "Emergency Duty";
@@ -114,42 +188,54 @@ export async function upsertAttendanceOnClockIn({ employee, shiftId, device, log
     date: loginTime,
   });
   const { start, end } = getAttendanceDayBounds(loginTime);
+  const calendarDate = restaurantCalendarDate(loginTime);
 
-  const log = await EmployeeLog.findOneAndUpdate(
-    {
+  const existing = await EmployeeLog.findOne({
+    employee: employee._id,
+    restaurant: employee.restaurant,
+    date: { $gte: start, $lt: end },
+  });
+
+  const scheduleFields = {
+    shift: schedule.shift?._id || shiftId || existing?.shift || null,
+    dutyChange: schedule.dutyChange?._id || null,
+    date: existing?.date || calendarDate,
+    scheduledShiftStart: schedule.scheduledShiftStart,
+    scheduledShiftEnd: schedule.scheduledShiftEnd,
+    scheduledShiftMinutes: schedule.scheduledShiftMinutes,
+    floor: schedule.floor || null,
+    tablesAssigned: schedule.tablesAssigned || [],
+    attendanceStatus: schedule.attendanceStatus,
+    shiftStatus: schedule.shiftStatus,
+    isTemporaryDuty: schedule.isTemporaryDuty,
+    isIncomplete: true,
+    logoutTime: null,
+  };
+
+  let log;
+  if (!existing) {
+    log = await EmployeeLog.create({
       employee: employee._id,
       restaurant: employee.restaurant,
-      date: { $gte: start, $lte: end },
-    },
-    {
-      $set: {
-        shift: schedule.shift?._id || shiftId || null,
-        dutyChange: schedule.dutyChange?._id || null,
-        date: start,
-        scheduledShiftStart: schedule.scheduledShiftStart,
-        scheduledShiftEnd: schedule.scheduledShiftEnd,
-        scheduledShiftMinutes: schedule.scheduledShiftMinutes,
-        loginTime,
-        device: device?._id || null,
-        loginDeviceName: device?.deviceName || "",
-        floor: schedule.floor || null,
-        tablesAssigned: schedule.tablesAssigned || [],
-        attendanceStatus: schedule.attendanceStatus,
-        shiftStatus: schedule.shiftStatus,
-        isTemporaryDuty: schedule.isTemporaryDuty,
-        isIncomplete: true,
-      },
-    },
-    { new: true, upsert: true }
-  );
+      ...scheduleFields,
+      loginTime,
+      device: device?._id || null,
+      loginDeviceName: device?.deviceName || "",
+    });
+  } else {
+    Object.assign(existing, scheduleFields);
+    await existing.save();
+    log = existing;
+  }
 
   await ShiftHistory.create({
     employee: employee._id,
     restaurant: employee.restaurant,
-    date: start,
+    date: log.date || calendarDate,
     eventType: "EmployeeLogin",
     updatedData: {
       loginTime,
+      firstClockIn: log.loginTime,
       shift: log.shift,
       dutyChange: log.dutyChange,
       device: log.device,
@@ -168,15 +254,40 @@ export async function finalizeAttendanceOnClockOut({ session, logoutTime = new D
   const log = await EmployeeLog.findOne({
     employee: session.employee,
     restaurant: session.restaurant,
-    date: { $gte: start, $lte: end },
+    date: { $gte: start, $lt: end },
   });
 
   if (!log) return null;
 
-  log.logoutTime = logoutTime;
-  log.isIncomplete = false;
+  const remainingActive = await EmployeeSession.countDocuments({
+    employee: session.employee,
+    restaurant: session.restaurant,
+    status: "Active",
+    loginTime: { $gte: start, $lt: end },
+  });
 
-  const metrics = computeAttendanceMetrics(log);
+  const workedMinutes = await sumSessionWorkedMinutes({
+    employeeId: session.employee,
+    restaurantId: session.restaurant,
+    start,
+    end,
+    now: logoutTime,
+  });
+
+  const latestClosed = await EmployeeSession.findOne({
+    employee: session.employee,
+    restaurant: session.restaurant,
+    loginTime: { $gte: start, $lt: end },
+    logoutTime: { $ne: null },
+  })
+    .sort({ logoutTime: -1 })
+    .select("logoutTime")
+    .lean();
+
+  log.isIncomplete = remainingActive > 0;
+  log.logoutTime = remainingActive > 0 ? null : (latestClosed?.logoutTime || logoutTime);
+
+  const metrics = computeAttendanceMetrics(log, { workedMinutes });
   log.workedMinutes = metrics.workedMinutes;
   log.actualHours = Number((metrics.workedMinutes / MINUTES_PER_HOUR).toFixed(2));
   log.lateMinutes = metrics.lateMinutes;
@@ -187,14 +298,14 @@ export async function finalizeAttendanceOnClockOut({ session, logoutTime = new D
   await log.save();
 
   await OvertimeRecord.updateMany(
-    { employee: session.employee, restaurant: session.restaurant, date: { $gte: start, $lte: end } },
+    { employee: session.employee, restaurant: session.restaurant, date: { $gte: start, $lt: end } },
     { $set: { actualHours: Number((metrics.overtimeMinutes / MINUTES_PER_HOUR).toFixed(2)) } }
   );
 
   await ShiftHistory.create({
     employee: session.employee,
     restaurant: session.restaurant,
-    date: start,
+    date: log.date || start,
     eventType: "EmployeeLogout",
     updatedData: {
       logoutTime,
@@ -203,6 +314,7 @@ export async function finalizeAttendanceOnClockOut({ session, logoutTime = new D
       earlyLeaveMinutes: log.earlyLeaveMinutes,
       overtimeMinutes: log.overtimeMinutes,
       attendanceStatus: log.attendanceStatus,
+      isIncomplete: log.isIncomplete,
     },
     plannedShift: log.shift || null,
     dutyChange: log.dutyChange || null,
@@ -212,14 +324,27 @@ export async function finalizeAttendanceOnClockOut({ session, logoutTime = new D
 }
 
 export async function recalculateAttendanceLog(log) {
-  const metrics = computeAttendanceMetrics(log);
+  const { start, end } = getAttendanceDayBounds(log.date || log.loginTime);
+  const remainingActive = await EmployeeSession.countDocuments({
+    employee: log.employee,
+    restaurant: log.restaurant,
+    status: "Active",
+    loginTime: { $gte: start, $lt: end },
+  });
+  const workedMinutes = await sumSessionWorkedMinutes({
+    employeeId: log.employee,
+    restaurantId: log.restaurant,
+    start,
+    end,
+  });
+  log.isIncomplete = remainingActive > 0 || !log.logoutTime;
+  const metrics = computeAttendanceMetrics(log, { workedMinutes });
   log.workedMinutes = metrics.workedMinutes;
   log.actualHours = Number((metrics.workedMinutes / MINUTES_PER_HOUR).toFixed(2));
   log.lateMinutes = metrics.lateMinutes;
   log.earlyLeaveMinutes = metrics.earlyLeaveMinutes;
   log.overtimeMinutes = metrics.overtimeMinutes;
   log.attendanceStatus = metrics.attendanceStatus;
-  log.isIncomplete = !log.logoutTime;
   await log.save();
   return log;
 }
