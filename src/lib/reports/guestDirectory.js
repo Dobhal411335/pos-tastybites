@@ -22,6 +22,8 @@ const GENERIC_NAMES = new Set([
   "walk-in guest",
 ]);
 
+const PLACEHOLDER_NAME = /^(walk[\s-]*in|table)\b/i;
+
 const ORDER_STATUSES = [
   "PENDING",
   "CONFIRMED",
@@ -57,6 +59,7 @@ const LIST_SELECT = [
   "status",
   "paymentStatus",
   "guestCount",
+  "source",
 ].join(" ");
 
 const DETAIL_SELECT = `${LIST_SELECT} items.name items.qty`;
@@ -80,6 +83,25 @@ function isGenericName(name) {
   return GENERIC_NAMES.has(normalizeName(name).toLowerCase());
 }
 
+function isPlaceholderGuestName(name) {
+  const value = normalizeName(name);
+  if (!value || isGenericName(value)) return true;
+  return PLACEHOLDER_NAME.test(value);
+}
+
+function orderGuestDisplayName(order) {
+  return normalizeName(order.partyName || order.guestName);
+}
+
+export function isGuestDirectoryOrder(order) {
+  if (String(order.source || "").toUpperCase() === "STAFF") return false;
+  if (normalizeName(order.partyName) && isPlaceholderGuestName(order.partyName)) {
+    return false;
+  }
+  const name = orderGuestDisplayName(order);
+  return Boolean(name) && !isPlaceholderGuestName(name);
+}
+
 function normalizeEmail(email) {
   const value = String(email || "").trim().toLowerCase();
   if (!value || !value.includes("@")) return null;
@@ -89,7 +111,8 @@ function normalizeEmail(email) {
 export function guestIdentity(order) {
   const phone = normalizePhone(order.contactNumber);
   const email = normalizeEmail(order.guestEmail);
-  const name = normalizeName(order.partyName || order.guestName);
+  const name = orderGuestDisplayName(order);
+  const realName = name && !isPlaceholderGuestName(name) ? name : null;
 
   if (phone) {
     return {
@@ -98,7 +121,7 @@ export function guestIdentity(order) {
       phone,
       countryCode: order.guestCountryCode || null,
       email,
-      name: name || null,
+      name: realName,
       identified: true,
     };
   }
@@ -110,19 +133,19 @@ export function guestIdentity(order) {
       phone: null,
       countryCode: order.guestCountryCode || null,
       email,
-      name: name || null,
+      name: realName,
       identified: true,
     };
   }
 
-  if (name && !isGenericName(name)) {
+  if (realName) {
     return {
-      guestKey: `name:${name.toLowerCase()}`,
+      guestKey: `name:${realName.toLowerCase()}`,
       method: "name",
       phone: null,
       countryCode: order.guestCountryCode || null,
       email,
-      name,
+      name: realName,
       identified: true,
     };
   }
@@ -387,7 +410,7 @@ function parseGuestKeyQuery(guestKey) {
 }
 
 function guestKeyMongoFilter(parsed, restaurantId) {
-  const match = { restaurantId };
+  const match = { restaurantId, source: { $ne: "STAFF" } };
   if (parsed.type === "order" && mongoose.Types.ObjectId.isValid(parsed.value)) {
     match._id = new mongoose.Types.ObjectId(parsed.value);
     return match;
@@ -500,7 +523,10 @@ export async function buildGuestDirectoryReport({
     : restaurantId;
 
   const parsedKey = parseGuestKeyQuery(guestKey);
-  let match = { restaurantId: rid };
+  let match = {
+    restaurantId: rid,
+    source: { $ne: "STAFF" },
+  };
 
   if (parsedKey) {
     const keyMatch = guestKeyMongoFilter(parsedKey, rid);
@@ -528,7 +554,9 @@ export async function buildGuestDirectoryReport({
   const truncated = docs.length >= ORDER_SCAN_LIMIT;
 
   const filtered = docs.filter((order) => {
+    if (!isGuestDirectoryOrder(order)) return false;
     const identity = guestIdentity(order);
+    if (!identity.identified) return false;
     if (guestKey && identity.guestKey !== guestKey) return false;
     if (!matchesPaymentMethod(order, paymentMethod)) return false;
     if (!search) return true;
@@ -560,8 +588,7 @@ export async function buildGuestDirectoryReport({
     sort
   );
   const identified = allGuests.filter((guest) => guest.identified);
-  const unidentifiedGuests = allGuests.filter((guest) => !guest.identified);
-  const unidentified = summarizeUnidentified(unidentifiedGuests);
+  const unidentified = summarizeUnidentified([]);
 
   const paidOrders = filtered.filter(isRevenueOrder).length;
   const totalRevenue = r2(
@@ -581,8 +608,8 @@ export async function buildGuestDirectoryReport({
     : { topGuests: [] };
 
   return {
-    guests: parsedKey ? allGuests : identified,
-    unidentified: parsedKey ? summarizeUnidentified([]) : unidentified,
+    guests: identified,
+    unidentified,
     history,
     mostOrderedItems: parsedKey ? buildMostOrderedItems(filtered) : [],
     charts,

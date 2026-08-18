@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, Loader2, Mail, Phone, Calendar } from "lucide-react";
+import { ArrowLeft, Mail, Phone, Calendar } from "lucide-react";
 import {
   Area,
   AreaChart,
@@ -10,6 +10,7 @@ import {
   YAxis,
 } from "recharts";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Sheet,
   SheetContent,
@@ -29,6 +30,115 @@ import {
   money,
   STATUS_BADGE,
 } from "./guestFormat";
+
+function GuestProfileSkeleton() {
+  return (
+    <div className="flex flex-col gap-5 pb-6">
+      <div className="flex items-center gap-3">
+        <Skeleton className="w-14 h-14 rounded-full bg-zinc-200 shrink-0" />
+        <div className="flex flex-col gap-2 flex-1">
+          <Skeleton className="h-6 w-40 bg-zinc-200" />
+          <Skeleton className="h-4 w-24 rounded-md bg-zinc-200" />
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-3 bg-zinc-50 p-3 rounded-xl">
+        <div className="flex items-center gap-2">
+          <Skeleton className="h-4 w-4 rounded bg-zinc-200" />
+          <Skeleton className="h-4 w-48 bg-zinc-200" />
+        </div>
+        <div className="flex items-center gap-2">
+          <Skeleton className="h-4 w-4 rounded bg-zinc-200" />
+          <Skeleton className="h-4 w-32 bg-zinc-200" />
+        </div>
+        <div className="flex items-center gap-2">
+          <Skeleton className="h-4 w-4 rounded bg-zinc-200" />
+          <Skeleton className="h-4 w-36 bg-zinc-200" />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        {Array.from({ length: 4 }).map((_, index) => (
+          <div key={index} className="bg-zinc-50 p-3 rounded-xl flex flex-col gap-2">
+            <Skeleton className="h-3 w-20 bg-zinc-200" />
+            <Skeleton className="h-6 w-16 bg-zinc-200" />
+          </div>
+        ))}
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <Skeleton className="h-3 w-32 bg-zinc-200" />
+        <Skeleton className="h-32 w-full rounded-xl bg-zinc-200" />
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <Skeleton className="h-3 w-36 bg-zinc-200" />
+        <div className="rounded-xl overflow-hidden border border-zinc-100">
+          {Array.from({ length: 3 }).map((_, index) => (
+            <div
+              key={index}
+              className="px-3 py-2 flex items-center justify-between border-b border-zinc-100 last:border-b-0"
+            >
+              <Skeleton className="h-4 w-28 bg-zinc-200" />
+              <Skeleton className="h-5 w-10 rounded bg-zinc-200" />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <Skeleton className="h-3 w-28 bg-zinc-200" />
+        <div className="rounded-xl overflow-hidden border border-zinc-100">
+          {Array.from({ length: 4 }).map((_, index) => (
+            <div
+              key={index}
+              className="px-3 py-2.5 flex flex-col gap-2 border-b border-zinc-100 last:border-b-0"
+            >
+              <div className="flex items-center justify-between">
+                <Skeleton className="h-4 w-24 bg-zinc-200" />
+                <Skeleton className="h-4 w-14 rounded bg-zinc-200" />
+              </div>
+              <div className="flex items-center justify-between">
+                <Skeleton className="h-3 w-32 bg-zinc-200" />
+                <Skeleton className="h-4 w-12 bg-zinc-200" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function OrderDetailSkeleton() {
+  return (
+    <div className="flex flex-col gap-4 pb-6">
+      <div className="flex flex-col gap-2">
+        <Skeleton className="h-5 w-32 bg-zinc-200" />
+        <Skeleton className="h-3 w-48 bg-zinc-200" />
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        {Array.from({ length: 4 }).map((_, index) => (
+          <div key={index} className="bg-zinc-50 p-3 rounded-xl flex flex-col gap-2">
+            <Skeleton className="h-3 w-16 bg-zinc-200" />
+            <Skeleton className="h-5 w-20 bg-zinc-200" />
+          </div>
+        ))}
+      </div>
+      <div className="rounded-xl overflow-hidden border border-zinc-100">
+        {Array.from({ length: 5 }).map((_, index) => (
+          <div
+            key={index}
+            className="px-3 py-2.5 flex items-center justify-between border-b border-zinc-100 last:border-b-0"
+          >
+            <Skeleton className="h-4 w-36 bg-zinc-200" />
+            <Skeleton className="h-4 w-12 bg-zinc-200" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function ChartTooltip({ active, payload, label }) {
   if (!active || !payload?.length) return null;
@@ -191,13 +301,13 @@ function GuestProfileBody({
         {recent.length === 0 ? (
           <p className="text-sm text-zinc-500 py-4 text-center">No orders for this guest.</p>
         ) : (
-          <div className="rounded-xl overflow-hidden border border-zinc-100">
+          <div className="rounded overflow-hidden border border-zinc-100">
             {recent.map((row) => (
               <button
                 key={row.orderId}
                 type="button"
                 onClick={() => onSelectOrder(row.orderId)}
-                className="w-full px-3 py-2.5 flex flex-col gap-1 bg-white border-b border-zinc-100 last:border-b-0 text-left hover:bg-orange-50/50"
+                className="w-full px-3 py-2.5 flex flex-col gap-1 bg-white border-b border-zinc-100 text-left hover:bg-orange-200 hover:cursor-pointer"
               >
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-sm font-medium text-zinc-900">{row.orderNumber}</span>
@@ -246,7 +356,7 @@ export default function GuestProfileSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="right"
-        className="w-full sm:max-w-[420px] custom-scrollbar p-0 flex flex-col gap-0 overflow-hidden"
+        className="w-full sm:max-w-[500px] custom-scrollbar p-0 flex flex-col gap-0 overflow-hidden"
       >
         <SheetHeader className="bg-zinc-50 px-4 py-3 pr-12 border-b border-zinc-200 text-left space-y-0">
           {showingOrder ? (
@@ -284,18 +394,12 @@ export default function GuestProfileSheet({
         >
           {showingOrder ? (
             orderLoading ? (
-              <div className="py-10 flex justify-center text-sm text-zinc-500">
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Loading order…
-              </div>
+              <OrderDetailSkeleton />
             ) : orderDetail ? (
               <OrderDetailBody order={orderDetail} />
             ) : null
-          ) : loading && !guest ? (
-            <div className="py-10 flex justify-center text-sm text-zinc-500">
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              Loading guest…
-            </div>
+          ) : loading ? (
+            <GuestProfileSkeleton />
           ) : guest ? (
             <GuestProfileBody
               guest={guest}
@@ -304,7 +408,9 @@ export default function GuestProfileSheet({
               mostOrderedItems={mostOrderedItems}
               onSelectOrder={onSelectOrder}
             />
-          ) : null}
+          ) : (
+            <GuestProfileSkeleton />
+          )}
         </div>
       </SheetContent>
     </Sheet>

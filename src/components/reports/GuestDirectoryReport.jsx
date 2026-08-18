@@ -3,8 +3,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
   CalendarDays,
-  Download,
-  Loader2,
   Mail,
   Phone,
   Receipt,
@@ -27,6 +25,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
 import GuestDirectoryTable from "@/components/reports/guests/GuestDirectoryTable";
 import GuestProfileSheet from "@/components/reports/guests/GuestProfileSheet";
 import {
@@ -46,13 +45,39 @@ const EMPTY_FILTERS = {
   minSpend: "",
 };
 
+function KpiCardSkeleton() {
+  return (
+    <div className="bg-white border border-zinc-200 shadow-sm rounded-xl p-4 flex flex-col justify-between h-28">
+      <div className="flex justify-between items-start">
+        <Skeleton className="h-4 w-24 bg-zinc-200" />
+        <Skeleton className="h-5 w-5 rounded-md bg-zinc-200" />
+      </div>
+      <Skeleton className="h-8 w-20 bg-zinc-200" />
+    </div>
+  );
+}
+
+function FilterBarSkeleton() {
+  return (
+    <div className="bg-white border border-zinc-200 shadow-sm rounded-xl p-2 flex items-center gap-2 flex-wrap">
+      <Skeleton className="h-9 flex-1 min-w-[150px] rounded-lg bg-zinc-200" />
+      <Skeleton className="h-9 flex-1 min-w-[150px] rounded-lg bg-zinc-200" />
+      <Skeleton className="h-9 w-36 rounded-lg bg-zinc-200" />
+      <Skeleton className="h-9 w-28 rounded-lg bg-zinc-200" />
+      <Skeleton className="h-9 w-28 rounded-lg bg-zinc-200" />
+      <Skeleton className="h-8 w-24 rounded-md bg-zinc-200" />
+      <Skeleton className="h-8 w-16 rounded-md bg-zinc-200" />
+    </div>
+  );
+}
+
 function KpiCard({ label, value, icon: Icon }) {
   return (
     <div className="bg-white border border-zinc-200 shadow-sm rounded-xl p-4 flex flex-col justify-between h-28 relative overflow-hidden">
-      <div className="absolute -right-4 -top-4 w-24 h-24 bg-gradient-to-br from-orange-500/5 to-transparent rounded-full" />
+      <div className="absolute -right-4 -top-4 w-20 h-20 bg-linear-to-br from-orange-500 to-transparent rounded-full" />
       <div className="flex justify-between items-start z-10">
         <p className="text-sm text-zinc-500">{label}</p>
-        <Icon className="h-5 w-5 text-zinc-400" />
+        <Icon className="h-5 w-5 text-black" />
       </div>
       <h2 className="text-2xl font-semibold text-zinc-900 tabular-nums z-10 tracking-tight">
         {value}
@@ -74,42 +99,6 @@ function matchesGuestFilters(guest, filters) {
   if (filters.minOrders && guest.orders < Number(filters.minOrders)) return false;
   if (filters.minSpend && guest.totalSpent < Number(filters.minSpend)) return false;
   return true;
-}
-
-function exportGuestCsv(guests) {
-  const headers = [
-    "Guest",
-    "Email",
-    "Phone",
-    "Orders",
-    "Total Spent",
-    "Avg Order",
-    "Last Visit",
-    "Type",
-  ];
-  const lines = guests.map((guest) =>
-    [
-      guest.name,
-      guest.email || "",
-      formatPhone(guest.phone, guest.countryCode),
-      guest.orders,
-      guest.totalSpent,
-      guest.aov,
-      guest.lastVisit ? formatDate(guest.lastVisit) : "",
-      guestType(guest),
-    ]
-      .map((value) => `"${String(value).replace(/"/g, '""')}"`)
-      .join(",")
-  );
-  const blob = new Blob([[headers.join(","), ...lines].join("\n")], {
-    type: "text/csv;charset=utf-8;",
-  });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = "guest-directory.csv";
-  link.click();
-  URL.revokeObjectURL(url);
 }
 
 export default function GuestDirectoryReport() {
@@ -297,75 +286,77 @@ export default function GuestDirectoryReport() {
 
   return (
     <div className="flex flex-col w-full gap-6">
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-        <div className="flex flex-col gap-1">
+      <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
+        <div className="flex flex-col gap-1 min-w-0">
           <h1 className="text-2xl font-semibold text-zinc-900 tracking-tight">
             Guest Directory
           </h1>
           <p className="text-sm text-zinc-500">Guest & Customer Analytics</p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="flex items-center gap-2 bg-white border border-zinc-200 shadow-sm px-2 py-1.5 rounded-lg">
-            <CalendarDays className="h-4 w-4 text-zinc-500 ml-1" />
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full xl:w-auto">
+          <div className="flex items-center gap-2 sm:gap-3 bg-white border border-zinc-200 shadow-sm px-3 py-1.5 rounded-lg flex-1 min-w-[220px] xl:flex-none xl:min-w-0">
+            <CalendarDays className="h-4 w-4 text-zinc-500 shrink-0" />
             <DatePicker
               value={dateFrom}
               onChange={(value) => setDateFrom(value ? startOfDay(value) : null)}
               placeholder="From"
-              className="h-8 w-32 border-0 shadow-none px-1 text-sm"
+              className="h-8 flex-1 min-w-0 sm:w-32 xl:w-36 border-0 shadow-none px-1 text-sm [&_svg]:hidden"
             />
-            <span className="text-zinc-400 text-xs">–</span>
+            <span className="text-zinc-400 text-sm px-1 shrink-0">–</span>
             <DatePicker
               value={dateTo}
               onChange={(value) => setDateTo(value ? startOfDay(value) : null)}
               placeholder="To"
-              className="h-8 w-32 border-0 shadow-none px-1 text-sm"
+              className="h-8 flex-1 min-w-0 sm:w-32 xl:w-36 border-0 shadow-none px-1 text-sm [&_svg]:hidden"
             />
           </div>
-          <div className="flex items-center bg-white border border-zinc-200 shadow-sm px-2 py-1.5 rounded-lg">
-            <Search className="h-4 w-4 text-zinc-400 ml-1 mr-2" />
+          <div className="flex items-center bg-white border border-zinc-200 shadow-sm px-3 py-1.5 rounded-lg flex-1 min-w-[160px] xl:flex-none">
+            <Search className="h-4 w-4 text-zinc-400 mr-2 shrink-0" />
             <Input
               value={searchInput}
               onChange={(event) => setSearchInput(event.target.value)}
               placeholder="Search guests..."
-              className="h-8 w-44 border-0 shadow-none px-0 text-sm"
+              className="h-8 w-full min-w-0 xl:w-44 border-0 shadow-none px-0 text-sm"
             />
           </div>
           <Button
             type="button"
             variant="outline"
-            className="h-10 bg-white"
-            onClick={() => exportGuestCsv(visibleGuests)}
-            disabled={visibleGuests.length === 0}
-          >
-            <Download className="h-4 w-4 mr-1.5" />
-            Export
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            className="h-10 w-10 p-0 bg-white"
+            className="h-10 w-10 p-0 bg-white shrink-0"
             onClick={() => setReloadToken((value) => value + 1)}
+            aria-label="Refresh guests"
           >
             <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
           </Button>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
-        {kpis.map((item) => (
-          <KpiCard key={item.label} label={item.label} value={item.value} icon={item.icon} />
-        ))}
-      </div>
+      {loading ? (
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
+          {Array.from({ length: 5 }).map((_, index) => (
+            <KpiCardSkeleton key={index} />
+          ))}
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
+          {kpis.map((item) => (
+            <KpiCard key={item.label} label={item.label} value={item.value} icon={item.icon} />
+          ))}
+        </div>
+      )}
 
-      {report?.meta?.truncated ? (
+      {report?.meta?.truncated && !loading ? (
         <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
           Showing guests from the most recent {report.meta.scannedOrders?.toLocaleString()} orders.
           Older guests may be missing.
         </p>
       ) : null}
 
+      {loading ? (
+        <FilterBarSkeleton />
+      ) : (
       <div className="bg-white border border-zinc-200 shadow-sm rounded-xl p-2 flex items-center gap-2 flex-wrap">
-        <div className="flex items-center bg-zinc-100 px-2 py-1.5 rounded-lg flex-1 min-w-[150px]">
+        <div className="flex items-center bg-zinc-100 px-2 py-1.5 rounded-lg flex-1 min-w-[150px] border-zinc-400 border">
           <Mail className="h-4 w-4 text-zinc-400 mr-2" />
           <Input
             value={draftFilters.email}
@@ -376,7 +367,7 @@ export default function GuestDirectoryReport() {
             className="h-7 border-0 shadow-none bg-transparent px-0 text-sm"
           />
         </div>
-        <div className="flex items-center bg-zinc-100 px-2 py-1.5 rounded-lg flex-1 min-w-[150px]">
+        <div className="flex items-center bg-zinc-100 px-2 py-1.5 rounded-lg flex-1 min-w-[150px] border-zinc-400 border">
           <Phone className="h-4 w-4 text-zinc-400 mr-2" />
           <Input
             value={draftFilters.phone}
@@ -391,7 +382,7 @@ export default function GuestDirectoryReport() {
           value={draftFilters.type}
           onValueChange={(value) => setDraftFilters((prev) => ({ ...prev, type: value }))}
         >
-          <SelectTrigger className="h-9 w-36 bg-zinc-100 border-0 text-sm">
+          <SelectTrigger className="h-9 w-36 bg-zinc-100 border-zinc-400 border text-sm">
             <SelectValue placeholder="All Types" />
           </SelectTrigger>
           <SelectContent>
@@ -409,7 +400,7 @@ export default function GuestDirectoryReport() {
             setDraftFilters((prev) => ({ ...prev, minOrders: event.target.value }))
           }
           placeholder="Min Orders"
-          className="h-9 w-28 bg-zinc-100 border-0 text-sm"
+          className="h-9 w-28 bg-zinc-100 text-sm border-zinc-400 border"
         />
         <Input
           type="number"
@@ -419,7 +410,7 @@ export default function GuestDirectoryReport() {
             setDraftFilters((prev) => ({ ...prev, minSpend: event.target.value }))
           }
           placeholder="Min Spend"
-          className="h-9 w-28 bg-zinc-100 border-0 text-sm"
+          className="h-9 w-28 bg-zinc-100 text-sm border-zinc-400 border"
         />
         <Button
           type="button"
@@ -431,26 +422,24 @@ export default function GuestDirectoryReport() {
         <Button
           type="button"
           variant="secondary"
-          className="h-8 text-[11px] font-semibold uppercase"
+          className="h-8 text-[11px] font-semibold uppercase border-zinc-400 border"
           onClick={clearFilters}
         >
           Clear
         </Button>
       </div>
+      )}
 
       {(dateFrom && !dateTo) || (!dateFrom && dateTo) ? (
-        <p className="text-[11px] text-zinc-500 -mt-3">
+        <p className="text-[11px] text-zinc-700 -mt-3">
           Pick both dates to filter by activity. The list still shows all guests until then.
         </p>
       ) : (
-        <p className="text-[11px] text-zinc-400 -mt-3">{dateLabel}</p>
+        <p className="text-[11px] text-zinc-800 -mt-3">{dateLabel}</p>
       )}
 
       {loading ? (
-        <div className="bg-white border border-zinc-200 rounded-xl h-64 flex items-center justify-center text-sm text-zinc-500">
-          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-          Loading guests…
-        </div>
+        <GuestDirectoryTable loading />
       ) : !hasGuests ? (
         <div className="bg-white border border-zinc-200 rounded-xl h-48 flex items-center justify-center text-sm text-zinc-500">
           No guests found{dateFilterReady ? " for this period" : ""}.

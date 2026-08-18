@@ -35,33 +35,48 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
-/* Custom Scrollbar */
-
-.custom-scrollbar {
+/* Orange scrollbar — every page and overflow container */
+* {
   scrollbar-width: thin;
-  /* Firefox */
-  scrollbar-color: #f97316 #f4f4f5;
-  /* thumb track */
+  scrollbar-color: var(--primary) #f4f4f5;
 }
 
-/* Chrome, Edge, Safari */
-.custom-scrollbar::-webkit-scrollbar {
+*::-webkit-scrollbar {
   width: 6px;
+  height: 6px;
 }
 
-.custom-scrollbar::-webkit-scrollbar-track {
+*::-webkit-scrollbar-track {
   background: #f4f4f5;
   border-radius: 9999px;
 }
 
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background: #f97316;
+*::-webkit-scrollbar-thumb {
+  background: var(--primary);
   border-radius: 9999px;
   border: 1px solid #f4f4f5;
 }
 
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: #ea580c;
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--primary-hover);
+}
+
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: var(--primary) #f4f4f5;
+}
+
+.no-scrollbar,
+.scrollbar-none {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.no-scrollbar::-webkit-scrollbar,
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
 }
 
 /* Hide browser-native password reveal (Edge/Chrome on Windows) */
