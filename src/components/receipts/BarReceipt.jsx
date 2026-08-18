@@ -2,6 +2,7 @@ import React from "react";
 import "./print.css";
 import moment from "moment";
 import { isDirectSaleOrder, formatTableNumbersWithFloor } from "@/utils/orderDisplay";
+import { getProductChoiceDetailLines } from "@/utils/productChoices";
 
 function isStyleOption(opt, preparationStyle) {
   const value = String(opt || "").trim();
@@ -123,6 +124,7 @@ const BarReceipt = ({
           const extras = (item.options || []).filter(
             (opt) => !isStyleOption(opt, item.preparationStyle)
           );
+          const choiceLines = getProductChoiceDetailLines(item);
           const seatBits = [];
           if (item.seat) seatBits.push(item.seat);
           if (Array.isArray(item.seats)) {
@@ -154,6 +156,18 @@ const BarReceipt = ({
               {item.preparationStyle && (
                 <div className="pl-7 text-[11px] font-semibold italic">
                   + {item.preparationStyle}
+                </div>
+              )}
+              {choiceLines.length > 0 && (
+                <div className="pl-7 mt-0.5 space-y-0.5">
+                  {choiceLines.map((line) => (
+                    <div
+                      key={line.label}
+                      className="text-[11px] font-semibold italic"
+                    >
+                      {line.label}: {line.value}
+                    </div>
+                  ))}
                 </div>
               )}
               {extras.length > 0 && (

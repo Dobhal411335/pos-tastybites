@@ -8,7 +8,15 @@ import Tax from "@/models/tax/Tax";
 // GET - List all offers for the restaurant (POS + admin)
 export const GET = withAuth(async (request) => {
   try {
-    const offers = await Offer.find({ restaurant: request.restaurant })
+    const { searchParams } = new URL(request.url);
+    const activeOnly =
+      searchParams.get("active") === "1" ||
+      searchParams.get("status") === "Active";
+
+    const query = { restaurant: request.restaurant };
+    if (activeOnly) query.status = true;
+
+    const offers = await Offer.find(query)
       .sort({ createdAt: -1 })
       .lean();
     return sendSuccess(offers, "Offers retrieved successfully");

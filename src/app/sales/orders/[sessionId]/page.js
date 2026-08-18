@@ -59,6 +59,12 @@ import {
   offerNeedsOptions,
   buildOfferCartModifier,
 } from "@/utils/offerDetails";
+import {
+  productHasChoiceOptions,
+  normalizeChoiceOptions,
+  normalizeChoiceSelections,
+  cartChoiceSelectionsKey,
+} from "@/utils/productChoices";
 
 function formatOrderServerName(order, fallbackUser) {
   if (order?.processedByName) return order.processedByName;
@@ -112,7 +118,9 @@ function isSameCartLine(a, b) {
     String(a.preparationStyle || "") === String(b.preparationStyle || "") &&
     Number(a.price) === Number(b.price) &&
     Boolean(a.isOffer) === Boolean(b.isOffer) &&
-    cartOptionsKey(a.options) === cartOptionsKey(b.options)
+    cartOptionsKey(a.options) === cartOptionsKey(b.options) &&
+    cartChoiceSelectionsKey(a.choiceSelections) ===
+      cartChoiceSelectionsKey(b.choiceSelections)
   );
 }
 
@@ -173,6 +181,7 @@ export default function OrderPage() {
   const [selectedOfferChoices, setSelectedOfferChoices] = useState([]);
   const [selectedOfferDrinks, setSelectedOfferDrinks] = useState([]);
   const [selectedOfferInclusions, setSelectedOfferInclusions] = useState([]);
+  const [selectedProductChoices, setSelectedProductChoices] = useState({});
 
   // New states
   const [isKitchenModalOpen, setIsKitchenModalOpen] = useState(false);
@@ -253,13 +262,13 @@ export default function OrderPage() {
       try {
         const [catRes, prodRes, taxRes, serviceTaxRes, headRes, phRes, offerRes] =
           await Promise.all([
-            fetch("/api/menu/categories"),
-            fetch("/api/menu/products"),
+            fetch("/api/menu/categories?active=1"),
+            fetch("/api/menu/products?active=1"),
             fetch("/api/tax"),
             fetch("/api/tax/servicetax?active=1"),
-            fetch("/api/menu/heads"),
-            fetch("/api/menu/product-heads"),
-            fetch("/api/menu/offers"),
+            fetch("/api/menu/heads?active=1"),
+            fetch("/api/menu/product-heads?active=1"),
+            fetch("/api/menu/offers?active=1"),
           ]);
         const catJson = await catRes.json();
         const prodJson = await prodRes.json();
@@ -270,11 +279,20 @@ export default function OrderPage() {
         const offerJson = await offerRes.json();
 
         if (catJson.success) {
-          const cats = catJson.data.map((c) => c.name);
+          const cats = (catJson.data || [])
+            .filter((c) => String(c.status || "Active") !== "Inactive")
+            .map((c) => c.name);
           setCategories(["All", ...cats]);
         }
         if (prodJson.success) {
-          setMenuItems(prodJson.data);
+          setMenuItems(
+            (prodJson.data || []).filter((p) => {
+              const productActive = String(p.status || "Active") !== "Inactive";
+              const categoryActive =
+                String(p.category?.status || "Active") !== "Inactive";
+              return productActive && categoryActive;
+            }),
+          );
         }
         if (taxJson.success) {
           setGlobalTaxes(taxJson.data.filter((t) => t.status === "Active"));
@@ -287,7 +305,9 @@ export default function OrderPage() {
         }
         if (headJson.success) {
           const menuHeads = (headJson.data || []).filter(
-            (h) => String(h.name).toLowerCase() !== "offer",
+            (h) =>
+              String(h.name).toLowerCase() !== "offer" &&
+              String(h.status || "Active") !== "Inactive",
           );
           setHeads([
             { _id: "all", name: "All" },
@@ -301,7 +321,13 @@ export default function OrderPage() {
           ]);
         }
         if (phJson.success) {
-          setProductHeads(phJson.data);
+          setProductHeads(
+            (phJson.data || []).filter(
+              (ph) =>
+                String(ph.status || "Active") !== "Inactive" &&
+                String(ph.head?.status || "Active") !== "Inactive",
+            ),
+          );
         }
         if (offerJson.success) {
           setOffers(Array.isArray(offerJson.data) ? offerJson.data : []);
@@ -420,6 +446,7 @@ export default function OrderPage() {
                 inclusions,
                 choices,
                 drinks,
+                choiceSelections: normalizeChoiceSelections(item.choiceSelections),
                 modifier: parts.length > 0 ? parts.join(" | ") : undefined,
                 cartId: item.cartId || `r-${Date.now()}-${idx}`,
               };
@@ -511,6 +538,7 @@ export default function OrderPage() {
                   inclusions,
                   choices,
                   drinks,
+                  choiceSelections: normalizeChoiceSelections(item.choiceSelections),
                   modifier: parts.length > 0 ? parts.join(" | ") : undefined,
                   cartId: item.cartId || `r-${Date.now()}-${idx}`,
                 };
@@ -715,6 +743,7 @@ export default function OrderPage() {
     setSelectedOfferChoices([]);
     setSelectedOfferDrinks([]);
     setSelectedOfferInclusions([]);
+    setSelectedProductChoices({});
   };
 
   const handleOpenOptions = (item) => {
@@ -730,6 +759,7 @@ export default function OrderPage() {
     setSelectedOfferChoices([]);
     setSelectedOfferDrinks([]);
     setSelectedOfferInclusions([]);
+    setSelectedProductChoices({});
     setIsOptionsModalOpen(true);
   };
 
@@ -744,6 +774,7 @@ export default function OrderPage() {
     setSelectedOfferInclusions(inclusions);
     setSelectedOfferChoices(choices.length === 1 ? choices : []);
     setSelectedOfferDrinks(drinks.length === 1 ? drinks : []);
+    setSelectedProductChoices({});
     setIsOptionsModalOpen(true);
   };
 
@@ -753,6 +784,16 @@ export default function OrderPage() {
         ? prev.filter((value) => value !== item)
         : [...prev, item],
     );
+  };
+
+  const toggleProductSubChoice = (groupIndex, value) => {
+    setSelectedProductChoices((prev) => {
+      const current = prev[groupIndex] || [];
+      const next = current.includes(value)
+        ? current.filter((item) => item !== value)
+        : [...current, value];
+      return { ...prev, [groupIndex]: next };
+    });
   };
 
   const setVariantQty = (size, qty) => {
@@ -790,7 +831,7 @@ export default function OrderPage() {
     const hasStyles =
       product.preparationStyles &&
       product.preparationStyles.filter(Boolean).length > 0;
-    return hasVariants || hasAddons || hasStyles;
+    return hasVariants || hasAddons || hasStyles || productHasChoiceOptions(product);
   };
 
   const addToCart = (product) => {
@@ -820,6 +861,7 @@ export default function OrderPage() {
             preparationStyle: null,
             options: [],
             productType: product.productType === "BAR" ? "BAR" : "KITCHEN",
+            choiceSelections: [],
           },
         ],
         cartIdSeq,
@@ -909,6 +951,15 @@ export default function OrderPage() {
       (entry) => entry?.qty > 0 && entry?.addon,
     );
 
+    const choiceSelections = normalizeChoiceOptions(
+      selectedProduct.choiceOptions,
+    )
+      .map((group, index) => ({
+        name: group.name,
+        subChoices: selectedProductChoices[index] || [],
+      }))
+      .filter((group) => group.subChoices.length > 0);
+
     const newLines = [];
 
     if (hasVariants) {
@@ -937,6 +988,7 @@ export default function OrderPage() {
           productType:
             selectedProduct.productType === "BAR" ? "BAR" : "KITCHEN",
           modifier: parts.join(" | "),
+          choiceSelections,
         });
       });
     } else {
@@ -959,6 +1011,7 @@ export default function OrderPage() {
         options,
         productType: selectedProduct.productType === "BAR" ? "BAR" : "KITCHEN",
         modifier: selectedPreparationStyle || undefined,
+        choiceSelections,
       });
     }
 
@@ -1577,6 +1630,30 @@ export default function OrderPage() {
                             <p className="text-[11px] font-semibold text-zinc-500 mt-0.5">
                               {item.modifier}
                             </p>
+                          ) : null}
+                          {!isOfferItem(item) &&
+                          normalizeChoiceSelections(item.choiceSelections).length > 0 ? (
+                            <div className="mt-1.5 space-y-1.5">
+                              {normalizeChoiceSelections(item.choiceSelections).map(
+                                (group) => (
+                                  <div key={group.name}>
+                                    <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-wide">
+                                      {group.name}
+                                    </p>
+                                    <div className="flex flex-wrap gap-1 mt-1">
+                                      {group.subChoices.map((choice) => (
+                                        <span
+                                          key={`${group.name}-${choice}`}
+                                          className="inline-flex items-center rounded-full border border-orange-100 bg-orange-50 px-2 py-0.5 text-[10px] font-semibold text-orange-800"
+                                        >
+                                          {choice}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  </div>
+                                ),
+                              )}
+                            </div>
                           ) : null}
                         </div>
                         <span className="font-bold text-sm text-zinc-900 shrink-0">
@@ -2221,6 +2298,49 @@ export default function OrderPage() {
                       </div>
                     </div>
                   )}
+
+                {normalizeChoiceOptions(selectedProduct.choiceOptions).length > 0 && (
+                  <div className="space-y-5">
+                    {normalizeChoiceOptions(selectedProduct.choiceOptions).map(
+                      (group, groupIndex) => (
+                        <div key={`${group.name}-${groupIndex}`} className="space-y-2">
+                          <span className="text-[13px] font-bold text-zinc-900 mb-2 block">
+                            {group.name}
+                          </span>
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                            {group.subChoices.map((choice) => {
+                              const selected = (
+                                selectedProductChoices[groupIndex] || []
+                              ).includes(choice);
+                              return (
+                                <label
+                                  key={`${group.name}-${choice}`}
+                                  className={`flex items-center border p-3 rounded-lg cursor-pointer transition-colors ${
+                                    selected
+                                      ? "border-orange-500 bg-orange-50/30"
+                                      : "border-zinc-200 hover:border-orange-300"
+                                  }`}
+                                >
+                                  <div className="flex-1 flex items-center gap-3 text-[14px] font-bold text-zinc-800">
+                                    <input
+                                      type="checkbox"
+                                      checked={selected}
+                                      onChange={() =>
+                                        toggleProductSubChoice(groupIndex, choice)
+                                      }
+                                      className="w-4 h-4 accent-orange-500"
+                                    />
+                                    <span>{choice}</span>
+                                  </div>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ),
+                    )}
+                  </div>
+                )}
 
                 {selectedProduct.addons &&
                   selectedProduct.addons.length > 0 && (

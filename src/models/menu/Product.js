@@ -13,6 +13,11 @@ const AddonSchema = new mongoose.Schema({
   status: { type: Boolean, default: true },
 });
 
+const ChoiceOptionSchema = new mongoose.Schema({
+  name: { type: String, required: true, trim: true },
+  subChoices: [{ type: String, trim: true }],
+});
+
 const ProductSchema = new mongoose.Schema(
   {
     restaurant: { type: mongoose.Schema.Types.ObjectId, ref: 'Restaurant', required: true },
@@ -38,6 +43,7 @@ const ProductSchema = new mongoose.Schema(
     image: { url: { type: String }, key: { type: String } },
     variants: [VariantSchema],
     addons: [AddonSchema],
+    choiceOptions: [ChoiceOptionSchema],
     preparationStyles: [{ type: String }],
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee' },
     updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee' },

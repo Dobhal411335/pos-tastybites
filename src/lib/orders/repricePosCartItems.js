@@ -11,6 +11,7 @@ import {
 } from "@/lib/orders/staffDiscount";
 import { computeOrderServiceCharge } from "@/lib/orders/serviceCharge";
 import { filterOfferSelections } from "@/utils/offerDetails";
+import { filterProductChoiceSelections } from "@/utils/productChoices";
 
 const r2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 
@@ -208,6 +209,7 @@ export async function repricePosCartItems({
     let inclusions = [];
     let choices = [];
     let drinks = [];
+    let choiceSelections = [];
 
     if (isOffer) {
       const offer = offerMap.get(String(id));
@@ -269,6 +271,12 @@ export async function repricePosCartItems({
       productCode = product.productCode || "";
       category = item.category || "ITEMS";
       productType = normalizeProductType(product.productType);
+      if (!isExtraLine) {
+        choiceSelections = filterProductChoiceSelections(
+          item.choiceSelections,
+          product.choiceOptions,
+        );
+      }
     }
 
     unitPrice = r2(unitPrice);
@@ -291,6 +299,7 @@ export async function repricePosCartItems({
       isOffer,
       inclusions,
       choices,
+      choiceSelections,
       drinks,
       cartId: item.cartId || String(Date.now() + Math.random()),
     });

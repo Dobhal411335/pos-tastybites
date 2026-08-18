@@ -39,6 +39,9 @@ export default function ProductDetailsConfigPage() {
   const [serviceTax, setServiceTax] = useState(null);
   const [preparationStyles, setPreparationStyles] = useState([""]);
   const [productType, setProductType] = useState("");
+  const [choiceOptions, setChoiceOptions] = useState([
+    { name: "", subChoices: ["", "", "", ""] },
+  ]);
 
   // Custom selection lists
   const [sizesList, setSizesList] = useState([]);
@@ -63,6 +66,14 @@ export default function ProductDetailsConfigPage() {
         setVariants(p.variants || []);
         setAddons(p.addons || []);
         setPreparationStyles(p.preparationStyles?.length ? p.preparationStyles : [""]);
+        setChoiceOptions(
+          p.choiceOptions?.length
+            ? p.choiceOptions.map((group) => ({
+                name: group.name || "",
+                subChoices: group.subChoices?.length ? [...group.subChoices] : ["", "", "", ""],
+              }))
+            : [{ name: "", subChoices: ["", "", "", ""] }]
+        );
         setProductType(p.productType === "BAR" ? "BAR" : p.productType === "KITCHEN" ? "KITCHEN" : "");
         setSelectedTaxes(p.taxes?.map(t => typeof t === 'object' ? t._id : t) || []);
       } else {
@@ -234,6 +245,12 @@ export default function ProductDetailsConfigPage() {
           variants: variants.filter(v => v.size).map(v => ({ ...v, price: parseFloat(v.price) || 0 })),
           addons: addons.filter(a => a.name).map(a => ({ ...a, price: parseFloat(a.price) || 0 })),
           preparationStyles: preparationStyles.filter(s => s.trim() !== ""),
+          choiceOptions: choiceOptions
+            .map((group) => ({
+              name: (group.name || "").trim(),
+              subChoices: (group.subChoices || []).map((value) => value.trim()).filter(Boolean),
+            }))
+            .filter((group) => group.name && group.subChoices.length > 0),
           image: product?.image
         })
       });
@@ -427,7 +444,111 @@ export default function ProductDetailsConfigPage() {
                   </CardContent>
                 </Card>
 
-                
+                <Card className="shadow-sm border-zinc-200 bg-white overflow-hidden">
+                  <CardHeader className="bg-zinc-50/50 border-b border-zinc-100 pb-4">
+                    <CardTitle className="text-[18px] font-bold text-zinc-900">Choice Option</CardTitle>
+                    <CardDescription className="text-[14px]">
+                      Add named choice groups and their selectable sub-choices.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="p-6 space-y-6">
+                    {choiceOptions.map((group, groupIndex) => (
+                      <div
+                        key={`choice-group-${groupIndex}`}
+                        className="space-y-4 border border-zinc-200 rounded-xl p-4 bg-white"
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <label className="text-[14px] font-semibold text-zinc-900">
+                            Choice Option
+                          </label>
+                          {choiceOptions.length > 1 && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              onClick={() => {
+                                const next = [...choiceOptions];
+                                next.splice(groupIndex, 1);
+                                setChoiceOptions(next);
+                              }}
+                              className="h-9 w-9 p-0 shrink-0 text-red-500 hover:text-red-700 hover:bg-red-50"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          )}
+                        </div>
+                        <Input
+                          type="text"
+                          placeholder="Example: Topping Options Name Title"
+                          value={group.name}
+                          onChange={(e) => {
+                            const next = [...choiceOptions];
+                            next[groupIndex] = { ...next[groupIndex], name: e.target.value };
+                            setChoiceOptions(next);
+                          }}
+                          className="h-11 text-[15px] bg-white rounded-full px-5"
+                        />
+                        <div className="space-y-3">
+                          <label className="text-[14px] font-semibold text-zinc-900">
+                            Add Option :
+                          </label>
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                            {group.subChoices.map((option, optionIndex) => (
+                              <Input
+                                key={`choice-${groupIndex}-${optionIndex}`}
+                                type="text"
+                                placeholder="Type Choice"
+                                value={option}
+                                onChange={(e) => {
+                                  const next = [...choiceOptions];
+                                  const subChoices = [...next[groupIndex].subChoices];
+                                  subChoices[optionIndex] = e.target.value;
+                                  next[groupIndex] = { ...next[groupIndex], subChoices };
+                                  setChoiceOptions(next);
+                                }}
+                                className="h-10 text-[14px] bg-white rounded-full px-4"
+                              />
+                            ))}
+                          </div>
+                          <div className="flex items-center justify-end gap-3 pt-1">
+                            <span className="text-[13px] font-medium text-zinc-600">
+                              Need More Choice Option
+                            </span>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              onClick={() => {
+                                const next = [...choiceOptions];
+                                next[groupIndex] = {
+                                  ...next[groupIndex],
+                                  subChoices: [...next[groupIndex].subChoices, ""],
+                                };
+                                setChoiceOptions(next);
+                              }}
+                              className="h-10 w-10 p-0 shrink-0 text-zinc-700"
+                            >
+                              <Plus className="w-5 h-5" />
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    <div className="flex justify-end">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() =>
+                          setChoiceOptions([
+                            ...choiceOptions,
+                            { name: "", subChoices: ["", "", "", ""] },
+                          ])
+                        }
+                        className="h-9 px-4 font-semibold text-zinc-700"
+                      >
+                        <Plus className="w-4 h-4 mr-2" /> Add Choice Option
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
 
                 {/* Pricing, Size, Addons Card */}
                 <Card className="shadow-sm border-zinc-200 bg-white overflow-hidden">

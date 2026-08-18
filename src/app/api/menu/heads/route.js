@@ -7,7 +7,15 @@ import { logger } from "@/utils/logger";
 // GET - List all heads
 export const GET = withAuth(async (request) => {
   try {
-    const heads = await Head.find({ restaurant: request.restaurant }).lean();
+    const { searchParams } = new URL(request.url);
+    const activeOnly =
+      searchParams.get("active") === "1" ||
+      searchParams.get("status") === "Active";
+
+    const query = { restaurant: request.restaurant };
+    if (activeOnly) query.status = "Active";
+
+    const heads = await Head.find(query).lean();
     return sendSuccess(heads, "Heads retrieved successfully");
   } catch (error) {
     logger.error("Failed to list heads", error);

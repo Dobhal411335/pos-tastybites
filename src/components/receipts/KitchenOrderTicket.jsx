@@ -2,6 +2,7 @@ import React from "react";
 import "./print.css";
 import moment from "moment";
 import { isOfferItem, getOfferDetailLines } from "@/utils/offerDetails";
+import { getProductChoiceDetailLines } from "@/utils/productChoices";
 import { isDirectSaleOrder, formatTableLocation } from "@/utils/orderDisplay";
 
 function isStyleOption(opt, preparationStyle) {
@@ -108,6 +109,9 @@ const KitchenOrderTicket = ({
                   : item.options?.filter(
                       (opt) => !isStyleOption(opt, item.preparationStyle),
                     ) || [];
+                const choiceLines = isOfferItem(item)
+                  ? []
+                  : getProductChoiceDetailLines(item);
 
                 return (
                 <div key={itemIdx}>
@@ -131,6 +135,18 @@ const KitchenOrderTicket = ({
                   {item.preparationStyle && (
                     <div className="pl-7 text-[11px] font-semibold italic">
                       + {item.preparationStyle}
+                    </div>
+                  )}
+                  {choiceLines.length > 0 && (
+                    <div className="pl-7 mt-1 space-y-0.5">
+                      {choiceLines.map((line) => (
+                        <div
+                          key={line.label}
+                          className="text-[11px] font-semibold italic"
+                        >
+                          {line.label}: {line.value}
+                        </div>
+                      ))}
                     </div>
                   )}
                   {offerLines.length > 0 && (

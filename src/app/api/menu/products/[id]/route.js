@@ -45,7 +45,7 @@ export const PUT = withAuth(async (request, { params }) => {
 
     const data = await request.json();
     // Allow updating basic info, description, taxes, status, variants, addons, image, discount
-    const { name, category, productCode, productType, description, taxes, status, variants, addons, image, preparationStyles } = data;
+    const { name, category, productCode, productType, description, taxes, status, variants, addons, image, preparationStyles, choiceOptions } = data;
 
     const updateData = { updatedBy: request.user.id };
 
@@ -86,6 +86,16 @@ export const PUT = withAuth(async (request, { params }) => {
     if (addons) updateData.addons = addons;
     if (image !== undefined) updateData.image = image;
     if (preparationStyles !== undefined) updateData.preparationStyles = preparationStyles;
+    if (choiceOptions !== undefined) {
+      updateData.choiceOptions = (Array.isArray(choiceOptions) ? choiceOptions : [])
+        .map((group) => ({
+          name: String(group?.name || "").trim(),
+          subChoices: (Array.isArray(group?.subChoices) ? group.subChoices : [])
+            .map((value) => String(value || "").trim())
+            .filter(Boolean),
+        }))
+        .filter((group) => group.name && group.subChoices.length > 0);
+    }
 
     const updateObj = { $set: updateData };
     if (data.discount === null) {

@@ -9,8 +9,25 @@ import Tax from "@/models/tax/Tax";
 // GET - List all products
 export const GET = withAuth(async (request) => {
   try {
-    const products = await Product.find({ restaurant: request.restaurant })
-      .populate("category", "name")
+    const { searchParams } = new URL(request.url);
+    const activeOnly =
+      searchParams.get("active") === "1" ||
+      searchParams.get("status") === "Active";
+
+    const query = { restaurant: request.restaurant };
+    if (activeOnly) {
+      query.status = "Active";
+      const activeCategories = await Category.find({
+        restaurant: request.restaurant,
+        status: "Active",
+      })
+        .select("_id")
+        .lean();
+      query.category = { $in: activeCategories.map((c) => c._id) };
+    }
+
+    const products = await Product.find(query)
+      .populate("category", "name status")
       .populate("discount")
       .populate("taxes")
       .lean();

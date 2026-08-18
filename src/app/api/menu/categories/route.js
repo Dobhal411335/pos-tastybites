@@ -23,12 +23,26 @@ async function syncCategoryAddonsToProducts(restaurantId, categoryId, categoryAd
 // GET - List all categories with product counts
 export const GET = withAuth(async (request) => {
   try {
-    const categories = await Category.find({ restaurant: request.restaurant }).lean();
+    const { searchParams } = new URL(request.url);
+    const activeOnly =
+      searchParams.get("active") === "1" ||
+      searchParams.get("status") === "Active";
+
+    const query = { restaurant: request.restaurant };
+    if (activeOnly) query.status = "Active";
+
+    const categories = await Category.find(query).lean();
 
     // Get product counts per category
     const categoryIds = categories.map(c => c._id);
+    const productMatch = {
+      category: { $in: categoryIds },
+      restaurant: new mongoose.Types.ObjectId(request.restaurant),
+    };
+    if (activeOnly) productMatch.status = "Active";
+
     const productCounts = await Product.aggregate([
-      { $match: { category: { $in: categoryIds }, restaurant: new mongoose.Types.ObjectId(request.restaurant) } },
+      { $match: productMatch },
       { $group: { _id: "$category", count: { $sum: 1 } } }
     ]);
 

@@ -8,12 +8,28 @@ import mongoose from "mongoose";
 // GET - List all product head mappings
 export const GET = withAuth(async (request) => {
   try {
-    const productHeads = await ProductHead.find({ restaurant: request.restaurant })
-      .populate('head')
-      .populate('categories.category', 'name')
+    const { searchParams } = new URL(request.url);
+    const activeOnly =
+      searchParams.get("active") === "1" ||
+      searchParams.get("status") === "Active";
+
+    const query = { restaurant: request.restaurant };
+    if (activeOnly) query.status = "Active";
+
+    const productHeads = await ProductHead.find(query)
+      .populate("head")
+      .populate("categories.category", "name status")
       .lean();
 
-    return sendSuccess(productHeads, "Product Heads retrieved successfully");
+    const data = activeOnly
+      ? productHeads.filter(
+          (ph) =>
+            ph.head &&
+            String(ph.head.status || "Active") !== "Inactive",
+        )
+      : productHeads;
+
+    return sendSuccess(data, "Product Heads retrieved successfully");
   } catch (error) {
     logger.error("Failed to list product heads", error);
     return sendError(error, "Failed to retrieve product heads", 500);
