@@ -40,7 +40,7 @@ export function dash(value) {
 export function DetailItem({ label, value }) {
   return (
     <div>
-      <p className="text-[11px] uppercase tracking-wide text-zinc-400">{label}</p>
+      <p className="text-[12px] uppercase tracking-wide text-black">{label}</p>
       <p className="text-zinc-900">{value}</p>
     </div>
   );
@@ -65,7 +65,7 @@ export default function OrderDetailBody({ order }) {
           <DetailItem label="Waive reason" value={order.waiveReason} />
         ) : null}
       </div>
-      <div className="overflow-x-auto border border-zinc-200 rounded-md">
+      <div className="overflow-x-auto border border-zinc-500 rounded-md">
         <Table>
           <TableHeader>
             <TableRow>
@@ -95,20 +95,20 @@ export default function OrderDetailBody({ order }) {
       </div>
       <div className="space-y-1 text-sm">
         <div className="flex justify-between">
-          <span className="text-zinc-500">Subtotal</span>
+          <span className="text-black">Subtotal</span>
           <span>{money(order.subTotal)}</span>
         </div>
         <div className="flex justify-between">
-          <span className="text-zinc-500">Discount</span>
+          <span className="text-black">Discount</span>
           <span>{money(order.discountTotal)}</span>
         </div>
         <div className="flex justify-between">
-          <span className="text-zinc-500">Tax</span>
+          <span className="text-black">Tax</span>
           <span>{money(order.taxTotal)}</span>
         </div>
         {Number(order.serviceChargeTotal) > 0 ? (
           <div className="flex justify-between">
-            <span className="text-zinc-500">
+            <span className="text-black">
               {order.serviceChargeName || "Service charge"}
             </span>
             <span>{money(order.serviceChargeTotal)}</span>
@@ -120,7 +120,7 @@ export default function OrderDetailBody({ order }) {
         </div>
         {Number(order.tipAmount) > 0 ? (
           <div className="flex justify-between">
-            <span className="text-zinc-500">Tip</span>
+            <span className="text-black">Tip</span>
             <span>{money(order.tipAmount)}</span>
           </div>
         ) : null}

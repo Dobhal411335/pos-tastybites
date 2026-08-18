@@ -1,0 +1,40 @@
+import { withAuth } from "@/utils/auth";
+import { sendError } from "@/utils/errorHandler";
+import { buildEmployeeExportPayload } from "@/lib/reports/employee/exportPayload";
+import {
+  exportEmployeeReportExcel,
+  employeeExcelFilename,
+} from "@/lib/reports/employee/exportExcel";
+
+/**
+ * GET /api/admin/reports/employees/excel
+ */
+export const GET = withAuth(async (request) => {
+  try {
+    const { searchParams } = new URL(request.url);
+    const payload = await buildEmployeeExportPayload({
+      restaurantId: request.restaurant,
+      searchParams,
+    });
+    const buffer = await exportEmployeeReportExcel(payload);
+    const filename = employeeExcelFilename(
+      payload.labels.dateFrom,
+      payload.labels.dateTo,
+      payload.labels.employeeName
+    );
+
+    return new Response(new Uint8Array(buffer), {
+      status: 200,
+      headers: {
+        "Content-Type":
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "Content-Disposition": `attachment; filename="${filename}"`,
+        "Cache-Control": "no-store",
+      },
+    });
+  } catch (error) {
+    console.error("Employee report excel error:", error);
+    const status = Number(error?.status) || 500;
+    return sendError(error, error.message || "Failed to export Excel", status);
+  }
+}, ["ADMIN", "MANAGER"]);

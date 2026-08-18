@@ -6,7 +6,7 @@ export const ATTENDANCE_BADGE = {
   Present: "bg-emerald-50 text-emerald-700",
   Late: "bg-amber-50 text-amber-700",
   Absent: "bg-red-50 text-red-700",
-  "Half Day": "bg-orange-50 text-orange-700",
+  "Half Day": "bg-orange-100 text-orange-700",
   Leave: "bg-zinc-100 text-zinc-600",
   Holiday: "bg-blue-50 text-blue-700",
   "Emergency Duty": "bg-violet-50 text-violet-700",

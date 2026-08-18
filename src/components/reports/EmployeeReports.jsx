@@ -1,10 +1,13 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  startOfMonth,
-  startOfWeek,
-} from "date-fns";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { startOfMonth, startOfWeek } from "date-fns";
 import {
   CalendarDays,
   ChevronLeft,
@@ -13,6 +16,7 @@ import {
   Filter,
   RefreshCw,
   Search,
+  X,
   Users,
   Clock,
   Timer,
@@ -35,7 +39,7 @@ import {
 } from "recharts";
 
 import { Button } from "@/components/ui/button";
-import { DatePicker } from "@/components/ui/date-picker";
+import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { Input } from "@/components/ui/input";
 import {
   Popover,
@@ -59,6 +63,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import EmployeeProfileSheet from "@/components/reports/employees/EmployeeProfileSheet";
+import EmployeeExportDialog from "@/components/reports/employees/EmployeeExportDialog";
 import {
   employeeInitials,
   formatHoursLabel,
@@ -134,7 +139,9 @@ function KpiCard({ label, value, hint, icon: Icon, accent = false }) {
   return (
     <div className="bg-white border border-zinc-200 shadow-sm rounded-xl p-4 flex flex-col justify-between h-28 relative overflow-hidden">
       <div className="flex justify-between items-start z-10">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{label}</p>
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
+          {label}
+        </p>
         <div
           className={`w-8 h-8 rounded-full flex items-center justify-center ${
             accent ? "bg-orange-500 text-white" : "bg-zinc-100 text-zinc-600"
@@ -144,7 +151,9 @@ function KpiCard({ label, value, hint, icon: Icon, accent = false }) {
         </div>
       </div>
       <div className="z-10">
-        <p className="text-2xl font-semibold text-zinc-900 tabular-nums tracking-tight">{value}</p>
+        <p className="text-2xl font-semibold text-zinc-900 tabular-nums tracking-tight">
+          {value}
+        </p>
         {hint ? <p className="text-xs text-zinc-500 mt-0.5">{hint}</p> : null}
       </div>
     </div>
@@ -180,48 +189,6 @@ function ClockBadge({ clockedIn }) {
   );
 }
 
-function exportStaffCsv(rows) {
-  const headers = [
-    "Employee",
-    "Role",
-    "Status",
-    "Clock In",
-    "Clock Out",
-    "Hours",
-    "Sales",
-    "Tips",
-    "Service Charges",
-    "Cancels",
-    "Estimated Pay",
-  ];
-  const lines = rows.map((row) =>
-    [
-      row.name,
-      row.role,
-      row.clockedIn ? "Clocked In" : "Clocked Out",
-      row.clockIn || "",
-      row.clockOut || "",
-      row.hours,
-      row.sales,
-      row.tips,
-      row.serviceCharges,
-      row.cancellations,
-      row.estimatedPay,
-    ]
-      .map((value) => `"${String(value ?? "").replace(/"/g, '""')}"`)
-      .join(",")
-  );
-  const blob = new Blob([[headers.join(","), ...lines].join("\n")], {
-    type: "text/csv;charset=utf-8;",
-  });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = "employee-staff-report.csv";
-  link.click();
-  URL.revokeObjectURL(url);
-}
-
 export default function EmployeeReports() {
   const [draft, setDraft] = useState(defaultFilters);
   const [applied, setApplied] = useState(defaultFilters);
@@ -241,6 +208,7 @@ export default function EmployeeReports() {
   const [selectedDay, setSelectedDay] = useState(null);
   const [orderDetail, setOrderDetail] = useState(null);
   const [orderLoading, setOrderLoading] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
 
   const performersRef = useRef(null);
   const pendingEmployeeId = useRef(null);
@@ -254,7 +222,10 @@ export default function EmployeeReports() {
   }, []);
 
   useEffect(() => {
-    const timer = setTimeout(() => setSearch(searchInput.trim().toLowerCase()), 300);
+    const timer = setTimeout(
+      () => setSearch(searchInput.trim().toLowerCase()),
+      300,
+    );
     return () => clearTimeout(timer);
   }, [searchInput]);
 
@@ -266,20 +237,32 @@ export default function EmployeeReports() {
       paymentMethod: applied.paymentMethod,
       section: "summary",
     });
-    if (applied.shiftId && applied.shiftId !== "ALL") params.set("shiftId", applied.shiftId);
+    if (applied.shiftId && applied.shiftId !== "ALL")
+      params.set("shiftId", applied.shiftId);
     return params;
   }, [applied]);
+
+  const exportQuery = useMemo(() => {
+    const params = summaryParams();
+    if (search) params.set("search", search);
+    if (staffTab !== "all") params.set("staffTab", staffTab);
+    return params.toString();
+  }, [summaryParams, search, staffTab]);
 
   const fetchSummary = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/admin/reports/employees?${summaryParams()}`, {
-        credentials: "include",
-        cache: "no-store",
-      });
+      const res = await fetch(
+        `/api/admin/reports/employees?${summaryParams()}`,
+        {
+          credentials: "include",
+          cache: "no-store",
+        },
+      );
       const json = await res.json();
-      if (!json.success) throw new Error(json.message || "Unable to load employee report.");
+      if (!json.success)
+        throw new Error(json.message || "Unable to load employee report.");
       setReport(json.data);
     } catch (err) {
       setError(err.message || "Unable to load employee report.");
@@ -314,7 +297,8 @@ export default function EmployeeReports() {
           cache: "no-store",
         });
         const json = await res.json();
-        if (!json.success) throw new Error(json.message || "Unable to load employee.");
+        if (!json.success)
+          throw new Error(json.message || "Unable to load employee.");
         setDetail(json.data);
         setSelectedEmployee(json.data.employee);
       } catch (err) {
@@ -323,14 +307,16 @@ export default function EmployeeReports() {
         setDetailLoading(false);
       }
     },
-    [summaryParams]
+    [summaryParams],
   );
 
   useEffect(() => {
     if (loading || !report || !pendingEmployeeId.current) return;
     const id = pendingEmployeeId.current;
     pendingEmployeeId.current = null;
-    const row = (report.performance || []).find((item) => item.employeeId === id);
+    const row = (report.performance || []).find(
+      (item) => item.employeeId === id,
+    );
     openEmployee(id, row || null);
   }, [loading, report, openEmployee]);
 
@@ -381,6 +367,28 @@ export default function EmployeeReports() {
     syncEmployeeQuery(null);
   };
 
+  const hasActiveFilters = useMemo(() => {
+    const defaults = defaultFilters();
+    if (searchInput.trim() || staffTab !== "all") return true;
+    if (applied.preset !== defaults.preset) return true;
+    if (applied.shiftId !== defaults.shiftId) return true;
+    if (applied.orderStatus !== defaults.orderStatus) return true;
+    if (applied.paymentMethod !== defaults.paymentMethod) return true;
+    if (toYmd(applied.dateFrom) !== toYmd(defaults.dateFrom)) return true;
+    if (toYmd(applied.dateTo) !== toYmd(defaults.dateTo)) return true;
+    return false;
+  }, [applied, searchInput, staffTab]);
+
+  const clearAllFilters = () => {
+    const next = defaultFilters();
+    setDraft(next);
+    setApplied(next);
+    setSearchInput("");
+    setSearch("");
+    setStaffTab("all");
+    closeSheet(false);
+  };
+
   const overview = report?.overview;
   const performance = report?.performance || [];
   const shifts = report?.filters?.shifts || [];
@@ -389,23 +397,32 @@ export default function EmployeeReports() {
     return performance.filter((row) => {
       if (staffTab !== "all" && staffGroup(row.role) !== staffTab) return false;
       if (!search) return true;
-      const haystack = `${row.name} ${row.role} ${row.employeeCode || ""}`.toLowerCase();
+      const haystack =
+        `${row.name} ${row.role} ${row.employeeCode || ""}`.toLowerCase();
       return haystack.includes(search);
     });
   }, [performance, staffTab, search]);
 
   const topPerformers = useMemo(() => {
     return [...performance]
-      .filter((row) => Number(row.sales) > 0 || Number(row.orders) > 0 || Number(row.hours) > 0)
+      .filter(
+        (row) =>
+          Number(row.sales) > 0 ||
+          Number(row.orders) > 0 ||
+          Number(row.hours) > 0,
+      )
       .sort((a, b) => b.sales - a.sales || b.hours - a.hours)
       .slice(0, 8);
   }, [performance]);
 
-  const maxPerformerSales = Math.max(...topPerformers.map((row) => Number(row.sales) || 0), 1);
+  const maxPerformerSales = Math.max(
+    ...topPerformers.map((row) => Number(row.sales) || 0),
+    1,
+  );
   const clockedIn = Number(overview?.clockedIn) || 0;
   const totalStaff = Number(overview?.totalStaff || overview?.employees) || 0;
-  const clockedPct = totalStaff > 0 ? Math.round((clockedIn / totalStaff) * 100) : 0;
-  const staffWithTips = performance.filter((row) => Number(row.tips) > 0).length || 1;
+  const clockedPct =
+    totalStaff > 0 ? Math.round((clockedIn / totalStaff) * 100) : 0;
   const charts = report?.charts || {};
   const salesOverTime = charts.salesOverTime || [];
   const tipsOverTime = charts.tipsOverTime || [];
@@ -430,7 +447,7 @@ export default function EmployeeReports() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <div className="flex bg-zinc-100 rounded-lg p-1">
+          <div className="flex bg-zinc-100 border border-zinc-300 rounded-lg p-1">
             {DATE_PRESETS.map((option) => (
               <Button
                 key={option.value}
@@ -440,7 +457,7 @@ export default function EmployeeReports() {
                 className={`h-8 px-3 text-xs ${
                   draft.preset === option.value
                     ? "bg-white text-zinc-900 shadow-sm"
-                    : "text-zinc-500 hover:text-zinc-900"
+                    : "text-zinc-900 hover:text-zinc-900"
                 }`}
                 onClick={() => onPresetChange(option.value)}
               >
@@ -456,26 +473,18 @@ export default function EmployeeReports() {
             ))}
           </div>
           {draft.preset === "custom" ? (
-            <div className="flex items-center gap-2 bg-white border border-zinc-200 shadow-sm px-2 py-1.5 rounded-lg">
-              <DatePicker
-                value={draft.dateFrom}
-                onChange={(value) =>
-                  value &&
-                  applyDraft({ ...draft, preset: "custom", dateFrom: startOfDay(value) })
-                }
-                placeholder="From"
-                className="h-8 w-32 border-0 shadow-none px-1 text-sm"
-              />
-              <span className="text-zinc-400 text-xs">–</span>
-              <DatePicker
-                value={draft.dateTo}
-                onChange={(value) =>
-                  value && applyDraft({ ...draft, preset: "custom", dateTo: startOfDay(value) })
-                }
-                placeholder="To"
-                className="h-8 w-32 border-0 shadow-none px-1 text-sm"
-              />
-            </div>
+            <DateRangePicker
+              dateFrom={draft.dateFrom}
+              dateTo={draft.dateTo}
+              onChange={({ from, to }) =>
+                applyDraft({
+                  ...draft,
+                  preset: "custom",
+                  dateFrom: startOfDay(from),
+                  dateTo: startOfDay(to || from),
+                })
+              }
+            />
           ) : null}
 
           <Popover>
@@ -485,12 +494,16 @@ export default function EmployeeReports() {
                 Filter
               </Button>
             </PopoverTrigger>
-            <PopoverContent align="end" className="w-72 space-y-3">
+            <PopoverContent align="end" className="w-72 space-y-3 bg-white">
               <div className="space-y-1">
-                <p className="text-[11px] uppercase tracking-wide text-zinc-500">Shift</p>
+                <p className="text-[11px] uppercase tracking-wide text-zinc-500">
+                  Shift
+                </p>
                 <Select
                   value={draft.shiftId}
-                  onValueChange={(value) => setDraft((prev) => ({ ...prev, shiftId: value }))}
+                  onValueChange={(value) =>
+                    setDraft((prev) => ({ ...prev, shiftId: value }))
+                  }
                 >
                   <SelectTrigger className="h-9 text-sm">
                     <SelectValue placeholder="All shifts" />
@@ -506,10 +519,14 @@ export default function EmployeeReports() {
                 </Select>
               </div>
               <div className="space-y-1">
-                <p className="text-[11px] uppercase tracking-wide text-zinc-500">Order status</p>
+                <p className="text-[11px] uppercase tracking-wide text-zinc-500">
+                  Order status
+                </p>
                 <Select
                   value={draft.orderStatus}
-                  onValueChange={(value) => setDraft((prev) => ({ ...prev, orderStatus: value }))}
+                  onValueChange={(value) =>
+                    setDraft((prev) => ({ ...prev, orderStatus: value }))
+                  }
                 >
                   <SelectTrigger className="h-9 text-sm">
                     <SelectValue />
@@ -524,10 +541,14 @@ export default function EmployeeReports() {
                 </Select>
               </div>
               <div className="space-y-1">
-                <p className="text-[11px] uppercase tracking-wide text-zinc-500">Payment</p>
+                <p className="text-[11px] uppercase tracking-wide text-zinc-500">
+                  Payment
+                </p>
                 <Select
                   value={draft.paymentMethod}
-                  onValueChange={(value) => setDraft((prev) => ({ ...prev, paymentMethod: value }))}
+                  onValueChange={(value) =>
+                    setDraft((prev) => ({ ...prev, paymentMethod: value }))
+                  }
                 >
                   <SelectTrigger className="h-9 text-sm">
                     <SelectValue />
@@ -541,7 +562,11 @@ export default function EmployeeReports() {
                   </SelectContent>
                 </Select>
               </div>
-              <Button type="button" className="w-full h-9 text-xs" onClick={() => setApplied({ ...draft })}>
+              <Button
+                type="button"
+                className="w-full h-9 text-xs"
+                onClick={() => setApplied({ ...draft })}
+              >
                 Apply filters
               </Button>
             </PopoverContent>
@@ -550,9 +575,20 @@ export default function EmployeeReports() {
           <Button
             type="button"
             variant="outline"
+            className="h-10 bg-white text-zinc-600"
+            onClick={clearAllFilters}
+            disabled={!hasActiveFilters}
+          >
+            <X className="h-4 w-4 mr-1.5" />
+            Clear filters
+          </Button>
+
+          <Button
+            type="button"
+            variant="outline"
             className="h-10 bg-white"
-            onClick={() => exportStaffCsv(visibleStaff)}
-            disabled={visibleStaff.length === 0}
+            onClick={() => setExportOpen(true)}
+            disabled={loading || !report}
           >
             <Download className="h-4 w-4 mr-1.5" />
             Export
@@ -574,36 +610,52 @@ export default function EmployeeReports() {
       ) : error ? (
         <div className="bg-white border border-zinc-200 rounded-xl h-48 flex flex-col items-center justify-center gap-3 text-sm text-zinc-500">
           <p>Unable to load employee report.</p>
-          <Button type="button" variant="outline" className="h-8 text-xs" onClick={fetchSummary}>
+          <Button
+            type="button"
+            variant="outline"
+            className="h-8 text-xs"
+            onClick={fetchSummary}
+          >
             Retry
           </Button>
         </div>
       ) : (
         <>
           <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-4">
-            <KpiCard label="Total Staff" value={totalStaff} hint="Active" icon={Users} />
+            <KpiCard
+              label="Total Staff"
+              value={totalStaff}
+              hint="Active"
+              icon={Users}
+              accent
+            />
             <KpiCard
               label="Clocked In"
               value={
                 <>
                   {clockedIn}
-                  <span className="text-base font-normal text-zinc-400">/{totalStaff}</span>
+                  <span className="text-base font-normal text-zinc-400">
+                    /{totalStaff}
+                  </span>
                 </>
               }
               hint={`${clockedPct}%`}
               icon={Clock}
+              accent
             />
             <KpiCard
               label="Working Hrs"
               value={formatHoursLabel(overview?.totalHours)}
               hint={`OT ${formatHoursLabel(overview?.overtimeHours)}`}
               icon={Timer}
+              accent
             />
             <KpiCard
               label="Est. Pay"
               value={money(overview?.estimatedPay)}
               hint={`Reg ${money(overview?.regularPay)} · OT ${money(overview?.overtimePay)}`}
               icon={Banknote}
+              accent
             />
             <KpiCard
               label="Total Sales"
@@ -615,14 +667,16 @@ export default function EmployeeReports() {
             <KpiCard
               label="Total Tips"
               value={money(overview?.totalTips)}
-              hint={`Avg ${money((Number(overview?.totalTips) || 0) / staffWithTips)}/staff`}
+              hint="Split by each staff tip%"
               icon={HeartHandshake}
+              accent
             />
             <KpiCard
               label="Svc Charges"
               value={money(overview?.serviceCharges)}
               hint="On paid orders"
               icon={Receipt}
+              accent
             />
           </div>
 
@@ -635,8 +689,14 @@ export default function EmployeeReports() {
                 {showSalesChart ? (
                   <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={salesOverTime}>
-                      <XAxis dataKey="label" tick={{ fontSize: 10, fill: "#71717a" }} />
-                      <YAxis tick={{ fontSize: 10, fill: "#71717a" }} width={40} />
+                      <XAxis
+                        dataKey="label"
+                        tick={{ fontSize: 10, fill: "#71717a" }}
+                      />
+                      <YAxis
+                        tick={{ fontSize: 10, fill: "#71717a" }}
+                        width={40}
+                      />
                       <Tooltip content={<ChartTooltip moneyValue />} />
                       <Area
                         type="monotone"
@@ -662,8 +722,14 @@ export default function EmployeeReports() {
                 {showTipsChart ? (
                   <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={tipsOverTime}>
-                      <XAxis dataKey="label" tick={{ fontSize: 10, fill: "#71717a" }} />
-                      <YAxis tick={{ fontSize: 10, fill: "#71717a" }} width={40} />
+                      <XAxis
+                        dataKey="label"
+                        tick={{ fontSize: 10, fill: "#71717a" }}
+                      />
+                      <YAxis
+                        tick={{ fontSize: 10, fill: "#71717a" }}
+                        width={40}
+                      />
                       <Tooltip content={<ChartTooltip moneyValue />} />
                       <Area
                         type="monotone"
@@ -688,7 +754,11 @@ export default function EmployeeReports() {
               <div className="h-40">
                 {showByEmployee ? (
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={salesByEmployee} layout="vertical" margin={{ left: 8 }}>
+                    <BarChart
+                      data={salesByEmployee}
+                      layout="vertical"
+                      margin={{ left: 8 }}
+                    >
                       <XAxis type="number" hide />
                       <YAxis
                         type="category"
@@ -697,7 +767,11 @@ export default function EmployeeReports() {
                         width={72}
                       />
                       <Tooltip content={<ChartTooltip moneyValue />} />
-                      <Bar dataKey="sales" fill={PALETTE.accent} radius={[0, 4, 4, 0]} />
+                      <Bar
+                        dataKey="sales"
+                        fill={PALETTE.accent}
+                        radius={[0, 4, 4, 0]}
+                      />
                     </BarChart>
                   </ResponsiveContainer>
                 ) : (
@@ -710,9 +784,11 @@ export default function EmployeeReports() {
           </div>
 
           {topPerformers.length > 0 ? (
-            <div className="space-y-3">
+            <div className="space-y-3 ">
               <div className="flex items-center justify-between">
-                <h2 className="text-lg font-semibold text-zinc-900">Top Performers</h2>
+                <h2 className="text-lg font-semibold text-zinc-900">
+                  Top Performers
+                </h2>
                 <div className="flex gap-2">
                   <Button
                     type="button"
@@ -740,19 +816,26 @@ export default function EmployeeReports() {
               >
                 {topPerformers.map((row, index) => {
                   const kitchen = staffGroup(row.role) === "kitchen";
-                  const width = Math.max(8, Math.round(((Number(row.sales) || 0) / maxPerformerSales) * 100));
+                  const width = Math.max(
+                    8,
+                    Math.round(
+                      ((Number(row.sales) || 0) / maxPerformerSales) * 100,
+                    ),
+                  );
                   return (
                     <button
                       key={row.employeeId}
                       type="button"
                       onClick={() => openEmployee(row.employeeId, row)}
-                      className={`bg-white rounded-xl shadow-sm border p-4 w-64 shrink-0 snap-start text-left hover:-translate-y-0.5 transition-transform relative ${
+                      className={`bg-white rounded-xl shadow-sm border p-4 w-64 shrink-0 snap-start text-left hover:-translate-y-0.5 transition-transform my-3 relative ${
                         index === 0 ? "border-orange-500" : "border-zinc-200"
                       }`}
                     >
                       <div
                         className={`absolute -top-2.5 -right-2.5 w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-semibold shadow-sm ${
-                          index === 0 ? "bg-orange-500 text-white" : "bg-zinc-200 text-zinc-700"
+                          index === 0
+                            ? "bg-orange-500 text-white"
+                            : "bg-zinc-200 text-zinc-700"
                         }`}
                       >
                         {index + 1}
@@ -762,20 +845,30 @@ export default function EmployeeReports() {
                           {employeeInitials(row.name)}
                         </div>
                         <div className="min-w-0">
-                          <p className="font-semibold text-zinc-900 truncate">{row.name}</p>
-                          <p className="text-xs text-zinc-500 truncate">{row.role}</p>
+                          <p className="font-semibold text-zinc-900 truncate">
+                            {row.name}
+                          </p>
+                          <p className="text-xs text-zinc-500 truncate">
+                            {row.role}
+                          </p>
                         </div>
                       </div>
                       <div className="flex items-center justify-between text-sm mb-1">
-                        <span className="text-zinc-500">{kitchen ? "Orders" : "Sales"}</span>
+                        <span className="text-zinc-500">
+                          {kitchen ? "Orders" : "Sales"}
+                        </span>
                         <span className="font-semibold tabular-nums">
                           {kitchen ? row.orders : money(row.sales)}
                         </span>
                       </div>
                       <div className="flex items-center justify-between text-sm mb-3">
-                        <span className="text-zinc-500">{kitchen ? "Hours" : "Tips"}</span>
+                        <span className="text-zinc-500">
+                          {kitchen ? "Hours" : "Tips"}
+                        </span>
                         <span className="font-semibold tabular-nums">
-                          {kitchen ? formatHoursLabel(row.hours) : money(row.tips)}
+                          {kitchen
+                            ? formatHoursLabel(row.hours)
+                            : money(row.tips)}
                         </span>
                       </div>
                       <div className="w-full bg-zinc-100 h-2 rounded-full overflow-hidden">
@@ -822,7 +915,12 @@ export default function EmployeeReports() {
                   />
                 </div>
               </div>
-              <Button type="button" variant="link" className="h-8 px-0 text-orange-700" asChild>
+              <Button
+                type="button"
+                variant="link"
+                className="h-8 px-0 text-orange-700"
+                asChild
+              >
                 <Link href="/admin/employee/shifts">
                   View Full Schedule
                   <ChevronRight className="h-4 w-4 ml-1" />
@@ -833,20 +931,39 @@ export default function EmployeeReports() {
               <Table>
                 <TableHeader>
                   <TableRow className="hover:bg-transparent bg-zinc-50">
-                    <TableHead className="text-[11px] uppercase tracking-wide">Employee</TableHead>
-                    <TableHead className="text-[11px] uppercase tracking-wide">Status</TableHead>
-                    <TableHead className="text-[11px] uppercase tracking-wide">Clock In/Out</TableHead>
-                    <TableHead className="text-[11px] uppercase tracking-wide text-right">Hrs</TableHead>
-                    <TableHead className="text-[11px] uppercase tracking-wide text-right">Sales</TableHead>
-                    <TableHead className="text-[11px] uppercase tracking-wide text-right">Tips</TableHead>
-                    <TableHead className="text-[11px] uppercase tracking-wide text-right">Svc</TableHead>
-                    <TableHead className="text-[11px] uppercase tracking-wide text-right">Cancels</TableHead>
+                    <TableHead className="text-[11px] uppercase tracking-wide">
+                      Employee
+                    </TableHead>
+                    <TableHead className="text-[11px] uppercase tracking-wide">
+                      Status
+                    </TableHead>
+                    <TableHead className="text-[11px] uppercase tracking-wide">
+                      Clock In/Out
+                    </TableHead>
+                    <TableHead className="text-[11px] uppercase tracking-wide text-right">
+                      Hrs
+                    </TableHead>
+                    <TableHead className="text-[11px] uppercase tracking-wide text-right">
+                      Sales
+                    </TableHead>
+                    <TableHead className="text-[11px] uppercase tracking-wide text-right">
+                      Tips
+                    </TableHead>
+                    <TableHead className="text-[11px] uppercase tracking-wide text-right">
+                      Svc
+                    </TableHead>
+                    <TableHead className="text-[11px] uppercase tracking-wide text-right">
+                      Cancels
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {visibleStaff.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={8} className="text-sm text-zinc-500 text-center py-10">
+                      <TableCell
+                        colSpan={8}
+                        className="text-sm text-zinc-500 text-center py-10"
+                      >
                         No employees match the current filters.
                       </TableCell>
                     </TableRow>
@@ -854,7 +971,7 @@ export default function EmployeeReports() {
                     visibleStaff.map((row) => (
                       <TableRow
                         key={row.employeeId}
-                        className={`cursor-pointer ${row.clockedIn ? "" : "opacity-70"}`}
+                        className={`cursor-pointer ${row.clockedIn ? "" : "opacity-90"}`}
                         onClick={() => openEmployee(row.employeeId, row)}
                       >
                         <TableCell>
@@ -863,8 +980,12 @@ export default function EmployeeReports() {
                               {employeeInitials(row.name)}
                             </div>
                             <div>
-                              <p className="text-sm font-semibold text-zinc-900">{row.name}</p>
-                              <p className="text-xs text-zinc-500">{row.role}</p>
+                              <p className="text-sm font-semibold text-zinc-900">
+                                {row.name}
+                              </p>
+                              <p className="text-xs text-zinc-500">
+                                {row.role}
+                              </p>
                             </div>
                           </div>
                         </TableCell>
@@ -872,18 +993,33 @@ export default function EmployeeReports() {
                           <ClockBadge clockedIn={row.clockedIn} />
                         </TableCell>
                         <TableCell>
-                          <p className="text-sm tabular-nums">{formatTimeTz(row.clockIn, timezone)}</p>
+                          <p className="text-sm tabular-nums">
+                            {formatTimeTz(row.clockIn, timezone)}
+                          </p>
                           <p className="text-xs text-zinc-400 tabular-nums">
-                            {row.clockedIn ? "—" : formatTimeTz(row.clockOut, timezone)}
+                            {row.clockedIn
+                              ? "—"
+                              : formatTimeTz(row.clockOut, timezone)}
                           </p>
                         </TableCell>
                         <TableCell className="text-right text-sm tabular-nums">
                           {formatHoursLabel(row.hours)}
                         </TableCell>
-                        <TableCell className="text-right text-sm tabular-nums">{money(row.sales)}</TableCell>
-                        <TableCell className="text-right text-sm tabular-nums">{money(row.tips)}</TableCell>
-                        <TableCell className="text-right text-sm tabular-nums">{money(row.serviceCharges)}</TableCell>
-                        <TableCell className="text-right text-sm tabular-nums">{row.cancellations}</TableCell>
+                        <TableCell className="text-right text-sm tabular-nums">
+                          {money(row.sales)}
+                        </TableCell>
+                        <TableCell className="text-right text-sm tabular-nums">
+                          {money(row.tips)}
+                          {Number(row.tipPercent) > 0 ? (
+                            <p className="text-[10px] text-zinc-400">{row.tipPercent}%</p>
+                          ) : null}
+                        </TableCell>
+                        <TableCell className="text-right text-sm tabular-nums">
+                          {money(row.serviceCharges)}
+                        </TableCell>
+                        <TableCell className="text-right text-sm tabular-nums">
+                          {row.cancellations}
+                        </TableCell>
                       </TableRow>
                     ))
                   )}
@@ -912,6 +1048,17 @@ export default function EmployeeReports() {
         onSelectOrder={openOrder}
         onBackToDay={() => setOrderDetail(null)}
       />
+
+      <EmployeeExportDialog
+        open={exportOpen}
+        onOpenChange={setExportOpen}
+        exportQuery={exportQuery}
+        dateFrom={toYmd(applied.dateFrom)}
+        dateTo={toYmd(applied.dateTo)}
+        disabled={loading}
+        rowCount={visibleStaff.length}
+        employees={report?.filters?.employees || []}
+      />
     </div>
   );
 }
@@ -921,7 +1068,10 @@ function ReportSkeleton() {
     <div className="space-y-4">
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         {Array.from({ length: 7 }).map((_, index) => (
-          <div key={index} className="bg-white border border-zinc-200 rounded-xl p-4 space-y-3 h-28">
+          <div
+            key={index}
+            className="bg-white border border-zinc-200 rounded-xl p-4 space-y-3 h-28"
+          >
             <Skeleton className="h-3 w-16" />
             <Skeleton className="h-7 w-20" />
           </div>
