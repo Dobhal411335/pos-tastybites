@@ -33,6 +33,7 @@ import {
   ShoppingCart,
 } from "lucide-react";
 import { toast } from "sonner";
+import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -1428,22 +1429,38 @@ export default function OrderPage() {
           {/* Heads Grid (GRID VIEW) */}
           {viewMode === "grid" && (
             <div className="flex items-center gap-2 px-3 py-2.5 bg-white border-b border-zinc-200 shrink-0 overflow-x-auto custom-scrollbar">
-              {heads.map((head) => (
+              {heads.map((head) => {
+                const isActive = activeHead === head.name;
+                const imageUrl = head.image?.url;
+                return (
                 <button
                   key={head._id}
                   onClick={() => setActiveHead(head.name)}
-                  className={`flex flex-col items-center justify-center min-w-[76px] h-[64px] rounded-lg transition-all border ${
-                    activeHead === head.name
-                      ? "bg-orange-500 text-white border-orange-500 shadow-sm"
-                      : "bg-zinc-100 text-zinc-700 border-zinc-200 hover:bg-zinc-200"
+                  className={`flex flex-col items-center justify-center min-w-[88px] rounded-lg transition-all border px-1 py-1.5 ${
+                    isActive
+                      ? "border-orange-500 shadow-sm ring-2 ring-orange-500 bg-orange-50 text-orange-700"
+                      : "border-zinc-200 bg-zinc-100 text-zinc-700 hover:bg-zinc-200 hover:border-zinc-300"
                   }`}
                 >
-                  {getHeadIcon(head.name)}
-                  <span className="text-[10px] mt-1 font-black uppercase tracking-wider">
+                  {imageUrl ? (
+                    <span className="relative block w-[76px] h-[48px] rounded-md overflow-hidden bg-zinc-200 shrink-0">
+                      <Image
+                        src={imageUrl}
+                        alt=""
+                        fill
+                        sizes="76px"
+                        className="object-cover"
+                      />
+                    </span>
+                  ) : (
+                    getHeadIcon(head.name)
+                  )}
+                  <span className="mt-1 px-0.5 text-[10px] font-black uppercase tracking-wider text-center leading-tight">
                     {head.name}
                   </span>
                 </button>
-              ))}
+                );
+              })}
             </div>
           )}
 

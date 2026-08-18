@@ -3,6 +3,7 @@ import Head from "@/models/menu/Head";
 import { sendSuccess } from "@/utils/apiResponse";
 import { sendError } from "@/utils/errorHandler";
 import { logger } from "@/utils/logger";
+import { deleteImage } from "@/lib/cloudinary/deleteImage";
 
 // GET - List all heads
 export const GET = withAuth(async (request) => {
@@ -27,7 +28,7 @@ export const GET = withAuth(async (request) => {
 export const POST = withAuth(async (request) => {
   try {
     const data = await request.json();
-    const { name } = data;
+    const { name, image } = data;
 
     if (!name) {
       return sendError(new Error("Missing name"), "Head name is required", 400);
@@ -46,6 +47,7 @@ export const POST = withAuth(async (request) => {
     const newHead = await Head.create({
       restaurant: request.restaurant,
       name: name.trim(),
+      ...(image?.url ? { image } : {}),
       createdBy: request.user.id
     });
 
@@ -57,19 +59,24 @@ export const POST = withAuth(async (request) => {
   }
 }, ["ADMIN", "MANAGER"]);
 
-// PUT - Update head status
+// PUT - Update head
 export const PUT = withAuth(async (request) => {
   try {
     const data = await request.json();
-    const { _id, status } = data;
+    const { _id, status, image, name } = data;
 
     if (!_id) {
       return sendError(new Error("Missing ID"), "Head ID is required", 400);
     }
 
+    const updateData = { updatedBy: request.user.id };
+    if (status) updateData.status = status;
+    if (name !== undefined) updateData.name = String(name).trim();
+    if (image !== undefined) updateData.image = image;
+
     const updatedHead = await Head.findOneAndUpdate(
       { _id, restaurant: request.restaurant },
-      { $set: { status, updatedBy: request.user.id } },
+      { $set: updateData },
       { new: true, runValidators: true }
     );
 
@@ -77,11 +84,11 @@ export const PUT = withAuth(async (request) => {
       return sendError(new Error("Not Found"), "Head not found", 404);
     }
 
-    logger.info(`Head status updated: ${_id}`);
-    return sendSuccess(updatedHead, "Head status updated successfully");
+    logger.info(`Head updated: ${_id}`);
+    return sendSuccess(updatedHead, "Head updated successfully");
   } catch (error) {
-    logger.error("Failed to update head status", error);
-    return sendError(error, "Failed to update head status", 500);
+    logger.error("Failed to update head", error);
+    return sendError(error, "Failed to update head", 500);
   }
 }, ["ADMIN", "MANAGER"]);
 
@@ -96,9 +103,13 @@ export const DELETE = withAuth(async (request) => {
     }
 
     const deleted = await Head.findOneAndDelete({ _id: id, restaurant: request.restaurant });
-    
+
     if (!deleted) {
       return sendError(new Error("Not Found"), "Head not found", 404);
+    }
+
+    if (deleted.image?.key) {
+      try { await deleteImage(deleted.image.key); } catch (e) { logger.error("Cloudinary delete error", e); }
     }
 
     logger.info(`Head deleted: ${id}`);

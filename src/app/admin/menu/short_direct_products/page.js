@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Plus, Trash, Edit, Loader2, Eye, MoreHorizontal } from "lucide-react";
+import { Plus, Trash, Edit, Loader2, Eye, MoreHorizontal, Image as ImageIcon } from "lucide-react";
+import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
@@ -30,6 +31,7 @@ export default function ShortDirectProductsPage() {
   const [isAddHeadOpen, setIsAddHeadOpen] = useState(false);
   const [newHeadName, setNewHeadName] = useState("");
   const [isHeadSubmitting, setIsHeadSubmitting] = useState(false);
+  const [uploadingHeadImage, setUploadingHeadImage] = useState(false);
 
   // View Modal State
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
@@ -201,6 +203,70 @@ export default function ShortDirectProductsPage() {
     }
   };
 
+  const selectedHead = heads.find((h) => h._id === selectedHeadId);
+
+  const handleHeadImageUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!selectedHeadId) {
+      toast.error("Please select a head first.");
+      e.target.value = "";
+      return;
+    }
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please select an image file.");
+      e.target.value = "";
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Image size must be less than 5MB.");
+      e.target.value = "";
+      return;
+    }
+
+    setUploadingHeadImage(true);
+    const formDataUpload = new FormData();
+    formDataUpload.append("file", file);
+
+    const existingKey = selectedHead?.image?.key;
+    if (existingKey) {
+      try { await fetch(`/api/cloudinary?key=${existingKey}`, { method: "DELETE" }); } catch (err) { }
+    }
+
+    try {
+      const res = await fetch("/api/cloudinary", {
+        method: "POST",
+        body: formDataUpload,
+      });
+      const data = await res.json();
+      if (!res.ok || !data.url) {
+        toast.error("Cloudinary upload failed: " + (data.error || "Unknown error"));
+        return;
+      }
+
+      const image = { url: data.url, key: data.key || "" };
+      const saveRes = await fetch("/api/menu/heads", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ _id: selectedHeadId, image }),
+      });
+      const saveJson = await saveRes.json();
+      if (saveJson.success) {
+        toast.success("Head image uploaded!");
+        setHeads((prev) =>
+          prev.map((h) => (h._id === selectedHeadId ? { ...h, image } : h)),
+        );
+      } else {
+        toast.error(saveJson.message || "Failed to save head image");
+      }
+    } catch (error) {
+      toast.error("Cloudinary upload error: " + error.message);
+    } finally {
+      setUploadingHeadImage(false);
+      e.target.value = "";
+    }
+  };
+
   const handleToggleStatus = async (head) => {
     const newStatus = head.status === "Active" ? "Inactive" : "Active";
     try {
@@ -289,7 +355,51 @@ export default function ShortDirectProductsPage() {
               </Dialog>
             </div>
 
-            
+            {selectedHeadId && (
+              <div className="space-y-2">
+                <label className="text-[14px] font-semibold text-zinc-900">
+                  Head Image
+                </label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  id="head-image-upload"
+                  className="hidden"
+                  onChange={handleHeadImageUpload}
+                  disabled={uploadingHeadImage}
+                />
+                <label
+                  htmlFor="head-image-upload"
+                  className={`w-full flex flex-col items-center justify-center gap-2 border-2 border-dashed border-zinc-300 rounded-lg h-32 hover:border-[#F97316] hover:bg-orange-50/50 transition-colors cursor-pointer group ${uploadingHeadImage ? "opacity-50 pointer-events-none" : ""}`}
+                >
+                  {uploadingHeadImage ? (
+                    <Loader2 className="h-6 w-6 animate-spin text-zinc-400" />
+                  ) : selectedHead?.image?.url ? (
+                    <div className="relative w-full h-full p-1 rounded-md overflow-hidden">
+                      <Image
+                        width={100}
+                        height={150}
+                        src={selectedHead.image.url}
+                        alt="Head"
+                        className="w-full h-full object-contain rounded-md"
+                      />
+                      <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity rounded-md">
+                        <span className="text-white text-xs font-semibold">Change Image</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="h-10 w-10 rounded-full bg-zinc-100 group-hover:bg-orange-100 flex items-center justify-center transition-colors">
+                        <ImageIcon className="h-5 w-5 text-zinc-500 group-hover:text-[#F97316]" />
+                      </div>
+                      <span className="text-[13px] font-medium text-zinc-600 group-hover:text-zinc-900">
+                        Click to upload image
+                      </span>
+                    </>
+                  )}
+                </label>
+              </div>
+            )}
 
             <hr className="border-zinc-200" />
 
