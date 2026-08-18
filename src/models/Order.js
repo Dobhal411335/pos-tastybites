@@ -23,6 +23,12 @@ const OrderItemSchema = new mongoose.Schema({
       subChoices: [{ type: String, trim: true }],
     },
   ],
+  addonChoiceSelections: [
+    {
+      name: { type: String, trim: true },
+      subChoices: [{ type: String, trim: true }],
+    },
+  ],
   drinks: [{ type: String }],
   sentQty: { type: Number, default: 0 },
   cartId: { type: String }, // To match incoming items reliably

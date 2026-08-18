@@ -6,16 +6,17 @@ const VariantSchema = new mongoose.Schema({
   status: { type: Boolean, default: true },
 });
 
+const ChoiceOptionSchema = new mongoose.Schema({
+  name: { type: String, required: true, trim: true },
+  subChoices: [{ type: String, trim: true }],
+});
+
 const AddonSchema = new mongoose.Schema({
   name: { type: String, required: true },
   price: { type: Number, required: true },
   size: { type: String, default: 'Regular' },
   status: { type: Boolean, default: true },
-});
-
-const ChoiceOptionSchema = new mongoose.Schema({
-  name: { type: String, required: true, trim: true },
-  subChoices: [{ type: String, trim: true }],
+  choiceOptions: { type: [ChoiceOptionSchema], default: [] },
 });
 
 const ProductSchema = new mongoose.Schema(

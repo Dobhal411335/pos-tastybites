@@ -210,6 +210,7 @@ export async function repricePosCartItems({
     let choices = [];
     let drinks = [];
     let choiceSelections = [];
+    let addonChoiceSelections = [];
 
     if (isOffer) {
       const offer = offerMap.get(String(id));
@@ -254,6 +255,16 @@ export async function repricePosCartItems({
           err.status = 400;
           throw err;
         }
+        const addonName = options[0];
+        const matchedAddon = (product.addons || []).find(
+          (addon) =>
+            String(addon?.name || "").toLowerCase() ===
+            String(addonName || "").toLowerCase(),
+        );
+        addonChoiceSelections = filterProductChoiceSelections(
+          item.addonChoiceSelections,
+          matchedAddon?.choiceOptions || [],
+        );
       } else {
         unitPrice =
           resolveVariantUnitPrice(product, sizes) + addonExtra(product, options);
@@ -300,6 +311,7 @@ export async function repricePosCartItems({
       inclusions,
       choices,
       choiceSelections,
+      addonChoiceSelections,
       drinks,
       cartId: item.cartId || String(Date.now() + Math.random()),
     });

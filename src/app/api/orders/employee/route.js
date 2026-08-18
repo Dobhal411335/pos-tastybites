@@ -16,6 +16,20 @@ import { repricePosCartItems } from "@/lib/orders/repricePosCartItems";
 import { formatSessionTableLabel, formatTableLocation, joinTableNumbers } from "@/utils/orderDisplay";
 import { freeSessionTables } from "@/lib/orders/sessionTables";
 import { countryCodes } from "@/utils/countryCodes";
+import { cartChoiceSelectionsKey } from "@/utils/productChoices";
+
+function orderItemsMatch(existingItem, incomingItem) {
+  if (existingItem.cartId === incomingItem.cartId) return true;
+  return (
+    existingItem.menuItemId === incomingItem.menuItemId &&
+    JSON.stringify(existingItem.options) === JSON.stringify(incomingItem.options) &&
+    existingItem.size === incomingItem.size &&
+    cartChoiceSelectionsKey(existingItem.choiceSelections) ===
+      cartChoiceSelectionsKey(incomingItem.choiceSelections) &&
+    cartChoiceSelectionsKey(existingItem.addonChoiceSelections) ===
+      cartChoiceSelectionsKey(incomingItem.addonChoiceSelections)
+  );
+}
 
 function normalizeProductType(value) {
   return String(value || "").toUpperCase() === "BAR" ? "BAR" : "KITCHEN";
@@ -305,12 +319,8 @@ export const POST = withAuth(async (request) => {
 
         const kotPayload = [];
         const finalItems = formattedItems.map((incomingItem) => {
-          const existingItem = order.items.find(
-            (i) =>
-              i.cartId === incomingItem.cartId ||
-              (i.menuItemId === incomingItem.menuItemId &&
-                JSON.stringify(i.options) === JSON.stringify(incomingItem.options) &&
-                i.size === incomingItem.size),
+          const existingItem = order.items.find((i) =>
+            orderItemsMatch(i, incomingItem),
           );
           const sentQty = existingItem ? existingItem.sentQty || 0 : 0;
           const unprintedQty = incomingItem.qty - sentQty;
@@ -486,7 +496,7 @@ export const POST = withAuth(async (request) => {
       const kotPayload = [];
       
       const finalItems = formattedItems.map(incomingItem => {
-        const existingItem = order.items.find(i => i.cartId === incomingItem.cartId || (i.menuItemId === incomingItem.menuItemId && JSON.stringify(i.options) === JSON.stringify(incomingItem.options) && i.size === incomingItem.size));
+        const existingItem = order.items.find((i) => orderItemsMatch(i, incomingItem));
         const sentQty = existingItem ? (existingItem.sentQty || 0) : 0;
         const unprintedQty = incomingItem.qty - sentQty;
         

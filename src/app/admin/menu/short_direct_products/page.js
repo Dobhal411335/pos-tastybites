@@ -289,6 +289,8 @@ export default function ShortDirectProductsPage() {
               </Dialog>
             </div>
 
+            
+
             <hr className="border-zinc-200" />
 
             {/* Section 2: Categories and Products */}

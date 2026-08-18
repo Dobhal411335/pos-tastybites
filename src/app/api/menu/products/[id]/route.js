@@ -6,7 +6,7 @@ import { sendError } from "@/utils/errorHandler";
 import { logger } from "@/utils/logger";
 import { deleteImage } from "@/lib/cloudinary/deleteImage";
 import Tax from "@/models/tax/Tax";
-import { markCategoryAddons, mergeAddons, normalizeAddons } from "@/lib/menu/addons";
+import { markCategoryAddons, mergeAddons, normalizeAddons, stripAddonClientFields } from "@/lib/menu/addons";
 // GET - Get single product details
 export const GET = withAuth(async (request, { params }) => {
   try {
@@ -83,7 +83,7 @@ export const PUT = withAuth(async (request, { params }) => {
     }
     if (status) updateData.status = status;
     if (variants) updateData.variants = variants;
-    if (addons) updateData.addons = addons;
+    if (addons) updateData.addons = stripAddonClientFields(addons);
     if (image !== undefined) updateData.image = image;
     if (preparationStyles !== undefined) updateData.preparationStyles = preparationStyles;
     if (choiceOptions !== undefined) {

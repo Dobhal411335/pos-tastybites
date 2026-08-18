@@ -120,13 +120,102 @@ function isSameCartLine(a, b) {
     Boolean(a.isOffer) === Boolean(b.isOffer) &&
     cartOptionsKey(a.options) === cartOptionsKey(b.options) &&
     cartChoiceSelectionsKey(a.choiceSelections) ===
-      cartChoiceSelectionsKey(b.choiceSelections)
+      cartChoiceSelectionsKey(b.choiceSelections) &&
+    cartChoiceSelectionsKey(a.addonChoiceSelections) ===
+      cartChoiceSelectionsKey(b.addonChoiceSelections)
   );
+}
+
+function getVariantKey(_variant, index) {
+  return String(index);
+}
+
+function getAddonKey(addon) {
+  return String(addon?._id || addon?.name || "");
+}
+
+function buildAddonChoiceSelections(addon, choicesByGroup = {}) {
+  return normalizeChoiceOptions(addon?.choiceOptions)
+    .map((group, index) => ({
+      name: group.name,
+      subChoices: choicesByGroup[index] || [],
+    }))
+    .filter((group) => group.subChoices.length > 0);
+}
+
+function buildCartFromOrderItems(items = []) {
+  return items.map((item, idx) => {
+    const style = item.preparationStyle || null;
+    const extras = (item.options || []).filter(
+      (o) => !String(o).toLowerCase().startsWith("style:"),
+    );
+    const offer = isOfferItem(item);
+    const inclusions = cleanOfferList(item.inclusions);
+    const choices = cleanOfferList(item.choices);
+    const drinks = cleanOfferList(item.drinks);
+    const parts = [];
+    if (item.size && item.size !== "Standard") parts.push(`Size: ${item.size}`);
+    if (style) parts.push(`${style}`);
+    if (offer) {
+      const offerModifier = buildOfferCartModifier({
+        inclusions,
+        choices,
+        drinks,
+      });
+      if (offerModifier) parts.push(offerModifier);
+    } else if (extras.length > 0) {
+      parts.push(`Extras: ${extras.join(", ")}`);
+    }
+    return {
+      id: item.menuItemId,
+      name: item.name,
+      productCode: item.productCode || "",
+      category: offer ? OFFER_CATEGORY : item.category || "ITEMS",
+      price: item.price,
+      tax: item.tax,
+      serviceCharge: item.serviceCharge || 0,
+      qty: item.qty,
+      size: item.size,
+      sizes:
+        item.sizes ||
+        (item.size && item.size !== "Standard"
+          ? String(item.size).split(", ").filter(Boolean)
+          : []),
+      preparationStyle: style,
+      options: item.options || [],
+      productType: item.productType === "BAR" ? "BAR" : "KITCHEN",
+      isOffer: offer,
+      inclusions,
+      choices,
+      drinks,
+      choiceSelections: normalizeChoiceSelections(item.choiceSelections),
+      addonChoiceSelections: normalizeChoiceSelections(item.addonChoiceSelections),
+      modifier: parts.length > 0 ? parts.join(" | ") : undefined,
+      cartId: item.cartId || `r-${Date.now()}-${idx}`,
+    };
+  });
+}
+
+function syncCartIdSeqFromItems(seqRef, items = []) {
+  let max = Number(seqRef.current) || 0;
+  for (const item of items) {
+    const raw = String(item?.cartId || "");
+    const legacyMatch = raw.match(/^c-(\d+)$/);
+    if (legacyMatch) {
+      max = Math.max(max, Number(legacyMatch[1]));
+      continue;
+    }
+    const stampedMatch = raw.match(/^c-\d+-(\d+)$/);
+    if (stampedMatch) {
+      max = Math.max(max, Number(stampedMatch[1]));
+    }
+  }
+  seqRef.current = max;
 }
 
 function nextCartId(seqRef) {
   seqRef.current += 1;
-  return `c-${seqRef.current}`;
+  return `c-${Date.now()}-${seqRef.current}`;
 }
 
 function mergeCartLines(prev, incomingLines, seqRef) {
@@ -400,57 +489,8 @@ export default function OrderPage() {
               setGuestEmail(existingOrder.guestEmail);
             }
 
-            // Reconstruct cart
-            const restoredCart = existingOrder.items.map((item, idx) => {
-              const style = item.preparationStyle || null;
-              const extras = (item.options || []).filter(
-                (o) => !String(o).toLowerCase().startsWith("style:"),
-              );
-              const offer = isOfferItem(item);
-              const inclusions = cleanOfferList(item.inclusions);
-              const choices = cleanOfferList(item.choices);
-              const drinks = cleanOfferList(item.drinks);
-              const parts = [];
-              if (item.size && item.size !== "Standard")
-                parts.push(`Size: ${item.size}`);
-              if (style) parts.push(`${style}`);
-              if (offer) {
-                const offerModifier = buildOfferCartModifier({
-                  inclusions,
-                  choices,
-                  drinks,
-                });
-                if (offerModifier) parts.push(offerModifier);
-              } else if (extras.length > 0) {
-                parts.push(`Extras: ${extras.join(", ")}`);
-              }
-              return {
-                id: item.menuItemId,
-                name: item.name,
-                productCode: item.productCode || "",
-                category: offer ? OFFER_CATEGORY : item.category || "ITEMS",
-                price: item.price,
-                tax: item.tax,
-                serviceCharge: 0,
-                qty: item.qty,
-                size: item.size,
-                sizes:
-                  item.sizes ||
-                  (item.size && item.size !== "Standard"
-                    ? String(item.size).split(", ").filter(Boolean)
-                    : []),
-                preparationStyle: style,
-                options: item.options || [],
-                productType: item.productType === "BAR" ? "BAR" : "KITCHEN",
-                isOffer: offer,
-                inclusions,
-                choices,
-                drinks,
-                choiceSelections: normalizeChoiceSelections(item.choiceSelections),
-                modifier: parts.length > 0 ? parts.join(" | ") : undefined,
-                cartId: item.cartId || `r-${Date.now()}-${idx}`,
-              };
-            });
+            const restoredCart = buildCartFromOrderItems(existingOrder.items);
+            syncCartIdSeqFromItems(cartIdSeq, restoredCart);
             setCart(restoredCart);
             setKotCartFingerprint(getCartFingerprint(restoredCart));
 
@@ -493,56 +533,8 @@ export default function OrderPage() {
               if (existingOrder.staffOrderReason) {
                 setStaffOrderReason(existingOrder.staffOrderReason);
               }
-              const restoredCart = existingOrder.items.map((item, idx) => {
-                const style = item.preparationStyle || null;
-                const extras = (item.options || []).filter(
-                  (o) => !String(o).toLowerCase().startsWith("style:"),
-                );
-                const offer = isOfferItem(item);
-                const inclusions = cleanOfferList(item.inclusions);
-                const choices = cleanOfferList(item.choices);
-                const drinks = cleanOfferList(item.drinks);
-                const parts = [];
-                if (item.size && item.size !== "Standard")
-                  parts.push(`Size: ${item.size}`);
-                if (style) parts.push(`${style}`);
-                if (offer) {
-                  const offerModifier = buildOfferCartModifier({
-                    inclusions,
-                    choices,
-                    drinks,
-                  });
-                  if (offerModifier) parts.push(offerModifier);
-                } else if (extras.length > 0) {
-                  parts.push(`Extras: ${extras.join(", ")}`);
-                }
-                return {
-                  id: item.menuItemId,
-                  name: item.name,
-                  productCode: item.productCode || "",
-                  category: offer ? OFFER_CATEGORY : item.category || "ITEMS",
-                  price: item.price,
-                  tax: item.tax,
-                  serviceCharge: 0,
-                  qty: item.qty,
-                  size: item.size,
-                  sizes:
-                    item.sizes ||
-                    (item.size && item.size !== "Standard"
-                      ? String(item.size).split(", ").filter(Boolean)
-                      : []),
-                  preparationStyle: style,
-                  options: item.options || [],
-                  productType: item.productType === "BAR" ? "BAR" : "KITCHEN",
-                  isOffer: offer,
-                  inclusions,
-                  choices,
-                  drinks,
-                  choiceSelections: normalizeChoiceSelections(item.choiceSelections),
-                  modifier: parts.length > 0 ? parts.join(" | ") : undefined,
-                  cartId: item.cartId || `r-${Date.now()}-${idx}`,
-                };
-              });
+              const restoredCart = buildCartFromOrderItems(existingOrder.items);
+              syncCartIdSeqFromItems(cartIdSeq, restoredCart);
               setCart(restoredCart);
               setKotCartFingerprint(getCartFingerprint(restoredCart));
             }
@@ -748,11 +740,7 @@ export default function OrderPage() {
 
   const handleOpenOptions = (item) => {
     setSelectedProduct(item);
-    const initialVariants = {};
-    if (item.variants && item.variants.length > 0) {
-      initialVariants[item.variants[0].size] = 1;
-    }
-    setVariantQtyBySize(initialVariants);
+    setVariantQtyBySize({});
     setAddonQtyById({});
     const styles = (item.preparationStyles || []).filter(Boolean);
     setSelectedPreparationStyle(styles.length === 1 ? styles[0] : "");
@@ -796,26 +784,52 @@ export default function OrderPage() {
     });
   };
 
-  const setVariantQty = (size, qty) => {
+  const setVariantQty = (variantKey, qty) => {
     const next = Math.max(0, Math.floor(Number(qty) || 0));
     setVariantQtyBySize((prev) => {
       const copy = { ...prev };
-      if (next <= 0) delete copy[size];
-      else copy[size] = next;
+      if (next <= 0) delete copy[variantKey];
+      else copy[variantKey] = next;
       return copy;
     });
   };
 
   const setAddonQty = (addon, qty) => {
     const next = Math.max(0, Math.floor(Number(qty) || 0));
+    const addonKey = getAddonKey(addon);
     setAddonQtyById((prev) => {
       const copy = { ...prev };
       if (next <= 0) {
-        delete copy[addon._id];
+        delete copy[addonKey];
       } else {
-        copy[addon._id] = { qty: next, addon };
+        copy[addonKey] = {
+          qty: next,
+          addon,
+          choicesByGroup: copy[addonKey]?.choicesByGroup || {},
+        };
       }
       return copy;
+    });
+  };
+
+  const toggleAddonSubChoice = (addonKey, groupIndex, value) => {
+    setAddonQtyById((prev) => {
+      const entry = prev[addonKey];
+      if (!entry) return prev;
+      const current = entry.choicesByGroup?.[groupIndex] || [];
+      const nextChoices = current.includes(value)
+        ? current.filter((item) => item !== value)
+        : [...current, value];
+      return {
+        ...prev,
+        [addonKey]: {
+          ...entry,
+          choicesByGroup: {
+            ...(entry.choicesByGroup || {}),
+            [groupIndex]: nextChoices,
+          },
+        },
+      };
     });
   };
 
@@ -963,9 +977,11 @@ export default function OrderPage() {
     const newLines = [];
 
     if (hasVariants) {
-      variantEntries.forEach(([size, qty], idx) => {
-        const variant = selectedProduct.variants.find((v) => v.size === size);
-        const unitPrice = Number(variant?.price) || 0;
+      variantEntries.forEach(([variantKey, qty]) => {
+        const variant = selectedProduct.variants[Number(variantKey)];
+        if (!variant) return;
+        const size = variant.size;
+        const unitPrice = Number(variant.price) || 0;
         const unitTax = calculateItemTax(selectedProduct, unitPrice);
         const options = [];
         if (selectedPreparationStyle) options.push(selectedPreparationStyle);
@@ -1015,10 +1031,14 @@ export default function OrderPage() {
       });
     }
 
-    addonEntries.forEach((entry, idx) => {
+    addonEntries.forEach((entry) => {
       const addon = entry.addon;
       const unitPrice = Number(addon.price) || 0;
       const unitTax = calculateItemTax(selectedProduct, unitPrice);
+      const addonChoiceSelections = buildAddonChoiceSelections(
+        addon,
+        entry.choicesByGroup || {},
+      );
       newLines.push({
         id: selectedProduct._id,
         name: selectedProduct.name,
@@ -1034,6 +1054,7 @@ export default function OrderPage() {
         options: [addon.name],
         productType: selectedProduct.productType === "BAR" ? "BAR" : "KITCHEN",
         modifier: `Addons: ${addon.name}`,
+        addonChoiceSelections,
       });
     });
 
@@ -1158,7 +1179,19 @@ export default function OrderPage() {
             json.data.processedByName || prev?.processedByName,
         }));
         setOrderStatus("PENDING");
-        setKotCartFingerprint(getCartFingerprint(cart));
+        const syncedCart = json.data.items?.length
+          ? buildCartFromOrderItems(json.data.items)
+          : cart;
+        syncCartIdSeqFromItems(cartIdSeq, syncedCart);
+        setCart(syncedCart);
+        setKotCartFingerprint(getCartFingerprint(syncedCart));
+        if (json.data.discountCode) {
+          setAppliedDiscount({
+            code: json.data.discountCode,
+            value: Number(json.data.discountTotal || 0),
+            type: "$",
+          });
+        }
 
         if (isDirectOrder && json.data._id) {
           sessionStorage.setItem(`direct-order-${sessionId}`, json.data._id);
@@ -1253,6 +1286,21 @@ export default function OrderPage() {
     orderStatus !== "Draft" &&
     kotCartFingerprint === getCartFingerprint(cart);
   const canPay = hasSentKot && cart.length > 0 && orderStatus !== "PAID";
+
+  // After KOT, persisted order totals are authoritative (server reprices items).
+  const billingSubtotal =
+    hasSentKot && activeOrder?.subTotal != null
+      ? Number(activeOrder.subTotal)
+      : subtotal;
+  const billingTaxTotal =
+    hasSentKot && activeOrder?.taxTotal != null
+      ? Number(activeOrder.taxTotal)
+      : totalTax;
+  const billingDiscount =
+    hasSentKot && activeOrder?.discountTotal != null
+      ? Number(activeOrder.discountTotal)
+      : discountAmount;
+  const billingTotal = billingSubtotal - billingDiscount + billingTaxTotal;
 
   const openPaymentModal = () => {
     if (orderStatus === "PAID") return;
@@ -1655,6 +1703,30 @@ export default function OrderPage() {
                               )}
                             </div>
                           ) : null}
+                          {!isOfferItem(item) &&
+                          normalizeChoiceSelections(item.addonChoiceSelections).length > 0 ? (
+                            <div className="mt-1.5 space-y-1.5">
+                              {normalizeChoiceSelections(item.addonChoiceSelections).map(
+                                (group) => (
+                                  <div key={`addon-${group.name}`}>
+                                    <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-wide">
+                                      {group.name}
+                                    </p>
+                                    <div className="flex flex-wrap gap-1 mt-1">
+                                      {group.subChoices.map((choice) => (
+                                        <span
+                                          key={`addon-${group.name}-${choice}`}
+                                          className="inline-flex items-center rounded-full border border-blue-100 bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-800"
+                                        >
+                                          {choice}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  </div>
+                                ),
+                              )}
+                            </div>
+                          ) : null}
                         </div>
                         <span className="font-bold text-sm text-zinc-900 shrink-0">
                           ${(item.price * item.qty).toFixed(2)}
@@ -1721,9 +1793,11 @@ export default function OrderPage() {
             <div className="space-y-1 mb-3">
               <div className="flex justify-between text-sm font-semibold text-zinc-500">
                 <span>Subtotal</span>
-                <span className="text-zinc-900">${subtotal.toFixed(2)}</span>
+                <span className="text-zinc-900">
+                  ${(hasSentKot ? billingSubtotal : subtotal).toFixed(2)}
+                </span>
               </div>
-              {discountAmount > 0 && (
+              {(hasSentKot ? billingDiscount : discountAmount) > 0 && (
                 <div className="flex justify-between text-sm font-semibold text-green-600">
                   <span>
                     {isStaffOrder || appliedDiscount?.code === "STAFF"
@@ -1734,17 +1808,22 @@ export default function OrderPage() {
                             : ""
                         }`}
                   </span>
-                  <span>-${discountAmount.toFixed(2)}</span>
+                  <span>
+                    -$
+                    {(hasSentKot ? billingDiscount : discountAmount).toFixed(2)}
+                  </span>
                 </div>
               )}
               <div className="flex justify-between text-sm font-semibold text-zinc-500">
                 <span>HST</span>
-                <span className="text-zinc-900">${totalTax.toFixed(2)}</span>
+                <span className="text-zinc-900">
+                  ${(hasSentKot ? billingTaxTotal : totalTax).toFixed(2)}
+                </span>
               </div>
               <div className="flex justify-between items-center pt-1.5 border-t border-zinc-100">
                 <span className="text-base font-bold text-zinc-900">Total</span>
                 <span className="text-2xl font-black text-zinc-900 leading-none">
-                  ${total.toFixed(2)}
+                  ${(hasSentKot ? billingTotal : total).toFixed(2)}
                 </span>
               </div>
             </div>
@@ -1955,12 +2034,11 @@ export default function OrderPage() {
           activeOrder
             ? {
                 ...activeOrder,
-                subTotal: subtotal,
-                taxTotal: totalTax,
+                subTotal: billingSubtotal,
+                taxTotal: billingTaxTotal,
                 discountCode:
                   appliedDiscount?.code || activeOrder.discountCode || null,
-                discountTotal:
-                  discountAmount || activeOrder.discountTotal || 0,
+                discountTotal: billingDiscount,
                 partyName:
                   guestName ||
                   activeOrder.partyName ||
@@ -2176,7 +2254,8 @@ export default function OrderPage() {
                       </span>
                       <div className="grid gap-2">
                         {selectedProduct.variants.map((v, idx) => {
-                          const qty = variantQtyBySize[v.size] || 0;
+                          const variantKey = getVariantKey(v, idx);
+                          const qty = variantQtyBySize[variantKey] || 0;
                           const isChecked = qty > 0;
                           const discountAmount = calculateItemDiscount(
                             selectedProduct,
@@ -2196,7 +2275,7 @@ export default function OrderPage() {
 
                           return (
                             <div
-                              key={idx}
+                              key={variantKey}
                               className={`flex items-center border p-3 rounded-lg transition-colors gap-1 ${
                                 isChecked
                                   ? "border-orange-500 bg-orange-50/30"
@@ -2212,7 +2291,7 @@ export default function OrderPage() {
                                 <button
                                   type="button"
                                   onClick={() =>
-                                    setVariantQty(v.size, qty - 1)
+                                    setVariantQty(variantKey, qty - 1)
                                   }
                                   className="w-7 h-7 rounded bg-zinc-100 flex items-center justify-center text-zinc-700 hover:bg-zinc-200"
                                   aria-label={`Decrease ${v.size}`}
@@ -2225,7 +2304,7 @@ export default function OrderPage() {
                                 <button
                                   type="button"
                                   onClick={() =>
-                                    setVariantQty(v.size, qty + 1)
+                                    setVariantQty(variantKey, qty + 1)
                                   }
                                   className="w-7 h-7 rounded bg-zinc-100 flex items-center justify-center text-zinc-700 hover:bg-zinc-200"
                                   aria-label={`Increase ${v.size}`}
@@ -2348,9 +2427,12 @@ export default function OrderPage() {
                       <span className="text-[13px] font-bold text-zinc-900 mb-2 block">
                         Addons
                       </span>
-                      <div className="grid gap-2">
+                      <div className="grid gap-3">
                         {selectedProduct.addons.map((addon) => {
-                          const qty = addonQtyById[addon._id]?.qty || 0;
+                          const addonKey = getAddonKey(addon);
+                          const qty = addonQtyById[addonKey]?.qty || 0;
+                          const choicesByGroup =
+                            addonQtyById[addonKey]?.choicesByGroup || {};
                           const isChecked = qty > 0;
                           const discountAmount = calculateItemDiscount(
                             selectedProduct,
@@ -2367,16 +2449,20 @@ export default function OrderPage() {
                           const unitFinal = discountedPrice + taxAmount;
                           const lineTax = taxAmount * qty;
                           const lineTotal = unitFinal * qty;
+                          const addonChoiceGroups = normalizeChoiceOptions(
+                            addon.choiceOptions,
+                          );
 
                           return (
                             <div
-                              key={addon._id}
-                              className={`flex items-center border p-3 rounded-lg transition-colors gap-1 ${
+                              key={addonKey}
+                              className={`border rounded-lg transition-colors ${
                                 isChecked
                                   ? "border-orange-500 bg-orange-50/30"
                                   : "border-zinc-200"
                               }`}
                             >
+                              <div className="flex items-center p-3 gap-1">
                               <div
                                 className={`flex-1 min-w-[100px] text-[14px] font-bold ${isChecked ? "text-zinc-900" : "text-zinc-700"}`}
                               >
@@ -2418,6 +2504,54 @@ export default function OrderPage() {
                                 +$
                                 {(qty > 0 ? lineTotal : unitFinal).toFixed(2)}
                               </div>
+                              </div>
+                              {addonChoiceGroups.length > 0 && (
+                                <div className="px-3 pb-3 pt-1 space-y-4 border-t border-zinc-100/80">
+                                  {addonChoiceGroups.map((group, groupIndex) => (
+                                    <div
+                                      key={`${addonKey}-${group.name}-${groupIndex}`}
+                                      className="space-y-2"
+                                    >
+                                      <span className="text-[12px] font-bold text-zinc-800 block">
+                                        {group.name}
+                                      </span>
+                                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                        {group.subChoices.map((choice) => {
+                                          const selected = (
+                                            choicesByGroup[groupIndex] || []
+                                          ).includes(choice);
+                                          return (
+                                            <label
+                                              key={`${addonKey}-${group.name}-${choice}`}
+                                              className={`flex items-center border p-2.5 rounded-lg cursor-pointer transition-colors ${
+                                                selected
+                                                  ? "border-orange-500 bg-orange-50/30"
+                                                  : "border-zinc-200 hover:border-orange-300"
+                                              }`}
+                                            >
+                                              <div className="flex-1 flex items-center gap-2 text-[13px] font-bold text-zinc-800">
+                                                <input
+                                                  type="checkbox"
+                                                  checked={selected}
+                                                  onChange={() =>
+                                                    toggleAddonSubChoice(
+                                                      addonKey,
+                                                      groupIndex,
+                                                      choice,
+                                                    )
+                                                  }
+                                                  className="w-4 h-4 accent-orange-500"
+                                                />
+                                                <span>{choice}</span>
+                                              </div>
+                                            </label>
+                                          );
+                                        })}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
                             </div>
                           );
                         })}

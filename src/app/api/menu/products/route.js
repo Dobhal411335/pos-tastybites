@@ -6,6 +6,7 @@ import { sendError } from "@/utils/errorHandler";
 import { logger } from "@/utils/logger";
 import Coupon from "@/models/menu/Coupon";
 import Tax from "@/models/tax/Tax";
+import { normalizeAddons } from "@/lib/menu/addons";
 // GET - List all products
 export const GET = withAuth(async (request) => {
   try {
@@ -65,7 +66,7 @@ export const POST = withAuth(async (request) => {
       else totalFixed += t.value;
     });
 
-    const categoryAddons = Array.isArray(category.addons) ? category.addons : [];
+    const categoryAddons = normalizeAddons(category.addons || []);
 
     const productsToCreate = names.map((name, index) => ({
       restaurant: request.restaurant,
@@ -74,12 +75,7 @@ export const POST = withAuth(async (request) => {
       productCode: codes && codes[index] ? codes[index].trim() : "",
       productType: "KITCHEN",
       status: "Active",
-      addons: categoryAddons.map((addon) => ({
-        name: addon.name,
-        price: Number(addon.price) || 0,
-        size: addon.size || "Regular",
-        status: addon.status !== false,
-      })),
+      addons: categoryAddons,
       taxes: taxIds,
       taxData: {
         totalPercentage,

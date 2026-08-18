@@ -27,6 +27,10 @@ import { toast } from "sonner";
 import { PALETTE } from "@/utils/paletteeColor"
 import DeleteDialog from "@/components/common/DeleteDialog";
 import { Loader2 } from "lucide-react";
+import AddonChoiceOptionsEditor, {
+  normalizeAddonChoiceOptionsForForm,
+  serializeAddonChoiceOptions,
+} from "@/components/menu/AddonChoiceOptionsEditor";
 
 export default function MenuCategoriesPage() {
   const router = useRouter();
@@ -93,6 +97,7 @@ export default function MenuCategoriesPage() {
             price: a.price ?? "",
             size: a.size || "Regular",
             status: a.status !== false,
+            choiceOptions: normalizeAddonChoiceOptionsForForm(a.choiceOptions),
           }))
         : []
     );
@@ -136,7 +141,11 @@ export default function MenuCategoriesPage() {
       const method = editCategoryId ? "PUT" : "POST";
       const addonsPayload = categoryAddons
         .filter((a) => a.name)
-        .map((a) => ({ ...a, price: parseFloat(a.price) || 0 }));
+        .map((a) => ({
+          ...a,
+          price: parseFloat(a.price) || 0,
+          choiceOptions: serializeAddonChoiceOptions(a.choiceOptions),
+        }));
       const payload = editCategoryId
         ? { _id: editCategoryId, name: newCategoryName.trim(), addons: addonsPayload }
         : { name: newCategoryName.trim(), addons: addonsPayload };
@@ -262,7 +271,8 @@ export default function MenuCategoriesPage() {
                           Link Addons
                         </label>
                         {categoryAddons.map((addon, index) => (
-                          <div key={index} className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end border border-zinc-100 p-4 rounded-md bg-zinc-50/50">
+                          <div key={index} className="border border-zinc-100 p-4 rounded-md bg-zinc-50/50 space-y-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
                             <div className="space-y-2">
                               <label className="text-[13px] font-semibold text-zinc-900">Price Amount ($)</label>
                               <Input
@@ -316,6 +326,15 @@ export default function MenuCategoriesPage() {
                                 </Button>
                               </div>
                             </div>
+                            </div>
+                            <AddonChoiceOptionsEditor
+                              choiceOptions={addon.choiceOptions || []}
+                              onChange={(choiceOptions) => {
+                                const next = [...categoryAddons];
+                                next[index] = { ...next[index], choiceOptions };
+                                setCategoryAddons(next);
+                              }}
+                            />
                           </div>
                         ))}
                         <div className="flex justify-end mt-2">
@@ -323,7 +342,7 @@ export default function MenuCategoriesPage() {
                             type="button"
                             variant="secondary"
                             className="h-9"
-                            onClick={() => setCategoryAddons([...categoryAddons, { name: addonsList[0] || "", price: "", size: "Regular", status: true }])}
+                            onClick={() => setCategoryAddons([...categoryAddons, { name: addonsList[0] || "", price: "", size: "Regular", status: true, choiceOptions: normalizeAddonChoiceOptionsForForm([]) }])}
                           >
                             Add More Addons
                           </Button>

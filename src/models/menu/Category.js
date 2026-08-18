@@ -1,10 +1,16 @@
 import mongoose from 'mongoose';
 
+const ChoiceOptionSchema = new mongoose.Schema({
+  name: { type: String, required: true, trim: true },
+  subChoices: [{ type: String, trim: true }],
+});
+
 const CategoryAddonSchema = new mongoose.Schema({
   name: { type: String, required: true },
   price: { type: Number, required: true, default: 0 },
   size: { type: String, default: 'Regular' },
   status: { type: Boolean, default: true },
+  choiceOptions: { type: [ChoiceOptionSchema], default: [] },
 });
 
 const CategorySchema = new mongoose.Schema(

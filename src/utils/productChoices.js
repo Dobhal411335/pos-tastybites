@@ -54,6 +54,13 @@ export function getProductChoiceDetailLines(item) {
   }));
 }
 
+export function getAddonChoiceDetailLines(item) {
+  return normalizeChoiceSelections(item?.addonChoiceSelections).map((group) => ({
+    label: group.name,
+    value: group.subChoices.join(", "),
+  }));
+}
+
 export function cartChoiceSelectionsKey(selections) {
   return JSON.stringify(
     normalizeChoiceSelections(selections).map((group) => ({

@@ -15,6 +15,10 @@ import { toast } from "sonner";
 import { PALETTE } from "@/utils/paletteeColor";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import Image from "next/image";
+import AddonChoiceOptionsEditor, {
+  normalizeAddonChoiceOptionsForForm,
+  serializeAddonChoiceOptions,
+} from "@/components/menu/AddonChoiceOptionsEditor";
 
 export default function ProductDetailsConfigPage() {
   const { id } = useParams();
@@ -64,7 +68,12 @@ export default function ProductDetailsConfigPage() {
         setDescription(p.description || "");
         setTaxValue(p.taxValue?.toString() || "0");
         setVariants(p.variants || []);
-        setAddons(p.addons || []);
+        setAddons(
+          (p.addons || []).map((addon) => ({
+            ...addon,
+            choiceOptions: normalizeAddonChoiceOptionsForForm(addon.choiceOptions),
+          })),
+        );
         setPreparationStyles(p.preparationStyles?.length ? p.preparationStyles : [""]);
         setChoiceOptions(
           p.choiceOptions?.length
@@ -243,7 +252,11 @@ export default function ProductDetailsConfigPage() {
           taxValue: parseFloat(taxValue) || 0,
           taxes: availableTaxes.map(t => t._id),
           variants: variants.filter(v => v.size).map(v => ({ ...v, price: parseFloat(v.price) || 0 })),
-          addons: addons.filter(a => a.name).map(a => ({ ...a, price: parseFloat(a.price) || 0 })),
+          addons: addons.filter(a => a.name).map(a => ({
+            ...a,
+            price: parseFloat(a.price) || 0,
+            choiceOptions: serializeAddonChoiceOptions(a.choiceOptions),
+          })),
           preparationStyles: preparationStyles.filter(s => s.trim() !== ""),
           choiceOptions: choiceOptions
             .map((group) => ({
@@ -634,11 +647,12 @@ export default function ProductDetailsConfigPage() {
 
                     <div className="space-y-2 pt-6 border-t border-zinc-100">
                       <div className="space-y-4 pt-6 border-t border-zinc-100">
-                        <label className="text-[14px] font-semibold text-zinc-900 block">
+                        <label className="text-[16px] underline font-semibold text-zinc-900 block">
                           Link Addons
                         </label>
                         {addons.map((addon, index) => (
-                          <div key={index} className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end border border-zinc-100 p-4 rounded-md bg-zinc-50/50">
+                          <div key={index} className="border border-zinc-100 p-4 rounded-md bg-zinc-50/50 space-y-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
                             <div className="space-y-2">
                               <label className="text-[13px] font-semibold text-zinc-900 flex items-center gap-2">
                                 Price Amount ($)
@@ -701,6 +715,15 @@ export default function ProductDetailsConfigPage() {
                                 </Button>
                               </div>
                             </div>
+                            </div>
+                            <AddonChoiceOptionsEditor
+                              choiceOptions={addon.choiceOptions || []}
+                              onChange={(choiceOptions) => {
+                                const newAddons = [...addons];
+                                newAddons[index] = { ...newAddons[index], choiceOptions };
+                                setAddons(newAddons);
+                              }}
+                            />
                           </div>
                         ))}
                         <div className="flex justify-end mt-2">
@@ -708,7 +731,7 @@ export default function ProductDetailsConfigPage() {
                             type="button"
                             variant="secondary"
                             className="h-9"
-                            onClick={() => setAddons([...addons, { name: addonsList[0] || "", price: "", size: "Regular", status: true }])}
+                            onClick={() => setAddons([...addons, { name: addonsList[0] || "", price: "", size: "Regular", status: true, choiceOptions: normalizeAddonChoiceOptionsForForm([]) }])}
                           >
                             Add More Addons
                           </Button>
@@ -921,6 +944,11 @@ export default function ProductDetailsConfigPage() {
                                 )}
                               </span>
                               <span className="text-[13px] text-zinc-500 mt-0.5">{add.size}</span>
+                              {serializeAddonChoiceOptions(add.choiceOptions).length > 0 && (
+                                <span className="text-[11px] text-zinc-400 mt-1">
+                                  {serializeAddonChoiceOptions(add.choiceOptions).length} choice group(s)
+                                </span>
+                              )}
                             </div>
                           </TableCell>
                           <TableCell className="px-6 text-center font-bold text-[15px] text-[#F97316]">

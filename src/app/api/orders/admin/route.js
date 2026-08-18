@@ -24,7 +24,7 @@ export const POST = withAuth(async (request) => {
       items: items.map(item => ({
         menuItemId: item.id,
         name: item.name,
-        size: item.size || "Standard",
+        size: item.size || "",
         qty: item.qty,
         price: item.price,
         tax: item.tax || 0,
