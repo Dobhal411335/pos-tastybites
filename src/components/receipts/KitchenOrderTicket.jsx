@@ -1,19 +1,9 @@
 import React from "react";
 import "./print.css";
 import moment from "moment";
-import { isOfferItem, getOfferDetailLines } from "@/utils/offerDetails";
-import { getProductChoiceDetailLines, getAddonChoiceDetailLines } from "@/utils/productChoices";
+import { isOfferItem } from "@/utils/offerDetails";
+import { getReceiptModifierLines } from "@/utils/productChoices";
 import { isDirectSaleOrder, formatTableLocation } from "@/utils/orderDisplay";
-
-function isStyleOption(opt, preparationStyle) {
-  const value = String(opt || "").trim();
-  const lower = value.toLowerCase();
-  if (lower.startsWith("style:")) return true;
-  if (preparationStyle && lower === String(preparationStyle).trim().toLowerCase()) {
-    return true;
-  }
-  return false;
-}
 
 /**
  * Hardware-independent Kitchen Order Ticket for 80mm thermal paper.
@@ -101,20 +91,7 @@ const KitchenOrderTicket = ({
             </div>
             <div className="space-y-3 mt-2">
               {items.map((item, itemIdx) => {
-                const offerLines = isOfferItem(item)
-                  ? getOfferDetailLines(item)
-                  : [];
-                const extraOptions = isOfferItem(item)
-                  ? []
-                  : item.options?.filter(
-                      (opt) => !isStyleOption(opt, item.preparationStyle),
-                    ) || [];
-                const choiceLines = isOfferItem(item)
-                  ? []
-                  : getProductChoiceDetailLines(item);
-                const addonChoiceLines = isOfferItem(item)
-                  ? []
-                  : getAddonChoiceDetailLines(item);
+                const modifierLines = getReceiptModifierLines(item);
 
                 return (
                 <div key={itemIdx}>
@@ -135,57 +112,16 @@ const KitchenOrderTicket = ({
                       Course: {item.course}
                     </div>
                   )}
-                  {item.preparationStyle && (
-                    <div className="pl-7 text-[11px] font-semibold italic">
-                      + {item.preparationStyle}
-                    </div>
-                  )}
-                  {choiceLines.length > 0 && (
+                  {modifierLines.length > 0 && (
                     <div className="pl-7 mt-1 space-y-0.5">
-                      {choiceLines.map((line) => (
+                      {modifierLines.map((line, lineIdx) => (
                         <div
-                          key={line.label}
+                          key={`${line.kind}-${lineIdx}`}
                           className="text-[11px] font-semibold italic"
                         >
-                          {line.label}: {line.value}
+                          {line.text}
                         </div>
                       ))}
-                    </div>
-                  )}
-                  {addonChoiceLines.length > 0 && (
-                    <div className="pl-7 mt-1 space-y-0.5">
-                      {addonChoiceLines.map((line) => (
-                        <div
-                          key={`addon-${line.label}`}
-                          className="text-[11px] font-semibold italic"
-                        >
-                          {line.label}: {line.value}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {offerLines.length > 0 && (
-                    <div className="pl-7 mt-1 space-y-0.5">
-                      {offerLines.map((line) => (
-                        <div
-                          key={line.label}
-                          className="text-[11px] font-semibold italic"
-                        >
-                          {line.label}: {line.value}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {extraOptions.length > 0 && (
-                    <div className="pl-7 mt-1 space-y-0.5">
-                      {extraOptions.map((opt, oIdx) => (
-                          <div
-                            key={oIdx}
-                            className="text-[11px] font-semibold italic"
-                          >
-                            + {opt}
-                          </div>
-                        ))}
                     </div>
                   )}
                 </div>

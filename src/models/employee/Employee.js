@@ -12,6 +12,7 @@ const EmployeeSchema = new mongoose.Schema(
     username: { type: String, lowercase: true, trim: true },
     password: { type: String }, // Bcrypt hash for login, generated on approval
     plainPassword: { type: String }, // Plain text for admin viewing only (never exposed in list APIs)
+    passcode: { type: String, trim: true }, // Plain-text POS quick login; unique per restaurant
     profileImage: { type: String },
     role: { type: String, required: true },
     status: { type: String, enum: ['Pending Approval', 'Approved', 'Active', 'Suspended'], default: 'Pending Approval' },
@@ -52,6 +53,7 @@ const EmployeeSchema = new mongoose.Schema(
 );
 
 EmployeeSchema.index({ restaurant: 1, email: 1 }, { unique: true });
+EmployeeSchema.index({ restaurant: 1, passcode: 1 }, { unique: true, sparse: true });
 
 // Virtual for backward compatibility
 EmployeeSchema.virtual('name').get(function() {

@@ -16,6 +16,19 @@ function resetCursor(doc, y = doc.y) {
   doc.y = y;
 }
 
+function formatDateTime(dateStr, tz) {
+  if (!dateStr) return "—";
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return "—";
+    const opts = { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" };
+    if (tz) opts.timeZone = tz;
+    return d.toLocaleString("en-US", opts);
+  } catch (err) {
+    return "—";
+  }
+}
+
 export async function exportEmployeeReportPdf(payload) {
   return new Promise((resolve, reject) => {
     try {
@@ -122,7 +135,7 @@ export async function exportEmployeeReportPdf(payload) {
         "Sales",
         "Tips",
         "Svc",
-        "Can",
+        "Cancel",
         "Est Pay",
       ];
       const colW = [
@@ -138,18 +151,19 @@ export async function exportEmployeeReportPdf(payload) {
         width * 0.06,
         width * 0.12,
       ];
-      const rowH = 16;
+      const rowH = 24;
 
       const drawHeader = (y) => {
         let x = left;
-        doc.font("Helvetica-Bold").fontSize(8).fillColor("#333");
+        doc.font("Helvetica-Bold").fontSize(9).fillColor("#333");
         headers.forEach((h, i) => {
-          doc.text(h, x, y, { width: colW[i] - 4, align: "left", lineBreak: false });
+          doc.text(h, x, y + 6, { width: colW[i] - 4, align: i >= 5 ? "right" : "left", lineBreak: false });
           x += colW[i];
         });
         doc
-          .moveTo(left, y + rowH - 2)
-          .lineTo(left + width, y + rowH - 2)
+          .moveTo(left, y + rowH)
+          .lineTo(left + width, y + rowH)
+          .lineWidth(1)
           .strokeColor("#ccc")
           .stroke();
         return y + rowH;
@@ -168,8 +182,8 @@ export async function exportEmployeeReportPdf(payload) {
           row.name || "",
           row.role || "",
           row.clockedIn ? "In" : "Out",
-          row.clockIn || "—",
-          row.clockOut || "—",
+          formatDateTime(row.clockIn, payload.meta?.timezone),
+          formatDateTime(row.clockOut, payload.meta?.timezone),
           String(Number(row.hours) || 0),
           money(row.sales),
           money(row.tips),
@@ -178,13 +192,19 @@ export async function exportEmployeeReportPdf(payload) {
           money(row.estimatedPay),
         ];
         values.forEach((value, i) => {
-          doc.text(String(value), x, y, {
+          doc.text(String(value), x, y + 6, {
             width: colW[i] - 4,
             align: i >= 5 ? "right" : "left",
             lineBreak: false,
           });
           x += colW[i];
         });
+        doc
+          .moveTo(left, y + rowH)
+          .lineTo(left + width, y + rowH)
+          .lineWidth(0.5)
+          .strokeColor("#eee")
+          .stroke();
         y += rowH;
       };
 

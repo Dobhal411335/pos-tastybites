@@ -94,8 +94,8 @@ export function showSystemNotification(notification) {
     const body = notification?.message || "";
     const n = new Notification(title, {
       body,
-      icon: absoluteAssetUrl("/favicon/android-chrome-192x192.png"),
-      badge: absoluteAssetUrl("/favicon/favicon-32x32.png"),
+      icon: absoluteAssetUrl("/android-chrome-192x192.png"),
+      badge: absoluteAssetUrl("/favicon-32x32.png"),
       tag: String(notification?.id || notification?._id || `tb-order-${Date.now()}`),
       renotify: true,
       requireInteraction: true,

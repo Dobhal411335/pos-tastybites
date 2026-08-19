@@ -12,7 +12,7 @@ export const DEFAULT_ADDON_CHOICE_GROUP = {
 
 export function normalizeAddonChoiceOptionsForForm(choiceOptions) {
   if (!Array.isArray(choiceOptions) || choiceOptions.length === 0) {
-    return [{ ...DEFAULT_ADDON_CHOICE_GROUP, subChoices: ["", "", "", ""] }];
+    return [];
   }
   return choiceOptions.map((group) => ({
     name: group.name || "",
@@ -36,10 +36,7 @@ export default function AddonChoiceOptionsEditor({
   onChange,
   className = "",
 }) {
-  const groups =
-    choiceOptions.length > 0
-      ? choiceOptions
-      : [{ ...DEFAULT_ADDON_CHOICE_GROUP }];
+  const groups = Array.isArray(choiceOptions) ? choiceOptions : [];
 
   const updateGroups = (nextGroups) => {
     onChange(nextGroups);
@@ -50,6 +47,11 @@ export default function AddonChoiceOptionsEditor({
       <label className="text-[13px] font-semibold text-zinc-900 block">
         Choice Options
       </label>
+      {groups.length === 0 && (
+        <p className="text-[12px] text-zinc-500">
+          No choice groups. Add one to collect extra options for this addon.
+        </p>
+      )}
       {groups.map((group, groupIndex) => (
         <div
           key={`addon-choice-group-${groupIndex}`}
@@ -59,20 +61,18 @@ export default function AddonChoiceOptionsEditor({
             <label className="text-[12px] font-semibold text-zinc-700">
               Choice Option
             </label>
-            {groups.length > 1 && (
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => {
-                  const next = [...groups];
-                  next.splice(groupIndex, 1);
-                  updateGroups(next);
-                }}
-                className="h-8 w-8 p-0 shrink-0 text-red-500 hover:text-red-700 hover:bg-red-50"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-              </Button>
-            )}
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                updateGroups(groups.filter((_, i) => i !== groupIndex));
+              }}
+              className="h-8 px-2 shrink-0 text-red-500 hover:text-red-700 hover:bg-red-50"
+              aria-label="Delete choice option"
+            >
+              <Trash2 className="w-3.5 h-3.5 mr-1" />
+              <span className="text-[12px] font-semibold">Delete</span>
+            </Button>
           </div>
           <Input
             type="text"
@@ -83,28 +83,49 @@ export default function AddonChoiceOptionsEditor({
               next[groupIndex] = { ...next[groupIndex], name: e.target.value };
               updateGroups(next);
             }}
-            className="h-10 text-[14px] bg-white rounded-full px-4"
+            className="h-10 text-[14px] bg-white rounded-md px-4"
           />
           <div className="space-y-2">
             <label className="text-[12px] font-semibold text-zinc-700">
               Add Option :
             </label>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+            <div className="grid grid-cols-2 md:grid-cols-2 gap-2">
               {(group.subChoices || []).map((option, optionIndex) => (
-                <Input
+                <div
                   key={`addon-choice-${groupIndex}-${optionIndex}`}
-                  type="text"
-                  placeholder="Type Choice"
-                  value={option}
-                  onChange={(e) => {
-                    const next = [...groups];
-                    const subChoices = [...(next[groupIndex].subChoices || [])];
-                    subChoices[optionIndex] = e.target.value;
-                    next[groupIndex] = { ...next[groupIndex], subChoices };
-                    updateGroups(next);
-                  }}
-                  className="h-9 text-[13px] bg-white rounded-full px-3"
-                />
+                  className="flex items-center gap-1.5"
+                >
+                  <Input
+                    type="text"
+                    placeholder="Type Choice"
+                    value={option}
+                    onChange={(e) => {
+                      const next = [...groups];
+                      const subChoices = [...(next[groupIndex].subChoices || [])];
+                      subChoices[optionIndex] = e.target.value;
+                      next[groupIndex] = { ...next[groupIndex], subChoices };
+                      updateGroups(next);
+                    }}
+                    className="h-9 text-[13px] bg-white rounded-md px-3"
+                  />
+                  {(group.subChoices || []).length > 1 && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        const next = [...groups];
+                        const subChoices = [...(next[groupIndex].subChoices || [])];
+                        subChoices.splice(optionIndex, 1);
+                        next[groupIndex] = { ...next[groupIndex], subChoices };
+                        updateGroups(next);
+                      }}
+                      className="h-9 w-9 p-0 shrink-0 text-red-500 hover:text-red-700 hover:bg-red-50"
+                      aria-label="Delete sub choice"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
+                  )}
+                </div>
               ))}
             </div>
             <div className="flex items-center justify-end gap-2 pt-1">

@@ -64,6 +64,27 @@ async function assertTipPercentAvailable(restaurantId, tipPercent, excludeEmploy
   return value;
 }
 
+function normalizePasscode(passcode) {
+  if (passcode === undefined || passcode === null) return undefined;
+  const trimmed = String(passcode).trim();
+  return trimmed || undefined;
+}
+
+async function assertPasscodeAvailable(restaurantId, passcode, excludeEmployeeId = null) {
+  const value = normalizePasscode(passcode);
+  if (!value) return undefined;
+
+  const query = { restaurant: restaurantId, passcode: value };
+  if (excludeEmployeeId) query._id = { $ne: excludeEmployeeId };
+
+  const exists = await Employee.findOne(query).select("_id").lean();
+  if (exists) {
+    throw Object.assign(new Error("This passcode is already assigned to another employee"), { status: 409 });
+  }
+
+  return value;
+}
+
 /**
  * Generate planned shifts from a default shift template (next `days` days).
  * Skips days that already have an isPlanned shift for this employee.
@@ -178,7 +199,7 @@ export const GET = withAuth(async (request) => {
     if (id) query._id = id;
 
     const employees = await Employee.find(query)
-      .select("-password -plainPassword")
+      .select("-password -plainPassword -passcode")
       .populate("defaultFloor", "name")
       .lean();
 
@@ -193,7 +214,7 @@ export const GET = withAuth(async (request) => {
 export const POST = withAuth(async (request) => {
   try {
     const data = await request.json();
-    const { firstName, lastName, email, countryCode, phoneNumber, role, password, status, profileImage, defaultFloor, employeeColor, defaultShiftTemplate, weeklyOff, availableDays, hourlyPaid, staffDiscount, tipPercent } = data;
+    const { firstName, lastName, email, countryCode, phoneNumber, role, password, status, profileImage, defaultFloor, employeeColor, defaultShiftTemplate, weeklyOff, availableDays, hourlyPaid, staffDiscount, tipPercent, passcode } = data;
 
     // Validation
     if (!firstName || !lastName || !email || !phoneNumber) {
@@ -218,6 +239,16 @@ export const POST = withAuth(async (request) => {
       return sendError(tipErr, tipErr.message, tipErr.status || 400);
     }
 
+    let validatedPasscode;
+    try {
+      validatedPasscode = await assertPasscodeAvailable(request.restaurant, passcode);
+    } catch (passErr) {
+      return sendError(passErr, passErr.message, passErr.status || 400);
+    }
+    if (!validatedPasscode) {
+      return sendError(new Error("Passcode is required"), "Passcode is required", 400);
+    }
+
     const normalizedHourlyPaid = normalizeHourlyPaid(hourlyPaid);
 
     const newEmployee = await Employee.create({
@@ -238,6 +269,7 @@ export const POST = withAuth(async (request) => {
       hourlyPaid: normalizedHourlyPaid,
       tipPercent: validatedTipPercent,
       staffDiscount: staffDiscount !== undefined ? staffDiscount : undefined,
+      passcode: validatedPasscode,
     });
 
     // Auto-generate planned schedule if defaultShiftTemplate is provided
@@ -252,6 +284,9 @@ export const POST = withAuth(async (request) => {
     }
 
     const employeeObj = newEmployee.toObject();
+    delete employeeObj.password;
+    delete employeeObj.plainPassword;
+    delete employeeObj.passcode;
 
     logger.info(`Employee created: ${email}`);
     return sendSuccess(employeeObj, "Employee created successfully", 201);
@@ -265,7 +300,7 @@ export const POST = withAuth(async (request) => {
 export const PUT = withAuth(async (request) => {
   try {
     const data = await request.json();
-    const { _id, action, firstName, lastName, countryCode, phoneNumber, role, status, profileImage, defaultFloor, employeeColor, defaultShiftTemplate, weeklyOff, availableDays, hourlyPaid, staffDiscount, tipPercent } = data;
+    const { _id, action, firstName, lastName, countryCode, phoneNumber, role, status, profileImage, defaultFloor, employeeColor, defaultShiftTemplate, weeklyOff, availableDays, hourlyPaid, staffDiscount, tipPercent, passcode, employeeId, password } = data;
 
     if (!_id) {
       return sendError(new Error("Missing ID"), "Employee ID is required", 400);
@@ -276,14 +311,6 @@ export const PUT = withAuth(async (request) => {
     if (!existing) {
       return sendError(new Error("Not Found"), "Employee not found", 404);
     }
-
-    // Generate random 10 char password
-    const generatePassword = () => {
-      const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*";
-      let pass = "";
-      for (let i = 0; i < 10; i++) pass += chars[Math.floor(Math.random() * chars.length)];
-      return pass;
-    };
 
     if (action === "updateEmployee") {
       const previousTemplateId = existing.defaultShiftTemplate
@@ -304,6 +331,13 @@ export const PUT = withAuth(async (request) => {
           existing.tipPercent = await assertTipPercentAvailable(request.restaurant, tipPercent, _id);
         } catch (tipErr) {
           return sendError(tipErr, tipErr.message, tipErr.status || 400);
+        }
+      }
+      if (passcode !== undefined && String(passcode).trim()) {
+        try {
+          existing.passcode = await assertPasscodeAvailable(request.restaurant, passcode, _id);
+        } catch (passErr) {
+          return sendError(passErr, passErr.message, passErr.status || 400);
         }
       }
 
@@ -339,15 +373,28 @@ export const PUT = withAuth(async (request) => {
       const employeeData = existing.toObject();
       delete employeeData.password;
       delete employeeData.plainPassword;
+      delete employeeData.passcode;
       return sendSuccess(employeeData, "Employee updated successfully");
     }
 
     if (action === "approve") {
       if (existing.status !== "Pending Approval") return sendError(new Error("Invalid State"), "Employee is not pending approval", 400);
-      
-      const count = await Employee.countDocuments({ restaurant: request.restaurant, employeeId: { $exists: true } });
-      const employeeId = `EMP-${(count + 1).toString().padStart(4, "0")}`;
-      
+
+      const manualEmployeeId = typeof employeeId === "string" ? employeeId.trim() : "";
+      const rawPassword = typeof password === "string" ? password.trim() : "";
+      if (!manualEmployeeId || !rawPassword) {
+        return sendError(new Error("Missing fields"), "Employee ID and password are required", 400);
+      }
+
+      const duplicateId = await Employee.findOne({
+        restaurant: request.restaurant,
+        employeeId: manualEmployeeId,
+        _id: { $ne: existing._id },
+      }).select("_id").lean();
+      if (duplicateId) {
+        return sendError(new Error("Conflict"), "This Employee ID is already in use", 409);
+      }
+
       let usernameBase = existing.firstName.toLowerCase() + "." + existing.lastName.toLowerCase();
       usernameBase = usernameBase.replace(/[^a-z0-9.]/g, "");
       let username = usernameBase;
@@ -357,7 +404,6 @@ export const PUT = withAuth(async (request) => {
         username = usernameBase + counter;
       }
 
-      const rawPassword = generatePassword();
       const hashedPassword = await hashPassword(rawPassword);
 
       // Auto-create a RegisteredDevice for this employee
@@ -372,7 +418,7 @@ export const PUT = withAuth(async (request) => {
         assignedEmployee: existing._id,
       });
 
-      existing.employeeId = employeeId;
+      existing.employeeId = manualEmployeeId;
       existing.username = username;
       existing.password = hashedPassword;
       existing.plainPassword = rawPassword;
@@ -389,7 +435,10 @@ export const PUT = withAuth(async (request) => {
     }
 
     if (action === "regeneratePassword") {
-      const rawPassword = generatePassword();
+      const rawPassword = typeof password === "string" ? password.trim() : "";
+      if (!rawPassword) {
+        return sendError(new Error("Missing fields"), "Password is required", 400);
+      }
       const hashedPassword = await hashPassword(rawPassword);
 
       existing.password = hashedPassword;
@@ -432,6 +481,7 @@ export const PUT = withAuth(async (request) => {
           employeeId: existing.employeeId,
           username: existing.username,
           password: existing.plainPassword,
+          passcode: existing.passcode || "",
           role: existing.role,
           restaurantName: restaurantName,
           floor: null, // Depending on if we populate assignedFloor, leaving null for now as per template resilience
@@ -493,6 +543,7 @@ export const PUT = withAuth(async (request) => {
           employeeId: existing.employeeId,
           username: existing.username,
           password: existing.plainPassword || "******** (Password remains unchanged)",
+          passcode: existing.passcode || "",
           role: existing.role,
           restaurantName: restaurantName,
           floor: null,
@@ -536,7 +587,7 @@ export const PUT = withAuth(async (request) => {
       }
     }
 
-    const updatedEmployee = await Employee.findByIdAndUpdate(_id, updateData, { new: true }).select("-password -plainPassword");
+    const updatedEmployee = await Employee.findByIdAndUpdate(_id, updateData, { new: true }).select("-password -plainPassword -passcode");
 
     logger.info(`Employee updated: ${existing.email}`);
     return sendSuccess(updatedEmployee, "Employee updated successfully");

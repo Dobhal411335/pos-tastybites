@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import { ArrowLeft, Loader2, UserPlus, Mail, Phone, User } from "lucide-react";
+import { ArrowLeft, Loader2, UserPlus, Mail, Phone, User, KeyRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -30,6 +30,7 @@ export default function CreateServerAccountPage() {
   const [tipPercent, setTipPercent] = useState("");
   const [allocatedTipPercent, setAllocatedTipPercent] = useState(0);
   const [staffDiscount, setStaffDiscount] = useState("");
+  const [passcode, setPasscode] = useState("");
 
   // Default Shift Assignment
   const [defaultShiftTemplate, setDefaultShiftTemplate] = useState("");
@@ -119,6 +120,13 @@ export default function CreateServerAccountPage() {
             }
             if (emp.tipPercent != null) setTipPercent(emp.tipPercent.toString());
             if (emp.staffDiscount !== undefined) setStaffDiscount(emp.staffDiscount.toString());
+            try {
+              const credRes = await fetch(`/api/employees/credentials?id=${id}`);
+              const credJson = await credRes.json();
+              if (credJson.success && credJson.data?.passcode) {
+                setPasscode(credJson.data.passcode);
+              }
+            } catch (err) {}
           }
         }
       } catch (err) {
@@ -132,6 +140,10 @@ export default function CreateServerAccountPage() {
     e.preventDefault();
     if (!firstName.trim() || !lastName.trim() || !email.trim() || !phoneNumber.trim()) {
       toast.error("First Name, Last Name, Email, and Phone Number are required.");
+      return;
+    }
+    if (!isEditMode && !passcode.trim()) {
+      toast.error("Passcode is required.");
       return;
     }
 
@@ -167,6 +179,12 @@ export default function CreateServerAccountPage() {
         staffDiscount: staffDiscount ? Number(staffDiscount) : undefined
       };
 
+      if (isEditMode) {
+        if (passcode.trim()) payload.passcode = passcode.trim();
+      } else {
+        payload.passcode = passcode.trim();
+      }
+
       if (!isEditMode) {
         payload.email = email.trim();
       } else {
@@ -197,6 +215,7 @@ export default function CreateServerAccountPage() {
       setOvertimeAmountPerHour("");
       setTipPercent("");
       setStaffDiscount("");
+      setPasscode("");
       setDefaultShiftTemplate("");
 
       // Redirect to list page
@@ -352,6 +371,27 @@ export default function CreateServerAccountPage() {
                       />
                     </div>
                   </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[14px] font-semibold text-zinc-900">
+                    Passcode {!isEditMode && <span className="text-red-500">*</span>}
+                  </label>
+                  <div className="relative">
+                    <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-400" />
+                    <Input
+                      type="text"
+                      placeholder="e.g. 4821"
+                      required={!isEditMode}
+                      value={passcode}
+                      onChange={(e) => setPasscode(e.target.value)}
+                      className="pl-10 h-12 text-[15px] bg-white border-zinc-200 focus:ring-[#1e40af]"
+                    />
+                  </div>
+                  <p className="text-xs text-zinc-500">
+                    Saved as entered. Staff can use this on a registered POS device instead of Employee ID and password.
+                    {isEditMode ? " Leave blank to keep the current passcode." : ""}
+                  </p>
                 </div>
 
                 <div className=" flex items-center w-full gap-5">

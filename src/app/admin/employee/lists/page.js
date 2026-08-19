@@ -31,6 +31,11 @@ export default function EmployeeListPage() {
   const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [showPassword, setShowPassword] = useState(false);
   const [viewPassword, setViewPassword] = useState("");
+  const [viewPasscode, setViewPasscode] = useState("");
+  const [approveEmployeeId, setApproveEmployeeId] = useState("");
+  const [approvePassword, setApprovePassword] = useState("");
+  const [isRegenerateOpen, setIsRegenerateOpen] = useState(false);
+  const [regeneratePassword, setRegeneratePassword] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
 
   const fetchInitialData = useCallback(async () => {
@@ -127,20 +132,30 @@ export default function EmployeeListPage() {
 
   const handleApprove = async () => {
     if (!selectedEmployee) return;
+    if (!approveEmployeeId.trim() || !approvePassword.trim()) {
+      toast.error("Employee ID and password are required.");
+      return;
+    }
     setActionLoading(true);
     try {
       const res = await fetch("/api/employees", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ _id: selectedEmployee._id, action: "approve" }),
+        body: JSON.stringify({
+          _id: selectedEmployee._id,
+          action: "approve",
+          employeeId: approveEmployeeId.trim(),
+          password: approvePassword.trim(),
+        }),
       });
       const json = await res.json();
       if (json.success) {
-        toast.success("Employee approved and credentials generated!");
+        toast.success("Employee approved and credentials saved!");
         setIsApproveOpen(false);
+        setApproveEmployeeId("");
+        setApprovePassword("");
         fetchInitialData();
-        // Immediately show credentials
-        handleOpenCredentials(json.data, json.data.plainPassword);
+        handleOpenCredentials(json.data, json.data.plainPassword, json.data.passcode);
       } else {
         toast.error(json.message || "Approval failed");
       }
@@ -151,23 +166,37 @@ export default function EmployeeListPage() {
     }
   };
 
-  const handleRegeneratePassword = async (empId) => {
+  const handleRegeneratePassword = async () => {
+    if (!selectedEmployee) return;
+    if (!regeneratePassword.trim()) {
+      toast.error("Enter a new password.");
+      return;
+    }
+    setActionLoading(true);
     try {
       const res = await fetch("/api/employees", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ _id: empId, action: "regeneratePassword" }),
+        body: JSON.stringify({
+          _id: selectedEmployee._id,
+          action: "regeneratePassword",
+          password: regeneratePassword.trim(),
+        }),
       });
       const json = await res.json();
       if (json.success) {
-        toast.success("Password regenerated successfully.");
+        toast.success("Password updated successfully.");
+        setIsRegenerateOpen(false);
+        setRegeneratePassword("");
         fetchInitialData();
-        handleOpenCredentials(json.data, json.data.plainPassword);
+        handleOpenCredentials(json.data, json.data.plainPassword, json.data.passcode);
       } else {
-        toast.error(json.message || "Failed to regenerate password");
+        toast.error(json.message || "Failed to update password");
       }
     } catch (err) {
-      toast.error("Error regenerating password");
+      toast.error("Error updating password");
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -219,27 +248,42 @@ export default function EmployeeListPage() {
     }
   };
 
-  const handleOpenCredentials = async (emp, knownPassword = null) => {
+  const handleOpenCredentials = async (emp, knownPassword = null, knownPasscode = null) => {
     await new Promise(resolve => setTimeout(resolve, 150));
 
     setSelectedEmployee(emp);
     setViewPassword(knownPassword || "");
+    setViewPasscode(knownPasscode || emp?.passcode || "");
     setShowPassword(false);
     setIsCredentialsOpen(true);
 
-    if (knownPassword) return;
+    if (knownPassword && knownPasscode !== null && knownPasscode !== undefined) return;
 
     try {
       const res = await fetch(`/api/employees/credentials?id=${emp._id}`);
       const json = await res.json();
       if (json.success) {
-        setViewPassword(json.data.password);
+        if (!knownPassword) setViewPassword(json.data.password || "");
+        setViewPasscode(json.data.passcode || knownPasscode || "");
       } else {
-        toast.error(json.message || "Could not load password for viewing");
+        toast.error(json.message || "Could not load credentials for viewing");
       }
     } catch (err) {
       toast.error("Failed to fetch credentials");
     }
+  };
+
+  const openApproveDialog = async (emp) => {
+    setSelectedEmployee(emp);
+    setApproveEmployeeId("");
+    setApprovePassword("");
+    setViewPasscode("");
+    setIsApproveOpen(true);
+    try {
+      const res = await fetch(`/api/employees/credentials?id=${emp._id}`);
+      const json = await res.json();
+      if (json.success) setViewPasscode(json.data.passcode || "");
+    } catch (err) {}
   };
 
   const copyToClipboard = (text, item) => {
@@ -385,7 +429,7 @@ export default function EmployeeListPage() {
                                       </Link>
                                     </DropdownMenuItem>
                                     {emp.status === "Pending Approval" && (
-                                      <DropdownMenuItem className="text-[14px] font-medium text-[#1e40af] focus:bg-blue-50 cursor-pointer" onClick={() => { setSelectedEmployee(emp); setTimeout(() => setIsApproveOpen(true), 150); }}>
+                                      <DropdownMenuItem className="text-[14px] font-medium text-[#1e40af] focus:bg-blue-50 cursor-pointer" onClick={() => { setTimeout(() => openApproveDialog(emp), 150); }}>
                                         <CheckCircle className="mr-2 h-4 w-4" /> Approve Employee
                                       </DropdownMenuItem>
                                     )}
@@ -394,11 +438,24 @@ export default function EmployeeListPage() {
                                         <DropdownMenuItem className="text-[14px] font-medium cursor-pointer" onClick={() => handleOpenCredentials(emp)}>
                                           <Key className="mr-2 h-4 w-4" /> View Credentials
                                         </DropdownMenuItem>
-                                        <DropdownMenuItem className="text-[14px] font-medium cursor-pointer" onClick={() => { setSelectedEmployee(emp); setTimeout(() => setIsEmailOpen(true), 150); }}>
+                                        <DropdownMenuItem className="text-[14px] font-medium cursor-pointer" onClick={() => {
+                                          setSelectedEmployee(emp);
+                                          setTimeout(async () => {
+                                            setIsEmailOpen(true);
+                                            try {
+                                              const credRes = await fetch(`/api/employees/credentials?id=${emp._id}`);
+                                              const credJson = await credRes.json();
+                                              if (credJson.success) {
+                                                setViewPasscode(credJson.data.passcode || "");
+                                                setViewPassword(credJson.data.password || "");
+                                              }
+                                            } catch (err) {}
+                                          }, 150);
+                                        }}>
                                           <Send className="mr-2 h-4 w-4" /> Send Credentials
                                         </DropdownMenuItem>
-                                        <DropdownMenuItem className="text-[14px] font-medium text-amber-600 focus:bg-amber-50 cursor-pointer" onClick={() => handleRegeneratePassword(emp._id)}>
-                                          <RefreshCw className="mr-2 h-4 w-4" /> Regenerate Password
+                                        <DropdownMenuItem className="text-[14px] font-medium text-amber-600 focus:bg-amber-50 cursor-pointer" onClick={() => { setSelectedEmployee(emp); setRegeneratePassword(""); setTimeout(() => setIsRegenerateOpen(true), 150); }}>
+                                          <RefreshCw className="mr-2 h-4 w-4" /> Set New Password
                                         </DropdownMenuItem>
                                         <DropdownMenuItem className="text-[14px] font-medium cursor-pointer" onClick={() => { setSelectedEmployee(emp); setTimeout(() => setIsDeviceTokenOpen(true), 150); }}>
                                           <Smartphone className="mr-2 h-4 w-4" /> Generate Device Token
@@ -444,7 +501,7 @@ export default function EmployeeListPage() {
           <DialogHeader>
             <DialogTitle>Approve Employee Account</DialogTitle>
             <DialogDescription>
-              Approving this employee will automatically generate their unique Employee ID, Username, and secure Password.
+              Enter the Employee ID and password this staff member will use to log in. Username is created automatically.
             </DialogDescription>
           </DialogHeader>
           {selectedEmployee && (
@@ -457,8 +514,28 @@ export default function EmployeeListPage() {
                 <span className="font-bold text-zinc-600">Role</span>
                 <span className="col-span-3 font-semibold">{selectedEmployee.role}</span>
               </div>
-              <div className="border-t border-zinc-100 pt-4">
-                <p className="text-xs text-zinc-500 italic">A unique Employee ID, username, and password will be generated automatically.</p>
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Employee ID</label>
+                <Input
+                  value={approveEmployeeId}
+                  onChange={(e) => setApproveEmployeeId(e.target.value)}
+                  placeholder="e.g. EMP-0001"
+                  className="font-mono"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Password</label>
+                <Input
+                  type="text"
+                  value={approvePassword}
+                  onChange={(e) => setApprovePassword(e.target.value)}
+                  placeholder="Set a password"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Passcode</label>
+                <Input readOnly value={viewPasscode || "Not set"} className="bg-zinc-50 font-mono" />
+                <p className="text-xs text-zinc-500">Set when the employee was created. Used for quick clock-in on a registered device.</p>
               </div>
             </div>
           )}
@@ -466,7 +543,7 @@ export default function EmployeeListPage() {
             <Button variant="outline" onClick={() => setIsApproveOpen(false)}>Cancel</Button>
             <Button disabled={actionLoading} onClick={handleApprove} className="bg-[#1e40af] text-white hover:bg-blue-800">
               {actionLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Approve & Generate Credentials
+              Approve & Save Credentials
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -505,12 +582,21 @@ export default function EmployeeListPage() {
                     </Button>
                   </div>
                 </div>
+                <div>
+                  <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-1 block">Passcode</label>
+                  <div className="flex gap-2">
+                    <Input readOnly value={viewPasscode || "—"} className="bg-zinc-50 font-mono" />
+                    <Button variant="outline" size="icon" onClick={() => copyToClipboard(viewPasscode, "Passcode")}>
+                      <Copy className="h-4 w-4 text-zinc-600" />
+                    </Button>
+                  </div>
+                </div>
               </div>
               <div className="flex flex-col gap-2 pt-2 border-t border-zinc-100">
                 <Button variant="outline" className="w-full font-bold" onClick={() => {
-                  copyToClipboard(`Employee ID: ${selectedEmployee.employeeId}\nPassword: ${viewPassword}`, "Credentials");
+                  copyToClipboard(`Employee ID: ${selectedEmployee.employeeId}\nPassword: ${viewPassword}\nPasscode: ${viewPasscode || ""}`, "Credentials");
                 }}>
-                  Copy Employee ID & Password
+                  Copy Employee ID, Password & Passcode
                 </Button>
                 <Button className="w-full bg-[#1e40af] text-white hover:bg-blue-800 font-bold" onClick={() => {
                   setIsCredentialsOpen(false);
@@ -541,7 +627,7 @@ export default function EmployeeListPage() {
                 <div className="pt-2 border-t border-zinc-200 text-zinc-700">
                   <p>Hello {selectedEmployee.firstName},</p>
                   <p className="mt-2">Your employee account has been approved.</p>
-                  <p className="mt-2 font-mono bg-white p-2 border border-zinc-200 rounded">Employee ID: {selectedEmployee.employeeId}<br/>Password: ********</p>
+                  <p className="mt-2 font-mono bg-white p-2 border border-zinc-200 rounded">Employee ID: {selectedEmployee.employeeId}<br/>Password: ********<br/>Passcode: {viewPasscode || "********"}</p>
                   
                 </div>
               </div>
@@ -552,6 +638,34 @@ export default function EmployeeListPage() {
             <Button disabled={actionLoading} onClick={handleSendEmail} className="bg-emerald-600 text-white hover:bg-emerald-700">
               {actionLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Send Email
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Set New Password Dialog */}
+      <Dialog open={isRegenerateOpen} onOpenChange={setIsRegenerateOpen}>
+        <DialogContent className="sm:max-w-md bg-white">
+          <DialogHeader>
+            <DialogTitle>Set New Password</DialogTitle>
+            <DialogDescription>
+              Enter a new password for {selectedEmployee?.firstName} {selectedEmployee?.lastName}. The passcode is unchanged.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 py-2">
+            <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">New password</label>
+            <Input
+              type="text"
+              value={regeneratePassword}
+              onChange={(e) => setRegeneratePassword(e.target.value)}
+              placeholder="Enter password"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsRegenerateOpen(false)}>Cancel</Button>
+            <Button disabled={actionLoading} onClick={handleRegeneratePassword} className="bg-amber-600 text-white hover:bg-amber-700">
+              {actionLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Save Password
             </Button>
           </DialogFooter>
         </DialogContent>

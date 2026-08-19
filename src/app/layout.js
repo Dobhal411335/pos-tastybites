@@ -13,11 +13,11 @@ export const metadata = {
   keywords:
     "tastybites, restaurant pos, pos system, restaurant management, online ordering, billing software, menu management, cafe pos",
   icons: { 
-    icon: "/favicon/favicon.ico",
-    shortcut: "/favicon/favicon-16x16.png",
-    apple: "/favicon/apple-touch-icon.png" 
+    icon: "/favicon.ico",
+    shortcut: "/favicon-16x16.png",
+    apple: "/apple-touch-icon.png" 
   },
-  manifest: "/favicon/site.webmanifest",
+  manifest: "/site.webmanifest",
   openGraph: {
     title: "TastyBites - Modern POS & Restaurant Management",
     description:

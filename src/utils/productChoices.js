@@ -1,3 +1,5 @@
+import { getOfferDetailLines, isOfferItem } from "./offerDetails";
+
 export function cleanChoiceList(list) {
   if (!Array.isArray(list)) return [];
   return list.map((value) => String(value).trim()).filter(Boolean);
@@ -59,6 +61,57 @@ export function getAddonChoiceDetailLines(item) {
     label: group.name,
     value: group.subChoices.join(", "),
   }));
+}
+
+export function isStyleOption(opt, preparationStyle) {
+  const value = String(opt || "").trim();
+  const lower = value.toLowerCase();
+  if (lower.startsWith("style:")) return true;
+  if (
+    preparationStyle &&
+    lower === String(preparationStyle).trim().toLowerCase()
+  ) {
+    return true;
+  }
+  return false;
+}
+
+/** Addon / extra labels stored on `item.options`, excluding preparation style. */
+export function getItemExtraOptions(item) {
+  return (item?.options || []).filter(
+    (opt) => !isStyleOption(opt, item?.preparationStyle),
+  );
+}
+
+/**
+ * Kitchen + customer tickets share this so extras, addons, and choices
+ * print the same way on both.
+ */
+export function getReceiptModifierLines(item) {
+  const lines = [];
+  const style = String(item?.preparationStyle || "").trim();
+  if (style) {
+    lines.push({ kind: "style", text: `+ ${style}` });
+  }
+
+  if (isOfferItem(item)) {
+    for (const line of getOfferDetailLines(item)) {
+      lines.push({ kind: "offer", text: `${line.label}: ${line.value}` });
+    }
+    return lines;
+  }
+
+  for (const line of getProductChoiceDetailLines(item)) {
+    lines.push({ kind: "choice", text: `${line.label}: ${line.value}` });
+  }
+  for (const line of getAddonChoiceDetailLines(item)) {
+    lines.push({ kind: "addon-choice", text: `${line.label}: ${line.value}` });
+  }
+  for (const opt of getItemExtraOptions(item)) {
+    const label = String(opt || "").trim();
+    if (label) lines.push({ kind: "extra", text: `+ ${label}` });
+  }
+  return lines;
 }
 
 export function cartChoiceSelectionsKey(selections) {

@@ -127,8 +127,13 @@ function addOrderMetrics(bucket, order) {
   if (order.status === "WAIVED") bucket.waivedOrders += 1;
   if (!isRevenueOrder(order)) return;
   bucket.completedOrders += 1;
-  bucket.sales = r2(bucket.sales + (Number(order.totalAmount) || 0));
-  bucket.discounts = r2(bucket.discounts + (Number(order.discountTotal) || 0));
+  
+  const subTotal = Number(order.subTotal) || 0;
+  const discountTotal = Number(order.discountTotal) || 0;
+  
+  bucket.sales = r2(bucket.sales + (subTotal - discountTotal));
+  bucket.discounts = r2(bucket.discounts + discountTotal);
+  
   const tip = Number(order.tipAmount) || 0;
   const charge = Number(order.serviceChargeTotal) || 0;
   if (tip > 0) {
@@ -206,7 +211,9 @@ function emptyPoint() {
 
 function addPoint(target, order) {
   if (!isRevenueOrder(order)) return;
-  target.sales = r2(target.sales + (Number(order.totalAmount) || 0));
+  const subTotal = Number(order.subTotal) || 0;
+  const discountTotal = Number(order.discountTotal) || 0;
+  target.sales = r2(target.sales + (subTotal - discountTotal));
   target.orders += 1;
   target.tips = r2(target.tips + (Number(order.tipAmount) || 0));
   target.serviceCharges = r2(
@@ -728,6 +735,7 @@ function cancelledItemsFromOrders(orders) {
         qty: 1,
         value: r2(order.totalAmount),
         status: order.status,
+        waiveReason: order.waiveReason || null,
         createdAt: order.createdAt,
         dayKey: restaurantDayKey(order.createdAt),
       });
@@ -741,6 +749,7 @@ function cancelledItemsFromOrders(orders) {
         qty: Number(item.qty) || 1,
         value: r2((Number(item.price) || 0) * (Number(item.qty) || 1)),
         status: order.status,
+        waiveReason: order.waiveReason || null,
         createdAt: order.createdAt,
         dayKey: restaurantDayKey(order.createdAt),
       });

@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import { useForm } from "react-hook-form";
-import { Lock, Loader2, ArrowRight, Eye, EyeOff, UserCircle } from "lucide-react";
+import { Lock, Loader2, ArrowRight, Eye, EyeOff, UserCircle, KeyRound } from "lucide-react";
 import LoginNotificationBell from "@/components/auth/LoginNotificationBell";
 import NotificationSoundPrompt from "@/components/common/NotificationSoundPrompt";
 import { Button } from "@/components/ui/button";
@@ -38,12 +38,14 @@ export default function SalesLoginPage() {
   const [activationCode, setActivationCode] = useState("");
   const [activating, setActivating] = useState(false);
   const [pendingCredentials, setPendingCredentials] = useState(null);
+  const [deviceRegistered, setDeviceRegistered] = useState(false);
+  const [passcode, setPasscode] = useState("");
+  const [showPasscode, setShowPasscode] = useState(false);
 
   const {
     register,
     handleSubmit,
     setValue,
-    formState: { errors },
   } = useForm({ defaultValues: { employeeId: "", password: "" } });
 
   useEffect(() => {
@@ -53,6 +55,13 @@ export default function SalesLoginPage() {
     if (savedId) {
       setValue("employeeId", savedId);
     }
+
+    fetch("/api/employee/auth/device-status", { cache: "no-store" })
+      .then((res) => res.json())
+      .then((json) => {
+        if (json?.registered) setDeviceRegistered(true);
+      })
+      .catch(() => {});
 
     // Unlock audio on first tap so login alerts can ring on this device
     const cleanupGesture = installNotificationAudioUnlockOnGesture();
@@ -68,45 +77,90 @@ export default function SalesLoginPage() {
     window.location.assign(onSalesHost ? "/sales/floor" : "/sales/floor");
   };
 
+  const finishSuccessfulLogin = (firstName, employeeId) => {
+    toast.success(`Welcome back, ${firstName}`);
+
+    if (getNotificationSoundEnabled()) {
+      void playNotificationSoundPreview();
+    }
+
+    if (rememberDevice && employeeId) {
+      localStorage.setItem("rememberedEmployeeId", employeeId);
+    } else if (!rememberDevice) {
+      localStorage.removeItem("rememberedEmployeeId");
+    }
+
+    setTimeout(redirectAfterLogin, 1000);
+  };
+
+  const loginWithPasscode = async () => {
+    const browserFingerprint = btoa(navigator.userAgent + navigator.language).substring(0, 32).toLowerCase();
+    const res = await fetch("/api/employee/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        passcode: passcode.trim(),
+        browserFingerprint,
+      }),
+    });
+    const json = await res.json();
+    if (res.ok && json.success) {
+      finishSuccessfulLogin(json.data.employee.firstName, json.data.employee.id);
+      return;
+    }
+    throw new Error(json.message || "Authentication failed");
+  };
+
+  const loginWithEmployeeId = async (data) => {
+    const browserFingerprint = btoa(navigator.userAgent + navigator.language).substring(0, 32).toLowerCase();
+    const res = await fetch("/api/employee/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        employeeId: data.employeeId,
+        password: data.password,
+        browserFingerprint,
+      }),
+    });
+
+    const json = await res.json();
+    if (res.ok && json.success) {
+      finishSuccessfulLogin(json.data.employee.firstName, data.employeeId);
+      return;
+    }
+    if (json.action === "DEVICE_ACTIVATION_REQUIRED") {
+      setPendingCredentials({ employeeId: data.employeeId, password: data.password });
+      setShowActivationDialog(true);
+      return;
+    }
+    throw new Error(json.message || "Authentication failed");
+  };
+
+  const onClockIn = async (data) => {
+    const usingPasscode = deviceRegistered && passcode.trim();
+    if (!usingPasscode && (!data.employeeId?.trim() || !data.password)) {
+      toast.error("Enter your Employee ID and password, or your passcode.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      if (usingPasscode) {
+        await loginWithPasscode();
+      } else {
+        await loginWithEmployeeId(data);
+      }
+    } catch (err) {
+      toast.error(err.message || "Network error occurred during login. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const onEmployeeSubmit = async (data) => {
     setLoading(true);
     try {
-      const browserFingerprint = btoa(navigator.userAgent + navigator.language).substring(0, 32).toLowerCase();
-
-      const res = await fetch("/api/employee/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          employeeId: data.employeeId,
-          password: data.password,
-          browserFingerprint,
-        }),
-      });
-
-      const json = await res.json();
-      if (res.ok && json.success) {
-        toast.success(`Welcome back, ${json.data.employee.firstName}`);
-
-        // Local confirmation ring (other POS devices get the socket EMPLOYEE_LOGIN sound)
-        if (getNotificationSoundEnabled()) {
-          void playNotificationSoundPreview();
-        }
-
-        if (rememberDevice) {
-          localStorage.setItem("rememberedEmployeeId", data.employeeId);
-        } else {
-          localStorage.removeItem("rememberedEmployeeId");
-        }
-
-        setTimeout(redirectAfterLogin, 1000);
-      } else {
-        if (json.action === "DEVICE_ACTIVATION_REQUIRED") {
-          setPendingCredentials({ employeeId: data.employeeId, password: data.password });
-          setShowActivationDialog(true);
-          return;
-        }
-        throw new Error(json.message || "Authentication failed");
-      }
+      await loginWithEmployeeId(data);
     } catch (err) {
       toast.error(err.message || "Network error occurred during login. Please try again.");
     } finally {
@@ -138,6 +192,7 @@ export default function SalesLoginPage() {
         toast.success("Device activated successfully! Completing login...");
         setShowActivationDialog(false);
         setActivationCode("");
+        setDeviceRegistered(true);
         await onEmployeeSubmit(pendingCredentials);
       } else {
         throw new Error(json.message || "Activation failed");
@@ -187,7 +242,7 @@ export default function SalesLoginPage() {
               </p>
             </div>
 
-            <form onSubmit={handleSubmit(onEmployeeSubmit)} className="space-y-5 pt-2">
+            <form onSubmit={handleSubmit(onClockIn)} className="space-y-5 pt-2">
               <div className="space-y-1.5">
                 <Label htmlFor="employeeId" className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-1.5 pl-1">
                   <UserCircle className="h-3.5 w-3.5 text-blue-600" /> Employee ID
@@ -197,9 +252,8 @@ export default function SalesLoginPage() {
                   type="text"
                   placeholder="e.g. EMP-001"
                   className="bg-zinc-50 border-zinc-200 rounded-lg h-11 focus:ring-blue-500 focus:border-blue-500 text-sm font-medium uppercase"
-                  {...register("employeeId", { required: "Employee ID is required" })}
+                  {...register("employeeId")}
                 />
-                {errors.employeeId && <span className="text-xs text-rose-500 font-medium pl-1 block">{errors.employeeId.message}</span>}
               </div>
 
               <div className="space-y-1.5">
@@ -215,7 +269,7 @@ export default function SalesLoginPage() {
                     type={showPassword ? "text" : "password"}
                     placeholder="••••••••"
                     className="bg-zinc-50 border-zinc-200 rounded-lg h-11 focus:ring-blue-500 focus:border-blue-500 text-sm font-medium pr-10"
-                    {...register("password", { required: "Password is required" })}
+                    {...register("password")}
                   />
                   <button
                     type="button"
@@ -225,7 +279,6 @@ export default function SalesLoginPage() {
                     {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
-                {errors.password && <span className="text-xs text-rose-500 font-medium pl-1 block">{errors.password.message}</span>}
               </div>
 
               <div className="flex items-center space-x-2 pl-1 pt-1">
@@ -239,6 +292,47 @@ export default function SalesLoginPage() {
                   Remember me on this terminal
                 </label>
               </div>
+
+              {deviceRegistered && (
+                <>
+                  <div className="relative py-1">
+                    <div className="absolute inset-0 flex items-center">
+                      <div className="w-full border-t border-zinc-200" />
+                    </div>
+                    <div className="relative flex justify-center">
+                      <span className="bg-white px-3 text-[10px] font-bold uppercase tracking-widest text-zinc-800">
+                        Or
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label htmlFor="passcode" className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-1.5 pl-1">
+                      <KeyRound className="h-3.5 w-3.5 text-blue-600" /> Enter your passcode
+                    </Label>
+                    <div className="relative">
+                      <Input
+                        id="passcode"
+                        type={showPasscode ? "text" : "password"}
+                        inputMode="numeric"
+                        autoComplete="one-time-code"
+                        placeholder="••••"
+                        value={passcode}
+                        onChange={(e) => setPasscode(e.target.value)}
+                        className="bg-zinc-50 border-zinc-200 rounded-lg h-11 focus:ring-blue-500 focus:border-blue-500 text-sm font-medium tracking-widest pr-10"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPasscode(!showPasscode)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-blue-600 transition-colors focus:outline-none"
+                        aria-label={showPasscode ? "Hide passcode" : "Show passcode"}
+                      >
+                        {showPasscode ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
 
               <div className="pt-2">
                 <Button

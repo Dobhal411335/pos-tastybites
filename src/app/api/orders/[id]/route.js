@@ -39,11 +39,17 @@ export const GET = withAuth(async (request, { params }) => {
     }
 
     let processedByName = null;
-    if (order.processedBy) {
-      const emp = await Employee.findById(order.processedBy)
+    let waivedByName = null;
+    const peopleToLoad = [];
+    if (order.processedBy) peopleToLoad.push(order.processedBy);
+    if (order.waivedBy) peopleToLoad.push(order.waivedBy);
+    if (peopleToLoad.length) {
+      const people = await Employee.find({ _id: { $in: peopleToLoad } })
         .select("firstName lastName name")
         .lean();
-      processedByName = formatPersonName(emp);
+      const byId = new Map(people.map((emp) => [String(emp._id), formatPersonName(emp)]));
+      processedByName = order.processedBy ? byId.get(String(order.processedBy)) || null : null;
+      waivedByName = order.waivedBy ? byId.get(String(order.waivedBy)) || null : null;
     }
 
     const restaurant = await Restaurant.findById(restaurantId)
@@ -54,6 +60,7 @@ export const GET = withAuth(async (request, { params }) => {
       {
         ...order,
         processedByName,
+        waivedByName,
         restaurantDetails: restaurant
           ? {
               name: restaurant.name,

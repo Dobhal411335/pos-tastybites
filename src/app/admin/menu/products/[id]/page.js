@@ -43,9 +43,7 @@ export default function ProductDetailsConfigPage() {
   const [serviceTax, setServiceTax] = useState(null);
   const [preparationStyles, setPreparationStyles] = useState([""]);
   const [productType, setProductType] = useState("");
-  const [choiceOptions, setChoiceOptions] = useState([
-    { name: "", subChoices: ["", "", "", ""] },
-  ]);
+  const [choiceOptions, setChoiceOptions] = useState([]);
 
   // Custom selection lists
   const [sizesList, setSizesList] = useState([]);
@@ -81,7 +79,7 @@ export default function ProductDetailsConfigPage() {
                 name: group.name || "",
                 subChoices: group.subChoices?.length ? [...group.subChoices] : ["", "", "", ""],
               }))
-            : [{ name: "", subChoices: ["", "", "", ""] }]
+            : []
         );
         setProductType(p.productType === "BAR" ? "BAR" : p.productType === "KITCHEN" ? "KITCHEN" : "");
         setSelectedTaxes(p.taxes?.map(t => typeof t === 'object' ? t._id : t) || []);
@@ -465,6 +463,11 @@ export default function ProductDetailsConfigPage() {
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="p-6 space-y-6">
+                    {choiceOptions.length === 0 && (
+                      <p className="text-[13px] text-zinc-500">
+                        No choice groups. Add one if this product needs extra selectable options.
+                      </p>
+                    )}
                     {choiceOptions.map((group, groupIndex) => (
                       <div
                         key={`choice-group-${groupIndex}`}
@@ -474,20 +477,20 @@ export default function ProductDetailsConfigPage() {
                           <label className="text-[14px] font-semibold text-zinc-900">
                             Choice Option
                           </label>
-                          {choiceOptions.length > 1 && (
-                            <Button
-                              type="button"
-                              variant="outline"
-                              onClick={() => {
-                                const next = [...choiceOptions];
-                                next.splice(groupIndex, 1);
-                                setChoiceOptions(next);
-                              }}
-                              className="h-9 w-9 p-0 shrink-0 text-red-500 hover:text-red-700 hover:bg-red-50"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                          )}
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => {
+                              setChoiceOptions(
+                                choiceOptions.filter((_, i) => i !== groupIndex),
+                              );
+                            }}
+                            className="h-9 px-3 shrink-0 text-red-500 hover:text-red-700 hover:bg-red-50"
+                            aria-label="Delete choice option"
+                          >
+                            <Trash2 className="w-4 h-4 mr-1.5" />
+                            Delete
+                          </Button>
                         </div>
                         <Input
                           type="text"
@@ -506,20 +509,41 @@ export default function ProductDetailsConfigPage() {
                           </label>
                           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                             {group.subChoices.map((option, optionIndex) => (
-                              <Input
+                              <div
                                 key={`choice-${groupIndex}-${optionIndex}`}
-                                type="text"
-                                placeholder="Type Choice"
-                                value={option}
-                                onChange={(e) => {
-                                  const next = [...choiceOptions];
-                                  const subChoices = [...next[groupIndex].subChoices];
-                                  subChoices[optionIndex] = e.target.value;
-                                  next[groupIndex] = { ...next[groupIndex], subChoices };
-                                  setChoiceOptions(next);
-                                }}
-                                className="h-10 text-[14px] bg-white rounded-full px-4"
-                              />
+                                className="flex items-center gap-1.5"
+                              >
+                                <Input
+                                  type="text"
+                                  placeholder="Type Choice"
+                                  value={option}
+                                  onChange={(e) => {
+                                    const next = [...choiceOptions];
+                                    const subChoices = [...next[groupIndex].subChoices];
+                                    subChoices[optionIndex] = e.target.value;
+                                    next[groupIndex] = { ...next[groupIndex], subChoices };
+                                    setChoiceOptions(next);
+                                  }}
+                                  className="h-10 text-[14px] bg-white rounded-full px-4"
+                                />
+                                {group.subChoices.length > 1 && (
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={() => {
+                                      const next = [...choiceOptions];
+                                      const subChoices = [...next[groupIndex].subChoices];
+                                      subChoices.splice(optionIndex, 1);
+                                      next[groupIndex] = { ...next[groupIndex], subChoices };
+                                      setChoiceOptions(next);
+                                    }}
+                                    className="h-10 w-10 p-0 shrink-0 text-red-500 hover:text-red-700 hover:bg-red-50"
+                                    aria-label="Delete sub choice"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </Button>
+                                )}
+                              </div>
                             ))}
                           </div>
                           <div className="flex items-center justify-end gap-3 pt-1">

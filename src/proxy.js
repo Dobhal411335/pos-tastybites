@@ -63,9 +63,13 @@ export async function proxy(request) {
   let targetPath = pathname;
 
   // Public/static assets must not be rewritten onto /sales or /admin
-  // (e.g. /favicon/favicon.ico was becoming /sales/favicon/favicon.ico → 404)
+  // (e.g. /favicon.ico was becoming /sales/favicon.ico → 404)
   const isStaticAsset =
-    pathname.startsWith('/favicon') ||
+    pathname === '/favicon.ico' ||
+    pathname.startsWith('/favicon-') ||
+    pathname === '/apple-touch-icon.png' ||
+    pathname.startsWith('/android-chrome-') ||
+    pathname === '/site.webmanifest' ||
     pathname.startsWith('/uploads') ||
     /\.(?:ico|png|jpg|jpeg|gif|webp|svg|woff2?|ttf|eot|txt|xml|webmanifest|json|map)$/i.test(pathname);
   
@@ -138,9 +142,9 @@ export async function proxy(request) {
 }
 
 export const config = {
-  // Match all request paths except static assets (favicon folder, images, fonts, etc.)
+  // Match all request paths except static assets (root favicon files, images, fonts, etc.)
   matcher: [
-    '/((?!_next/static|_next/image|favicon(?:\\.ico|/)|.*\\.(?:ico|png|jpg|jpeg|gif|webp|svg|woff2?|ttf|eot|txt|xml|webmanifest)$).*)',
+    '/((?!_next/static|_next/image|favicon\\.ico|favicon-|apple-touch-icon\\.png|android-chrome-|site\\.webmanifest|.*\\.(?:ico|png|jpg|jpeg|gif|webp|svg|woff2?|ttf|eot|txt|xml|webmanifest)$).*)',
   ],
 };
 

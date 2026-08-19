@@ -526,6 +526,89 @@ function OrderDetailSkeleton() {
   );
 }
 
+function CancelledItemsTable({ rows, onSelectOrder, timezone, emptyLabel }) {
+  if (!rows.length) {
+    return (
+      <p className="text-sm text-zinc-500 bg-zinc-50 rounded-xl px-3 py-4 text-center">
+        {emptyLabel}
+      </p>
+    );
+  }
+
+  return (
+    <div className="rounded-md border border-zinc-300 overflow-hidden">
+      <Table className="border-collapse">
+        <TableHeader>
+          <TableRow className="hover:bg-transparent">
+            <TableHead className="text-[11px] font-bold uppercase tracking-wider text-red-800 bg-red-50 border border-zinc-300">
+              Order
+            </TableHead>
+            <TableHead className="text-[11px] font-bold uppercase tracking-wider text-red-800 bg-red-50 border border-zinc-300">
+              Item
+            </TableHead>
+            <TableHead className="text-[11px] font-bold uppercase tracking-wider text-red-800 bg-red-50 border border-zinc-300 text-right">
+              Value
+            </TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {rows.map((row, index) => {
+            const even = index % 2 === 1;
+            const clickable = typeof onSelectOrder === "function";
+            return (
+              <TableRow
+                key={`${row.orderId}-${index}`}
+                className={`${even ? "bg-red-50/70" : "bg-white"} ${
+                  clickable ? "cursor-pointer hover:bg-orange-100" : ""
+                }`}
+                onClick={clickable ? () => onSelectOrder(row.orderId) : undefined}
+              >
+                <TableCell className={`border border-zinc-300 align-top ${even ? "bg-red-50/70" : ""}`}>
+                  <div className="text-xs font-semibold tabular-nums text-zinc-900">
+                    {row.orderNumber}
+                  </div>
+                  <div className="mt-0.5 flex items-center gap-1.5 flex-wrap">
+                    <span
+                      className={`text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded ${
+                        STATUS_BADGE[row.status] || "bg-zinc-100 text-zinc-600"
+                      }`}
+                    >
+                      {row.status}
+                    </span>
+                    {timezone && row.createdAt ? (
+                      <span className="text-[10px] text-zinc-500">
+                        {formatTimeTz(row.createdAt, timezone)}
+                      </span>
+                    ) : null}
+                  </div>
+                </TableCell>
+                <TableCell className={`border border-zinc-300 align-top ${even ? "bg-red-50/70" : ""}`}>
+                  <div className="text-xs text-zinc-900">
+                    {row.item}
+                    {row.qty > 1 ? ` ×${row.qty}` : ""}
+                  </div>
+                  {row.waiveReason ? (
+                    <p className="text-[11px] text-amber-800 mt-1 line-clamp-2">
+                      Reason: {row.waiveReason}
+                    </p>
+                  ) : null}
+                </TableCell>
+                <TableCell
+                  className={`border border-zinc-300 text-right align-top tabular-nums text-xs font-semibold text-red-700 ${
+                    even ? "bg-red-50/70" : ""
+                  }`}
+                >
+                  -{money(row.value)}
+                </TableCell>
+              </TableRow>
+            );
+          })}
+        </TableBody>
+      </Table>
+    </div>
+  );
+}
+
 function EmployeeProfileBody({
   employee,
   overview,
@@ -535,6 +618,7 @@ function EmployeeProfileBody({
   charts,
   timezone,
   onSelectDay,
+  onSelectOrder,
 }) {
   const latest = attendance.find((row) => row.clockIn) || attendance[0] || null;
   const salesSeries = charts?.salesOverTime || [];
@@ -683,37 +767,12 @@ function EmployeeProfileBody({
             {(overview?.cancelCount ?? cancelledItems.length)} cancelled
           </Badge>
         </div>
-        {cancelledItems.length === 0 ? (
-          <p className="text-sm text-zinc-500 bg-zinc-50 rounded-xl px-3 py-4 text-center">
-            No cancelled items in this period.
-          </p>
-        ) : (
-          <div className="rounded-xl border border-zinc-200 overflow-hidden">
-            <Table>
-              <TableHeader>
-                <TableRow className="hover:bg-transparent bg-zinc-50">
-                  <TableHead className="text-[11px]">Order #</TableHead>
-                  <TableHead className="text-[11px]">Item</TableHead>
-                  <TableHead className="text-[11px] text-right">Value</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {cancelledItems.slice(0, 8).map((row, index) => (
-                  <TableRow key={`${row.orderId}-${index}`}>
-                    <TableCell className="text-xs tabular-nums">{row.orderNumber}</TableCell>
-                    <TableCell className="text-xs">
-                      {row.item}
-                      {row.qty > 1 ? ` ×${row.qty}` : ""}
-                    </TableCell>
-                    <TableCell className="text-xs text-right tabular-nums text-red-700">
-                      -{money(row.value)}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        )}
+        <CancelledItemsTable
+          rows={cancelledItems.slice(0, 8)}
+          onSelectOrder={onSelectOrder}
+          timezone={timezone}
+          emptyLabel="No cancelled items in this period."
+        />
       </div>
 
       <Separator className="bg-black/30"/>
@@ -731,7 +790,7 @@ function EmployeeProfileBody({
             ["Late", `${attendanceStats?.lateDays || 0} days`],
             ["Avg / day", `${attendanceStats?.avgHoursPerDay || 0}h`],
           ].map(([label, value]) => (
-            <div key={label} className="bg-zinc-50 rounded-xl p-2.5 border border-zinc-100">
+            <div key={label} className="bg-zinc-50 rounded p-2.5 border border-zinc-500">
               <p className="text-[10px] uppercase tracking-wider text-black">{label}</p>
               <p className={`text-sm font-semibold mt-0.5 ${label === "Absent" ? "text-red-700" : "text-zinc-900"}`}>
                 {value}
@@ -740,13 +799,13 @@ function EmployeeProfileBody({
           ))}
         </div>
         <div className="grid grid-cols-2 gap-2">
-          <div className="bg-zinc-50 rounded-xl p-2.5 border border-zinc-100">
+          <div className="bg-zinc-50 rounded p-2.5 border border-zinc-500">
             <p className="text-[10px] uppercase tracking-wider text-black">Total scheduled</p>
             <p className="text-sm font-semibold text-zinc-900 mt-0.5">
               {formatHoursLabel(attendanceStats?.scheduledHours)}
             </p>
           </div>
-          <div className="bg-zinc-50 rounded-xl p-2.5 border border-zinc-100">
+          <div className="bg-zinc-50 rounded p-2.5 border border-zinc-500">
             <p className="text-[10px] uppercase tracking-wider text-black">Total worked</p>
             <p className="text-sm font-semibold text-orange-700 mt-0.5">
               {formatHoursLabel(attendanceStats?.workedHours)}
@@ -754,8 +813,8 @@ function EmployeeProfileBody({
           </div>
         </div>
 
-        <div className="bg-zinc-50 rounded-xl p-3 border border-zinc-100">
-          <p className="text-[10px] uppercase tracking-wider text-black mb-2">Daily working hours</p>
+        <div className="bg-zinc-50 rounded p-3 border border-zinc-500">
+          <p className="text-[10px] uppercase tracking-wider text-black mb-2">Daily working hours</p> 
           <div className="h-24">
             {showHoursChart ? (
               <ResponsiveContainer width="100%" height="100%">
@@ -872,7 +931,7 @@ function DayDetailBody({
 }) {
   const sales = orders
     .filter((row) => row.status !== "CANCELLED" && row.status !== "WAIVED")
-    .reduce((sum, row) => sum + (Number(row.totalAmount) || 0), 0);
+    .reduce((sum, row) => sum + ((Number(row.subTotal) || 0) - (Number(row.discountTotal) || 0)), 0);
   const tips = orders.reduce((sum, row) => sum + (Number(row.tipAmount) || 0), 0);
   const logins = sessions.length || (day.clockIn ? 1 : 0);
   const previewSessions = sessions.slice(0, SESSION_PREVIEW_COUNT);
@@ -966,15 +1025,26 @@ function DayDetailBody({
 
       <Separator className="bg-black/20"/>
 
-      <div className="grid grid-cols-2 gap-2 text-sm">
-        <div className="bg-zinc-50 rounded-xl p-2">
-          <p className="text-[11px] uppercase tracking-wider text-black">Order tips</p>
-          <p className="font-semibold tabular-nums mt-1">{money(tips)}</p>
+      <div className="bg-zinc-50 rounded-xl p-3 text-sm">
+        <p className="text-[11px] uppercase tracking-wider text-black">Order tips</p>
+        <p className="font-semibold tabular-nums mt-1">{money(tips)}</p>
+      </div>
+
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <h4 className="text-[12px] font-semibold uppercase tracking-wider text-black">
+            Cancelled / waived
+          </h4>
+          <Badge variant="outline" className="text-[10px] bg-red-50 text-red-700 border-red-200">
+            {cancelledItems.length}
+          </Badge>
         </div>
-        <div className="bg-zinc-50 rounded-xl p-3">
-          <p className="text-[10px] uppercase tracking-wider text-zinc-500">Cancelled</p>
-          <p className="font-semibold tabular-nums mt-1">{cancelledItems.length}</p>
-        </div>
+        <CancelledItemsTable
+          rows={cancelledItems}
+          onSelectOrder={onSelectOrder}
+          timezone={timezone}
+          emptyLabel="No cancelled or waived orders this day."
+        />
       </div>
 
       <Separator className="bg-black/20"/>
@@ -1170,6 +1240,7 @@ export default function EmployeeProfileSheet({
               charts={detail.charts}
               timezone={timezone}
               onSelectDay={onSelectDay}
+              onSelectOrder={onSelectOrder}
             />
           ) : null}
         </div>

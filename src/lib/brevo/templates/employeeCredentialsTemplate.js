@@ -3,6 +3,7 @@ export const employeeCredentialsTemplate = ({
   employeeId,
   username,
   password,
+  passcode,
   role,
   restaurantName,
   floor,
@@ -307,6 +308,12 @@ export const employeeCredentialsTemplate = ({
               
               <p class="cred-label">Password</p>
               <div class="cred-value">${password}</div>
+
+              ${passcode ? `
+              <p class="cred-label">Passcode</p>
+              <div class="cred-value">${passcode}</div>
+              <p style="font-size: 13px; color: #78350F; margin-bottom: 20px;">On a registered POS device you can clock in with this passcode only.</p>
+              ` : ''}
 
               ${activationCode ? `
               <p class="cred-label">Device Activation Code</p>

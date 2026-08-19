@@ -1690,6 +1690,12 @@ export default function OrderPage() {
                               </span>
                             ) : null}
                             {item.name}
+                            {item.size && item.size !== "Standard" ? (
+                              <span className="text-zinc-500 font-semibold">
+                                {" "}
+                                ({item.size})
+                              </span>
+                            ) : null}
                           </h4>
                           {item.modifier ? (
                             <p className="text-[11px] font-semibold text-zinc-500 mt-0.5">

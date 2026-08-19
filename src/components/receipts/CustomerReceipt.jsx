@@ -1,8 +1,8 @@
 import React from "react";
 import "./print.css";
 import moment from "moment";
-import { isOfferItem, getOfferDetailLines } from "@/utils/offerDetails";
-import { getProductChoiceDetailLines, getAddonChoiceDetailLines } from "@/utils/productChoices";
+import { isOfferItem } from "@/utils/offerDetails";
+import { getReceiptModifierLines } from "@/utils/productChoices";
 import { shouldShowTable, formatTableNumbersWithFloor } from "@/utils/orderDisplay";
 
 const money = (n) => `$${(Number(n) || 0).toFixed(2)}`;
@@ -106,9 +106,7 @@ const CustomerReceipt = ({
   const offerItems = items.filter((item) => isOfferItem(item));
 
   const renderReceiptItem = (item, idx) => {
-    const offerLines = isOfferItem(item) ? getOfferDetailLines(item) : [];
-    const choiceLines = isOfferItem(item) ? [] : getProductChoiceDetailLines(item);
-    const addonChoiceLines = isOfferItem(item) ? [] : getAddonChoiceDetailLines(item);
+    const modifierLines = getReceiptModifierLines(item);
     return (
       <div key={idx} className="mb-2 text-[11px]">
         <div className="flex justify-between items-start gap-2">
@@ -124,35 +122,10 @@ const CustomerReceipt = ({
             ${(Number(item.price) * Number(item.qty)).toFixed(2)}
           </span>
         </div>
-        {item.preparationStyle ? (
-          <div className="pl-3 mt-0.5 text-[9px] text-zinc-600">
-            {item.preparationStyle}
-          </div>
-        ) : null}
-        {choiceLines.length > 0 ? (
+        {modifierLines.length > 0 ? (
           <div className="pl-3 mt-0.5 space-y-0.5 text-[9px] text-zinc-600">
-            {choiceLines.map((line) => (
-              <div key={line.label}>
-                {line.label}: {line.value}
-              </div>
-            ))}
-          </div>
-        ) : null}
-        {addonChoiceLines.length > 0 ? (
-          <div className="pl-3 mt-0.5 space-y-0.5 text-[9px] text-zinc-600">
-            {addonChoiceLines.map((line) => (
-              <div key={`addon-${line.label}`}>
-                {line.label}: {line.value}
-              </div>
-            ))}
-          </div>
-        ) : null}
-        {offerLines.length > 0 ? (
-          <div className="pl-3 mt-0.5 space-y-0.5 text-[9px] text-zinc-600">
-            {offerLines.map((line) => (
-              <div key={line.label}>
-                {line.label}: {line.value}
-              </div>
+            {modifierLines.map((line, lineIdx) => (
+              <div key={`${line.kind}-${lineIdx}`}>{line.text}</div>
             ))}
           </div>
         ) : null}

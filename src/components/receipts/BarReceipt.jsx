@@ -2,17 +2,7 @@ import React from "react";
 import "./print.css";
 import moment from "moment";
 import { isDirectSaleOrder, formatTableNumbersWithFloor } from "@/utils/orderDisplay";
-import { getProductChoiceDetailLines, getAddonChoiceDetailLines } from "@/utils/productChoices";
-
-function isStyleOption(opt, preparationStyle) {
-  const value = String(opt || "").trim();
-  const lower = value.toLowerCase();
-  if (lower.startsWith("style:")) return true;
-  if (preparationStyle && lower === String(preparationStyle).trim().toLowerCase()) {
-    return true;
-  }
-  return false;
-}
+import { getReceiptModifierLines } from "@/utils/productChoices";
 
 /**
  * Hardware-independent Bar / Counter ticket for small thermal printers.
@@ -121,11 +111,7 @@ const BarReceipt = ({
 
       <div className="text-sm space-y-3 mb-2">
         {items.map((item, itemIdx) => {
-          const extras = (item.options || []).filter(
-            (opt) => !isStyleOption(opt, item.preparationStyle)
-          );
-          const choiceLines = getProductChoiceDetailLines(item);
-          const addonChoiceLines = getAddonChoiceDetailLines(item);
+          const modifierLines = getReceiptModifierLines(item);
           const seatBits = [];
           if (item.seat) seatBits.push(item.seat);
           if (Array.isArray(item.seats)) {
@@ -154,40 +140,14 @@ const BarReceipt = ({
                   Course: {item.course}
                 </div>
               )}
-              {item.preparationStyle && (
-                <div className="pl-7 text-[11px] font-semibold italic">
-                  + {item.preparationStyle}
-                </div>
-              )}
-              {choiceLines.length > 0 && (
+              {modifierLines.length > 0 && (
                 <div className="pl-7 mt-0.5 space-y-0.5">
-                  {choiceLines.map((line) => (
+                  {modifierLines.map((line, lineIdx) => (
                     <div
-                      key={line.label}
+                      key={`${line.kind}-${lineIdx}`}
                       className="text-[11px] font-semibold italic"
                     >
-                      {line.label}: {line.value}
-                    </div>
-                  ))}
-                </div>
-              )}
-              {addonChoiceLines.length > 0 && (
-                <div className="pl-7 mt-0.5 space-y-0.5">
-                  {addonChoiceLines.map((line) => (
-                    <div
-                      key={`addon-${line.label}`}
-                      className="text-[11px] font-semibold italic"
-                    >
-                      {line.label}: {line.value}
-                    </div>
-                  ))}
-                </div>
-              )}
-              {extras.length > 0 && (
-                <div className="pl-7 mt-0.5 space-y-0.5">
-                  {extras.map((opt, oIdx) => (
-                    <div key={oIdx} className="text-[11px] font-semibold italic">
-                      + {opt}
+                      {line.text}
                     </div>
                   ))}
                 </div>
