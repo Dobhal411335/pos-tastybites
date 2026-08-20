@@ -2,15 +2,58 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import { ArrowLeft, Trash2, Edit, MoreHorizontal, Boxes, Trash, AlertTriangle, CheckCircle2, ChevronDown, Check, Loader2, Plus } from "lucide-react";
+import {
+  ArrowLeft,
+  Trash2,
+  Edit,
+  MoreHorizontal,
+  Boxes,
+  Trash,
+  AlertTriangle,
+  CheckCircle2,
+  ChevronDown,
+  Check,
+  Loader2,
+  Plus,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { toast, Toaster } from "sonner";
 import { PALETTE } from "@/utils/paletteeColor";
 import DeleteDialog from "@/components/common/DeleteDialog";
@@ -58,21 +101,20 @@ export default function StockProductsPage() {
         fetch("/api/stock/category"),
         fetch("/api/stock/settings?type=productType"),
         fetch("/api/stock/settings?type=unitMeasure"),
-        fetch("/api/stock/products")
+        fetch("/api/stock/products"),
       ]);
 
       const [catJson, typeJson, unitJson, prodJson] = await Promise.all([
         catRes.json(),
         typeRes.json(),
         unitRes.json(),
-        prodRes.json()
+        prodRes.json(),
       ]);
 
       if (catJson.success) setCategories(catJson.data);
       if (typeJson.success) setProductTypes(typeJson.data);
       if (unitJson.success) setUnitMeasures(unitJson.data);
       if (prodJson.success) setProducts(prodJson.data);
-
     } catch (error) {
       toast.error("Failed to fetch data");
     } finally {
@@ -103,15 +145,15 @@ export default function StockProductsPage() {
           ? ""
           : String(product.minStock),
     });
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
   useEffect(() => {
-    if (products.length > 0 && typeof window !== 'undefined') {
+    if (products.length > 0 && typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
       const editId = params.get("edit");
 
       if (editId) {
-        const productToEdit = products.find(p => p._id === editId);
+        const productToEdit = products.find((p) => p._id === editId);
         if (productToEdit) {
           handleEdit(productToEdit);
           window.history.replaceState(null, "", "/admin/stock/products");
@@ -127,14 +169,22 @@ export default function StockProductsPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!formData.category || !formData.name || !formData.type || !formData.unit || !formData.purchaseAmount) {
+    if (
+      !formData.category ||
+      !formData.name ||
+      !formData.type ||
+      !formData.unit ||
+      !formData.purchaseAmount
+    ) {
       toast.error("Please fill all required fields");
       return;
     }
 
     setSaving(true);
     try {
-      const url = editingId ? `/api/stock/products/${editingId}` : "/api/stock/products";
+      const url = editingId
+        ? `/api/stock/products/${editingId}`
+        : "/api/stock/products";
       const method = editingId ? "PUT" : "POST";
 
       const payload = {
@@ -149,7 +199,7 @@ export default function StockProductsPage() {
       const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payload),
       });
 
       const json = await res.json();
@@ -166,8 +216,6 @@ export default function StockProductsPage() {
       setSaving(false);
     }
   };
-
-
 
   const handleCancelEdit = () => {
     setEditingId(null);
@@ -196,7 +244,9 @@ export default function StockProductsPage() {
       });
       const json = await res.json();
       if (json.success) {
-        toast.success(`Product status updated to ${newStatus ? 'Active' : 'Inactive'}`);
+        toast.success(
+          `Product status updated to ${newStatus ? "Active" : "Inactive"}`,
+        );
         fetchProducts();
       } else {
         toast.error(json.message);
@@ -209,7 +259,9 @@ export default function StockProductsPage() {
   const confirmDelete = async () => {
     if (!itemToDelete) return;
     try {
-      const res = await fetch(`/api/stock/products/${itemToDelete}`, { method: "DELETE" });
+      const res = await fetch(`/api/stock/products/${itemToDelete}`, {
+        method: "DELETE",
+      });
       const json = await res.json();
       if (json.success) {
         toast.success("Product deleted");
@@ -236,21 +288,21 @@ export default function StockProductsPage() {
       const res = await fetch(`/api/stock/settings?type=${settingType}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name })
+        body: JSON.stringify({ name }),
       });
       const json = await res.json();
       if (json.success) {
         toast.success("Saved successfully");
         if (isType) {
-          setProductTypes(prev => [...prev, json.data]);
+          setProductTypes((prev) => [...prev, json.data]);
           setNewTypeName("");
           setTypeDialogOpen(false);
-          setFormData(prev => ({ ...prev, type: json.data._id }));
+          setFormData((prev) => ({ ...prev, type: json.data._id }));
         } else {
-          setUnitMeasures(prev => [...prev, json.data]);
+          setUnitMeasures((prev) => [...prev, json.data]);
           setNewUnitName("");
           setUnitDialogOpen(false);
-          setFormData(prev => ({ ...prev, unit: json.data._id }));
+          setFormData((prev) => ({ ...prev, unit: json.data._id }));
         }
       } else {
         toast.error(json.message);
@@ -263,7 +315,10 @@ export default function StockProductsPage() {
   };
 
   return (
-    <div className="flex flex-col overflow-hidden min-h-screen" style={{ backgroundColor: PALETTE.canvas, color: PALETTE.ink }}>
+    <div
+      className="flex flex-col overflow-hidden min-h-screen"
+      style={{ backgroundColor: PALETTE.canvas, color: PALETTE.ink }}
+    >
       <Toaster position="top-right" richColors />
 
       <DeleteDialog
@@ -288,9 +343,16 @@ export default function StockProductsPage() {
             />
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setTypeDialogOpen(false)}>Cancel</Button>
-            <Button onClick={() => handleCreateSetting("productType")} disabled={savingSetting}>
-              {savingSetting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+            <Button variant="outline" onClick={() => setTypeDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => handleCreateSetting("productType")}
+              disabled={savingSetting}
+            >
+              {savingSetting && (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              )}
               Save
             </Button>
           </DialogFooter>
@@ -311,9 +373,16 @@ export default function StockProductsPage() {
             />
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setUnitDialogOpen(false)}>Cancel</Button>
-            <Button onClick={() => handleCreateSetting("unitMeasure")} disabled={savingSetting}>
-              {savingSetting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+            <Button variant="outline" onClick={() => setUnitDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => handleCreateSetting("unitMeasure")}
+              disabled={savingSetting}
+            >
+              {savingSetting && (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              )}
               Save
             </Button>
           </DialogFooter>
@@ -325,18 +394,24 @@ export default function StockProductsPage() {
           {/* Header */}
           <div className="flex flex-col sm:flex-row justify-between sm:items-end gap-4 border-b border-zinc-200 pb-5">
             <div>
-              <h1 className="text-[32px] font-bold leading-tight" style={{ color: PALETTE.ink }}>
+              <h1
+                className="text-[32px] font-bold leading-tight"
+                style={{ color: PALETTE.ink }}
+              >
                 Stock Products Master
               </h1>
-              <p className="text-[15px] mt-1" style={{ color: PALETTE.inkMuted }}>
-                Create and manage inventory products, pricing, and categorizations.
+              <p
+                className="text-[15px] mt-1"
+                style={{ color: PALETTE.inkMuted }}
+              >
+                Create and manage inventory products, pricing, and
+                categorizations.
               </p>
             </div>
           </div>
 
           <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-8">
             <div className="space-y-6">
-
               <Card className="shadow-sm border-zinc-200 bg-white overflow-hidden">
                 <CardHeader className="bg-zinc-50/50 border-b border-zinc-100 pb-4">
                   <CardTitle className="text-[16px] font-bold text-zinc-900">
@@ -353,14 +428,18 @@ export default function StockProductsPage() {
                       <div className="relative">
                         <Select
                           value={formData.category}
-                          onValueChange={(val) => setFormData(prev => ({ ...prev, category: val }))}
+                          onValueChange={(val) =>
+                            setFormData((prev) => ({ ...prev, category: val }))
+                          }
                         >
                           <SelectTrigger className="w-full h-11 bg-white border-zinc-200 text-[15px]">
                             <SelectValue placeholder="Select category..." />
                           </SelectTrigger>
                           <SelectContent className="bg-white max-h-60 overflow-y-auto">
                             {categories.map((c) => (
-                              <SelectItem key={c._id} value={c._id}>{c.name}</SelectItem>
+                              <SelectItem key={c._id} value={c._id}>
+                                {c.name}
+                              </SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
@@ -376,14 +455,18 @@ export default function StockProductsPage() {
                         <div className="relative flex-1">
                           <Select
                             value={formData.type}
-                            onValueChange={(val) => setFormData(prev => ({ ...prev, type: val }))}
+                            onValueChange={(val) =>
+                              setFormData((prev) => ({ ...prev, type: val }))
+                            }
                           >
                             <SelectTrigger className="w-full h-11 bg-white border-zinc-200 text-[15px]">
                               <SelectValue placeholder="Select type..." />
                             </SelectTrigger>
                             <SelectContent className="bg-white max-h-60 overflow-y-auto">
                               {productTypes.map((t) => (
-                                <SelectItem key={t._id} value={t._id}>{t.name}</SelectItem>
+                                <SelectItem key={t._id} value={t._id}>
+                                  {t.name}
+                                </SelectItem>
                               ))}
                             </SelectContent>
                           </Select>
@@ -399,7 +482,7 @@ export default function StockProductsPage() {
                         </Button>
                       </div>
                     </div>
-                    
+
                     {/* Product Name */}
                     <div className="space-y-2">
                       <label className="text-[14px] font-semibold text-zinc-900">
@@ -415,7 +498,6 @@ export default function StockProductsPage() {
                       />
                     </div>
 
-
                     {/* Unit Measure */}
                     <div className="space-y-2">
                       <label className="text-[14px] font-semibold text-zinc-900">
@@ -425,14 +507,18 @@ export default function StockProductsPage() {
                         <div className="relative flex-1">
                           <Select
                             value={formData.unit}
-                            onValueChange={(val) => setFormData(prev => ({ ...prev, unit: val }))}
+                            onValueChange={(val) =>
+                              setFormData((prev) => ({ ...prev, unit: val }))
+                            }
                           >
                             <SelectTrigger className="w-full h-11 bg-white border-zinc-200 text-[15px]">
                               <SelectValue placeholder="Select unit..." />
                             </SelectTrigger>
                             <SelectContent className="bg-white max-h-60 overflow-y-auto">
                               {unitMeasures.map((u) => (
-                                <SelectItem key={u._id} value={u._id}>{u.name}</SelectItem>
+                                <SelectItem key={u._id} value={u._id}>
+                                  {u.name}
+                                </SelectItem>
                               ))}
                             </SelectContent>
                           </Select>
@@ -455,42 +541,59 @@ export default function StockProductsPage() {
               {/* Pricing Information */}
               <Card className="shadow-sm border-zinc-200 bg-white overflow-hidden">
                 <CardHeader className="bg-zinc-50/50 border-b border-zinc-100 pb-4">
-                  <CardTitle className="text-[16px] font-bold text-zinc-900">Pricing Matrix</CardTitle>
+                  <CardTitle className="text-[16px] font-bold text-zinc-900">
+                    Pricing Matrix
+                  </CardTitle>
                 </CardHeader>
                 <CardContent className="p-6">
-                  <div className="max-w-md space-y-4">
-                    <div className="space-y-1">
-                      <label className="text-[14px] font-semibold text-zinc-900">Purchase Cost Price <span className="text-red-500">*</span></label>
-                      <p className="text-[12px] text-zinc-500 font-medium">Standard purchasing price input.</p>
+                  <div className="flex w-full flex-col gap-6 md:flex-row md:items-end">
+                    <div className="flex w-full flex-1 flex-col gap-2">
+                      <div className="space-y-1">
+                        <label className="text-[14px] font-semibold text-zinc-900">
+                          Purchase Cost Price{" "}
+                          <span className="text-red-500">*</span>
+                        </label>
+                        <p className="text-[12px] text-zinc-500 font-medium">
+                          Standard purchasing price input.
+                        </p>
+                      </div>
+                      <div className="relative w-full">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-zinc-400">
+                          $
+                        </span>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          name="purchaseAmount"
+                          placeholder="Amount"
+                          value={formData.purchaseAmount}
+                          onChange={handleChange}
+                          className="h-11 w-full pl-8 text-[15px] bg-white border-zinc-200 focus:ring-[#F97316]"
+                        />
+                      </div>
                     </div>
-                    <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-zinc-400">$</span>
+                    <div className="flex w-full flex-1 flex-col gap-2">
+                      <div className="space-y-1">
+                        <label className="text-[14px] font-semibold text-zinc-900">
+                          Minimum stock
+                        </label>
+                        <p className="text-[12px] text-zinc-500 font-medium">
+                          Optional reorder threshold. Leave blank if this
+                          product has no low-stock level.
+                        </p>
+                      </div>
                       <Input
                         type="number"
+                        min="0"
                         step="0.01"
-                        name="purchaseAmount"
-                        placeholder="Amount"
-                        value={formData.purchaseAmount}
+                        name="minStock"
+                        placeholder="e.g. 10"
+                        value={formData.minStock}
                         onChange={handleChange}
-                        className="h-11 pl-8 text-[15px] bg-white border-zinc-200 focus:ring-[#F97316]"
+                        className="h-11 w-full text-[15px] bg-white border-zinc-200 focus:ring-[#F97316]"
                       />
                     </div>
-                    <div className="space-y-1 pt-2">
-                      <label className="text-[14px] font-semibold text-zinc-900">Minimum stock</label>
-                      <p className="text-[12px] text-zinc-500 font-medium">
-                        Optional reorder threshold. Leave blank if this product has no low-stock level.
-                      </p>
-                    </div>
-                    <Input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      name="minStock"
-                      placeholder="e.g. 10"
-                      value={formData.minStock}
-                      onChange={handleChange}
-                      className="h-11 text-[15px] bg-white border-zinc-200 focus:ring-[#F97316]"
-                    />
                   </div>
                 </CardContent>
               </Card>
@@ -498,7 +601,9 @@ export default function StockProductsPage() {
               <div className="lg:col-span-4 space-y-6">
                 <Card className="shadow-sm border-zinc-200 bg-white sticky top-24">
                   <CardHeader className="bg-zinc-50/50 border-b border-zinc-100 pb-4">
-                    <CardTitle className="sr-only text-[16px] font-bold text-zinc-900">Actions</CardTitle>
+                    <CardTitle className="sr-only text-[16px] font-bold text-zinc-900">
+                      Actions
+                    </CardTitle>
                   </CardHeader>
                   <CardContent className=" space-y-4 flex flex-col">
                     <Button
@@ -507,7 +612,9 @@ export default function StockProductsPage() {
                       className="w-full h-12 text-[15px] font-bold text-white transition-transform hover:scale-[1.02]"
                       style={{ backgroundColor: PALETTE.accent }}
                     >
-                      {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                      {saving && (
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      )}
                       {editingId ? "Update Product" : "Create Product"}
                     </Button>
 
@@ -525,56 +632,88 @@ export default function StockProductsPage() {
                   </CardContent>
                 </Card>
               </div>
-
             </div>
-
           </form>
 
           {/* Overview Table */}
           <Card className="shadow-sm border-zinc-200 bg-white overflow-hidden mt-8">
             <CardHeader className="px-6 py-5 border-b border-zinc-200 flex flex-row items-center justify-between">
-              <CardTitle className="text-[16px] font-bold text-zinc-900">Products Inventory Overview</CardTitle>
+              <CardTitle className="text-[16px] font-bold text-zinc-900">
+                Products Inventory Overview
+              </CardTitle>
             </CardHeader>
             <CardContent className="p-0">
               <Table>
                 <TableHeader className="bg-zinc-50">
                   <TableRow>
-                    <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6">Product</TableHead>
-                    <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6">Category</TableHead>
-                    <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6">Type & Unit</TableHead>
-                    <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6">Pricing</TableHead>
-                    <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6 text-center">Status</TableHead>
-                    <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6 text-center">Actions</TableHead>
+                    <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6">
+                      Product
+                    </TableHead>
+                    <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6">
+                      Category
+                    </TableHead>
+                    <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6">
+                      Type & Unit
+                    </TableHead>
+                    <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6">
+                      Pricing
+                    </TableHead>
+                    <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6 text-center">
+                      Status
+                    </TableHead>
+                    <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6 text-center">
+                      Actions
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {loading ? (
                     Array.from({ length: 5 }).map((_, idx) => (
                       <TableRow key={idx}>
-                        <TableCell className="px-6 py-4"><Skeleton className="h-10 w-full rounded-md" /></TableCell>
-                        <TableCell className="px-6 py-4"><Skeleton className="h-6 w-[80px] rounded-full" /></TableCell>
-                        <TableCell className="px-6 py-4"><Skeleton className="h-8 w-[100px]" /></TableCell>
-                        <TableCell className="px-6 py-4"><Skeleton className="h-10 w-[80px]" /></TableCell>
-                        <TableCell className="px-6 py-4 text-center"><Skeleton className="h-8 w-[60px] mx-auto rounded-md" /></TableCell>
-                        <TableCell className="px-6 py-4 text-center"><Skeleton className="h-8 w-8 mx-auto" /></TableCell>
+                        <TableCell className="px-6 py-4">
+                          <Skeleton className="h-10 w-full rounded-md" />
+                        </TableCell>
+                        <TableCell className="px-6 py-4">
+                          <Skeleton className="h-6 w-[80px] rounded-full" />
+                        </TableCell>
+                        <TableCell className="px-6 py-4">
+                          <Skeleton className="h-8 w-[100px]" />
+                        </TableCell>
+                        <TableCell className="px-6 py-4">
+                          <Skeleton className="h-10 w-[80px]" />
+                        </TableCell>
+                        <TableCell className="px-6 py-4 text-center">
+                          <Skeleton className="h-8 w-[60px] mx-auto rounded-md" />
+                        </TableCell>
+                        <TableCell className="px-6 py-4 text-center">
+                          <Skeleton className="h-8 w-8 mx-auto" />
+                        </TableCell>
                       </TableRow>
                     ))
                   ) : products.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={6} className="h-24 text-center text-zinc-500 text-[14px]">
+                      <TableCell
+                        colSpan={6}
+                        className="h-24 text-center text-zinc-500 text-[14px]"
+                      >
                         No products found.
                       </TableCell>
                     </TableRow>
                   ) : (
                     products.map((p) => (
-                      <TableRow key={p._id} className="hover:bg-zinc-50 transition-colors group">
+                      <TableRow
+                        key={p._id}
+                        className="hover:bg-zinc-50 transition-colors group"
+                      >
                         <TableCell className="px-6 py-4">
                           <div className="flex items-center gap-3">
                             <div className="w-10 h-10 rounded-lg bg-orange-100 flex items-center justify-center border border-orange-200">
                               <Boxes className="w-5 h-5 text-orange-600" />
                             </div>
                             <div>
-                              <span className="font-bold text-[15px] text-zinc-900 block">{p.name}</span>
+                              <span className="font-bold text-[15px] text-zinc-900 block">
+                                {p.name}
+                              </span>
                             </div>
                           </div>
                         </TableCell>
@@ -585,32 +724,46 @@ export default function StockProductsPage() {
                         </TableCell>
                         <TableCell className="px-6 py-4">
                           <div className="flex flex-col gap-1">
-                            <span className="text-[14px] font-semibold text-zinc-900">{p.type?.name || "-"}</span>
-                            <span className="text-[12px] font-medium text-zinc-500">{p.unit?.name || "-"}</span>
+                            <span className="text-[14px] font-semibold text-zinc-900">
+                              {p.type?.name || "-"}
+                            </span>
+                            <span className="text-[12px] font-medium text-zinc-500">
+                              {p.unit?.name || "-"}
+                            </span>
                           </div>
                         </TableCell>
                         <TableCell className="px-6 py-4">
-                          <span className="text-[14px] font-bold text-zinc-900">CP: ${p.purchasePrice?.toFixed(2)}</span>
+                          <span className="text-[14px] font-bold text-zinc-900">
+                            CP: ${p.purchasePrice?.toFixed(2)}
+                          </span>
                         </TableCell>
                         <TableCell className="px-6 py-4 text-center">
                           <button
                             onClick={() => handleToggleStatus(p)}
-                            className={`px-5 py-2 text-[12px] font-bold rounded transition-colors ${p.status
-                              ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
-                              : 'bg-red-100 text-red-700 hover:bg-red-200'
-                              }`}
+                            className={`px-5 py-2 text-[12px] font-bold rounded transition-colors ${
+                              p.status
+                                ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
+                                : "bg-red-100 text-red-700 hover:bg-red-200"
+                            }`}
                           >
-                            {p.status ? 'Active' : 'Inactive'}
+                            {p.status ? "Active" : "Inactive"}
                           </button>
                         </TableCell>
                         <TableCell className="px-6 py-4 text-center">
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon" className="h-8 w-8 border text-zinc-500 hover:text-zinc-900 cursor-pointer">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 border text-zinc-500 hover:text-zinc-900 cursor-pointer"
+                              >
                                 <MoreHorizontal className="h-4 w-4" />
                               </Button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-40 bg-white">
+                            <DropdownMenuContent
+                              align="end"
+                              className="w-40 bg-white"
+                            >
                               <DropdownMenuItem
                                 className="text-[14px] font-medium cursor-pointer"
                                 onSelect={() => handleEdit(p)}
@@ -633,7 +786,6 @@ export default function StockProductsPage() {
               </Table>
             </CardContent>
           </Card>
-
         </div>
       </div>
     </div>

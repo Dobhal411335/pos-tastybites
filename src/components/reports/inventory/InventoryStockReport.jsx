@@ -1,36 +1,18 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { format } from "date-fns";
 import {
   ArrowDownRight,
   ArrowUpRight,
-  CalendarDays,
   Download,
-  FileSpreadsheet,
-  FileText,
-  Loader2,
   Package,
   Repeat,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { DatePicker } from "@/components/ui/date-picker";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import InventoryFilters from "./InventoryFilters";
+import InventoryExportDialog from "./InventoryExportDialog";
 import InventoryProductSheet from "./InventoryProductSheet";
 import MovementTab from "./MovementTab";
 import StockTab from "./StockTab";
@@ -48,29 +30,8 @@ const TABS = [
   { id: "logs", label: "Movement Logs" },
 ];
 
-const PRESETS = [
-  { value: "TODAY", label: "Today" },
-  { value: "YESTERDAY", label: "Yesterday" },
-  { value: "THIS_WEEK", label: "This Week" },
-  { value: "LAST_WEEK", label: "Last Week" },
-  { value: "THIS_MONTH", label: "This Month" },
-  { value: "LAST_MONTH", label: "Last Month" },
-  { value: "CUSTOM", label: "Custom Range" },
-];
-
 const TAB_TRIGGER =
   "rounded-none border-b-2 border-transparent bg-transparent px-0 pb-2 pt-0 shadow-none text-zinc-500 hover:text-zinc-900 data-[state=active]:border-orange-500 data-[state=active]:bg-transparent data-[state=active]:text-orange-600 data-[state=active]:shadow-none";
-
-function ymdToDate(ymd) {
-  if (!ymd) return undefined;
-  const [y, m, d] = ymd.split("-").map(Number);
-  if (!y || !m || !d) return undefined;
-  return new Date(y, m - 1, d);
-}
-
-function dateToYmd(date) {
-  return date ? format(date, "yyyy-MM-dd") : "";
-}
 
 function movementTypeForTab(tab) {
   if (tab === "in") return "STOCK_IN";
@@ -78,35 +39,50 @@ function movementTypeForTab(tab) {
   return "ALL";
 }
 
-function KpiCard({ label, value, hint, icon: Icon, tone = "neutral" }) {
-  const valueClass =
-    tone === "in"
-      ? "text-emerald-700"
-      : tone === "out"
-        ? "text-red-700"
-        : "text-zinc-900";
-  const iconClass =
-    tone === "in"
-      ? "bg-emerald-50 text-emerald-700"
-      : tone === "out"
-        ? "bg-red-50 text-red-700"
-        : "bg-zinc-100 text-zinc-600";
+const KPI_STYLES = {
+  products: {
+    card: "border-orange-200 bg-gradient-to-br from-orange-50 to-white",
+    icon: "bg-orange-500 text-white",
+    value: "text-zinc-900",
+  },
+  in: {
+    card: "border-emerald-200 bg-gradient-to-br from-emerald-50 to-white",
+    icon: "bg-emerald-600 text-white",
+    value: "text-emerald-700",
+  },
+  out: {
+    card: "border-red-200 bg-gradient-to-br from-red-50 to-white",
+    icon: "bg-red-600 text-white",
+    value: "text-red-700",
+  },
+  movements: {
+    card: "border-blue-200 bg-gradient-to-br from-blue-50 to-white",
+    icon: "bg-blue-600 text-white",
+    value: "text-zinc-900",
+  },
+};
 
+function KpiCard({ label, value, hint, icon: Icon, variant = "products" }) {
+  const style = KPI_STYLES[variant] || KPI_STYLES.products;
   return (
-    <div className="bg-white border border-zinc-200 shadow-sm rounded-xl p-4 flex flex-col justify-between h-28 relative overflow-hidden">
+    <div
+      className={`border shadow-sm rounded-xl p-4 flex flex-col justify-between h-28 relative overflow-hidden ${style.card}`}
+    >
       <div className="flex justify-between items-start">
-        <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
           {label}
         </p>
-        <div className={`w-8 h-8 rounded-full flex items-center justify-center ${iconClass}`}>
+        <div
+          className={`w-8 h-8 rounded-full flex items-center justify-center ${style.icon}`}
+        >
           <Icon className="h-4 w-4" />
         </div>
       </div>
       <div>
-        <p className={`text-2xl font-semibold tabular-nums tracking-tight ${valueClass}`}>
+        <p className={`text-2xl font-semibold tabular-nums tracking-tight ${style.value}`}>
           {value}
         </p>
-        {hint ? <p className="text-sm text-zinc-500 mt-0.5">{hint}</p> : null}
+        {hint ? <p className="text-xs text-zinc-500 mt-0.5">{hint}</p> : null}
       </div>
     </div>
   );
@@ -124,6 +100,9 @@ function snapshotFromRow(row, tab) {
       unitsInPeriod: row.unitsInPeriod,
       unitsOutPeriod: row.unitsOutPeriod,
       stockStatus: row.stockStatus,
+      minStock: row.minStock,
+      purchasePrice: row.purchasePrice,
+      stockValue: row.stockValue,
     };
   }
   return {
@@ -137,7 +116,7 @@ function snapshotFromRow(row, tab) {
 export default function InventoryStockReport() {
   const [filters, setFilters] = useState(DEFAULT_INVENTORY_FILTERS);
   const [tab, setTab] = useState("overview");
-  const [downloading, setDownloading] = useState(null);
+  const [exportOpen, setExportOpen] = useState(false);
   const [selectedId, setSelectedId] = useState(null);
   const [product, setProduct] = useState(null);
   const [history, setHistory] = useState([]);
@@ -161,13 +140,18 @@ export default function InventoryStockReport() {
 
   const kpis = overview.data?.kpis;
   const lookups = overview.data?.lookups || { categories: [] };
+  const meta = overview.data?.meta;
+  const timezone = meta?.timezone || "Asia/Kolkata";
+
+  const exportQuery = useMemo(
+    () => inventoryQueryString(filters),
+    [filters]
+  );
+
+  const rowCount = stock.data?.total ?? kpis?.totalProducts ?? 0;
 
   const setPage = (page) => {
     setFilters((prev) => ({ ...prev, page }));
-  };
-
-  const patchFilters = (next) => {
-    setFilters((prev) => ({ ...prev, ...next, page: 1 }));
   };
 
   const handleTabChange = (next) => {
@@ -196,7 +180,7 @@ export default function InventoryStockReport() {
           stockStatus: "ALL",
           movementType: "ALL",
           page: 1,
-          pageSize: 20,
+          pageSize: 100,
         },
         { paginate: true }
       );
@@ -234,38 +218,6 @@ export default function InventoryStockReport() {
     setHistory([]);
   };
 
-  const handleDownload = async (kind) => {
-    setDownloading(kind);
-    try {
-      const qs = inventoryQueryString(filters);
-      const res = await fetch(`/api/admin/reports/inventory/${kind}?${qs}`, {
-        credentials: "include",
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.message || `Failed to download ${kind}`);
-      }
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `Inventory-Stock-${
-        overview.data?.meta?.dateFrom || "report"
-      }-to-${overview.data?.meta?.dateTo || "report"}.${
-        kind === "excel" ? "xlsx" : "pdf"
-      }`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-      toast.success(`${kind === "excel" ? "Excel" : "PDF"} downloaded`);
-    } catch (err) {
-      toast.error(err.message || "Download failed");
-    } finally {
-      setDownloading(null);
-    }
-  };
-
   return (
     <div className="flex flex-col w-full gap-6">
       <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
@@ -277,75 +229,16 @@ export default function InventoryStockReport() {
             Track inventory additions, removals and stock movement history.
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Select
-            value={filters.preset}
-            onValueChange={(preset) => {
-              if (preset === "CUSTOM") {
-                const today = format(new Date(), "yyyy-MM-dd");
-                patchFilters({
-                  preset,
-                  dateFrom: filters.dateFrom || today,
-                  dateTo: filters.dateTo || today,
-                });
-              } else {
-                patchFilters({ preset });
-              }
-            }}
-          >
-            <SelectTrigger className="h-10 w-[180px] bg-white border-zinc-200">
-              <CalendarDays className="h-4 w-4 text-zinc-500" />
-              <SelectValue placeholder="This Month" />
-            </SelectTrigger>
-            <SelectContent>
-              {PRESETS.map((item) => (
-                <SelectItem key={item.value} value={item.value}>
-                  {item.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {filters.preset === "CUSTOM" ? (
-            <div className="flex items-center gap-2">
-              <DatePicker
-                value={ymdToDate(filters.dateFrom)}
-                onChange={(d) => patchFilters({ dateFrom: dateToYmd(d) })}
-                className="h-10 w-[160px]"
-              />
-              <DatePicker
-                value={ymdToDate(filters.dateTo)}
-                onChange={(d) => patchFilters({ dateTo: dateToYmd(d) })}
-                className="h-10 w-[160px]"
-              />
-            </div>
-          ) : null}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="outline"
-                className="h-10"
-                disabled={!!downloading || overview.loading}
-              >
-                {downloading ? (
-                  <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
-                ) : (
-                  <Download className="h-4 w-4 mr-1.5" />
-                )}
-                Export
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => handleDownload("excel")}>
-                <FileSpreadsheet className="h-4 w-4 mr-2" />
-                Export Excel
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleDownload("pdf")}>
-                <FileText className="h-4 w-4 mr-2" />
-                Export PDF
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
+        <Button
+          type="button"
+          variant="outline"
+          className="h-10 bg-white"
+          onClick={() => setExportOpen(true)}
+          disabled={overview.loading || !overview.data}
+        >
+          <Download className="h-4 w-4 mr-1.5" />
+          Export
+        </Button>
       </div>
 
       <InventoryFilters
@@ -355,35 +248,39 @@ export default function InventoryStockReport() {
       />
 
       {overview.loading && !overview.data ? (
-        <div className="flex justify-center py-16">
-          <Loader2 className="h-7 w-7 animate-spin text-orange-500" />
+        <div className="flex justify-center py-16 text-sm text-zinc-500">
+          Loading inventory report…
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
             <KpiCard
               label="Total Products"
               value={kpis?.totalProducts || 0}
+              hint={`${kpis?.lowStockCount || 0} low · ${kpis?.outOfStockCount || 0} out`}
               icon={Package}
+              variant="products"
             />
             <KpiCard
               label="Stock In"
               value={`+${qty(kpis?.stockAdded)}`}
-              hint="units"
+              hint="units this period"
               icon={ArrowUpRight}
-              tone="in"
+              variant="in"
             />
             <KpiCard
               label="Stock Out"
               value={`-${qty(kpis?.stockRemoved)}`}
-              hint="units"
+              hint="units this period"
               icon={ArrowDownRight}
-              tone="out"
+              variant="out"
             />
             <KpiCard
               label="Movements"
               value={kpis?.movementCount || 0}
+              hint="transactions logged"
               icon={Repeat}
+              variant="movements"
             />
           </div>
 
@@ -443,6 +340,19 @@ export default function InventoryStockReport() {
         product={product}
         history={history}
         loading={detailLoading}
+        timezone={timezone}
+        dateFrom={meta?.dateFrom}
+        dateTo={meta?.dateTo}
+      />
+
+      <InventoryExportDialog
+        open={exportOpen}
+        onOpenChange={setExportOpen}
+        exportQuery={exportQuery}
+        dateFrom={meta?.dateFrom || filters.dateFrom || "report"}
+        dateTo={meta?.dateTo || filters.dateTo || "report"}
+        disabled={overview.loading}
+        rowCount={rowCount}
       />
     </div>
   );

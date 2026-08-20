@@ -57,7 +57,6 @@ import {
   Bar,
   Cell,
 } from "recharts";
-import { PALETTE } from "@/utils/paletteeColor";
 import DateTimeDisplay from "@/components/common/DateTimeDisplay";
 import NotificationBell from "@/components/common/NotificationBell";
 
@@ -262,7 +261,7 @@ export default function AdminDashboardPage() {
                   : today.getHours() < 17
                     ? "Afternoon"
                     : "Evening"}
-                , {adminUser?.name?.split(" ")[0] || ""}
+                , {adminUser?.name?.split(" ").slice(0, 2).join(" ") || ""}
               </h1>
               <div className="flex items-center gap-3 pt-2 text-slate-500 font-medium text-sm">
                 <CalendarDays className="w-4 h-4 text-blue-500" />
