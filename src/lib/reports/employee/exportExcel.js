@@ -78,17 +78,24 @@ export async function exportEmployeeReportExcel(payload) {
     "Cancels",
     "Estimated Pay",
   ]);
-  header.font = { bold: true, size: 10 };
+  header.font = { bold: true, size: 10, color: { argb: "FF7C2D12" } };
   header.eachCell((cell) => {
     cell.fill = {
       type: "pattern",
       pattern: "solid",
-      fgColor: { argb: "FFE8E8E8" },
+      fgColor: { argb: "FFFCE4D6" },
     };
+    cell.border = {
+      top: { style: "thin", color: { argb: "FFD4D4D8" } },
+      left: { style: "thin", color: { argb: "FFD4D4D8" } },
+      bottom: { style: "thin", color: { argb: "FFD4D4D8" } },
+      right: { style: "thin", color: { argb: "FFD4D4D8" } },
+    };
+    cell.alignment = { horizontal: "center", vertical: "middle" };
   });
 
   for (const row of payload.rows || []) {
-    sheet.addRow([
+    const excelRow = sheet.addRow([
       row.name || "",
       row.role || "",
       row.clockedIn ? "Clocked In" : "Clocked Out",
@@ -102,6 +109,14 @@ export async function exportEmployeeReportExcel(payload) {
       Number(row.cancellations) || 0,
       money(row.estimatedPay),
     ]);
+    excelRow.eachCell((cell) => {
+      cell.border = {
+        top: { style: "thin", color: { argb: "FFE4E4E7" } },
+        left: { style: "thin", color: { argb: "FFE4E4E7" } },
+        bottom: { style: "thin", color: { argb: "FFE4E4E7" } },
+        right: { style: "thin", color: { argb: "FFE4E4E7" } },
+      };
+    });
   }
 
   sheet.addRow([]);
@@ -132,6 +147,19 @@ export async function exportEmployeeReportExcel(payload) {
     money(totals.pay),
   ]);
   totalRow.font = { bold: true, size: 10 };
+  totalRow.eachCell((cell) => {
+    cell.fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "FFF4F4F5" },
+    };
+    cell.border = {
+      top: { style: "thin", color: { argb: "FFD4D4D8" } },
+      left: { style: "thin", color: { argb: "FFD4D4D8" } },
+      bottom: { style: "thin", color: { argb: "FFD4D4D8" } },
+      right: { style: "thin", color: { argb: "FFD4D4D8" } },
+    };
+  });
 
   const stats = payload.attendanceStats;
   if (stats) {

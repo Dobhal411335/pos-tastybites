@@ -1,7 +1,7 @@
 "use client";
 
-import EmployeeReports from "@/components/reports/EmployeeReports";
+import EmployeeOverviewReport from "@/components/reports/employees/pages/EmployeeOverviewReport";
 
 export default function EmployeeReportsPage() {
-  return <EmployeeReports />;
+  return <EmployeeOverviewReport />;
 }

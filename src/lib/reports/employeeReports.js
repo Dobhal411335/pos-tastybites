@@ -19,6 +19,7 @@ import {
   isValidBusinessDate,
   normalizePaymentTypeLabel,
   r2,
+  resolveTenders,
   todayBusinessDate,
 } from "@/lib/eod/eodHelpers";
 import {
@@ -36,7 +37,14 @@ const ORDER_STATUSES = [
   "WAIVED",
 ];
 const PAYMENT_FILTERS = ["CASH", "CARD", "GIFT_CARD"];
-const SECTIONS = ["summary", "attendance", "orders", "detail"];
+const SECTIONS = [
+  "summary",
+  "attendance",
+  "orders",
+  "detail",
+  "tipsbypayment",
+  "cancellations",
+];
 const ORDER_SORTS = [
   "createdAt",
   "orderNumber",
@@ -58,6 +66,7 @@ const ORDER_SELECT = [
   "taxTotal",
   "serviceChargeTotal",
   "tipAmount",
+  "tipMethod",
   "totalAmount",
   "paymentMethod",
   "cashAmount",
@@ -67,6 +76,8 @@ const ORDER_SELECT = [
   "paymentStatus",
   "processedBy",
   "waiveReason",
+  "waivedBy",
+  "waivedAt",
 ].join(" ");
 
 const SUMMARY_ORDER_SELECT = [
@@ -83,6 +94,7 @@ const SUMMARY_ORDER_SELECT = [
   "taxTotal",
   "serviceChargeTotal",
   "tipAmount",
+  "tipMethod",
   "totalAmount",
 ].join(" ");
 
@@ -309,6 +321,30 @@ function tipShare(poolTips, tipPercent) {
   return r2((Number(poolTips) || 0) * ((Number(tipPercent) || 0) / 100));
 }
 
+function tipPaymentBucket(order) {
+  const tip = Number(order.tipAmount) || 0;
+  if (tip <= 0) return null;
+  const raw = String(order.tipMethod || "").trim().toLowerCase();
+  if (raw.includes("cash")) return "Cash";
+  if (raw.includes("gift")) return "Gift Card";
+  if (raw.includes("card")) return "Card";
+
+  const method = String(order.paymentMethod || "").toLowerCase();
+  if (method.includes("gift")) return "Gift Card";
+  if (/\bcash\b/.test(method) && !method.includes("card")) return "Cash";
+  if (method.includes("card")) return "Card";
+
+  try {
+    const tenders = resolveTenders(order);
+    if (tenders.cash > 0 && tenders.card <= 0 && tenders.giftCard <= 0) return "Cash";
+    if (tenders.card > 0 && tenders.cash <= 0) return "Card";
+    if (tenders.giftCard > 0 && tenders.cash <= 0 && tenders.card <= 0) return "Gift Card";
+  } catch {
+    /* ignore */
+  }
+  return "Other";
+}
+
 function resolveReceiveOwnTips(id, hours, emp, filterEmployees) {
   if (hours?.receiveOwnTips != null) return Boolean(hours.receiveOwnTips);
   if (emp?.receiveOwnTips != null) return Boolean(emp.receiveOwnTips);
@@ -469,6 +505,7 @@ export function parseEmployeeReportQuery(searchParams) {
 
   const employeeRaw = String(searchParams.get("employeeId") || "").trim();
   const shiftRaw = String(searchParams.get("shiftId") || "").trim();
+  const roleRaw = String(searchParams.get("role") || "").trim();
 
   if (employeeRaw && employeeRaw !== "ALL" && !toObjectId(employeeRaw)) {
     throw Object.assign(new Error("Invalid employeeId"), { status: 400 });
@@ -482,6 +519,7 @@ export function parseEmployeeReportQuery(searchParams) {
     dateTo,
     employeeId: employeeRaw && employeeRaw !== "ALL" ? employeeRaw : null,
     shiftId: shiftRaw && shiftRaw !== "ALL" ? shiftRaw : null,
+    role: roleRaw && roleRaw !== "ALL" ? roleRaw : null,
     orderStatus,
     paymentMethod,
     section,
@@ -754,6 +792,8 @@ function mapOrderRow(order, nameById) {
     status: order.status,
     paymentStatus: order.paymentStatus,
     waiveReason: order.waiveReason || null,
+    waivedBy: order.waivedBy ? String(order.waivedBy) : null,
+    waivedAt: order.waivedAt || null,
   };
 }
 
@@ -952,6 +992,7 @@ export async function buildEmployeeReport({
   dateTo,
   employeeId = null,
   shiftId = null,
+  role = null,
   orderStatus = "ALL",
   paymentMethod = "ALL",
   section = "summary",
@@ -971,6 +1012,7 @@ export async function buildEmployeeReport({
       dateTo,
       empId,
       shiftId,
+      role,
       page,
       limit,
     });
@@ -982,6 +1024,7 @@ export async function buildEmployeeReport({
       dateFrom,
       dateTo,
       empId,
+      role,
       orderStatus,
       paymentMethod,
       search,
@@ -1004,12 +1047,39 @@ export async function buildEmployeeReport({
     });
   }
 
+  if (section === "tipsbypayment") {
+    return buildTipsByPaymentSection({
+      rid,
+      dateFrom,
+      dateTo,
+      empId,
+      role,
+      orderStatus,
+      paymentMethod,
+    });
+  }
+
+  if (section === "cancellations") {
+    return buildCancellationsSection({
+      rid,
+      dateFrom,
+      dateTo,
+      empId,
+      role,
+      paymentMethod,
+      search,
+      page,
+      limit,
+    });
+  }
+
   return buildSummarySection({
     rid,
     dateFrom,
     dateTo,
     empId,
     shiftId,
+    role,
     orderStatus,
     paymentMethod,
   });
@@ -1021,6 +1091,7 @@ async function buildSummarySection({
   dateTo,
   empId,
   shiftId,
+  role = null,
   orderStatus,
   paymentMethod,
 }) {
@@ -1165,14 +1236,19 @@ async function buildSummarySection({
     })
     .sort((a, b) => b.sales - a.sales || b.hours - a.hours || a.name.localeCompare(b.name));
 
-  const overviewHours = hourRows.reduce(
+  const roleFiltered = role
+    ? performance.filter((row) => String(row.role || "").toLowerCase() === String(role).toLowerCase())
+    : performance;
+  const performanceRows = roleFiltered;
+
+  const overviewHours = performanceRows.reduce(
     (acc, row) => ({
-      totalHours: acc.totalHours + (Number(row.totalWorkedHours) || 0),
+      totalHours: acc.totalHours + (Number(row.hours) || 0),
       regularHours: acc.regularHours + (Number(row.regularHours) || 0),
       overtimeHours: acc.overtimeHours + (Number(row.overtimeHours) || 0),
       regularPay: acc.regularPay + (Number(row.regularPay) || 0),
       overtimePay: acc.overtimePay + (Number(row.overtimePay) || 0),
-      estimatedPay: acc.estimatedPay + (Number(row.estimatedTotalPay) || 0),
+      estimatedPay: acc.estimatedPay + (Number(row.estimatedPay) || 0),
     }),
     {
       totalHours: 0,
@@ -1186,31 +1262,51 @@ async function buildSummarySection({
 
   const salesTotals = finalizeMetrics(
     filteredOrders.reduce((acc, order) => {
-      if (order.processedBy) addOrderMetrics(acc, order);
+      if (!order.processedBy) return acc;
+      if (role) {
+        const empRow = performanceRows.find(
+          (row) => row.employeeId === String(order.processedBy)
+        );
+        if (!empRow) return acc;
+      }
+      addOrderMetrics(acc, order);
       return acc;
     }, emptyMetrics())
   );
 
   const overTime = buildOverTimeSeries(filteredOrders, dateFrom, dateTo);
-  const chartPeople = selected ? performance : performance.filter((row) => row.sales > 0 || row.orders > 0);
+  const chartPeople = selected
+    ? performanceRows
+    : performanceRows.filter((row) => row.sales > 0 || row.orders > 0);
   const tipPeople = selected
-    ? performance
-    : performance.filter(
+    ? performanceRows
+    : performanceRows.filter(
         (row) => Number(row.tips) > 0 || Number(row.tipPercent) > 0 || row.receiveOwnTips
       );
-  const chargePeople = selected ? performance : performance.filter((row) => row.serviceCharges > 0);
+  const chargePeople = selected
+    ? performanceRows
+    : performanceRows.filter((row) => row.serviceCharges > 0);
+
+  const activeStaff = performanceRows.filter((row) => {
+    const emp = filters.employees.find((e) => e.id === row.employeeId);
+    return emp?.status === "Active" || emp?.status === "Approved";
+  }).length;
+
+  const laborConfigured = performanceRows.some((row) => Number(row.hourlyRate) > 0);
 
   return {
     overview: {
-      employees: selected ? 1 : performance.length,
+      employees: selected ? 1 : performanceRows.length,
+      activeStaff: selected ? (performanceRows[0] ? 1 : 0) : activeStaff,
       totalHours: r2(overviewHours.totalHours),
       regularHours: r2(overviewHours.regularHours),
       overtimeHours: r2(overviewHours.overtimeHours),
       regularPay: r2(overviewHours.regularPay),
       overtimePay: r2(overviewHours.overtimePay),
       estimatedPay: r2(overviewHours.estimatedPay),
+      laborConfigured,
       totalTips: poolTips,
-      distributedTips: r2(performance.reduce((sum, row) => sum + (Number(row.tips) || 0), 0)),
+      distributedTips: r2(performanceRows.reduce((sum, row) => sum + (Number(row.tips) || 0), 0)),
       serviceCharges: salesTotals.serviceCharges,
       totalOrders: salesTotals.totalOrders,
       completedOrders: salesTotals.completedOrders,
@@ -1218,15 +1314,15 @@ async function buildSummarySection({
       waivedOrders: salesTotals.waivedOrders,
       cancelCount: salesTotals.cancelCount,
       totalSales: salesTotals.sales,
-      totalStaff: selected ? 1 : performance.length,
+      totalStaff: selected ? 1 : performanceRows.length,
       clockedIn: selected
-        ? performance[0]?.clockedIn
+        ? performanceRows[0]?.clockedIn
           ? 1
           : 0
-        : [...clockSnapshots.openByEmployee.keys()].filter((id) => employeeIds.has(id)).length,
+        : performanceRows.filter((row) => row.clockedIn).length,
     },
-    performance,
-    sales: performance.map((row) => ({
+    performance: performanceRows,
+    sales: performanceRows.map((row) => ({
       employeeId: row.employeeId,
       name: row.name,
       role: row.role,
@@ -1239,7 +1335,7 @@ async function buildSummarySection({
       waivedOrders: row.waived,
     })),
     tips: {
-      employees: performance.map((row) => ({
+      employees: performanceRows.map((row) => ({
         employeeId: row.employeeId,
         name: row.name,
         role: row.role,
@@ -1255,12 +1351,10 @@ async function buildSummarySection({
       })),
       totals: {
         orders: salesTotals.completedOrders,
-        tips: poolTips,
+        tips: r2(performanceRows.reduce((sum, row) => sum + (Number(row.tips) || 0), 0)),
         collectedTips: salesTotals.tips,
-        averageTip: salesTotals.averageTip,
         serviceCharges: salesTotals.serviceCharges,
-        averageCharge: salesTotals.averageCharge,
-        totalTipsAndCharges: salesTotals.totalTipsAndCharges,
+        tipPool: poolTips,
       },
     },
     cancellations: {
@@ -1271,11 +1365,12 @@ async function buildSummarySection({
         waived: salesTotals.waivedOrders,
         cancelCount: salesTotals.cancelCount,
       },
-      employees: performance.map((row) => ({
+      employees: performanceRows.map((row) => ({
         employeeId: row.employeeId,
         name: row.name,
         role: row.role,
         totalOrders: row.totalOrders,
+        completed: row.orders,
         cancelled: row.cancellations,
         waived: row.waived,
         cancellationRate: row.cancellationRate,
@@ -1288,6 +1383,9 @@ async function buildSummarySection({
       aovByEmployee: chartPeople.map((row) => ({ label: row.name, aov: row.aov })),
       tipsByEmployee: tipPeople.map((row) => ({ label: row.name, tips: row.tips })),
       tipsOverTime: overTime.map((row) => ({ label: row.label, tips: row.tips })),
+      hoursByEmployee: performanceRows
+        .filter((row) => Number(row.hours) > 0)
+        .map((row) => ({ label: row.name, hours: row.hours })),
       serviceChargesByEmployee: chargePeople.map((row) => ({
         label: row.name,
         serviceCharges: row.serviceCharges,
@@ -1318,13 +1416,14 @@ async function buildSummarySection({
       timezone: DEFAULT_RESTAURANT_TIMEZONE,
       employeeId: empId ? String(empId) : null,
       shiftId: shiftId || null,
+      role: role || null,
       orderStatus,
       paymentMethod,
     },
   };
 }
 
-async function buildAttendanceSection({ rid, dateFrom, dateTo, empId, shiftId, page, limit }) {
+async function buildAttendanceSection({ rid, dateFrom, dateTo, empId, shiftId, role = null, page, limit }) {
   const match = attendanceDateMatch(rid, dateFrom, dateTo);
   if (empId) match.employee = empId;
   if (shiftId) {
@@ -1344,23 +1443,49 @@ async function buildAttendanceSection({ rid, dateFrom, dateTo, empId, shiftId, p
   }
 
   const skip = (page - 1) * limit;
-  const [total, rows] = await Promise.all([
-    EmployeeLog.countDocuments(match),
-    EmployeeLog.find(match)
-      .populate("employee", "firstName lastName role employeeId")
-      .populate({
-        path: "shift",
-        select: "startTime endTime templateId",
-        populate: { path: "templateId", select: "name startTime endTime" },
-      })
-      .sort({ loginTime: -1, date: -1 })
-      .skip(skip)
-      .limit(limit)
-      .lean(),
-  ]);
+  let query = EmployeeLog.find(match)
+    .populate("employee", "firstName lastName role employeeId")
+    .populate({
+      path: "shift",
+      select: "startTime endTime templateId",
+      populate: { path: "templateId", select: "name startTime endTime" },
+    })
+    .sort({ loginTime: -1, date: -1 });
+
+  const allRows = await query.lean();
+  const filtered = role
+    ? allRows.filter(
+        (log) =>
+          String(log.employee?.role || "").toLowerCase() === String(role).toLowerCase()
+      )
+    : allRows;
+  const total = filtered.length;
+  const rows = filtered.slice(skip, skip + limit);
+
+  const totals = filtered.reduce(
+    (acc, log) => {
+      const worked = Number(log.workedMinutes) || 0;
+      const ot = Number(log.overtimeMinutes) || 0;
+      acc.totalHours += worked / MINUTES_PER_HOUR;
+      acc.overtimeHours += ot / MINUTES_PER_HOUR;
+      if (log.isIncomplete) acc.currentlyWorking += 1;
+      acc.attendanceCount += 1;
+      return acc;
+    },
+    { totalHours: 0, overtimeHours: 0, currentlyWorking: 0, attendanceCount: 0 }
+  );
+  const avgHours =
+    totals.attendanceCount > 0 ? totals.totalHours / totals.attendanceCount : 0;
 
   return {
     rows: rows.map((log) => mapAttendanceLog(log)),
+    summary: {
+      totalHours: r2(totals.totalHours),
+      averageHours: r2(avgHours),
+      overtimeHours: r2(totals.overtimeHours),
+      currentlyWorking: totals.currentlyWorking,
+      attendanceCount: totals.attendanceCount,
+    },
     pagination: {
       page,
       limit,
@@ -1371,6 +1496,7 @@ async function buildAttendanceSection({ rid, dateFrom, dateTo, empId, shiftId, p
       dateFrom,
       dateTo,
       timezone: DEFAULT_RESTAURANT_TIMEZONE,
+      role: role || null,
     },
   };
 }
@@ -1380,6 +1506,7 @@ async function buildOrdersSection({
   dateFrom,
   dateTo,
   empId,
+  role = null,
   orderStatus,
   paymentMethod,
   search,
@@ -1401,7 +1528,7 @@ async function buildOrdersSection({
     .limit(10000)
     .lean();
 
-  const filtered = docs.filter((order) => matchesPaymentMethod(order, paymentMethod));
+  let filtered = docs.filter((order) => matchesPaymentMethod(order, paymentMethod));
   const employeeIds = [
     ...new Set(filtered.map((order) => (order.processedBy ? String(order.processedBy) : null)).filter(Boolean)),
   ];
@@ -1411,6 +1538,15 @@ async function buildOrdersSection({
         .lean()
     : [];
   const nameById = new Map(employees.map((emp) => [String(emp._id), displayName(emp)]));
+  const roleById = new Map(employees.map((emp) => [String(emp._id), emp.role || "Staff"]));
+
+  if (role) {
+    const roleLower = String(role).toLowerCase();
+    filtered = filtered.filter((order) => {
+      const id = order.processedBy ? String(order.processedBy) : null;
+      return id && String(roleById.get(id) || "").toLowerCase() === roleLower;
+    });
+  }
 
   const dir = sortDir === "asc" ? 1 : -1;
   const sorted = [...filtered].sort((a, b) => {
@@ -1447,6 +1583,7 @@ async function buildOrdersSection({
       dateFrom,
       dateTo,
       timezone: DEFAULT_RESTAURANT_TIMEZONE,
+      role: role || null,
     },
   };
 }
@@ -1579,6 +1716,260 @@ async function buildDetailSection({
       dateTo,
       timezone: DEFAULT_RESTAURANT_TIMEZONE,
       employeeId: String(empId),
+    },
+  };
+}
+
+async function buildTipsByPaymentSection({
+  rid,
+  dateFrom,
+  dateTo,
+  empId,
+  role = null,
+  orderStatus,
+  paymentMethod,
+}) {
+  const match = orderDateMatch(rid, dateFrom, dateTo);
+  if (empId) match.processedBy = empId;
+  if (orderStatus !== "ALL") match.status = orderStatus;
+
+  const docs = await Order.find(match).select(SUMMARY_ORDER_SELECT).lean();
+  let filtered = docs.filter((order) => matchesPaymentMethod(order, paymentMethod));
+
+  const employeeIds = [
+    ...new Set(
+      filtered.map((order) => (order.processedBy ? String(order.processedBy) : null)).filter(Boolean)
+    ),
+  ];
+  const employees = employeeIds.length
+    ? await Employee.find({ _id: { $in: employeeIds.map((id) => toObjectId(id)).filter(Boolean) } })
+        .select("firstName lastName role employeeId")
+        .lean()
+    : [];
+  const empById = new Map(employees.map((emp) => [String(emp._id), emp]));
+
+  if (role) {
+    const roleLower = String(role).toLowerCase();
+    filtered = filtered.filter((order) => {
+      const emp = order.processedBy ? empById.get(String(order.processedBy)) : null;
+      return emp && String(emp.role || "").toLowerCase() === roleLower;
+    });
+  }
+
+  const methodMap = new Map();
+  const employeeMethodMap = new Map();
+
+  for (const order of filtered) {
+    const tip = Number(order.tipAmount) || 0;
+    if (tip <= 0 || !isRevenueOrder(order)) continue;
+    const bucket = tipPaymentBucket(order) || "Other";
+    const sales = r2(Math.max(0, (Number(order.subTotal) || 0) - (Number(order.discountTotal) || 0)));
+
+    if (!methodMap.has(bucket)) {
+      methodMap.set(bucket, { method: bucket, orders: 0, tips: 0, sales: 0 });
+    }
+    const m = methodMap.get(bucket);
+    m.orders += 1;
+    m.tips = r2(m.tips + tip);
+    m.sales = r2(m.sales + sales);
+
+    const empIdKey = order.processedBy ? String(order.processedBy) : "unassigned";
+    const empKey = `${empIdKey}::${bucket}`;
+    if (!employeeMethodMap.has(empKey)) {
+      const emp = empById.get(empIdKey);
+      employeeMethodMap.set(empKey, {
+        employeeId: empIdKey === "unassigned" ? null : empIdKey,
+        name: emp ? displayName(emp) : "Unassigned",
+        role: emp?.role || "Staff",
+        method: bucket,
+        orders: 0,
+        tips: 0,
+        sales: 0,
+      });
+    }
+    const em = employeeMethodMap.get(empKey);
+    em.orders += 1;
+    em.tips = r2(em.tips + tip);
+    em.sales = r2(em.sales + sales);
+  }
+
+  const methods = [...methodMap.values()]
+    .map((row) => ({
+      ...row,
+      averageTip: row.orders > 0 ? r2(row.tips / row.orders) : 0,
+      tipPercent: row.sales > 0 ? r2((row.tips / row.sales) * 100) : 0,
+    }))
+    .sort((a, b) => b.tips - a.tips);
+
+  const byEmployee = [...employeeMethodMap.values()]
+    .map((row) => ({
+      ...row,
+      averageTip: row.orders > 0 ? r2(row.tips / row.orders) : 0,
+      tipPercent: row.sales > 0 ? r2((row.tips / row.sales) * 100) : 0,
+    }))
+    .sort((a, b) => b.tips - a.tips || a.name.localeCompare(b.name));
+
+  const totalTips = r2(methods.reduce((sum, row) => sum + row.tips, 0));
+  const totalOrders = methods.reduce((sum, row) => sum + row.orders, 0);
+
+  return {
+    overview: {
+      totalTips,
+      totalOrders,
+      averageTip: totalOrders > 0 ? r2(totalTips / totalOrders) : 0,
+      methods: methods.length,
+    },
+    methods,
+    byEmployee,
+    charts: {
+      tipsByMethod: methods.map((row) => ({ label: row.method, value: row.tips })),
+    },
+    meta: {
+      dateFrom,
+      dateTo,
+      timezone: DEFAULT_RESTAURANT_TIMEZONE,
+      role: role || null,
+      note: "Collected tips by payment tender (not tip-pool allocation).",
+    },
+  };
+}
+
+async function buildCancellationsSection({
+  rid,
+  dateFrom,
+  dateTo,
+  empId,
+  role = null,
+  paymentMethod,
+  search = "",
+  page = 1,
+  limit = 25,
+}) {
+  const match = orderDateMatch(rid, dateFrom, dateTo);
+  match.status = { $in: ["CANCELLED", "WAIVED"] };
+  if (empId) match.processedBy = empId;
+  if (search) {
+    match.orderNumber = { $regex: search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), $options: "i" };
+  }
+
+  const docs = await Order.find(match)
+    .select(ORDER_SELECT)
+    .sort({ createdAt: -1 })
+    .limit(10000)
+    .lean();
+
+  let filtered = docs.filter((order) => matchesPaymentMethod(order, paymentMethod));
+
+  const employeeIds = [
+    ...new Set(
+      filtered.map((order) => (order.processedBy ? String(order.processedBy) : null)).filter(Boolean)
+    ),
+  ];
+  const waiveIds = [
+    ...new Set(filtered.map((order) => (order.waivedBy ? String(order.waivedBy) : null)).filter(Boolean)),
+  ];
+  const allIds = [...new Set([...employeeIds, ...waiveIds])];
+  const employees = allIds.length
+    ? await Employee.find({ _id: { $in: allIds.map((id) => toObjectId(id)).filter(Boolean) } })
+        .select("firstName lastName role employeeId")
+        .lean()
+    : [];
+  const empById = new Map(employees.map((emp) => [String(emp._id), emp]));
+  const nameById = new Map(employees.map((emp) => [String(emp._id), displayName(emp)]));
+
+  if (role) {
+    const roleLower = String(role).toLowerCase();
+    filtered = filtered.filter((order) => {
+      const emp = order.processedBy ? empById.get(String(order.processedBy)) : null;
+      return emp && String(emp.role || "").toLowerCase() === roleLower;
+    });
+  }
+
+  const byEmployeeMap = new Map();
+  const overTimeMap = new Map();
+  let cancelledAmount = 0;
+
+  const rows = filtered.map((order) => {
+    const amount = r2(order.totalAmount);
+    cancelledAmount = r2(cancelledAmount + amount);
+    const empIdKey = order.processedBy ? String(order.processedBy) : null;
+    const emp = empIdKey ? empById.get(empIdKey) : null;
+    const dayKey = restaurantDayKey(order.createdAt) || "unknown";
+
+    if (empIdKey) {
+      if (!byEmployeeMap.has(empIdKey)) {
+        byEmployeeMap.set(empIdKey, {
+          employeeId: empIdKey,
+          name: displayName(emp),
+          role: emp?.role || "Staff",
+          count: 0,
+          amount: 0,
+        });
+      }
+      const bucket = byEmployeeMap.get(empIdKey);
+      bucket.count += 1;
+      bucket.amount = r2(bucket.amount + amount);
+    }
+
+    if (!overTimeMap.has(dayKey)) overTimeMap.set(dayKey, { label: dayKey, count: 0, amount: 0 });
+    const ot = overTimeMap.get(dayKey);
+    ot.count += 1;
+    ot.amount = r2(ot.amount + amount);
+
+    return {
+      orderId: String(order._id),
+      orderNumber: order.orderNumber,
+      createdAt: order.createdAt,
+      employeeId: empIdKey,
+      employeeName: empIdKey ? nameById.get(empIdKey) || "Unknown" : "Unassigned",
+      amount,
+      status: order.status,
+      reason: order.waiveReason || null,
+      cancelledBy:
+        order.status === "WAIVED" && order.waivedBy
+          ? nameById.get(String(order.waivedBy)) || ""
+          : null,
+      waivedAt: order.waivedAt || null,
+    };
+  });
+
+  const total = rows.length;
+  const skip = (page - 1) * limit;
+  const pageRows = rows.slice(skip, skip + limit);
+  const byEmployee = [...byEmployeeMap.values()].sort((a, b) => b.count - a.count);
+  const overTime = [...overTimeMap.values()].sort((a, b) => String(a.label).localeCompare(String(b.label)));
+
+  // Cancellation rate vs all orders in range
+  const allMatch = orderDateMatch(rid, dateFrom, dateTo);
+  if (empId) allMatch.processedBy = empId;
+  const allCount = await Order.countDocuments(allMatch);
+  const cancellationRate = allCount > 0 ? r2((total / allCount) * 100) : 0;
+
+  return {
+    overview: {
+      totalCancellations: total,
+      cancelledAmount,
+      cancellationRate,
+      employeesWithCancellations: byEmployee.length,
+    },
+    rows: pageRows,
+    byEmployee,
+    charts: {
+      cancellationsOverTime: overTime.map((row) => ({ label: row.label, value: row.count })),
+      cancellationsByEmployee: byEmployee.map((row) => ({ label: row.name, value: row.count })),
+      cancellationAmountByEmployee: byEmployee.map((row) => ({ label: row.name, value: row.amount })),
+    },
+    pagination: {
+      page,
+      limit,
+      total,
+      pages: Math.max(1, Math.ceil(total / limit) || 1),
+    },
+    meta: {
+      dateFrom,
+      dateTo,
+      timezone: DEFAULT_RESTAURANT_TIMEZONE,
+      role: role || null,
     },
   };
 }

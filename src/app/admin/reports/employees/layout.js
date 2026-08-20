@@ -7,16 +7,25 @@ import { FooterBar } from "@/components/layout/FooterBar";
 
 const SIDEBAR_GROUPS = [
   {
-    title: "Reports",
+    title: "Employee & Staff Reports",
     color: "bg-orange-500",
     items: [
-
-      { label: "Employee & Staff", href: "/admin/reports/employees" },
+      { label: "Overview", href: "/admin/reports/employees", exact: true },
+      { label: "Clock In / Out", href: "/admin/reports/employees/clock" },
+      { label: "Sales Performance", href: "/admin/reports/employees/sales" },
+      { label: "Tips & Gratuity", href: "/admin/reports/employees/tips" },
+      { label: "Service Charges", href: "/admin/reports/employees/service-charges" },
+      { label: "Staff Order List", href: "/admin/reports/employees/orders" },
+      { label: "Cancellation Report", href: "/admin/reports/employees/cancellations" },
+      { label: "Timesheet Details", href: "/admin/reports/employees/timesheet" },
+      { label: "Tips by Payment Method", href: "/admin/reports/employees/tips-by-payment" },
+      { label: "Working Hours Summary", href: "/admin/reports/employees/hours" },
+      { label: "Hourly Labor Cost", href: "/admin/reports/employees/labor" },
     ],
   },
 ];
 
-export default function ReportsModuleLayout({ children }) {
+export default function EmployeeReportsLayout({ children }) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   return (

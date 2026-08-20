@@ -96,6 +96,7 @@ export async function buildEmployeeExportPayload({
         tips: ov.tips,
         serviceCharges: ov.serviceCharges,
         cancellations: ov.cancelCount,
+        hourlyRate: emp.hourlyRate,
       },
     ];
     const labels = {

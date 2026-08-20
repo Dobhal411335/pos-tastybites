@@ -620,12 +620,24 @@ function EmployeeProfileBody({
   onSelectDay,
   onSelectOrder,
 }) {
+  const [tab, setTab] = useState("overview");
   const latest = attendance.find((row) => row.clockIn) || attendance[0] || null;
   const salesSeries = charts?.salesOverTime || [];
   const hoursSeries = charts?.hoursOverTime || [];
   const showSalesChart = salesSeries.some((row) => Number(row.sales) > 0);
   const showHoursChart = hoursSeries.some((row) => Number(row.hours) > 0);
   const maxCharges = Math.max(Number(overview?.serviceCharges) || 0, 1);
+
+  const TABS = [
+    { id: "overview", label: "Overview" },
+    { id: "sales", label: "Sales" },
+    { id: "tips", label: "Tips" },
+    { id: "service", label: "Service" },
+    { id: "attendance", label: "Attendance" },
+    { id: "hours", label: "Hours" },
+    { id: "cancels", label: "Cancels" },
+    { id: "gratuity", label: "Gratuity" },
+  ];
 
   return (
     <div className="flex flex-col gap-6 pb-6">
@@ -651,7 +663,34 @@ function EmployeeProfileBody({
             </p>
           ) : null}
         </div>
-      </div>  
+      </div>
+
+      <div className="flex flex-wrap gap-1 border-b border-zinc-200 pb-2">
+        {TABS.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            onClick={() => setTab(item.id)}
+            className={`rounded-md px-2.5 py-1 text-xs font-semibold transition-colors ${
+              tab === item.id
+                ? "bg-orange-500 text-white"
+                : "text-zinc-600 hover:bg-zinc-100"
+            }`}
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
+
+      {tab === "gratuity" ? (
+        <div className="rounded-lg border border-dashed border-zinc-200 bg-zinc-50 px-4 py-8 text-center">
+          <p className="text-sm text-zinc-500">
+            Gratuity is not tracked separately in this system. Use Tips for voluntary tips and
+            Service Charges for auto charges.
+          </p>
+        </div>
+      ) : (
+      <>
       <Separator className="bg-black/20"/>
       <div>
         <h4 className="text-[12px] font-semibold uppercase tracking-wider text-black mb-2">
@@ -916,6 +955,8 @@ function EmployeeProfileBody({
           </Table>
         </div>
       </div>
+      </>
+      )}
     </div>
   );
 }
@@ -1133,7 +1174,7 @@ export default function EmployeeProfileSheet({
     <Sheet open={open} onOpenChange={handleOpenChange}>
       <SheetContent
         side="right"
-        className="w-full sm:max-w-[600px] custom-scrollbar p-0 flex flex-col gap-0 overflow-hidden"
+        className="w-full sm:max-w-3xl custom-scrollbar p-0 flex flex-col gap-0 overflow-hidden"
       >
         <SheetHeader className="bg-zinc-50 px-4 py-3 pr-12 border-b border-zinc-200 text-left space-y-0">
           {showingOrder ? (
