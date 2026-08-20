@@ -96,7 +96,7 @@ export async function exportEmployeeReportExcel(payload) {
       row.clockOut || "",
       Number(row.hours) || 0,
       money(row.sales),
-      Number(row.tipPercent) || 0,
+      row.receiveOwnTips ? "Own tips" : Number(row.tipPercent) || 0,
       money(row.tips),
       money(row.serviceCharges),
       Number(row.cancellations) || 0,

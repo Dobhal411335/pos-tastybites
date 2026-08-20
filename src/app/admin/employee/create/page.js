@@ -11,6 +11,7 @@ import { useRouter } from "next/navigation";
 import { PALETTE } from "@/utils/paletteeColor";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Checkbox } from "@/components/ui/checkbox";
 import { countryCodes } from "@/utils/countryCodes";
 
 export default function CreateServerAccountPage() {
@@ -28,6 +29,7 @@ export default function CreateServerAccountPage() {
   const [amountPerHour, setAmountPerHour] = useState("");
   const [overtimeAmountPerHour, setOvertimeAmountPerHour] = useState("");
   const [tipPercent, setTipPercent] = useState("");
+  const [receiveOwnTips, setReceiveOwnTips] = useState(false);
   const [allocatedTipPercent, setAllocatedTipPercent] = useState(0);
   const [staffDiscount, setStaffDiscount] = useState("");
   const [passcode, setPasscode] = useState("");
@@ -89,6 +91,7 @@ export default function CreateServerAccountPage() {
         if (employeesJson.success) {
           const used = (employeesJson.data || []).reduce((sum, emp) => {
             if (id && String(emp._id) === String(id)) return sum;
+            if (emp.receiveOwnTips) return sum;
             return sum + (Number(emp.tipPercent) || 0);
           }, 0);
           setAllocatedTipPercent(used);
@@ -118,7 +121,13 @@ export default function CreateServerAccountPage() {
             if (emp.hourlyPaid?.overtimeAmountPerHour != null) {
               setOvertimeAmountPerHour(emp.hourlyPaid.overtimeAmountPerHour.toString());
             }
-            if (emp.tipPercent != null) setTipPercent(emp.tipPercent.toString());
+            if (emp.receiveOwnTips) {
+              setReceiveOwnTips(true);
+              setTipPercent("");
+            } else {
+              setReceiveOwnTips(false);
+              if (emp.tipPercent != null) setTipPercent(emp.tipPercent.toString());
+            }
             if (emp.staffDiscount !== undefined) setStaffDiscount(emp.staffDiscount.toString());
             try {
               const credRes = await fetch(`/api/employees/credentials?id=${id}`);
@@ -147,7 +156,12 @@ export default function CreateServerAccountPage() {
       return;
     }
 
-    if (tipPercent !== "") {
+    if (receiveOwnTips && tipPercent !== "") {
+      toast.error("Choose either tip percent or keep earned tips, not both.");
+      return;
+    }
+
+    if (!receiveOwnTips && tipPercent !== "") {
       const tipValue = Number(tipPercent);
       if (!Number.isFinite(tipValue) || tipValue < 0) {
         toast.error("Tip percent must be a valid number.");
@@ -175,7 +189,8 @@ export default function CreateServerAccountPage() {
           totalAmountPerDay,
           overtimeAmountPerHour: overtimeAmountPerHour !== "" ? Number(overtimeAmountPerHour) : null,
         } : undefined,
-        tipPercent: tipPercent !== "" ? Number(tipPercent) : undefined,
+        tipPercent: receiveOwnTips ? null : tipPercent !== "" ? Number(tipPercent) : null,
+        receiveOwnTips: Boolean(receiveOwnTips),
         staffDiscount: staffDiscount ? Number(staffDiscount) : undefined
       };
 
@@ -214,6 +229,7 @@ export default function CreateServerAccountPage() {
       setAmountPerHour("");
       setOvertimeAmountPerHour("");
       setTipPercent("");
+      setReceiveOwnTips(false);
       setStaffDiscount("");
       setPasscode("");
       setDefaultShiftTemplate("");
@@ -506,7 +522,7 @@ export default function CreateServerAccountPage() {
                 </div>
 
                 <div className="w-full gap-6">
-                  <div className="space-y-2">
+                  <div className="space-y-3">
                     <label className="text-[14px] font-semibold text-zinc-900 block">
                       Tip Amount (%)
                     </label>
@@ -517,12 +533,37 @@ export default function CreateServerAccountPage() {
                       step="any"
                       placeholder={`0 – ${remainingTipPercent}`}
                       value={tipPercent}
-                      onChange={(e) => setTipPercent(e.target.value)}
-                      className="h-12 text-[15px] bg-white border-zinc-200 focus:ring-[#1e40af]"
+                      disabled={receiveOwnTips}
+                      onChange={(e) => {
+                        setTipPercent(e.target.value);
+                        if (e.target.value !== "") setReceiveOwnTips(false);
+                      }}
+                      className="h-12 text-[15px] bg-white border-zinc-200 focus:ring-[#1e40af] disabled:opacity-60"
                     />
                     <p className="text-[13px] text-zinc-500">
                       Available: {remainingTipPercent}% ({Number(allocatedTipPercent.toFixed(2))}% already allocated)
                     </p>
+                    <div className="flex items-start gap-3 rounded-md border border-zinc-200 bg-zinc-50 px-3 py-3">
+                      <Checkbox
+                        id="receiveOwnTips"
+                        checked={receiveOwnTips}
+                        onCheckedChange={(checked) => {
+                          const next = checked === true;
+                          setReceiveOwnTips(next);
+                          if (next) setTipPercent("");
+                        }}
+                        className="mt-0.5 border-zinc-400 data-[state=checked]:bg-[#1e40af] data-[state=checked]:border-[#1e40af]"
+                      />
+                      <label htmlFor="receiveOwnTips" className="cursor-pointer space-y-1">
+                        <span className="block text-[14px] font-semibold text-zinc-900">
+                          Keep all tips earned
+                        </span>
+                        <span className="block text-[13px] text-zinc-500 leading-snug">
+                          Employee receives every tip from tables they served and orders they processed for the day.
+                          Cannot be combined with tip percent.
+                        </span>
+                      </label>
+                    </div>
                   </div>
                 </div>
 

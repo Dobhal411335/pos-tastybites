@@ -1586,7 +1586,7 @@ export default function OrderPage() {
                             {product.productCode}
                           </span>
                         ) : null}
-                        <span className="font-bold text-zinc-900 text-xs">
+                        <span className="font-bold text-zinc-900 text-xs xl:text-[15px]">
                           {product.name}
                         </span>
                         {!isAvailable && (

@@ -700,7 +700,9 @@ function EmployeeProfileBody({
           <p className="text-[10px] uppercase tracking-wider text-zinc-500">Tips</p>
           <p className="text-lg font-semibold text-zinc-900 tabular-nums mt-1">{money(overview?.tips)}</p>
           <p className="text-[11px] text-zinc-500 mt-1">
-            {Number(overview?.tipPercent || employee.tipPercent) || 0}% of {money(overview?.tipPool)} pool
+            {overview?.receiveOwnTips || employee?.receiveOwnTips
+              ? "Tips from orders processed"
+              : `${Number(overview?.tipPercent || employee.tipPercent) || 0}% of ${money(overview?.tipPool)} pool`}
           </p>
         </div>
         <div className="bg-zinc-50 rounded-xl p-3">

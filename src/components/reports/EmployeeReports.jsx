@@ -667,7 +667,7 @@ export default function EmployeeReports() {
             <KpiCard
               label="Total Tips"
               value={money(overview?.totalTips)}
-              hint="Split by each staff tip%"
+              hint="Tip % share or earned tips"
               icon={HeartHandshake}
               accent
             />
@@ -1010,7 +1010,9 @@ export default function EmployeeReports() {
                         </TableCell>
                         <TableCell className="text-right text-sm tabular-nums">
                           {money(row.tips)}
-                          {Number(row.tipPercent) > 0 ? (
+                          {row.receiveOwnTips ? (
+                            <p className="text-[10px] text-zinc-400">Earned tips</p>
+                          ) : Number(row.tipPercent) > 0 ? (
                             <p className="text-[10px] text-zinc-400">{row.tipPercent}%</p>
                           ) : null}
                         </TableCell>

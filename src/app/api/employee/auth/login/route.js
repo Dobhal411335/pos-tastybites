@@ -303,7 +303,9 @@ async function finishEmployeeLogin({
         id: employee.employeeId,
         firstName: employee.firstName,
         lastName: employee.lastName,
-        role: employee.role
+        role: employee.role,
+        tipPercent: employee.receiveOwnTips ? 0 : Number(employee.tipPercent) || 0,
+        receiveOwnTips: Boolean(employee.receiveOwnTips),
       }
     }
   });

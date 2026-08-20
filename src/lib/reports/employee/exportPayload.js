@@ -92,6 +92,7 @@ export async function buildEmployeeExportPayload({
         estimatedPay: ov.estimatedPay,
         sales: ov.sales,
         tipPercent: ov.tipPercent,
+        receiveOwnTips: Boolean(ov.receiveOwnTips),
         tips: ov.tips,
         serviceCharges: ov.serviceCharges,
         cancellations: ov.cancelCount,

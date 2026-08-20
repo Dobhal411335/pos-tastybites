@@ -31,6 +31,8 @@ const EmployeeSchema = new mongoose.Schema(
       overtimeAmountPerHour: { type: Number },
     },
     tipPercent: { type: Number, min: 0, max: 100 },
+    // When true, employee keeps tips from orders they processed (tipPercent must be empty)
+    receiveOwnTips: { type: Boolean, default: false },
     staffDiscount: { type: Number },
     availableDays: [{ type: String, enum: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] }],
     weeklyOff: [{ type: String, enum: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] }],

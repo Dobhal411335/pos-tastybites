@@ -47,7 +47,7 @@ async function assertTipPercentAvailable(restaurantId, tipPercent, excludeEmploy
     throw Object.assign(new Error("Tip percent must be between 0 and 100"), { status: 400 });
   }
 
-  const query = { restaurant: restaurantId };
+  const query = { restaurant: restaurantId, receiveOwnTips: { $ne: true } };
   if (excludeEmployeeId) query._id = { $ne: excludeEmployeeId };
 
   const peers = await Employee.find(query).select("tipPercent").lean();
@@ -62,6 +62,20 @@ async function assertTipPercentAvailable(restaurantId, tipPercent, excludeEmploy
   }
 
   return value;
+}
+
+/**
+ * Tip share is either pool tip% OR keep tips from orders the employee processed — not both.
+ */
+function resolveTipSettings({ receiveOwnTips, tipPercent }) {
+  const keepOwn = Boolean(receiveOwnTips);
+  if (keepOwn) {
+    return { receiveOwnTips: true, tipPercent: undefined };
+  }
+  if (tipPercent !== undefined && tipPercent !== null && tipPercent !== "") {
+    return { receiveOwnTips: false, tipPercent };
+  }
+  return { receiveOwnTips: false, tipPercent: tipPercent === undefined ? undefined : null };
 }
 
 function normalizePasscode(passcode) {
@@ -214,7 +228,7 @@ export const GET = withAuth(async (request) => {
 export const POST = withAuth(async (request) => {
   try {
     const data = await request.json();
-    const { firstName, lastName, email, countryCode, phoneNumber, role, password, status, profileImage, defaultFloor, employeeColor, defaultShiftTemplate, weeklyOff, availableDays, hourlyPaid, staffDiscount, tipPercent, passcode } = data;
+    const { firstName, lastName, email, countryCode, phoneNumber, role, password, status, profileImage, defaultFloor, employeeColor, defaultShiftTemplate, weeklyOff, availableDays, hourlyPaid, staffDiscount, tipPercent, receiveOwnTips, passcode } = data;
 
     // Validation
     if (!firstName || !lastName || !email || !phoneNumber) {
@@ -232,9 +246,20 @@ export const POST = withAuth(async (request) => {
       return sendError(new Error("Employee with this phone number already exists"), "Conflict", 409);
     }
 
+    if (Boolean(receiveOwnTips) && tipPercent !== undefined && tipPercent !== null && tipPercent !== "") {
+      return sendError(
+        new Error("Choose either tip percent or keep earned tips, not both"),
+        "Choose either tip percent or keep earned tips, not both",
+        400
+      );
+    }
+
+    const tipSettings = resolveTipSettings({ receiveOwnTips, tipPercent });
     let validatedTipPercent;
     try {
-      validatedTipPercent = await assertTipPercentAvailable(request.restaurant, tipPercent);
+      validatedTipPercent = tipSettings.receiveOwnTips
+        ? undefined
+        : await assertTipPercentAvailable(request.restaurant, tipSettings.tipPercent);
     } catch (tipErr) {
       return sendError(tipErr, tipErr.message, tipErr.status || 400);
     }
@@ -267,7 +292,8 @@ export const POST = withAuth(async (request) => {
       weeklyOff: weeklyOff || [],
       availableDays: availableDays || [],
       hourlyPaid: normalizedHourlyPaid,
-      tipPercent: validatedTipPercent,
+      tipPercent: tipSettings.receiveOwnTips ? undefined : validatedTipPercent,
+      receiveOwnTips: tipSettings.receiveOwnTips,
       staffDiscount: staffDiscount !== undefined ? staffDiscount : undefined,
       passcode: validatedPasscode,
     });
@@ -300,7 +326,7 @@ export const POST = withAuth(async (request) => {
 export const PUT = withAuth(async (request) => {
   try {
     const data = await request.json();
-    const { _id, action, firstName, lastName, countryCode, phoneNumber, role, status, profileImage, defaultFloor, employeeColor, defaultShiftTemplate, weeklyOff, availableDays, hourlyPaid, staffDiscount, tipPercent, passcode, employeeId, password } = data;
+    const { _id, action, firstName, lastName, countryCode, phoneNumber, role, status, profileImage, defaultFloor, employeeColor, defaultShiftTemplate, weeklyOff, availableDays, hourlyPaid, staffDiscount, tipPercent, receiveOwnTips, passcode, employeeId, password } = data;
 
     if (!_id) {
       return sendError(new Error("Missing ID"), "Employee ID is required", 400);
@@ -326,11 +352,46 @@ export const PUT = withAuth(async (request) => {
       if (defaultShiftTemplate !== undefined) existing.defaultShiftTemplate = defaultShiftTemplate;
       if (hourlyPaid !== undefined) existing.hourlyPaid = normalizeHourlyPaid(hourlyPaid);
       if (staffDiscount !== undefined) existing.staffDiscount = staffDiscount;
-      if (tipPercent !== undefined) {
-        try {
-          existing.tipPercent = await assertTipPercentAvailable(request.restaurant, tipPercent, _id);
-        } catch (tipErr) {
-          return sendError(tipErr, tipErr.message, tipErr.status || 400);
+      if (receiveOwnTips !== undefined || tipPercent !== undefined) {
+        if (Boolean(receiveOwnTips) && tipPercent !== undefined && tipPercent !== null && tipPercent !== "") {
+          return sendError(
+            new Error("Choose either tip percent or keep earned tips, not both"),
+            "Choose either tip percent or keep earned tips, not both",
+            400
+          );
+        }
+        if (receiveOwnTips !== undefined && Boolean(receiveOwnTips)) {
+          existing.receiveOwnTips = true;
+          existing.tipPercent = null;
+        } else if (tipPercent !== undefined && tipPercent !== null && tipPercent !== "") {
+          existing.receiveOwnTips = false;
+          try {
+            existing.tipPercent = await assertTipPercentAvailable(request.restaurant, tipPercent, _id);
+          } catch (tipErr) {
+            return sendError(tipErr, tipErr.message, tipErr.status || 400);
+          }
+        } else if (receiveOwnTips !== undefined && !receiveOwnTips) {
+          existing.receiveOwnTips = false;
+          if (tipPercent !== undefined) {
+            try {
+              existing.tipPercent =
+                tipPercent === null || tipPercent === ""
+                  ? null
+                  : await assertTipPercentAvailable(request.restaurant, tipPercent, _id);
+            } catch (tipErr) {
+              return sendError(tipErr, tipErr.message, tipErr.status || 400);
+            }
+          }
+        } else if (tipPercent !== undefined) {
+          existing.receiveOwnTips = false;
+          try {
+            existing.tipPercent =
+              tipPercent === null || tipPercent === ""
+                ? null
+                : await assertTipPercentAvailable(request.restaurant, tipPercent, _id);
+          } catch (tipErr) {
+            return sendError(tipErr, tipErr.message, tipErr.status || 400);
+          }
         }
       }
       if (passcode !== undefined && String(passcode).trim()) {
@@ -576,14 +637,38 @@ export const PUT = withAuth(async (request) => {
       ...(availableDays !== undefined && { availableDays }),
       ...(hourlyPaid !== undefined && { hourlyPaid: normalizeHourlyPaid(hourlyPaid) }),
       ...(staffDiscount !== undefined && { staffDiscount }),
-      ...(tipPercent !== undefined && { tipPercent }),
     };
 
-    if (tipPercent !== undefined) {
-      try {
-        updateData.tipPercent = await assertTipPercentAvailable(request.restaurant, tipPercent, _id);
-      } catch (tipErr) {
-        return sendError(tipErr, tipErr.message, tipErr.status || 400);
+    if (receiveOwnTips !== undefined || tipPercent !== undefined) {
+      if (Boolean(receiveOwnTips) && tipPercent !== undefined && tipPercent !== null && tipPercent !== "") {
+        return sendError(
+          new Error("Choose either tip percent or keep earned tips, not both"),
+          "Choose either tip percent or keep earned tips, not both",
+          400
+        );
+      }
+      if (receiveOwnTips !== undefined && Boolean(receiveOwnTips)) {
+        updateData.receiveOwnTips = true;
+        updateData.tipPercent = null;
+      } else if (tipPercent !== undefined && tipPercent !== null && tipPercent !== "") {
+        updateData.receiveOwnTips = false;
+        try {
+          updateData.tipPercent = await assertTipPercentAvailable(request.restaurant, tipPercent, _id);
+        } catch (tipErr) {
+          return sendError(tipErr, tipErr.message, tipErr.status || 400);
+        }
+      } else {
+        if (receiveOwnTips !== undefined) updateData.receiveOwnTips = Boolean(receiveOwnTips);
+        if (tipPercent !== undefined) {
+          try {
+            updateData.tipPercent =
+              tipPercent === null || tipPercent === ""
+                ? null
+                : await assertTipPercentAvailable(request.restaurant, tipPercent, _id);
+          } catch (tipErr) {
+            return sendError(tipErr, tipErr.message, tipErr.status || 400);
+          }
+        }
       }
     }
 

@@ -25,6 +25,8 @@ const getMeHandler = async (request) => {
           restaurant: employee.restaurant,
           joinDate: employee.createdAt,
           profileImage: employee.profileImage,
+          tipPercent: employee.receiveOwnTips ? 0 : Number(employee.tipPercent) || 0,
+          receiveOwnTips: Boolean(employee.receiveOwnTips),
           permissions: employee.permissionGroup?.permissions || []
         },
         shift: activeShift ? {

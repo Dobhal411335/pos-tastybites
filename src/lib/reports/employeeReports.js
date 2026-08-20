@@ -282,13 +282,13 @@ function itemSummary(items) {
   const preview = names.slice(0, 3).join(", ");
   return {
     itemCount,
-    itemSummary: names.length > 3 ? `${preview}…` : preview,
+    itemSummary: names.length > 3 ? `${preview}` : preview,
   };
 }
 
 function paymentLabel(order) {
   if (order.paymentStatus !== "PAID") {
-    return order.paymentMethod || "—";
+    return order.paymentMethod || "";
   }
   return normalizePaymentTypeLabel(order.paymentMethod, order.giftcardUsedAmount);
 }
@@ -307,6 +307,39 @@ function clampLimit(value, fallback, max = 100) {
 
 function tipShare(poolTips, tipPercent) {
   return r2((Number(poolTips) || 0) * ((Number(tipPercent) || 0) / 100));
+}
+
+function resolveReceiveOwnTips(id, hours, emp, filterEmployees) {
+  if (hours?.receiveOwnTips != null) return Boolean(hours.receiveOwnTips);
+  if (emp?.receiveOwnTips != null) return Boolean(emp.receiveOwnTips);
+  const listed = (filterEmployees || []).find((row) => row.id === id);
+  return Boolean(listed?.receiveOwnTips);
+}
+
+function resolveEmployeeTips({
+  id,
+  hours,
+  emp,
+  selected,
+  filterEmployees,
+  poolTips,
+  collectedTips,
+}) {
+  const source = emp || selected;
+  const receiveOwnTips = resolveReceiveOwnTips(id, hours, source, filterEmployees);
+  if (receiveOwnTips) {
+    return {
+      receiveOwnTips: true,
+      tipPercent: 0,
+      tips: r2(collectedTips),
+    };
+  }
+  const tipPercent = resolveTipPercent(id, hours, source, filterEmployees);
+  return {
+    receiveOwnTips: false,
+    tipPercent,
+    tips: tipShare(poolTips, tipPercent),
+  };
 }
 
 function sumTipPool(orders) {
@@ -470,7 +503,7 @@ async function loadFilterOptions(rid) {
       restaurant: rid,
       status: { $in: ["Approved", "Active", "Suspended"] },
     })
-      .select("firstName lastName role employeeId status email tipPercent")
+      .select("firstName lastName role employeeId status email tipPercent receiveOwnTips")
       .sort({ firstName: 1, lastName: 1 })
       .lean(),
     ShiftTemplate.find({ restaurant: rid })
@@ -488,6 +521,7 @@ async function loadFilterOptions(rid) {
       status: emp.status,
       email: emp.email || "",
       tipPercent: Number(emp.tipPercent) || 0,
+      receiveOwnTips: Boolean(emp.receiveOwnTips),
     })),
     shifts: shifts.map((shift) => ({
       id: String(shift._id),
@@ -514,6 +548,7 @@ function mapHoursRow(row) {
     overtimePay: r2(row.overtimePay),
     estimatedPay: r2(row.estimatedTotalPay),
     tipPercent: Number(emp.tipPercent) || 0,
+    receiveOwnTips: Boolean(emp.receiveOwnTips),
     daysWorked: row.daysWorked || 0,
     incompleteDays: row.incompleteDays || 0,
   };
@@ -685,8 +720,8 @@ function mapSession(session) {
     loginTime: session.loginTime || null,
     logoutTime: session.logoutTime || null,
     durationSeconds,
-    platform: session.platform || "—",
-    deviceName: session.device?.deviceName || "—",
+    platform: session.platform || "",
+    deviceName: session.device?.deviceName || "",
     deviceType: session.device?.deviceType || null,
     status: session.status || null,
     dayKey: restaurantDayKey(session.loginTime),
@@ -704,7 +739,7 @@ function mapOrderRow(order, nameById) {
     employeeName: order.processedBy
       ? nameById.get(String(order.processedBy)) || "Unknown"
       : "Unassigned",
-    tableNo: order.tableNo || "—",
+    tableNo: order.tableNo || "",
     guest: order.partyName || order.guestName || "Walk-in",
     itemCount: items.itemCount,
     itemSummary: items.itemSummary,
@@ -992,7 +1027,7 @@ async function buildSummarySection({
   const filters = await loadFilterOptions(rid);
   const selected = empId
     ? await Employee.findOne({ _id: empId, restaurant: rid })
-        .select("firstName lastName role employeeId hourlyPaid status tipPercent")
+        .select("firstName lastName role employeeId hourlyPaid status tipPercent receiveOwnTips")
         .lean()
     : null;
 
@@ -1064,7 +1099,7 @@ async function buildSummarySection({
         _id: { $in: missingIds.map((id) => toObjectId(id)).filter(Boolean) },
         restaurant: rid,
       })
-        .select("firstName lastName role employeeId hourlyPaid tipPercent")
+        .select("firstName lastName role employeeId hourlyPaid tipPercent receiveOwnTips")
         .lean()
     : [];
   const extraById = new Map(extraEmployees.map((emp) => [String(emp._id), emp]));
@@ -1080,8 +1115,15 @@ async function buildSummarySection({
         clockSnapshots.openByEmployee,
         clockSnapshots.latestByEmployee
       );
-      const tipPercent = resolveTipPercent(id, hours, emp || selected, filters.employees);
-      const distributedTips = tipShare(poolTips, tipPercent);
+      const tipResult = resolveEmployeeTips({
+        id,
+        hours,
+        emp,
+        selected,
+        filterEmployees: filters.employees,
+        poolTips,
+        collectedTips: sales.tips,
+      });
       return {
         employeeId: id,
         name: hours?.name || displayName(emp),
@@ -1103,12 +1145,13 @@ async function buildSummarySection({
         discounts: sales.discounts,
         aov: sales.aov,
         collectedTips: sales.tips,
-        tipPercent,
-        tips: distributedTips,
+        tipPercent: tipResult.tipPercent,
+        receiveOwnTips: tipResult.receiveOwnTips,
+        tips: tipResult.tips,
         averageTip: sales.averageTip,
         serviceCharges: sales.serviceCharges,
         averageCharge: sales.averageCharge,
-        totalTipsAndCharges: r2(distributedTips + sales.serviceCharges),
+        totalTipsAndCharges: r2(tipResult.tips + sales.serviceCharges),
         cancellations: sales.cancelCount,
         waived: sales.waivedOrders,
         cancellationRate: sales.cancellationRate,
@@ -1152,7 +1195,9 @@ async function buildSummarySection({
   const chartPeople = selected ? performance : performance.filter((row) => row.sales > 0 || row.orders > 0);
   const tipPeople = selected
     ? performance
-    : performance.filter((row) => Number(row.tips) > 0 || Number(row.tipPercent) > 0);
+    : performance.filter(
+        (row) => Number(row.tips) > 0 || Number(row.tipPercent) > 0 || row.receiveOwnTips
+      );
   const chargePeople = selected ? performance : performance.filter((row) => row.serviceCharges > 0);
 
   return {
@@ -1200,6 +1245,7 @@ async function buildSummarySection({
         role: row.role,
         orders: row.orders,
         tipPercent: row.tipPercent,
+        receiveOwnTips: Boolean(row.receiveOwnTips),
         collectedTips: row.collectedTips,
         tips: row.tips,
         averageTip: row.averageTip,
@@ -1263,6 +1309,7 @@ async function buildSummarySection({
             selected.hourlyPaid?.overtimeAmountPerHour ?? selected.hourlyPaid?.amountPerHour
           ),
           tipPercent: Number(selected.tipPercent) || 0,
+          receiveOwnTips: Boolean(selected.receiveOwnTips),
         }
       : null,
     meta: {
@@ -1418,7 +1465,7 @@ async function buildDetailSection({
   }
 
   const employee = await Employee.findOne({ _id: empId, restaurant: rid })
-    .select("firstName lastName role employeeId hourlyPaid status tipPercent lastLoginIP lastLoginAt lastLoginPlatform")
+    .select("firstName lastName role employeeId hourlyPaid status tipPercent receiveOwnTips lastLoginIP lastLoginAt lastLoginPlatform")
     .lean();
 
   if (!employee) {
@@ -1475,7 +1522,10 @@ async function buildDetailSection({
   const regularPay = r2(hours.regularHours * hourlyRate);
   const overtimePay = r2(hours.overtimeHours * overtimeRate);
   const tipPercent = Number(employee.tipPercent) || 0;
-  const distributedTips = tipShare(poolTips, tipPercent);
+  const receiveOwnTips = Boolean(employee.receiveOwnTips);
+  const distributedTips = receiveOwnTips
+    ? r2(sales.tips)
+    : tipShare(poolTips, tipPercent);
 
   return {
     employee: {
@@ -1485,7 +1535,8 @@ async function buildDetailSection({
       employeeCode: employee.employeeId || null,
       hourlyRate,
       overtimeRate,
-      tipPercent,
+      tipPercent: receiveOwnTips ? 0 : tipPercent,
+      receiveOwnTips,
       clockedIn: Boolean(openLog),
       clockIn: openLog?.loginTime || attendance.find((row) => row.clockIn)?.clockIn || null,
       clockOut: openLog ? null : attendance.find((row) => row.clockOut)?.clockOut || null,
@@ -1503,7 +1554,8 @@ async function buildDetailSection({
       sales: sales.sales,
       tips: distributedTips,
       collectedTips: sales.tips,
-      tipPercent,
+      tipPercent: receiveOwnTips ? 0 : tipPercent,
+      receiveOwnTips,
       tipPool: poolTips,
       serviceCharges: sales.serviceCharges,
       totalOrders: sales.totalOrders,
