@@ -326,11 +326,11 @@ export default function OrderPage() {
 
   const getHeadIcon = (headName) => {
     if (headName === "All")
-      return <LayoutGrid className="w-6 h-6 mb-1" strokeWidth={1.5} />;
+      return <LayoutGrid className="w-6 h-6" strokeWidth={1.5} />;
     if (headName === "Offer")
-      return <Tag className="w-6 h-6 mb-1" strokeWidth={1.5} />;
+      return <Tag className="w-6 h-6" strokeWidth={1.5} />;
     const Icon = headIconMap[headName] || Utensils;
-    return <Icon className="w-6 h-6 mb-1" strokeWidth={1.5} />;
+    return <Icon className="w-6 h-6" strokeWidth={1.5} />;
   };
 
   const isOfferActive = (offer) => {
@@ -1453,7 +1453,9 @@ export default function OrderPage() {
                       />
                     </span>
                   ) : (
-                    getHeadIcon(head.name)
+                    <span className="flex items-center justify-center w-[76px] h-[48px] shrink-0">
+                      {getHeadIcon(head.name)}
+                    </span>
                   )}
                   <span className="mt-1 px-0.5 text-[10px] font-black uppercase tracking-wider text-center leading-tight">
                     {head.name}
@@ -1501,7 +1503,7 @@ export default function OrderPage() {
           )}
 
           <div className="flex-1 bg-zinc-50/50 overflow-y-auto custom-scrollbar">
-            <div className="flex flex-col p-4 gap-3">
+            <div className="grid grid-cols-2 p-4 gap-3">
               {activeHead === "Offer" ? (
                 filteredOffers.length === 0 ? (
                   <p className="text-sm text-zinc-500 text-center py-10">

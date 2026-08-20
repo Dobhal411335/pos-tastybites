@@ -1,7 +1,7 @@
 "use client";
 
-import { Loader2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
   TableBody,
@@ -14,6 +14,42 @@ import FinancialEmpty from "@/components/reports/financial/FinancialEmpty";
 import { qty } from "./useInventoryReport";
 import { ReportPager, StockStatusBadge } from "./reportUi";
 
+function StockTableSkeleton() {
+  return (
+    <Card className="bg-white border-zinc-200 shadow-sm overflow-hidden">
+      <CardContent className="p-0">
+        <Table>
+          <TableHeader className="bg-zinc-100">
+            <TableRow className="hover:bg-transparent">
+              {["Product", "Category", "Current Stock", "Unit", "Status", "Period In", "Period Out", "Opening"].map(
+                (label) => (
+                  <TableHead
+                    key={label}
+                    className="text-xs font-semibold uppercase tracking-wide text-zinc-500 bg-zinc-100"
+                  >
+                    {label}
+                  </TableHead>
+                )
+              )}
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {Array.from({ length: 8 }).map((_, idx) => (
+              <TableRow key={idx} className="h-14">
+                {Array.from({ length: 8 }).map((__, cell) => (
+                  <TableCell key={cell}>
+                    <Skeleton className="h-4 w-full max-w-[120px]" />
+                  </TableCell>
+                ))}
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function StockTab({
   data,
   loading,
@@ -22,11 +58,7 @@ export default function StockTab({
   selectedId,
 }) {
   if (loading) {
-    return (
-      <div className="flex justify-center py-16">
-        <Loader2 className="h-7 w-7 animate-spin text-orange-500" />
-      </div>
-    );
+    return <StockTableSkeleton />;
   }
 
   if (!data || data.empty) {
@@ -55,6 +87,9 @@ export default function StockTab({
                   </TableHead>
                   <TableHead className="text-xs font-semibold uppercase tracking-wide text-zinc-500 bg-zinc-100">
                     Status
+                  </TableHead>
+                  <TableHead className="text-xs font-semibold uppercase tracking-wide text-zinc-500 text-right bg-zinc-100">
+                    Opening
                   </TableHead>
                   <TableHead className="text-xs font-semibold uppercase tracking-wide text-zinc-500 text-right bg-zinc-100">
                     Period In
@@ -89,6 +124,9 @@ export default function StockTab({
                       </TableCell>
                       <TableCell>
                         <StockStatusBadge status={row.stockStatus} />
+                      </TableCell>
+                      <TableCell className="text-[15px] tabular-nums text-right text-zinc-700">
+                        {qty(row.openingStock)}
                       </TableCell>
                       <TableCell className="text-[15px] tabular-nums text-right text-emerald-700">
                         +{qty(row.unitsInPeriod)}

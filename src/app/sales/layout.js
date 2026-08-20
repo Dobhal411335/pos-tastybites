@@ -4,7 +4,6 @@ import React, { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import EmployeeTopNav from "@/components/employee/EmployeeTopNav";
 import { Loader2 } from "lucide-react";
-import { EmployeeFooter } from "@/components/employee/EmployeeFooter";
 import { SocketProvider } from "@/components/providers/SocketProvider";
 import { AuthProvider } from "@/components/providers/AuthProvider";
 import { employeeFetch } from "@/lib/employeeFetch";
@@ -81,7 +80,6 @@ export default function SalesMainLayout({ children }) {
               </div>
             </main>
           </div>
-          <EmployeeFooter />
           <NotificationSoundPrompt />
         </div>
       </AuthProvider>

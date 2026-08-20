@@ -7,15 +7,19 @@ import { sendSuccess } from "@/utils/apiResponse";
 import { sendError } from "@/utils/errorHandler";
 import { logger } from "@/utils/logger";
 
-function parseMinStock(value) {
+function parseOptionalNonNeg(value, label) {
   if (value === undefined || value === null || value === "") return null;
   const n = Number(value);
   if (!Number.isFinite(n) || n < 0) {
-    const error = new Error("Minimum stock must be 0 or greater");
+    const error = new Error(`${label} must be 0 or greater`);
     error.status = 400;
     throw error;
   }
   return n;
+}
+
+function parseMinStock(value) {
+  return parseOptionalNonNeg(value, "Minimum stock");
 }
 
 // PUT - Update a stock product
@@ -30,6 +34,18 @@ export const PUT = withAuth(async (request, { params }) => {
     if (updateData.purchasePrice !== undefined) updateData.purchasePrice = Number(updateData.purchasePrice);
     if (Object.prototype.hasOwnProperty.call(updateData, "minStock")) {
       updateData.minStock = parseMinStock(updateData.minStock);
+    }
+    if (Object.prototype.hasOwnProperty.call(updateData, "openingStock")) {
+      updateData.openingStock = parseOptionalNonNeg(
+        updateData.openingStock,
+        "Opening stock"
+      );
+    }
+    if (Object.prototype.hasOwnProperty.call(updateData, "openingStockPrice")) {
+      updateData.openingStockPrice = parseOptionalNonNeg(
+        updateData.openingStockPrice,
+        "Opening stock price"
+      );
     }
     delete updateData.salePrice;
 

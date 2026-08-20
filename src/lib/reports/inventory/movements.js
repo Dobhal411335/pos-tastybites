@@ -48,7 +48,7 @@ async function runningBalancesForProducts({ restaurantId, productIds }) {
   if (!ids.length) return new Map();
 
   const rid = toObjectId(restaurantId);
-  const [inRows, outRows] = await Promise.all([
+  const [inRows, outRows, productDocs] = await Promise.all([
     StockIn.aggregate([
       {
         $match: {
@@ -85,6 +85,9 @@ async function runningBalancesForProducts({ restaurantId, productIds }) {
         },
       },
     ]),
+    StockProduct.find({ _id: { $in: ids }, restaurant: rid })
+      .select("openingStock")
+      .lean(),
   ]);
 
   const all = [...inRows, ...outRows].sort((a, b) => {
@@ -95,8 +98,14 @@ async function runningBalancesForProducts({ restaurantId, productIds }) {
     return String(a.sourceId).localeCompare(String(b.sourceId));
   });
 
+  const openingById = new Map(
+    productDocs.map((p) => [String(p._id), Number(p.openingStock) || 0])
+  );
+
   const balances = new Map();
-  const running = new Map(ids.map((id) => [String(id), 0]));
+  const running = new Map(
+    ids.map((id) => [String(id), openingById.get(String(id)) || 0])
+  );
   for (const row of all) {
     const pid = String(row.productId);
     const previous = running.get(pid) || 0;

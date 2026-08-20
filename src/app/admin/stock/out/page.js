@@ -21,9 +21,6 @@ import DeleteDialog from "@/components/common/DeleteDialog";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Skeleton } from "@/components/ui/skeleton";
 
-const money = (n) =>
-  `$${(Math.round((Number(n) || 0) * 100) / 100).toFixed(2)}`;
-
 export default function StockOutPage() {
   const [categories, setCategories] = useState([]);
   const [allProducts, setAllProducts] = useState([]);
@@ -48,8 +45,6 @@ export default function StockOutPage() {
     productName: "",
     stockDate: new Date(),
     qty: "",
-    unitPrice: "",
-    value: "",
   });
 
   useEffect(() => {
@@ -122,7 +117,9 @@ export default function StockOutPage() {
         totalOut = outJson.data.reduce((sum, item) => sum + item.quantity, 0);
       }
 
-      const balance = totalIn - totalOut;
+      const product = allProducts.find((p) => p._id === productId);
+      const openingSeed = Number(product?.openingStock) || 0;
+      const balance = openingSeed + totalIn - totalOut;
       setOpeningBalance(balance.toFixed(2));
     } catch (error) {
       console.error("Failed to calculate balance");
@@ -145,37 +142,13 @@ export default function StockOutPage() {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData((prev) => {
-      const next = { ...prev, [name]: value };
-      const qty = Number(name === "qty" ? value : next.qty);
-      const unitPrice = Number(name === "unitPrice" ? value : next.unitPrice);
-      const total = Number(name === "value" ? value : next.value);
-
-      if (
-        (name === "qty" || name === "unitPrice") &&
-        value !== "" &&
-        !Number.isNaN(qty) &&
-        !Number.isNaN(unitPrice)
-      ) {
-        next.value = (qty * unitPrice).toFixed(2);
-      }
-      if (
-        name === "value" &&
-        value !== "" &&
-        !Number.isNaN(qty) &&
-        qty &&
-        !Number.isNaN(total)
-      ) {
-        next.unitPrice = (total / qty).toFixed(2);
-      }
-      return next;
-    });
+    setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!formData.productName || !formData.stockDate || !formData.qty || !formData.unitPrice || !formData.value) {
-      toast.error("Product, Date, QTY, Per Piece Value, and Total are required");
+    if (!formData.productName || !formData.stockDate || !formData.qty) {
+      toast.error("Product, Date, and Quantity are required");
       return;
     }
 
@@ -188,8 +161,8 @@ export default function StockOutPage() {
         product: formData.productName,
         date: formData.stockDate.toISOString(),
         quantity: formData.qty,
-        unitPrice: formData.unitPrice,
-        value: formData.value,
+        unitPrice: 0,
+        value: 0,
       };
 
       const res = await fetch(url, {
@@ -220,31 +193,16 @@ export default function StockOutPage() {
     const catId = entry.product?.category?._id?.toString() || entry.product?.category?.toString();
     const prodId = entry.product?._id?.toString() || entry.product?.toString();
 
-    // Set up category and filtered products first
     setFilteredProducts(allProducts.filter(p => {
       const pCat = p.category?._id?.toString() || p.category?.toString();
       return pCat === catId;
     }));
 
-    const qty = entry.quantity?.toString() || "";
-    const value =
-      entry.value !== undefined && entry.value !== null
-        ? Number(entry.value).toFixed(2)
-        : "";
-    const unitPrice =
-      entry.unitPrice !== undefined && entry.unitPrice !== null
-        ? Number(entry.unitPrice).toFixed(2)
-        : qty && value
-          ? (Number(value) / Number(qty)).toFixed(2)
-          : "";
-
     setFormData({
       menuHead: catId || "",
       productName: prodId || "",
       stockDate: new Date(entry.date),
-      qty,
-      unitPrice,
-      value,
+      qty: entry.quantity?.toString() || "",
     });
 
     const product = allProducts.find(p => p._id === entry.product?._id);
@@ -261,8 +219,6 @@ export default function StockOutPage() {
       productName: "",
       stockDate: new Date(),
       qty: "",
-      unitPrice: "",
-      value: "",
     });
     setFilteredProducts([]);
     setSelectedProductDetails(null);
@@ -302,7 +258,10 @@ export default function StockOutPage() {
             0
           );
         }
-        setViewBalance((totalIn - totalOut).toFixed(2));
+        const product =
+          allProducts.find((p) => p._id === prodId) || entry.product;
+        const openingSeed = Number(product?.openingStock) || 0;
+        setViewBalance((openingSeed + totalIn - totalOut).toFixed(2));
       } catch {
         setViewBalance("0.00");
       }
@@ -398,29 +357,6 @@ export default function StockOutPage() {
                   <p className="text-[11px] font-bold uppercase tracking-wider text-zinc-500">Quantity</p>
                   <p className="mt-1 text-[14px] font-bold text-zinc-900">
                     {viewEntry.quantity} {viewEntry.product?.unit?.name || ""}
-                  </p>
-                </div>
-                <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-3">
-                  <p className="text-[11px] font-bold uppercase tracking-wider text-zinc-500">Per Piece</p>
-                  <p className="mt-1 text-[14px] font-bold text-zinc-900">
-                    {money(
-                      viewEntry.unitPrice ??
-                        (viewEntry.quantity
-                          ? Number(viewEntry.value) / Number(viewEntry.quantity)
-                          : 0)
-                    )}
-                  </p>
-                </div>
-                <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-3">
-                  <p className="text-[11px] font-bold uppercase tracking-wider text-zinc-500">Value</p>
-                  <p className="mt-1 text-[14px] font-bold text-red-700">
-                    {money(
-                      viewEntry.unitPrice ??
-                        (viewEntry.quantity
-                          ? Number(viewEntry.value) / Number(viewEntry.quantity)
-                          : 0)
-                    )}{" "}
-                    × {viewEntry.quantity} = {money(viewEntry.value)}
                   </p>
                 </div>
                 <div className="rounded-lg border border-blue-100 bg-blue-50 p-3">
@@ -537,7 +473,7 @@ export default function StockOutPage() {
                 <CardContent className="p-6">
 
                   <div className="flex flex-col sm:flex-row gap-4 items-end">
-                    <div className="space-y-2 flex-1">
+                    <div className="space-y-2  flex-1">
                       <label className="text-[14px] font-semibold text-zinc-900">Date Out <span className="text-red-500">*</span></label>
                       <DatePicker
                         value={formData.stockDate}
@@ -545,50 +481,23 @@ export default function StockOutPage() {
                         className="border-zinc-200 focus:ring-[#F97316]"
                       />
                     </div>
-                    <div className="space-y-2 w-full sm:w-32">
+                    <div className="space-y-2 flex-1 w-full sm:w-40">
                       <label className="text-[14px] font-semibold text-zinc-900">Quantity <span className="text-red-500">*</span></label>
                       <Input
                         type="number"
                         step="0.01"
                         name="qty"
+                        min="0"
                         placeholder="QTY"
                         value={formData.qty}
                         onChange={handleChange}
                         className="h-11 text-[15px] bg-white border-zinc-200 focus:ring-[#F97316] font-medium"
                       />
                     </div>
-                    <div className="space-y-2 flex-1">
-                      <label className="text-[14px] font-semibold text-zinc-900">
-                        Per Piece Value ($) <span className="text-red-500">*</span>
-                      </label>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        name="unitPrice"
-                        placeholder="25.00"
-                        value={formData.unitPrice}
-                        onChange={handleChange}
-                        className="h-11 text-[15px] bg-white border-zinc-200 focus:ring-[#F97316] font-medium"
-                      />
-                    </div>
-                    <div className="space-y-2 flex-1">
-                      <label className="text-[14px] font-semibold text-zinc-900">Total Value ($) <span className="text-red-500">*</span></label>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        name="value"
-                        placeholder="0.00"
-                        value={formData.value}
-                        onChange={handleChange}
-                        className="h-11 text-[15px] bg-white border-zinc-200 focus:ring-[#F97316] font-medium"
-                      />
-                    </div>
                   </div>
-                  {formData.qty && formData.unitPrice && (
-                    <p className="mt-3 text-[13px] font-semibold text-red-700">
-                      {money(formData.unitPrice)} × {formData.qty} = {money(formData.value)}
-                    </p>
-                  )}
+                  <p className="mt-3 text-[13px] text-zinc-500">
+                    Stock out tracks quantity only — no purchase or sale value required.
+                  </p>
 
                 </CardContent>
               </Card>
@@ -632,7 +541,7 @@ export default function StockOutPage() {
                   <TableRow>
                     <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6">Product</TableHead>
                     <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6">Date</TableHead>
-                    <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6">Qty & Value</TableHead>
+                    <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6">Quantity</TableHead>
                     <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6 text-center">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -671,17 +580,12 @@ export default function StockOutPage() {
                           </div>
                         </TableCell>
                         <TableCell className="px-6">
-                          <div className="flex flex-col gap-1">
-                            <span className="font-bold text-zinc-900 text-[14px]">
-                              {money(
-                                s.unitPrice ??
-                                  (s.quantity ? Number(s.value) / Number(s.quantity) : 0)
-                              )}{" "}
-                              × {s.quantity}{" "}
-                              <span className="text-[12px] text-zinc-500 font-medium">{s.product?.unit?.name}</span>
+                          <span className="font-bold text-zinc-900 text-[14px]">
+                            {s.quantity}{" "}
+                            <span className="text-[12px] text-zinc-500 font-medium">
+                              {s.product?.unit?.name}
                             </span>
-                            <span className="text-[13px] font-semibold text-red-600">{money(s.value)}</span>
-                          </div>
+                          </span>
                         </TableCell>
                         <TableCell className="px-6 text-center">
                           <DropdownMenu>

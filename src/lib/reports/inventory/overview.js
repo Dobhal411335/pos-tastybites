@@ -133,8 +133,9 @@ export async function buildInventoryOverview({ restaurantId, ...filters }) {
     }),
   ]);
 
-  const opening = [...openingMap.entries()].reduce((sum, [id, row]) => {
-    return filteredIds.has(id) ? sum + (Number(row.balance) || 0) : sum;
+  const opening = enriched.reduce((sum, row) => {
+    const fromMovements = Number(openingMap.get(row.id)?.balance) || 0;
+    return sum + (Number(row.openingStock) || 0) + fromMovements;
   }, 0);
   const added = [...periodInMap.entries()].reduce((sum, [id, row]) => {
     return filteredIds.has(id) ? sum + (Number(row.totalIn) || 0) : sum;

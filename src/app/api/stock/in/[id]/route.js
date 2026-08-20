@@ -1,6 +1,6 @@
 import { withAuth } from "@/utils/auth";
 import StockIn from "@/models/stock/StockIn";
-import "@/models/stock/StockProduct";
+import StockProduct from "@/models/stock/StockProduct";
 import "@/models/stock/StockCategory";
 import "@/models/stock/StockType";
 import "@/models/stock/StockUnit";
@@ -77,6 +77,34 @@ export const PUT = withAuth(async (request, { params }) => {
 
     if (!updatedEntry) {
       return sendError(new Error("Not Found"), "Stock entry not found", 404);
+    }
+
+    if (Array.isArray(body.items)) {
+      const openingUpdates = body.items.filter(
+        (item) =>
+          item.product &&
+          (Object.prototype.hasOwnProperty.call(item, "openingStock") ||
+            Object.prototype.hasOwnProperty.call(item, "openingStockPrice"))
+      );
+      await Promise.all(
+        openingUpdates.map(async (item) => {
+          const productSet = { updatedBy: request.user.id };
+          if (Object.prototype.hasOwnProperty.call(item, "openingStock")) {
+            const raw = item.openingStock;
+            productSet.openingStock =
+              raw === "" || raw === null || raw === undefined ? null : Number(raw);
+          }
+          if (Object.prototype.hasOwnProperty.call(item, "openingStockPrice")) {
+            const raw = item.openingStockPrice;
+            productSet.openingStockPrice =
+              raw === "" || raw === null || raw === undefined ? null : Number(raw);
+          }
+          await StockProduct.findOneAndUpdate(
+            { _id: item.product, restaurant: request.restaurant },
+            { $set: productSet }
+          );
+        })
+      );
     }
 
     logger.info(`Stock In invoice updated: ${id}`);

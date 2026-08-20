@@ -77,6 +77,8 @@ export default function StockProductsPage() {
     unit: "",
     purchaseAmount: "",
     minStock: "",
+    openingStock: "",
+    openingStockPrice: "",
   });
 
   // Dialog States for adding new Type / Unit
@@ -144,6 +146,15 @@ export default function StockProductsPage() {
         product.minStock === null || product.minStock === undefined
           ? ""
           : String(product.minStock),
+      openingStock:
+        product.openingStock === null || product.openingStock === undefined
+          ? ""
+          : String(product.openingStock),
+      openingStockPrice:
+        product.openingStockPrice === null ||
+        product.openingStockPrice === undefined
+          ? ""
+          : String(product.openingStockPrice),
     });
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -194,6 +205,12 @@ export default function StockProductsPage() {
         unit: formData.unit,
         purchasePrice: Number(formData.purchaseAmount),
         minStock: formData.minStock === "" ? null : Number(formData.minStock),
+        openingStock:
+          formData.openingStock === "" ? null : Number(formData.openingStock),
+        openingStockPrice:
+          formData.openingStockPrice === ""
+            ? null
+            : Number(formData.openingStockPrice),
       };
 
       const res = await fetch(url, {
@@ -226,6 +243,8 @@ export default function StockProductsPage() {
       unit: "",
       purchaseAmount: "",
       minStock: "",
+      openingStock: "",
+      openingStockPrice: "",
     });
   };
 
@@ -595,6 +614,54 @@ export default function StockProductsPage() {
                       />
                     </div>
                   </div>
+                  <div className="mt-6 flex w-full flex-col gap-6 md:flex-row md:items-end">
+                    <div className="flex w-full flex-1 flex-col gap-2">
+                      <div className="space-y-1">
+                        <label className="text-[14px] font-semibold text-zinc-900">
+                          Opening stock
+                        </label>
+                        <p className="text-[12px] text-zinc-500 font-medium">
+                          Optional starting quantity before stock in/out
+                          movements.
+                        </p>
+                      </div>
+                      <Input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        name="openingStock"
+                        placeholder="e.g. 50"
+                        value={formData.openingStock}
+                        onChange={handleChange}
+                        className="h-11 w-full text-[15px] bg-white border-zinc-200 focus:ring-[#F97316]"
+                      />
+                    </div>
+                    <div className="flex w-full flex-1 flex-col gap-2">
+                      <div className="space-y-1">
+                        <label className="text-[14px] font-semibold text-zinc-900">
+                          Opening stock price ($)
+                        </label>
+                        <p className="text-[12px] text-zinc-500 font-medium">
+                          Optional unit price for the opening quantity.
+                        </p>
+                      </div>
+                      <div className="relative w-full">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-zinc-400">
+                          $
+                        </span>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          name="openingStockPrice"
+                          placeholder="Amount"
+                          value={formData.openingStockPrice}
+                          onChange={handleChange}
+                          className="h-11 w-full pl-8 text-[15px] bg-white border-zinc-200 focus:ring-[#F97316]"
+                        />
+                      </div>
+                    </div>
+                  </div>
                 </CardContent>
               </Card>
               {/* Sidebar Save Section */}
@@ -658,6 +725,9 @@ export default function StockProductsPage() {
                     <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6">
                       Pricing
                     </TableHead>
+                    <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6">
+                      Opening
+                    </TableHead>
                     <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6 text-center">
                       Status
                     </TableHead>
@@ -682,6 +752,9 @@ export default function StockProductsPage() {
                         <TableCell className="px-6 py-4">
                           <Skeleton className="h-10 w-[80px]" />
                         </TableCell>
+                        <TableCell className="px-6 py-4">
+                          <Skeleton className="h-10 w-[80px]" />
+                        </TableCell>
                         <TableCell className="px-6 py-4 text-center">
                           <Skeleton className="h-8 w-[60px] mx-auto rounded-md" />
                         </TableCell>
@@ -693,7 +766,7 @@ export default function StockProductsPage() {
                   ) : products.length === 0 ? (
                     <TableRow>
                       <TableCell
-                        colSpan={6}
+                        colSpan={7}
                         className="h-24 text-center text-zinc-500 text-[14px]"
                       >
                         No products found.
@@ -736,6 +809,19 @@ export default function StockProductsPage() {
                           <span className="text-[14px] font-bold text-zinc-900">
                             CP: ${p.purchasePrice?.toFixed(2)}
                           </span>
+                        </TableCell>
+                        <TableCell className="px-6 py-4">
+                          <div className="flex flex-col gap-0.5">
+                            <span className="text-[14px] font-semibold text-zinc-900">
+                              {p.openingStock != null ? p.openingStock : "—"}
+                              {p.unit?.name ? ` ${p.unit.name}` : ""}
+                            </span>
+                            <span className="text-[12px] text-zinc-500">
+                              {p.openingStockPrice != null
+                                ? `$${Number(p.openingStockPrice).toFixed(2)}`
+                                : "No open. price"}
+                            </span>
+                          </div>
                         </TableCell>
                         <TableCell className="px-6 py-4 text-center">
                           <button

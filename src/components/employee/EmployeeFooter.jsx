@@ -29,21 +29,6 @@ export const EmployeeFooter = () => {
           <ArrowLeft className="mr-1.5 h-3.5 w-3.5" />
           Previous
         </Button>
-
-        {isSalesPos ? (
-          <Button
-            asChild
-            variant="outline"
-            size="sm"
-            className="h-9 rounded-lg text-xs hover:bg-orange-500 hover:text-white"
-          >
-            <Link href={floorHref}>
-              <Grid className="mr-1.5 h-3.5 w-3.5" />
-              Back to Floor
-            </Link>
-          </Button>
-        ) : null}
-
         <Button
           variant="outline"
           size="sm"

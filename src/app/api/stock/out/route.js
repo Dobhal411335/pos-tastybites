@@ -8,26 +8,29 @@ import { sendSuccess } from "@/utils/apiResponse";
 import { sendError } from "@/utils/errorHandler";
 import { logger } from "@/utils/logger";
 
+function populateProduct(query) {
+  return query.populate({
+    path: "product",
+    populate: [
+      { path: "category", select: "name" },
+      { path: "type", select: "name" },
+      { path: "unit", select: "name" },
+    ],
+  });
+}
+
 // GET - List all stock out entries
 export const GET = withAuth(async (request) => {
   try {
     const { searchParams } = new URL(request.url);
     const productId = searchParams.get("productId");
-    
-    let query = { restaurant: request.restaurant };
+
+    const query = { restaurant: request.restaurant };
     if (productId) query.product = productId;
 
-    const entries = await StockOut.find(query)
-      .populate({
-        path: 'product',
-        populate: [
-          { path: 'category', select: 'name' },
-          { path: 'type', select: 'name' },
-          { path: 'unit', select: 'name' }
-        ]
-      })
-      .sort({ date: -1, createdAt: -1 })
-      .lean();
+    const entries = await populateProduct(
+      StockOut.find(query).sort({ date: -1, createdAt: -1 })
+    ).lean();
 
     const withUnitPrice = (entries || []).map((entry) => {
       const quantity = Number(entry.quantity) || 0;
@@ -40,7 +43,7 @@ export const GET = withAuth(async (request) => {
             : 0;
       return { ...entry, unitPrice };
     });
-      
+
     return sendSuccess(withUnitPrice, "Stock out entries retrieved successfully");
   } catch (error) {
     logger.error("Failed to list stock out entries", error);
@@ -48,20 +51,31 @@ export const GET = withAuth(async (request) => {
   }
 }, ["ADMIN", "MANAGER"]);
 
-// POST - Create a new stock out entry
+// POST - Create a new stock out entry (qty + date only; value optional)
 export const POST = withAuth(async (request) => {
   try {
     const data = await request.json();
     const { product, date, quantity, unitPrice, value } = data;
 
-    if (!product || !date || quantity === undefined || unitPrice === undefined || value === undefined) {
-      return sendError(new Error("Missing fields"), "Product, Date, Quantity, Per Piece Value, and Total are required", 400);
+    if (!product || !date || quantity === undefined || quantity === "") {
+      return sendError(
+        new Error("Missing fields"),
+        "Product, Date, and Quantity are required",
+        400
+      );
     }
 
     const qty = Number(quantity);
-    const piece = Number(unitPrice);
+    if (!Number.isFinite(qty) || qty <= 0) {
+      return sendError(new Error("Invalid qty"), "Quantity must be greater than 0", 400);
+    }
+
+    const piece =
+      unitPrice !== undefined && unitPrice !== "" && unitPrice !== null
+        ? Number(unitPrice)
+        : 0;
     const total =
-      value !== undefined && value !== ""
+      value !== undefined && value !== "" && value !== null
         ? Number(value)
         : Number((piece * qty).toFixed(2));
 
@@ -70,19 +84,12 @@ export const POST = withAuth(async (request) => {
       product,
       date: new Date(date),
       quantity: qty,
-      unitPrice: piece,
-      value: total,
-      createdBy: request.user.id
+      unitPrice: Number.isFinite(piece) ? piece : 0,
+      value: Number.isFinite(total) ? total : 0,
+      createdBy: request.user.id,
     });
 
-    await newEntry.populate({
-      path: 'product',
-      populate: [
-        { path: 'category', select: 'name' },
-        { path: 'type', select: 'name' },
-        { path: 'unit', select: 'name' }
-      ]
-    });
+    await populateProduct(newEntry);
 
     logger.info(`Stock Out created for product: ${product}`);
     return sendSuccess(newEntry, "Stock Out entry created successfully", 201);

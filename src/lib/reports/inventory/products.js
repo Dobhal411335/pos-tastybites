@@ -58,7 +58,13 @@ export function enrichProducts(
   return (products || []).map((product) => {
     const id = String(product._id);
     const life = lifetimeMap.get(id) || { totalIn: 0, totalOut: 0 };
-    const currentBalance = (Number(life.totalIn) || 0) - (Number(life.totalOut) || 0);
+    const openingStock = Number(product.openingStock) || 0;
+    const openingStockPrice =
+      product.openingStockPrice === null || product.openingStockPrice === undefined
+        ? null
+        : Number(product.openingStockPrice);
+    const currentBalance =
+      openingStock + (Number(life.totalIn) || 0) - (Number(life.totalOut) || 0);
     const minStock =
       product.minStock === null || product.minStock === undefined
         ? null
@@ -66,6 +72,10 @@ export function enrichProducts(
     const purchasePrice = Number(product.purchasePrice) || 0;
     const periodOut = periodOutMap.get(id) || { totalOut: 0 };
     const periodIn = periodInMap.get(id) || { totalIn: 0 };
+    const valuePrice =
+      openingStockPrice !== null && Number.isFinite(openingStockPrice)
+        ? openingStockPrice
+        : purchasePrice;
 
     return {
       id,
@@ -79,11 +89,13 @@ export function enrichProducts(
       active: Boolean(product.status),
       minStock,
       purchasePrice,
+      openingStock,
+      openingStockPrice,
       totalIn: Number(life.totalIn) || 0,
       totalOut: Number(life.totalOut) || 0,
       currentBalance,
       stockStatus: stockStatusOf(currentBalance, minStock),
-      stockValue: r2(currentBalance * purchasePrice),
+      stockValue: r2(currentBalance * valuePrice),
       unitsInPeriod: Number(periodIn.totalIn) || 0,
       unitsOutPeriod: Number(periodOut.totalOut) || 0,
       quantityNeeded: quantityNeeded(currentBalance, minStock),

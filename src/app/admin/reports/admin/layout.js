@@ -7,10 +7,38 @@ import { FooterBar } from "@/components/layout/FooterBar";
 
 const SIDEBAR_GROUPS = [
   {
-    title: "Reports",
+    title: "Admin Reports",
     color: "bg-orange-500",
     items: [
-      { label: "Admin Reports", href: "/admin/reports/admin", exact: true },
+      {
+        label: "Daily Summary",
+        href: "/admin/reports/admin",
+        exact: true,
+      },
+      {
+        label: "Revenue Generated",
+        href: "/admin/reports/admin/revenue",
+      },
+      {
+        label: "Admin Activity",
+        href: "/admin/reports/admin/activity",
+      },
+      {
+        label: "End of Day",
+        href: "/admin/reports/admin/eod",
+      },
+      {
+        label: "Transaction Audit",
+        href: "/admin/reports/admin/audit",
+      },
+      {
+        label: "Kitchen Log",
+        href: "/admin/reports/admin/kitchen",
+      },
+      {
+        label: "Personal Expense",
+        href: "/admin/reports/admin/expenses",
+      },
     ],
   },
 ];

@@ -25,6 +25,7 @@ export async function exportStockLevelExcel({
     { width: 12 },
     { width: 12 },
     { width: 12 },
+    { width: 12 },
     { width: 14 },
     { width: 14 },
     { width: 12 },
@@ -43,6 +44,7 @@ export async function exportStockLevelExcel({
     "Category",
     "Type",
     "Unit",
+    "Opening",
     "Total In",
     "Total Out",
     "Balance",
@@ -64,6 +66,7 @@ export async function exportStockLevelExcel({
       row.category?.name || "",
       row.type?.name || "",
       row.unit?.name || "",
+      Number(row.openingStock) || 0,
       Number(row.totalIn) || 0,
       Number(row.totalOut) || 0,
       Number(row.currentBalance) || 0,
@@ -74,12 +77,13 @@ export async function exportStockLevelExcel({
 
   const totals = (levels || []).reduce(
     (acc, row) => {
+      acc.open += Number(row.openingStock) || 0;
       acc.in += Number(row.totalIn) || 0;
       acc.out += Number(row.totalOut) || 0;
       acc.balance += Number(row.currentBalance) || 0;
       return acc;
     },
-    { in: 0, out: 0, balance: 0 }
+    { open: 0, in: 0, out: 0, balance: 0 }
   );
 
   sheet.addRow([]);
@@ -88,6 +92,7 @@ export async function exportStockLevelExcel({
     "",
     "",
     "",
+    totals.open,
     totals.in,
     totals.out,
     totals.balance,

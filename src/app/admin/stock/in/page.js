@@ -71,6 +71,8 @@ function newLine() {
     value: "",
     selectedProductDetails: null,
     openingBalance: "0.00",
+    openingStock: "",
+    openingStockPrice: "",
     filteredProducts: [],
   };
 }
@@ -183,7 +185,9 @@ export default function StockInPage() {
         );
       }
 
-      return (totalIn - totalOut).toFixed(2);
+      const product = allProducts.find((p) => p._id === productId);
+      const openingSeed = Number(product?.openingStock) || 0;
+      return (openingSeed + totalIn - totalOut).toFixed(2);
     } catch (error) {
       console.error("Failed to calculate balance");
       return "0.00";
@@ -202,6 +206,8 @@ export default function StockInPage() {
       productName: "",
       selectedProductDetails: null,
       openingBalance: "0.00",
+      openingStock: "",
+      openingStockPrice: "",
       filteredProducts: allProducts.filter(
         (p) => categoryIdOf(p) === categoryId
       ),
@@ -214,6 +220,15 @@ export default function StockInPage() {
       productName: productId,
       selectedProductDetails: product || null,
       openingBalance: "…",
+      openingStock:
+        product?.openingStock === null || product?.openingStock === undefined
+          ? ""
+          : String(product.openingStock),
+      openingStockPrice:
+        product?.openingStockPrice === null ||
+        product?.openingStockPrice === undefined
+          ? ""
+          : String(product.openingStockPrice),
     });
     const balance = await calculateOpeningBalance(productId);
     setLines((prev) =>
@@ -289,6 +304,9 @@ export default function StockInPage() {
       quantity: line.qty,
       unitPrice: line.unitPrice,
       value: line.value,
+      openingStock: line.openingStock === "" ? null : line.openingStock,
+      openingStockPrice:
+        line.openingStockPrice === "" ? null : line.openingStockPrice,
     }));
 
     const incomplete = prepared.some(
@@ -325,6 +343,14 @@ export default function StockInPage() {
         );
         resetForm();
         fetchStockIns();
+        // Refresh products so opening stock edits show next time
+        try {
+          const prodRes = await fetch("/api/stock/products");
+          const prodJson = await prodRes.json();
+          if (prodJson.success) setAllProducts(prodJson.data);
+        } catch {
+          /* ignore */
+        }
       } else {
         toast.error(json.message);
       }
@@ -371,6 +397,15 @@ export default function StockInPage() {
           value,
           selectedProductDetails: product,
           openingBalance: balance,
+          openingStock:
+            product?.openingStock === null || product?.openingStock === undefined
+              ? ""
+              : String(product.openingStock),
+          openingStockPrice:
+            product?.openingStockPrice === null ||
+            product?.openingStockPrice === undefined
+              ? ""
+              : String(product.openingStockPrice),
           filteredProducts: allProducts.filter((p) => categoryIdOf(p) === catId),
         };
       })
@@ -594,7 +629,7 @@ export default function StockInPage() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                     <div className="space-y-2">
                       <label className="text-[14px] font-semibold text-zinc-900">
-                        Date Received <span className="text-red-500">*</span>
+                        Date Received
                       </label>
                       <DatePicker
                         value={invoice.stockDate}
@@ -802,6 +837,51 @@ export default function StockInPage() {
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="p-6">
+                      {line.selectedProductDetails && (
+                        <div className="mb-5 rounded-lg border border-amber-100 bg-amber-50/60 p-4">
+                          <p className="text-[12px] font-bold uppercase tracking-wider text-amber-800 mb-3">
+                            Opening stock (optional — edit to update product)
+                          </p>
+                          <div className="flex flex-col sm:flex-row gap-4 items-end">
+                            <div className="space-y-2 w-full sm:w-40">
+                              <label className="text-[14px] font-semibold text-zinc-900">
+                                Opening qty
+                              </label>
+                              <Input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                placeholder="0"
+                                value={line.openingStock}
+                                onChange={(e) =>
+                                  updateLine(line.id, {
+                                    openingStock: e.target.value,
+                                  })
+                                }
+                                className="h-11 text-[15px] bg-white border-zinc-200 focus:ring-[#F97316] font-medium"
+                              />
+                            </div>
+                            <div className="space-y-2 flex-1">
+                              <label className="text-[14px] font-semibold text-zinc-900">
+                                Opening price ($)
+                              </label>
+                              <Input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                placeholder="0.00"
+                                value={line.openingStockPrice}
+                                onChange={(e) =>
+                                  updateLine(line.id, {
+                                    openingStockPrice: e.target.value,
+                                  })
+                                }
+                                className="h-11 text-[15px] bg-white border-zinc-200 focus:ring-[#F97316] font-medium"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      )}
                       <div className="flex flex-col sm:flex-row gap-4 items-end">
                         <div className="space-y-2 w-full sm:w-32">
                           <label className="text-[14px] font-semibold text-zinc-900">

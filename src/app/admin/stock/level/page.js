@@ -247,7 +247,15 @@ export default function StockLevelPage() {
           </DialogHeader>
           {viewProduct && (
             <div className="space-y-6">
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                <div className="rounded-lg border border-amber-100 bg-amber-50 p-3">
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-amber-700">
+                    Opening
+                  </p>
+                  <p className="mt-1 text-[18px] font-bold text-amber-900">
+                    {viewProduct.openingStock ?? 0} {viewProduct.unit?.name || ""}
+                  </p>
+                </div>
                 <div className="rounded-lg border border-emerald-100 bg-emerald-50 p-3">
                   <p className="text-[11px] font-bold uppercase tracking-wider text-emerald-700">
                     Total In
@@ -529,6 +537,9 @@ export default function StockLevelPage() {
                       Product
                     </TableHead>
                     <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6 text-center">
+                      Opening
+                    </TableHead>
+                    <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6 text-center">
                       Stock In
                     </TableHead>
                     <TableHead className="text-[12px] font-bold uppercase tracking-wider text-zinc-500 py-4 px-6 text-center">
@@ -562,6 +573,9 @@ export default function StockLevelPage() {
                           <Skeleton className="h-4 w-[60px] mx-auto" />
                         </TableCell>
                         <TableCell className="px-6 py-4">
+                          <Skeleton className="h-4 w-[60px] mx-auto" />
+                        </TableCell>
+                        <TableCell className="px-6 py-4">
                           <Skeleton className="h-8 w-[80px] mx-auto rounded-md" />
                         </TableCell>
                         <TableCell className="px-6 py-4">
@@ -578,7 +592,7 @@ export default function StockLevelPage() {
                   ) : stockLevels.length === 0 ? (
                     <TableRow>
                       <TableCell
-                        colSpan={7}
+                        colSpan={8}
                         className="h-24 text-center text-zinc-500 text-[14px]"
                       >
                         No inventory records found.
@@ -601,6 +615,11 @@ export default function StockLevelPage() {
                               {s.unit?.name ? ` · ${s.unit.name}` : ""}
                             </span>
                           </div>
+                        </TableCell>
+                        <TableCell className="px-6 text-center">
+                          <span className="inline-flex items-center justify-center bg-amber-50 text-amber-800 px-3 py-1 rounded-md text-[14px] font-bold border border-amber-100">
+                            {s.openingStock ?? 0}
+                          </span>
                         </TableCell>
                         <TableCell className="px-6 text-center">
                           <span className="inline-flex items-center justify-center bg-emerald-50 text-emerald-700 px-3 py-1 rounded-md text-[14px] font-bold border border-emerald-100">

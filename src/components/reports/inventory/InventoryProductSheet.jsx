@@ -195,6 +195,17 @@ export default function InventoryProductSheet({
                     {hasPeriod ? signedQty(net, unit) : "—"}
                   </p>
                 </StatCell>
+                <StatCell label="Opening Stock">
+                  <p className="text-lg font-semibold tabular-nums text-zinc-900">
+                    {qty(product.openingStock)}
+                    {unit ? ` ${unit}` : ""}
+                  </p>
+                  {product.openingStockPrice != null ? (
+                    <p className="text-xs text-zinc-500 mt-0.5">
+                      @ {money(product.openingStockPrice)}
+                    </p>
+                  ) : null}
+                </StatCell>
                 <StatCell label="Stock In">
                   <p className="text-lg font-semibold tabular-nums text-emerald-700">
                     {hasPeriod ? signedQty(stockIn, unit) : "—"}

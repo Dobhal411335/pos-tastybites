@@ -8,6 +8,8 @@ const StockProductSchema = new mongoose.Schema(
     type: { type: mongoose.Schema.Types.ObjectId, ref: 'StockType', required: true },
     unit: { type: mongoose.Schema.Types.ObjectId, ref: 'StockUnit', required: true },
     purchasePrice: { type: Number, required: true },
+    openingStock: { type: Number, default: null, min: 0 },
+    openingStockPrice: { type: Number, default: null, min: 0 },
     minStock: { type: Number, default: null, min: 0 },
     status: { type: Boolean, default: true },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },

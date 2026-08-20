@@ -46,6 +46,7 @@ export const POST = withAuth(async (request) => {
       excelBuffer,
       ...labels,
       productCount: levels.length,
+      levels,
     });
 
     return sendSuccess({ to }, "Stock level report emailed");

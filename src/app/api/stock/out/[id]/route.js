@@ -18,9 +18,27 @@ export const PUT = withAuth(async (request, { params }) => {
     updateData.updatedBy = request.user.id;
 
     if (updateData.quantity !== undefined) updateData.quantity = Number(updateData.quantity);
-    if (updateData.unitPrice !== undefined) updateData.unitPrice = Number(updateData.unitPrice);
-    if (updateData.value !== undefined) updateData.value = Number(updateData.value);
+    if (updateData.unitPrice !== undefined && updateData.unitPrice !== "") {
+      updateData.unitPrice = Number(updateData.unitPrice);
+    } else if (Object.prototype.hasOwnProperty.call(updateData, "unitPrice")) {
+      updateData.unitPrice = 0;
+    }
+    if (updateData.value !== undefined && updateData.value !== "") {
+      updateData.value = Number(updateData.value);
+    } else if (Object.prototype.hasOwnProperty.call(updateData, "value")) {
+      updateData.value = 0;
+    }
     if (updateData.date) updateData.date = new Date(updateData.date);
+
+    // Qty-only updates: keep value/unitPrice at 0 when not provided
+    if (
+      updateData.quantity !== undefined &&
+      updateData.unitPrice === undefined &&
+      updateData.value === undefined
+    ) {
+      updateData.unitPrice = 0;
+      updateData.value = 0;
+    }
 
     const updatedEntry = await StockOut.findOneAndUpdate(
       { _id: id, restaurant: request.restaurant },

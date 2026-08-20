@@ -1,8 +1,9 @@
 "use client";
 
-import { ArrowDown, ArrowUp, Loader2 } from "lucide-react";
+import { ArrowDown, ArrowUp } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
   TableBody,
@@ -31,6 +32,44 @@ function MovementBadge({ type, label }) {
   );
 }
 
+function MovementTableSkeleton({ showPerformedBy }) {
+  const cols = showPerformedBy ? 8 : 7;
+  return (
+    <Card className="bg-white border-zinc-200 shadow-sm overflow-hidden">
+      <CardContent className="p-0">
+        <Table>
+          <TableHeader className="bg-zinc-100">
+            <TableRow className="hover:bg-transparent">
+              {(showPerformedBy
+                ? ["Date", "Product", "Category", "Type", "Qty", "Prev → New", "Reason", "Performed By"]
+                : ["Date", "Product", "Category", "Type", "Qty", "Prev → New", "Reason"]
+              ).map((label) => (
+                <TableHead
+                  key={label}
+                  className="text-xs font-semibold uppercase tracking-wide text-zinc-500 bg-zinc-100"
+                >
+                  {label}
+                </TableHead>
+              ))}
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {Array.from({ length: 8 }).map((_, idx) => (
+              <TableRow key={idx} className="h-14">
+                {Array.from({ length: cols }).map((__, cell) => (
+                  <TableCell key={cell}>
+                    <Skeleton className="h-4 w-full max-w-[120px]" />
+                  </TableCell>
+                ))}
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function MovementTab({
   data,
   loading,
@@ -40,11 +79,7 @@ export default function MovementTab({
   showPerformedBy = false,
 }) {
   if (loading) {
-    return (
-      <div className="flex justify-center py-16">
-        <Loader2 className="h-7 w-7 animate-spin text-orange-500" />
-      </div>
-    );
+    return <MovementTableSkeleton showPerformedBy={showPerformedBy} />;
   }
 
   if (!data || data.empty) {
