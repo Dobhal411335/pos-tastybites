@@ -1385,7 +1385,7 @@ export default function OrderPage() {
   }
 
   return (
-    <div className="flex flex-col h-[calc(100vh-115px)] w-full bg-zinc-50 font-sans overflow-hidden border border-zinc-200 rounded-xl shadow-sm">
+    <div className="flex flex-col h-[calc(100vh-60px)] w-full bg-zinc-50 font-sans overflow-hidden border border-zinc-200 rounded-xl shadow-sm">
       {/* SPLIT PANELS */}
       <div className="flex-1 flex min-h-0 overflow-hidden">
         {/* LEFT PANEL (MENU) */}
@@ -1582,11 +1582,11 @@ export default function OrderPage() {
                     <div className="flex-1 flex flex-col justify-center px-4 py-3 border-b sm:border-b-0 sm:border-r border-zinc-200">
                       <div className="flex items-center gap-2 mb-1">
                         {product.productCode ? (
-                          <span className="text-[10px] font-bold text-orange-600 bg-orange-50 border border-orange-100 rounded px-1.5 py-0.5 shrink-0">
+                          <span className="text-[10px] font-bold text-black bg-orange-200 border border-orange-500 rounded px-1.5 py-0.5 shrink-0">
                             {product.productCode}
                           </span>
                         ) : null}
-                        <span className="font-bold text-zinc-900 text-xs md:text-sm">
+                        <span className="font-bold text-zinc-900 text-xs">
                           {product.name}
                         </span>
                         {!isAvailable && (
@@ -1595,8 +1595,8 @@ export default function OrderPage() {
                           </Badge>
                         )}
                       </div>
-                      <div className="flex items-center gap-3">
-                        <span className="text-xs font-semibold text-zinc-500">
+                      <div className="flex items-center gap-1">
+                        <span className="text-[11px] tracking-wider text-wrap font-semibold text-zinc-600">
                           {product.category?.name || "Uncategorized"}
                         </span>
                       </div>

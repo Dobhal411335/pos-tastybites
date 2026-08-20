@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import InventoryFilters from "./InventoryFilters";
 import InventoryExportDialog from "./InventoryExportDialog";
@@ -37,6 +38,69 @@ function movementTypeForTab(tab) {
   if (tab === "in") return "STOCK_IN";
   if (tab === "out") return "STOCK_OUT";
   return "ALL";
+}
+
+function InventoryReportSkeleton() {
+  return (
+    <div className="flex flex-col w-full gap-6 animate-pulse">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div
+            key={i}
+            className="border border-zinc-200 bg-white shadow-sm rounded-xl p-4 h-28 flex flex-col justify-between"
+          >
+            <div className="flex justify-between items-start">
+              <Skeleton className="h-3 w-24" />
+              <Skeleton className="h-8 w-8 rounded-full" />
+            </div>
+            <div className="space-y-2">
+              <Skeleton className="h-7 w-20" />
+              <Skeleton className="h-3 w-28" />
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="space-y-4">
+        <div className="flex items-center gap-6 border-b border-zinc-200 pb-2">
+          {TABS.map((item) => (
+            <Skeleton key={item.id} className="h-4 w-24" />
+          ))}
+        </div>
+
+        <div className="bg-white border border-zinc-200 shadow-sm rounded-xl overflow-hidden">
+          <div className="bg-zinc-100 px-4 py-3 flex gap-4 border-b border-zinc-200">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <Skeleton key={i} className="h-3 flex-1 max-w-[100px]" />
+            ))}
+          </div>
+          <div className="divide-y divide-zinc-100">
+            {Array.from({ length: 8 }).map((_, row) => (
+              <div key={row} className="px-4 py-4 flex gap-4 items-center">
+                {Array.from({ length: 8 }).map((_, cell) => (
+                  <Skeleton
+                    key={cell}
+                    className={`h-4 ${
+                      cell === 0 ? "w-32" : cell === 7 ? "w-16" : "flex-1 max-w-[90px]"
+                    }`}
+                  />
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between">
+          <Skeleton className="h-4 w-24" />
+          <div className="flex gap-2">
+            <Skeleton className="h-9 w-24 rounded-md" />
+            <Skeleton className="h-9 w-20 rounded-md" />
+            <Skeleton className="h-9 w-20 rounded-md" />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 const KPI_STYLES = {
@@ -97,6 +161,8 @@ function snapshotFromRow(row, tab) {
       categoryName: row.categoryName,
       unit: row.unit,
       currentBalance: row.currentBalance,
+      openingStock: row.openingStock,
+      openingStockPrice: row.openingStockPrice,
       unitsInPeriod: row.unitsInPeriod,
       unitsOutPeriod: row.unitsOutPeriod,
       stockStatus: row.stockStatus,
@@ -144,7 +210,13 @@ export default function InventoryStockReport() {
   const timezone = meta?.timezone || "Asia/Kolkata";
 
   const exportQuery = useMemo(
-    () => inventoryQueryString(filters),
+    () =>
+      inventoryQueryString({
+        ...filters,
+        // Always export full movement history, not the active tab filter
+        movementType: "ALL",
+        page: 1,
+      }),
     [filters]
   );
 
@@ -245,12 +317,16 @@ export default function InventoryStockReport() {
         value={filters}
         onChange={setFilters}
         categories={lookups.categories}
+        refreshing={overview.loading || stock.loading || movements.loading}
+        onRefresh={() => {
+          overview.reload();
+          if (tab === "overview") stock.reload();
+          else movements.reload();
+        }}
       />
 
       {overview.loading && !overview.data ? (
-        <div className="flex justify-center py-16 text-sm text-zinc-500">
-          Loading inventory report…
-        </div>
+        <InventoryReportSkeleton />
       ) : (
         <>
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">

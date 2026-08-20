@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { format } from "date-fns";
-import { Search } from "lucide-react";
+import { RefreshCw, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
@@ -39,6 +39,8 @@ export default function InventoryFilters({
   value,
   onChange,
   categories = [],
+  onRefresh,
+  refreshing = false,
 }) {
   const [searchInput, setSearchInput] = useState(value.search || "");
 
@@ -157,6 +159,20 @@ export default function InventoryFilters({
             <SelectItem value="OUT_OF_STOCK">Out of stock</SelectItem>
           </SelectContent>
         </Select>
+        {onRefresh ? (
+          <Button
+            type="button"
+            variant="outline"
+            className="h-11 w-11 p-0 bg-white shrink-0"
+            onClick={onRefresh}
+            disabled={refreshing}
+            aria-label="Refresh report"
+          >
+            <RefreshCw
+              className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`}
+            />
+          </Button>
+        ) : null}
       </div>
     </div>
   );

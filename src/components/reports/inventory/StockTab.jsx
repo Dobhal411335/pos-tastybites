@@ -14,6 +14,17 @@ import FinancialEmpty from "@/components/reports/financial/FinancialEmpty";
 import { qty } from "./useInventoryReport";
 import { ReportPager, StockStatusBadge } from "./reportUi";
 
+const COLUMNS = [
+  "Product",
+  "Category",
+  "Opening",
+  "Period In",
+  "Period Out",
+  "Current Stock",
+  "Unit",
+  "Status",
+];
+
 function StockTableSkeleton() {
   return (
     <Card className="bg-white border-zinc-200 shadow-sm overflow-hidden">
@@ -21,23 +32,21 @@ function StockTableSkeleton() {
         <Table>
           <TableHeader className="bg-zinc-100">
             <TableRow className="hover:bg-transparent">
-              {["Product", "Category", "Current Stock", "Unit", "Status", "Period In", "Period Out", "Opening"].map(
-                (label) => (
-                  <TableHead
-                    key={label}
-                    className="text-xs font-semibold uppercase tracking-wide text-zinc-500 bg-zinc-100"
-                  >
-                    {label}
-                  </TableHead>
-                )
-              )}
+              {COLUMNS.map((label) => (
+                <TableHead
+                  key={label}
+                  className="text-xs font-semibold uppercase tracking-wide text-zinc-500 bg-zinc-100"
+                >
+                  {label}
+                </TableHead>
+              ))}
             </TableRow>
           </TableHeader>
           <TableBody>
             {Array.from({ length: 8 }).map((_, idx) => (
               <TableRow key={idx} className="h-14">
-                {Array.from({ length: 8 }).map((__, cell) => (
-                  <TableCell key={cell}>
+                {COLUMNS.map((label) => (
+                  <TableCell key={label}>
                     <Skeleton className="h-4 w-full max-w-[120px]" />
                   </TableCell>
                 ))}
@@ -80,15 +89,6 @@ export default function StockTab({
                     Category
                   </TableHead>
                   <TableHead className="text-xs font-semibold uppercase tracking-wide text-zinc-500 text-right bg-zinc-100">
-                    Current Stock
-                  </TableHead>
-                  <TableHead className="text-xs font-semibold uppercase tracking-wide text-zinc-500 bg-zinc-100">
-                    Unit
-                  </TableHead>
-                  <TableHead className="text-xs font-semibold uppercase tracking-wide text-zinc-500 bg-zinc-100">
-                    Status
-                  </TableHead>
-                  <TableHead className="text-xs font-semibold uppercase tracking-wide text-zinc-500 text-right bg-zinc-100">
                     Opening
                   </TableHead>
                   <TableHead className="text-xs font-semibold uppercase tracking-wide text-zinc-500 text-right bg-zinc-100">
@@ -96,6 +96,15 @@ export default function StockTab({
                   </TableHead>
                   <TableHead className="text-xs font-semibold uppercase tracking-wide text-zinc-500 text-right bg-zinc-100">
                     Period Out
+                  </TableHead>
+                  <TableHead className="text-xs font-semibold uppercase tracking-wide text-zinc-500 text-right bg-zinc-100">
+                    Current Stock
+                  </TableHead>
+                  <TableHead className="text-xs font-semibold uppercase tracking-wide text-zinc-500 bg-zinc-100">
+                    Unit
+                  </TableHead>
+                  <TableHead className="text-xs font-semibold uppercase tracking-wide text-zinc-500 bg-zinc-100">
+                    Status
                   </TableHead>
                 </TableRow>
               </TableHeader>
@@ -116,15 +125,6 @@ export default function StockTab({
                       <TableCell className="text-[15px] text-zinc-600 whitespace-nowrap">
                         {row.categoryName}
                       </TableCell>
-                      <TableCell className="text-[15px] tabular-nums text-right text-zinc-900">
-                        {qty(row.currentBalance)}
-                      </TableCell>
-                      <TableCell className="text-[15px] text-zinc-600">
-                        {row.unit || "—"}
-                      </TableCell>
-                      <TableCell>
-                        <StockStatusBadge status={row.stockStatus} />
-                      </TableCell>
                       <TableCell className="text-[15px] tabular-nums text-right text-zinc-700">
                         {qty(row.openingStock)}
                       </TableCell>
@@ -133,6 +133,15 @@ export default function StockTab({
                       </TableCell>
                       <TableCell className="text-[15px] tabular-nums text-right text-red-700">
                         -{qty(row.unitsOutPeriod)}
+                      </TableCell>
+                      <TableCell className="text-[15px] tabular-nums text-right font-semibold text-zinc-900">
+                        {qty(row.currentBalance)}
+                      </TableCell>
+                      <TableCell className="text-[15px] text-zinc-600">
+                        {row.unit || "—"}
+                      </TableCell>
+                      <TableCell>
+                        <StockStatusBadge status={row.stockStatus} />
                       </TableCell>
                     </TableRow>
                   );

@@ -54,6 +54,7 @@ export async function exportInventoryExcel({
   summary.addRow(["Out of Stock", kpis.outOfStockCount || 0]);
   summary.addRow(["Stock Added (period)", kpis.stockAdded || 0]);
   summary.addRow(["Stock Removed (period)", kpis.stockRemoved || 0]);
+  summary.addRow(["Movement Count", kpis.movementCount || 0]);
   summary.addRow([
     "Top Outgoing Product",
     kpis.topOutgoingProduct?.name || "—",
@@ -70,16 +71,18 @@ export async function exportInventoryExcel({
     summary.addRow([overview.note]);
   }
 
-  const stockSheet = addSheet(wb, "Stock", [28, 18, 14, 12, 14, 14, 14, 14]);
+  const stockSheet = addSheet(wb, "Stock", [28, 18, 12, 12, 12, 12, 12, 14, 14, 14]);
   styleHeader(
     stockSheet.addRow([
       "Product",
       "Category",
+      "Opening",
+      "Period In",
+      "Period Out",
       "Current Stock",
       "Unit",
       "Minimum Stock",
       "Stock Status",
-      "Units Out (period)",
       "Stock Value",
     ])
   );
@@ -87,11 +90,13 @@ export async function exportInventoryExcel({
     stockSheet.addRow([
       row.name || "",
       row.categoryName || "",
+      Number(row.openingStock) || 0,
+      Number(row.unitsInPeriod) || 0,
+      Number(row.unitsOutPeriod) || 0,
       Number(row.currentBalance) || 0,
       row.unit || "",
       row.minStock == null ? "—" : row.minStock,
       stockStatusLabel(row.stockStatus),
-      Number(row.unitsOutPeriod) || 0,
       money(row.stockValue),
     ]);
   }
