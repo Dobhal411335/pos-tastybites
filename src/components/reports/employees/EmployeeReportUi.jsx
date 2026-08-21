@@ -20,44 +20,75 @@ import { money } from "./employeeFormat";
 
 const COLORS = ["#f97316", "#3b82f6", "#10b981", "#8b5cf6", "#eab308", "#64748b"];
 
-export function EmployeeKpiCards({ items = [], loading = false }) {
-  if (loading) {
-    return (
-      <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-2">
-        {Array.from({ length: 6 }).map((_, i) => (
-          <Skeleton key={i} className="h-16 rounded-md" />
-        ))}
-      </div>
-    );
-  }
+/**
+ * Highlight KPI strip for employee report pages.
+ * Bold title draws the admin’s eye to that page’s key numbers first.
+ */
+export function EmployeeKpiCards({
+  title,
+  description,
+  items = [],
+  loading = false,
+}) {
+  const cols =
+    items.length <= 3
+      ? "grid-cols-1 sm:grid-cols-3"
+      : items.length <= 4
+        ? "grid-cols-2 sm:grid-cols-4"
+        : "grid-cols-2 sm:grid-cols-3 xl:grid-cols-6";
+
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-2">
-      {items.map((item) => (
-        <div
-          key={item.label}
-          className="rounded-md border border-zinc-200 bg-white px-3 py-2"
-        >
-          <p className="text-[11px] font-medium uppercase tracking-wide text-zinc-500">
-            {item.label}
-          </p>
-          <p className="mt-0.5 text-base font-semibold tabular-nums text-zinc-900">
-            {item.money ? money(item.value) : item.value}
-          </p>
-          {item.hint ? (
-            <p className="text-[10px] text-zinc-400 mt-0.5">{item.hint}</p>
+    <section className="rounded-xl border border-orange-200 bg-gradient-to-br from-[#FFF7ED] via-white to-white p-4 shadow-sm ring-1 ring-orange-100/80">
+      {(title || description) && (
+        <div className="mb-3 border-b border-orange-100 pb-2.5">
+          {title ? (
+            <h2 className="text-base font-bold tracking-tight text-zinc-900 sm:text-lg">
+              {title}
+            </h2>
+          ) : null}
+          {description ? (
+            <p className="mt-0.5 text-sm text-zinc-600">{description}</p>
           ) : null}
         </div>
-      ))}
-    </div>
+      )}
+      {loading ? (
+        <div className={`grid ${cols} gap-2.5`}>
+          {Array.from({ length: Math.max(items.length, 4) }).map((_, i) => (
+            <Skeleton key={i} className="h-[4.5rem] rounded-lg" />
+          ))}
+        </div>
+      ) : (
+        <div className={`grid ${cols} gap-2.5`}>
+          {items.map((item) => (
+            <div
+              key={item.label}
+              className="rounded-lg border border-orange-100/90 bg-white px-3 py-2.5 shadow-sm"
+            >
+              <p className="text-[11px] font-bold uppercase tracking-wide text-orange-700/80">
+                {item.label}
+              </p>
+              <p className="mt-1 text-xl font-bold tabular-nums tracking-tight text-zinc-900">
+                {item.money ? money(item.value) : item.value}
+              </p>
+              {item.hint ? (
+                <p className="mt-0.5 text-[11px] font-medium text-zinc-500">{item.hint}</p>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
 
 export function ChartCard({ title, children, empty, loading, tall = false }) {
   return (
     <div className={`border border-zinc-200 rounded-lg bg-white p-3 ${tall ? "min-h-64" : "min-h-52"}`}>
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500 mb-2">
-        {title}
-      </p>
+      {title ? (
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500 mb-2">
+          {title}
+        </p>
+      ) : null}
       {loading ? (
         <Skeleton className={`w-full ${tall ? "h-52" : "h-40"}`} />
       ) : empty ? (
@@ -84,14 +115,14 @@ function ChartTooltip({ active, payload, label, moneyValue = false }) {
   );
 }
 
-export function TimeAreaChart({ data, dataKey = "value", color = PALETTE.accent }) {
+export function TimeAreaChart({ data, dataKey = "value", color = PALETTE.accent, moneyValue = true }) {
   return (
     <ResponsiveContainer width="100%" height="100%">
       <AreaChart data={data} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="#f4f4f5" />
         <XAxis dataKey="label" tick={{ fontSize: 10 }} tickLine={false} />
         <YAxis tick={{ fontSize: 10 }} tickLine={false} width={48} />
-        <Tooltip content={<ChartTooltip moneyValue />} />
+        <Tooltip content={<ChartTooltip moneyValue={moneyValue} />} />
         <Area
           type="monotone"
           dataKey={dataKey}

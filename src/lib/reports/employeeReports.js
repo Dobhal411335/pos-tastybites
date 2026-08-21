@@ -45,6 +45,18 @@ const SECTIONS = [
   "tipsbypayment",
   "cancellations",
 ];
+const DETAIL_FOCUSES = [
+  "profile",
+  "sales",
+  "tips",
+  "service",
+  "orders",
+  "cancellations",
+  "clock",
+  "tipsByPayment",
+  "hours",
+  "labor",
+];
 const ORDER_SORTS = [
   "createdAt",
   "orderNumber",
@@ -96,6 +108,7 @@ const SUMMARY_ORDER_SELECT = [
   "tipAmount",
   "tipMethod",
   "totalAmount",
+  "tableNo",
 ].join(" ");
 
 function toObjectId(value) {
@@ -387,11 +400,73 @@ function sumTipPool(orders) {
   );
 }
 
-async function loadTipPool(rid, dateFrom, dateTo, orderStatus, paymentMethod) {
+function sumShareableTipPool(orders, ownTipEmployeeIds) {
+  const ownIds = ownTipEmployeeIds instanceof Set ? ownTipEmployeeIds : new Set(ownTipEmployeeIds || []);
+  return r2(
+    (orders || []).reduce((sum, order) => {
+      if (!isRevenueOrder(order)) return sum;
+      const tip = Number(order.tipAmount) || 0;
+      if (tip <= 0) return sum;
+      const pid = order.processedBy ? String(order.processedBy) : null;
+      if (pid && ownIds.has(pid)) return sum;
+      return sum + tip;
+    }, 0)
+  );
+}
+
+function countTablesServed(orders) {
+  const tables = new Set();
+  for (const order of orders || []) {
+    if (!isRevenueOrder(order)) continue;
+    const table = order.tableNo != null ? String(order.tableNo).trim() : "";
+    if (table) tables.add(table);
+  }
+  return tables.size;
+}
+
+function tipMethodsFromOrders(orders) {
+  const methodMap = new Map();
+  for (const order of orders || []) {
+    if (!isRevenueOrder(order)) continue;
+    const tip = Number(order.tipAmount) || 0;
+    if (tip <= 0) continue;
+    const bucket = tipPaymentBucket(order) || "Other";
+    if (!methodMap.has(bucket)) {
+      methodMap.set(bucket, { method: bucket, orders: 0, tips: 0 });
+    }
+    const row = methodMap.get(bucket);
+    row.orders += 1;
+    row.tips = r2(row.tips + tip);
+  }
+  return [...methodMap.values()].sort((a, b) => b.tips - a.tips);
+}
+
+async function loadOwnTipEmployeeIdSet(rid) {
+  const docs = await Employee.find({
+    restaurant: rid,
+    receiveOwnTips: true,
+    status: { $in: ["Approved", "Active", "Suspended"] },
+  })
+    .select("_id")
+    .lean();
+  return new Set(docs.map((emp) => String(emp._id)));
+}
+
+async function loadTipPoolDocs(rid, dateFrom, dateTo, orderStatus, paymentMethod) {
   const match = orderDateMatch(rid, dateFrom, dateTo);
   if (orderStatus !== "ALL") match.status = orderStatus;
   const docs = await Order.find(match).select(SUMMARY_ORDER_SELECT).lean();
-  return sumTipPool(docs.filter((order) => matchesPaymentMethod(order, paymentMethod)));
+  return docs.filter((order) => matchesPaymentMethod(order, paymentMethod));
+}
+
+async function loadTipPool(rid, dateFrom, dateTo, orderStatus, paymentMethod) {
+  const docs = await loadTipPoolDocs(rid, dateFrom, dateTo, orderStatus, paymentMethod);
+  const ownIds = await loadOwnTipEmployeeIdSet(rid);
+  return {
+    totalTips: sumTipPool(docs),
+    shareableTips: sumShareableTipPool(docs, ownIds),
+    ownTipEmployeeIds: ownIds,
+  };
 }
 
 function resolveTipPercent(id, hours, emp, filterEmployees) {
@@ -499,6 +574,9 @@ export function parseEmployeeReportQuery(searchParams) {
   const sectionRaw = String(searchParams.get("section") || "summary").toLowerCase();
   const section = SECTIONS.includes(sectionRaw) ? sectionRaw : "summary";
 
+  const focusRaw = String(searchParams.get("detailFocus") || "profile");
+  const detailFocus = DETAIL_FOCUSES.includes(focusRaw) ? focusRaw : "profile";
+
   const sortRaw = String(searchParams.get("sort") || "createdAt");
   const sort = ORDER_SORTS.includes(sortRaw) ? sortRaw : "createdAt";
   const sortDir = String(searchParams.get("sortDir") || "desc").toLowerCase() === "asc" ? "asc" : "desc";
@@ -523,6 +601,7 @@ export function parseEmployeeReportQuery(searchParams) {
     orderStatus,
     paymentMethod,
     section,
+    detailFocus,
     search: String(searchParams.get("search") || "").trim(),
     sort,
     sortDir,
@@ -786,6 +865,8 @@ function mapOrderRow(order, nameById) {
     taxTotal: r2(order.taxTotal),
     serviceChargeTotal: r2(order.serviceChargeTotal),
     tipAmount: r2(order.tipAmount),
+    tipMethod: order.tipMethod || null,
+    tipPaymentMethod: tipPaymentBucket(order),
     totalAmount: r2(order.totalAmount),
     paymentMethod: order.paymentMethod || null,
     paymentLabel: paymentLabel(order),
@@ -996,6 +1077,7 @@ export async function buildEmployeeReport({
   orderStatus = "ALL",
   paymentMethod = "ALL",
   section = "summary",
+  detailFocus = "profile",
   search = "",
   sort = "createdAt",
   sortDir = "desc",
@@ -1044,6 +1126,7 @@ export async function buildEmployeeReport({
       shiftId,
       orderStatus,
       paymentMethod,
+      detailFocus,
     });
   }
 
@@ -1126,7 +1209,7 @@ async function buildSummarySection({
     if (shiftIds.length) logMatch.shift = { $in: shiftIds };
   }
 
-  const [hourRows, orderDocs, clockSnapshots, poolFromQuery] = await Promise.all([
+  const [hourRows, orderDocs, clockSnapshots, tipPoolInfo, ownTipIdsFallback] = await Promise.all([
     shiftId && !shiftIds.length
       ? Promise.resolve([])
       : EmployeeLog.aggregate(buildWorkingHoursSummaryPipeline(logMatch)),
@@ -1137,13 +1220,21 @@ async function buildSummarySection({
     empId
       ? loadTipPool(rid, dateFrom, dateTo, orderStatus, paymentMethod)
       : Promise.resolve(null),
+    empId ? Promise.resolve(null) : loadOwnTipEmployeeIdSet(rid),
   ]);
 
   const hoursByEmployee = new Map(hourRows.map((row) => [String(row._id), mapHoursRow(row)]));
   const filteredOrders = orderDocs.filter((order) =>
     matchesPaymentMethod(order, paymentMethod)
   );
-  const poolTips = poolFromQuery == null ? sumTipPool(filteredOrders) : poolFromQuery;
+
+  const resolvedOwnTipIds = tipPoolInfo?.ownTipEmployeeIds || ownTipIdsFallback || new Set();
+  const totalPoolTips =
+    tipPoolInfo?.totalTips != null ? tipPoolInfo.totalTips : sumTipPool(filteredOrders);
+  const poolTips =
+    tipPoolInfo?.shareableTips != null
+      ? tipPoolInfo.shareableTips
+      : sumShareableTipPool(filteredOrders, resolvedOwnTipIds);
 
   const salesByEmployee = new Map();
   for (const order of filteredOrders) {
@@ -1226,6 +1317,8 @@ async function buildSummarySection({
         cancellations: sales.cancelCount,
         waived: sales.waivedOrders,
         cancellationRate: sales.cancellationRate,
+        daysWorked: hours?.daysWorked || 0,
+        tablesServed: 0,
         clockedIn: clock.clockedIn,
         clockIn: clock.clockIn,
         clockOut: clock.clockOut,
@@ -1235,6 +1328,19 @@ async function buildSummarySection({
       };
     })
     .sort((a, b) => b.sales - a.sales || b.hours - a.hours || a.name.localeCompare(b.name));
+
+  // Fill tablesServed per employee from filtered orders
+  const tablesByEmployee = new Map();
+  for (const order of filteredOrders) {
+    if (!isRevenueOrder(order) || !order.processedBy) continue;
+    const key = String(order.processedBy);
+    if (!tablesByEmployee.has(key)) tablesByEmployee.set(key, new Set());
+    const table = order.tableNo != null ? String(order.tableNo).trim() : "";
+    if (table) tablesByEmployee.get(key).add(table);
+  }
+  for (const row of performance) {
+    row.tablesServed = tablesByEmployee.get(row.employeeId)?.size || 0;
+  }
 
   const roleFiltered = role
     ? performance.filter((row) => String(row.role || "").toLowerCase() === String(role).toLowerCase())
@@ -1275,6 +1381,23 @@ async function buildSummarySection({
   );
 
   const overTime = buildOverTimeSeries(filteredOrders, dateFrom, dateTo);
+  const hoursOverTimeLogs =
+    shiftId && !shiftIds.length
+      ? []
+      : await EmployeeLog.find(logMatch)
+          .select("loginTime date workedMinutes workedHours")
+          .lean();
+  const hoursOverTime = buildHoursSeries(
+    hoursOverTimeLogs.map((log) => ({
+      ...log,
+      dayKey: restaurantDayKey(log.date || log.loginTime),
+      workedMinutes:
+        Number(log.workedMinutes) ||
+        Math.round((Number(log.workedHours) || 0) * MINUTES_PER_HOUR),
+    })),
+    dateFrom,
+    dateTo
+  );
   const chartPeople = selected
     ? performanceRows
     : performanceRows.filter((row) => row.sales > 0 || row.orders > 0);
@@ -1305,7 +1428,8 @@ async function buildSummarySection({
       overtimePay: r2(overviewHours.overtimePay),
       estimatedPay: r2(overviewHours.estimatedPay),
       laborConfigured,
-      totalTips: poolTips,
+      totalTips: totalPoolTips,
+      shareableTipPool: poolTips,
       distributedTips: r2(performanceRows.reduce((sum, row) => sum + (Number(row.tips) || 0), 0)),
       serviceCharges: salesTotals.serviceCharges,
       totalOrders: salesTotals.totalOrders,
@@ -1354,7 +1478,8 @@ async function buildSummarySection({
         tips: r2(performanceRows.reduce((sum, row) => sum + (Number(row.tips) || 0), 0)),
         collectedTips: salesTotals.tips,
         serviceCharges: salesTotals.serviceCharges,
-        tipPool: poolTips,
+        tipPool: totalPoolTips,
+        shareableTipPool: poolTips,
       },
     },
     cancellations: {
@@ -1383,9 +1508,11 @@ async function buildSummarySection({
       aovByEmployee: chartPeople.map((row) => ({ label: row.name, aov: row.aov })),
       tipsByEmployee: tipPeople.map((row) => ({ label: row.name, tips: row.tips })),
       tipsOverTime: overTime.map((row) => ({ label: row.label, tips: row.tips })),
+      collectedTipsOverTime: overTime.map((row) => ({ label: row.label, tips: row.tips })),
       hoursByEmployee: performanceRows
         .filter((row) => Number(row.hours) > 0)
         .map((row) => ({ label: row.name, hours: row.hours })),
+      hoursOverTime,
       serviceChargesByEmployee: chargePeople.map((row) => ({
         label: row.name,
         serviceCharges: row.serviceCharges,
@@ -1424,6 +1551,7 @@ async function buildSummarySection({
 }
 
 async function buildAttendanceSection({ rid, dateFrom, dateTo, empId, shiftId, role = null, page, limit }) {
+  const filters = await loadFilterOptions(rid);
   const match = attendanceDateMatch(rid, dateFrom, dateTo);
   if (empId) match.employee = empId;
   if (shiftId) {
@@ -1432,6 +1560,7 @@ async function buildAttendanceSection({ rid, dateFrom, dateTo, empId, shiftId, r
       return {
         rows: [],
         pagination: { page, limit, total: 0, pages: 1 },
+        filters,
         meta: {
           dateFrom,
           dateTo,
@@ -1492,6 +1621,7 @@ async function buildAttendanceSection({ rid, dateFrom, dateTo, empId, shiftId, r
       total,
       pages: Math.max(1, Math.ceil(total / limit)),
     },
+    filters,
     meta: {
       dateFrom,
       dateTo,
@@ -1570,6 +1700,7 @@ async function buildOrdersSection({
   const total = sorted.length;
   const skip = (page - 1) * limit;
   const pageRows = sorted.slice(skip, skip + limit);
+  const filters = await loadFilterOptions(rid);
 
   return {
     rows: pageRows.map((order) => mapOrderRow(order, nameById)),
@@ -1579,6 +1710,7 @@ async function buildOrdersSection({
       total,
       pages: Math.max(1, Math.ceil(total / limit) || 1),
     },
+    filters,
     meta: {
       dateFrom,
       dateTo,
@@ -1596,9 +1728,24 @@ async function buildDetailSection({
   shiftId,
   orderStatus,
   paymentMethod,
+  detailFocus = "profile",
 }) {
   if (!empId) {
     throw Object.assign(new Error("employeeId is required"), { status: 400 });
+  }
+
+  const focus = DETAIL_FOCUSES.includes(detailFocus) ? detailFocus : "profile";
+  if (focus !== "profile") {
+    return buildFocusedDetailSection({
+      rid,
+      dateFrom,
+      dateTo,
+      empId,
+      shiftId,
+      orderStatus,
+      paymentMethod,
+      detailFocus: focus,
+    });
   }
 
   const employee = await Employee.findOne({ _id: empId, restaurant: rid })
@@ -1616,7 +1763,7 @@ async function buildDetailSection({
   const { start } = businessDateBounds(dateFrom);
   const { end } = businessDateBounds(dateTo);
 
-  const [attendance, orderDocs, sessions, openLog, poolTips] = await Promise.all([
+  const [attendance, orderDocs, sessions, openLog, tipPoolInfo] = await Promise.all([
     buildCalendarAttendance({ rid, empId, dateFrom, dateTo, shiftId, employee }),
     Order.find(orderMatch).select(ORDER_SELECT).sort({ createdAt: -1 }).limit(500).lean(),
     EmployeeSession.find({
@@ -1660,11 +1807,13 @@ async function buildDetailSection({
   const overtimePay = r2(hours.overtimeHours * overtimeRate);
   const tipPercent = Number(employee.tipPercent) || 0;
   const receiveOwnTips = Boolean(employee.receiveOwnTips);
+  const poolTips = tipPoolInfo.shareableTips;
   const distributedTips = receiveOwnTips
     ? r2(sales.tips)
     : tipShare(poolTips, tipPercent);
 
   return {
+    focus: "profile",
     employee: {
       id: String(employee._id),
       name: displayName(employee),
@@ -1693,7 +1842,8 @@ async function buildDetailSection({
       collectedTips: sales.tips,
       tipPercent: receiveOwnTips ? 0 : tipPercent,
       receiveOwnTips,
-      tipPool: poolTips,
+      tipPool: tipPoolInfo.totalTips,
+      shareableTipPool: poolTips,
       serviceCharges: sales.serviceCharges,
       totalOrders: sales.totalOrders,
       completedOrders: sales.completedOrders,
@@ -1701,6 +1851,7 @@ async function buildDetailSection({
       waivedOrders: sales.waivedOrders,
       cancelCount: sales.cancelCount,
       aov: sales.aov,
+      tablesServed: countTablesServed(filteredOrders),
     },
     attendance,
     sessions: sessionRows,
@@ -1716,8 +1867,349 @@ async function buildDetailSection({
       dateTo,
       timezone: DEFAULT_RESTAURANT_TIMEZONE,
       employeeId: String(empId),
+      detailFocus: "profile",
     },
   };
+}
+
+async function buildFocusedDetailSection({
+  rid,
+  dateFrom,
+  dateTo,
+  empId,
+  shiftId,
+  orderStatus,
+  paymentMethod,
+  detailFocus,
+}) {
+  const employee = await Employee.findOne({ _id: empId, restaurant: rid })
+    .select(
+      "firstName lastName role employeeId hourlyPaid status tipPercent receiveOwnTips lastLoginIP lastLoginAt lastLoginPlatform"
+    )
+    .lean();
+
+  if (!employee) {
+    throw Object.assign(new Error("Employee not found"), { status: 404 });
+  }
+
+  const employeeBase = {
+    id: String(employee._id),
+    name: displayName(employee),
+    role: employee.role || "Staff",
+    employeeCode: employee.employeeId || null,
+    hourlyRate: r2(employee.hourlyPaid?.amountPerHour),
+    overtimeRate: r2(
+      employee.hourlyPaid?.overtimeAmountPerHour ?? employee.hourlyPaid?.amountPerHour
+    ),
+    tipPercent: Boolean(employee.receiveOwnTips) ? 0 : Number(employee.tipPercent) || 0,
+    receiveOwnTips: Boolean(employee.receiveOwnTips),
+  };
+
+  const meta = {
+    dateFrom,
+    dateTo,
+    timezone: DEFAULT_RESTAURANT_TIMEZONE,
+    employeeId: String(empId),
+    detailFocus,
+  };
+
+  const needsOrders = [
+    "sales",
+    "tips",
+    "service",
+    "orders",
+    "cancellations",
+    "tipsByPayment",
+  ].includes(detailFocus);
+  const needsLogs = ["clock", "hours", "labor"].includes(detailFocus);
+
+  const orderMatch = orderDateMatch(rid, dateFrom, dateTo);
+  orderMatch.processedBy = empId;
+  if (orderStatus !== "ALL" && detailFocus !== "cancellations") {
+    orderMatch.status = orderStatus;
+  }
+  if (detailFocus === "cancellations") {
+    orderMatch.status = { $in: ["CANCELLED", "WAIVED"] };
+  }
+
+  const logMatch = attendanceDateMatch(rid, dateFrom, dateTo);
+  logMatch.employee = empId;
+  if (shiftId) {
+    const shiftIds = await shiftIdsForTemplate(rid, shiftId);
+    if (shiftIds.length) logMatch.shift = { $in: shiftIds };
+  }
+
+  const [orderDocs, tipPoolInfo, logDocs, hourAgg] = await Promise.all([
+    needsOrders
+      ? Order.find(orderMatch).select(ORDER_SELECT).sort({ createdAt: -1 }).limit(500).lean()
+      : Promise.resolve([]),
+    ["tips", "tipsByPayment"].includes(detailFocus)
+      ? loadTipPool(rid, dateFrom, dateTo, orderStatus === "ALL" ? "ALL" : orderStatus, paymentMethod)
+      : Promise.resolve(null),
+    needsLogs
+      ? EmployeeLog.find(logMatch)
+          .populate("employee", "firstName lastName role employeeId")
+          .populate({
+            path: "shift",
+            select: "startTime endTime templateId",
+            populate: { path: "templateId", select: "name startTime endTime" },
+          })
+          .sort({ loginTime: -1, date: -1 })
+          .lean()
+      : Promise.resolve([]),
+    detailFocus === "labor" || detailFocus === "hours"
+      ? EmployeeLog.aggregate(buildWorkingHoursSummaryPipeline(logMatch))
+      : Promise.resolve([]),
+  ]);
+
+  const filteredOrders = (orderDocs || []).filter((order) =>
+    matchesPaymentMethod(order, paymentMethod)
+  );
+  const nameById = new Map([[String(employee._id), displayName(employee)]]);
+  const orders = filteredOrders.map((order) => mapOrderRow(order, nameById));
+  const sales = finalizeMetrics(
+    filteredOrders.reduce((acc, order) => {
+      addOrderMetrics(acc, order);
+      return acc;
+    }, emptyMetrics())
+  );
+  const punches = (logDocs || []).map((log) => mapAttendanceLog(log));
+  const hoursRow = hourAgg?.[0] ? mapHoursRow(hourAgg[0]) : null;
+
+  if (detailFocus === "sales") {
+    return {
+      focus: "sales",
+      employee: employeeBase,
+      overview: {
+        sales: sales.sales,
+        discounts: sales.discounts,
+        orders: sales.completedOrders,
+        totalOrders: sales.totalOrders,
+        aov: sales.aov,
+        cancelCount: sales.cancelCount,
+        tablesServed: countTablesServed(filteredOrders),
+      },
+      orders,
+      charts: {
+        salesOverTime: buildOverTimeSeries(filteredOrders, dateFrom, dateTo),
+      },
+      meta,
+    };
+  }
+
+  if (detailFocus === "tips" || detailFocus === "tipsByPayment") {
+    const receiveOwnTips = Boolean(employee.receiveOwnTips);
+    const tipPercent = receiveOwnTips ? 0 : Number(employee.tipPercent) || 0;
+    const shareable = tipPoolInfo?.shareableTips || 0;
+    const allocatedTips = receiveOwnTips ? r2(sales.tips) : tipShare(shareable, tipPercent);
+    const tipOrders = orders.filter((o) => Number(o.tipAmount) > 0);
+    return {
+      focus: detailFocus,
+      employee: {
+        ...employeeBase,
+        tipPercent,
+        receiveOwnTips,
+      },
+      overview: {
+        collectedTips: sales.tips,
+        allocatedTips,
+        tipPercent,
+        receiveOwnTips,
+        tipPool: tipPoolInfo?.totalTips || 0,
+        shareableTipPool: shareable,
+        orders: sales.completedOrders,
+        tipOrders: tipOrders.length,
+        tablesServed: countTablesServed(filteredOrders),
+        serviceCharges: sales.serviceCharges,
+      },
+      tipMethods: tipMethodsFromOrders(filteredOrders),
+      orders: tipOrders.length ? tipOrders : orders,
+      meta,
+    };
+  }
+
+  if (detailFocus === "service") {
+    const scOrders = orders.filter((o) => Number(o.serviceChargeTotal) > 0);
+    return {
+      focus: "service",
+      employee: employeeBase,
+      overview: {
+        serviceCharges: sales.serviceCharges,
+        averageCharge: sales.averageCharge,
+        ordersWithCharge: scOrders.length,
+        totalOrders: sales.completedOrders,
+      },
+      orders: scOrders,
+      meta,
+    };
+  }
+
+  if (detailFocus === "orders") {
+    return {
+      focus: "orders",
+      employee: employeeBase,
+      overview: {
+        totalOrders: sales.totalOrders,
+        completedOrders: sales.completedOrders,
+        cancelCount: sales.cancelCount,
+        sales: sales.sales,
+        tips: sales.tips,
+        serviceCharges: sales.serviceCharges,
+        tablesServed: countTablesServed(filteredOrders),
+      },
+      orders,
+      meta,
+    };
+  }
+
+  if (detailFocus === "cancellations") {
+    const cancelRows = filteredOrders.map((order) => ({
+      orderId: String(order._id),
+      orderNumber: order.orderNumber,
+      createdAt: order.createdAt,
+      dayKey: restaurantDayKey(order.createdAt),
+      status: order.status,
+      amount: r2(order.totalAmount),
+      reason: order.waiveReason || null,
+      cancelledBy:
+        order.status === "WAIVED" && order.waivedBy ? String(order.waivedBy) : null,
+      tableNo: order.tableNo || "",
+    }));
+    const waivedByIds = [
+      ...new Set(cancelRows.map((row) => row.cancelledBy).filter(Boolean)),
+    ];
+    const waivedByEmps = waivedByIds.length
+      ? await Employee.find({ _id: { $in: waivedByIds.map((id) => toObjectId(id)).filter(Boolean) } })
+          .select("firstName lastName")
+          .lean()
+      : [];
+    const waivedNameById = new Map(
+      waivedByEmps.map((emp) => [String(emp._id), displayName(emp)])
+    );
+    for (const row of cancelRows) {
+      row.cancelledByName = row.cancelledBy
+        ? waivedNameById.get(row.cancelledBy) || "Staff"
+        : null;
+    }
+    return {
+      focus: "cancellations",
+      employee: employeeBase,
+      overview: {
+        cancelCount: cancelRows.length,
+        cancelledAmount: r2(cancelRows.reduce((s, r) => s + (Number(r.amount) || 0), 0)),
+        cancelled: cancelRows.filter((r) => r.status === "CANCELLED").length,
+        waived: cancelRows.filter((r) => r.status === "WAIVED").length,
+      },
+      cancellations: cancelRows,
+      cancelledItems: cancelledItemsFromOrders(filteredOrders),
+      meta,
+    };
+  }
+
+  if (detailFocus === "clock") {
+    const byDay = new Map();
+    for (const punch of punches) {
+      const key = punch.dayKey || "unknown";
+      if (!byDay.has(key)) byDay.set(key, []);
+      byDay.get(key).push(punch);
+    }
+    const days = [...byDay.entries()]
+      .map(([dayKey, logs]) => ({
+        dayKey,
+        date: logs[0]?.date || null,
+        logs,
+        workedMinutes: logs.reduce((s, l) => s + (Number(l.workedMinutes) || 0), 0),
+      }))
+      .sort((a, b) => String(b.dayKey).localeCompare(String(a.dayKey)));
+
+    return {
+      focus: "clock",
+      employee: employeeBase,
+      overview: {
+        punches: punches.length,
+        totalHours: r2(
+          punches.reduce((s, p) => s + (Number(p.workedHours) || 0), 0)
+        ),
+        overtimeHours: r2(
+          punches.reduce((s, p) => s + (Number(p.overtimeHours) || 0), 0)
+        ),
+        days: days.length,
+      },
+      punches,
+      days,
+      meta,
+    };
+  }
+
+  if (detailFocus === "hours") {
+    return {
+      focus: "hours",
+      employee: employeeBase,
+      overview: {
+        hours: hoursRow?.hours || r2(punches.reduce((s, p) => s + (Number(p.workedHours) || 0), 0)),
+        regularHours:
+          hoursRow?.regularHours ||
+          r2(punches.reduce((s, p) => s + (Number(p.regularHours) || 0), 0)),
+        overtimeHours:
+          hoursRow?.overtimeHours ||
+          r2(punches.reduce((s, p) => s + (Number(p.overtimeHours) || 0), 0)),
+        daysWorked: hoursRow?.daysWorked || new Set(punches.map((p) => p.dayKey).filter(Boolean)).size,
+      },
+      punches,
+      charts: {
+        hoursOverTime: buildHoursSeries(punches, dateFrom, dateTo),
+      },
+      meta,
+    };
+  }
+
+  // labor
+  const regularHours = hoursRow?.regularHours || 0;
+  const overtimeHours = hoursRow?.overtimeHours || 0;
+  const hourlyRate = employeeBase.hourlyRate;
+  const overtimeRate = employeeBase.overtimeRate;
+  const regularPay = hoursRow?.regularPay ?? r2(regularHours * hourlyRate);
+  const overtimePay = hoursRow?.overtimePay ?? r2(overtimeHours * overtimeRate);
+  return {
+    focus: "labor",
+    employee: employeeBase,
+    overview: {
+      hourlyRate,
+      overtimeRate,
+      regularHours,
+      overtimeHours,
+      hours: hoursRow?.hours || r2(regularHours + overtimeHours),
+      regularPay,
+      overtimePay,
+      estimatedPay: hoursRow?.estimatedPay ?? r2(regularPay + overtimePay),
+      daysWorked: hoursRow?.daysWorked || 0,
+      laborConfigured: hourlyRate > 0,
+    },
+    calculation: {
+      regular: {
+        hours: regularHours,
+        rate: hourlyRate,
+        pay: regularPay,
+        formula: `${regularHours}h × ${moneyPlain(hourlyRate)}`,
+      },
+      overtime: {
+        hours: overtimeHours,
+        rate: overtimeRate,
+        pay: overtimePay,
+        formula: `${overtimeHours}h × ${moneyPlain(overtimeRate)}`,
+      },
+      total: {
+        pay: hoursRow?.estimatedPay ?? r2(regularPay + overtimePay),
+        formula: `Regular + Overtime`,
+      },
+    },
+    punches,
+    meta,
+  };
+}
+
+function moneyPlain(value) {
+  return `$${Number(value || 0).toFixed(2)}`;
 }
 
 async function buildTipsByPaymentSection({
@@ -1743,7 +2235,7 @@ async function buildTipsByPaymentSection({
   ];
   const employees = employeeIds.length
     ? await Employee.find({ _id: { $in: employeeIds.map((id) => toObjectId(id)).filter(Boolean) } })
-        .select("firstName lastName role employeeId")
+        .select("firstName lastName role employeeId tipPercent receiveOwnTips")
         .lean()
     : [];
   const empById = new Map(employees.map((emp) => [String(emp._id), emp]));
@@ -1756,8 +2248,12 @@ async function buildTipsByPaymentSection({
     });
   }
 
+  const tipPoolInfo = await loadTipPool(rid, dateFrom, dateTo, orderStatus, paymentMethod);
+  const shareable = tipPoolInfo.shareableTips;
+
   const methodMap = new Map();
   const employeeMethodMap = new Map();
+  const collectedByEmployee = new Map();
 
   for (const order of filtered) {
     const tip = Number(order.tipAmount) || 0;
@@ -1791,6 +2287,13 @@ async function buildTipsByPaymentSection({
     em.orders += 1;
     em.tips = r2(em.tips + tip);
     em.sales = r2(em.sales + sales);
+
+    if (empIdKey !== "unassigned") {
+      collectedByEmployee.set(
+        empIdKey,
+        r2((collectedByEmployee.get(empIdKey) || 0) + tip)
+      );
+    }
   }
 
   const methods = [...methodMap.values()]
@@ -1809,27 +2312,68 @@ async function buildTipsByPaymentSection({
     }))
     .sort((a, b) => b.tips - a.tips || a.name.localeCompare(b.name));
 
+  const earnedByEmployee = [...new Set([...collectedByEmployee.keys(), ...empById.keys()])]
+    .map((id) => {
+      const emp = empById.get(id);
+      if (!emp) return null;
+      const collectedTips = collectedByEmployee.get(id) || 0;
+      const tipResult = resolveEmployeeTips({
+        id,
+        hours: null,
+        emp,
+        selected: null,
+        filterEmployees: [],
+        poolTips: shareable,
+        collectedTips,
+      });
+      return {
+        employeeId: id,
+        name: displayName(emp),
+        role: emp.role || "Staff",
+        receiveOwnTips: tipResult.receiveOwnTips,
+        tipPercent: tipResult.tipPercent,
+        collectedTips,
+        earnedTips: tipResult.tips,
+        orders: byEmployee
+          .filter((row) => row.employeeId === id)
+          .reduce((s, row) => s + (Number(row.orders) || 0), 0),
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => b.earnedTips - a.earnedTips || a.name.localeCompare(b.name));
+
   const totalTips = r2(methods.reduce((sum, row) => sum + row.tips, 0));
   const totalOrders = methods.reduce((sum, row) => sum + row.orders, 0);
+  const totalEarned = r2(earnedByEmployee.reduce((s, row) => s + (Number(row.earnedTips) || 0), 0));
+  const filters = await loadFilterOptions(rid);
 
   return {
     overview: {
       totalTips,
+      totalEarned,
+      shareableTipPool: shareable,
+      tipPool: tipPoolInfo.totalTips,
       totalOrders,
       averageTip: totalOrders > 0 ? r2(totalTips / totalOrders) : 0,
       methods: methods.length,
     },
     methods,
     byEmployee,
+    earnedByEmployee,
     charts: {
       tipsByMethod: methods.map((row) => ({ label: row.method, value: row.tips })),
+      earnedByEmployee: earnedByEmployee.map((row) => ({
+        label: row.name,
+        value: row.earnedTips,
+      })),
     },
+    filters,
     meta: {
       dateFrom,
       dateTo,
       timezone: DEFAULT_RESTAURANT_TIMEZONE,
       role: role || null,
-      note: "Collected tips by payment tender (not tip-pool allocation).",
+      note: "Collected tips by tender. Earned tips use own tips or tip % of the shareable pool (excluding own-tip staff collections).",
     },
   };
 }
@@ -1965,6 +2509,7 @@ async function buildCancellationsSection({
       total,
       pages: Math.max(1, Math.ceil(total / limit) || 1),
     },
+    filters: await loadFilterOptions(rid),
     meta: {
       dateFrom,
       dateTo,

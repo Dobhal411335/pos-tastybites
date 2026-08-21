@@ -43,6 +43,7 @@ export default function EmployeeExportDialog({
   open,
   onOpenChange,
   exportQuery,
+  reportTitle = "Employee Report",
   dateFrom,
   dateTo,
   defaultEmail = "",
@@ -109,9 +110,10 @@ export default function EmployeeExportDialog({
       const slug = selectedEmployee?.name
         ? String(selectedEmployee.name).replace(/[^a-zA-Z0-9]+/g, "-")
         : "Staff";
-      a.download = `Employee-Report-${slug}-${dateFrom}-to-${dateTo}.${
-        kind === "excel" ? "xlsx" : "pdf"
-      }`;
+      a.download = `Employee-${String(reportTitle || "Report").replace(
+        /[^a-zA-Z0-9]+/g,
+        "-"
+      )}-${slug}-${dateFrom}-to-${dateTo}.${kind === "excel" ? "xlsx" : "pdf"}`;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -179,9 +181,10 @@ export default function EmployeeExportDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg bg-white max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Export Employee Report</DialogTitle>
+          <DialogTitle>Export {reportTitle}</DialogTitle>
           <DialogDescription>
-            Download or email performance for {dateFrom} to {dateTo}, or switch the period below.
+            Download or email this page&apos;s data for {dateFrom} to {dateTo}, or
+            switch the period below.
           </DialogDescription>
         </DialogHeader>
 

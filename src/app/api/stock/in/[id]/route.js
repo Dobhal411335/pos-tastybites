@@ -83,25 +83,22 @@ export const PUT = withAuth(async (request, { params }) => {
       const openingUpdates = body.items.filter(
         (item) =>
           item.product &&
-          (Object.prototype.hasOwnProperty.call(item, "openingStock") ||
-            Object.prototype.hasOwnProperty.call(item, "openingStockPrice"))
+          Object.prototype.hasOwnProperty.call(item, "openingStock")
       );
       await Promise.all(
         openingUpdates.map(async (item) => {
-          const productSet = { updatedBy: request.user.id };
-          if (Object.prototype.hasOwnProperty.call(item, "openingStock")) {
-            const raw = item.openingStock;
-            productSet.openingStock =
-              raw === "" || raw === null || raw === undefined ? null : Number(raw);
-          }
-          if (Object.prototype.hasOwnProperty.call(item, "openingStockPrice")) {
-            const raw = item.openingStockPrice;
-            productSet.openingStockPrice =
-              raw === "" || raw === null || raw === undefined ? null : Number(raw);
-          }
+          const raw = item.openingStock;
           await StockProduct.findOneAndUpdate(
             { _id: item.product, restaurant: request.restaurant },
-            { $set: productSet }
+            {
+              $set: {
+                updatedBy: request.user.id,
+                openingStock:
+                  raw === "" || raw === null || raw === undefined
+                    ? null
+                    : Number(raw),
+              },
+            }
           );
         })
       );

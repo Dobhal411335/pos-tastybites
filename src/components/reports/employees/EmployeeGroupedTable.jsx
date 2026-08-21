@@ -179,7 +179,7 @@ function FragmentRows({
             </button>
             <button
               type="button"
-              className="text-left"
+              className="text-left hover:cursor-pointer"
               onClick={() => onOpenEmployee?.(row.employeeId, row)}
             >
               <p className="text-sm font-semibold text-zinc-900 hover:text-orange-600">
@@ -240,8 +240,7 @@ export function EmployeePayrollTable({ rows = [], onOpenEmployee }) {
           <TableRow className="bg-[#FCE4D6] hover:bg-[#FCE4D6]">
             {[
               "Employee ID",
-              "First Name",
-              "Last Name",
+              "Employee",
               "Position",
               "Hourly Rate",
               "Hours Worked",
@@ -259,38 +258,32 @@ export function EmployeePayrollTable({ rows = [], onOpenEmployee }) {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {rows.map((row) => {
-            const { firstName, lastName } = splitName(row.name);
-            return (
-              <TableRow
-                key={row.employeeId}
-                className="cursor-pointer hover:bg-orange-50/40"
-                onClick={() => onOpenEmployee?.(row.employeeId, row)}
-              >
-                <TableCell className="border border-zinc-200 text-center tabular-nums text-sm">
-                  {row.employeeCode || "—"}
-                </TableCell>
-                <TableCell className="border border-zinc-200 text-center text-sm">
-                  {firstName}
-                </TableCell>
-                <TableCell className="border border-zinc-200 text-center text-sm">
-                  {lastName || "—"}
-                </TableCell>
-                <TableCell className="border border-zinc-200 text-center text-sm">
-                  {row.role || "Staff"}
-                </TableCell>
-                <TableCell className="border border-zinc-200 text-center tabular-nums text-sm">
-                  {money(row.hourlyRate)}
-                </TableCell>
-                <TableCell className="border border-zinc-200 text-center tabular-nums text-sm">
-                  {Number(row.hours || 0).toFixed(2)}
-                </TableCell>
-                <TableCell className="border border-zinc-200 text-center tabular-nums text-sm font-semibold">
-                  {money(row.estimatedPay)}
-                </TableCell>
-              </TableRow>
-            );
-          })}
+          {rows.map((row) => (
+            <TableRow
+              key={row.employeeId}
+              className="cursor-pointer hover:bg-orange-50/40"
+              onClick={() => onOpenEmployee?.(row.employeeId, row)}
+            >
+              <TableCell className="border border-zinc-200 text-center tabular-nums text-sm">
+                {row.employeeCode || "—"}
+              </TableCell>
+              <TableCell className="border border-zinc-200 text-center text-sm font-medium">
+                {row.name || "—"}
+              </TableCell>
+              <TableCell className="border border-zinc-200 text-center text-sm">
+                {row.role || "Staff"}
+              </TableCell>
+              <TableCell className="border border-zinc-200 text-center tabular-nums text-sm">
+                {money(row.hourlyRate)}
+              </TableCell>
+              <TableCell className="border border-zinc-200 text-center tabular-nums text-sm">
+                {Number(row.hours || 0).toFixed(2)}
+              </TableCell>
+              <TableCell className="border border-zinc-200 text-center tabular-nums text-sm font-semibold">
+                {money(row.estimatedPay)}
+              </TableCell>
+            </TableRow>
+          ))}
         </TableBody>
       </Table>
     </div>
@@ -298,70 +291,98 @@ export function EmployeePayrollTable({ rows = [], onOpenEmployee }) {
 }
 
 export function PosSummaryCards({ overview, loading }) {
-  if (loading) return null;
+  if (loading) {
+    return (
+      <section className="rounded-xl border border-orange-200 bg-gradient-to-br from-[#FFF7ED] via-white to-white p-4 shadow-sm ring-1 ring-orange-100/80">
+        <div className="mb-3 border-b border-orange-100 pb-2.5">
+          <h2 className="text-base font-bold tracking-tight text-zinc-900 sm:text-lg">
+            Overview highlights
+          </h2>
+          <p className="mt-0.5 text-sm text-zinc-600">
+            Key sales, labor, and order totals for this period
+          </p>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="h-28 rounded-lg bg-orange-50/60 animate-pulse" />
+          ))}
+        </div>
+      </section>
+    );
+  }
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-      <div className="rounded-lg border border-zinc-200 bg-white p-4">
-        <p className="text-sm font-semibold text-zinc-900 mb-3">Net Sales</p>
-        <div className="space-y-1.5 text-sm">
-          <div className="flex justify-between">
-            <span className="text-zinc-500">Sales Total</span>
-            <span className="font-semibold tabular-nums">{money(overview.totalSales)}</span>
+    <section className="rounded-xl border border-orange-200 bg-gradient-to-br from-[#FFF7ED] via-white to-white p-4 shadow-sm ring-1 ring-orange-100/80">
+      <div className="mb-3 border-b border-orange-100 pb-2.5">
+        <h2 className="text-base font-bold tracking-tight text-zinc-900 sm:text-lg">
+          Overview highlights
+        </h2>
+        <p className="mt-0.5 text-sm text-zinc-600">
+          Key sales, labor, and order totals for this period
+        </p>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div className="rounded-lg border border-orange-100/90 bg-white p-4 shadow-sm">
+          <p className="text-sm font-bold text-zinc-900 mb-3">Net Sales</p>
+          <div className="space-y-1.5 text-sm">
+            <div className="flex justify-between">
+              <span className="text-zinc-500">Sales Total</span>
+              <span className="font-bold tabular-nums">{money(overview.totalSales)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-zinc-500">Tips</span>
+              <span className="font-bold tabular-nums">
+                {money(overview.distributedTips ?? overview.totalTips)}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-zinc-500">Gratuities</span>
+              <span className="font-bold tabular-nums text-zinc-400">$0.00</span>
+            </div>
           </div>
-          <div className="flex justify-between">
-            <span className="text-zinc-500">Tips</span>
-            <span className="font-semibold tabular-nums">
-              {money(overview.distributedTips ?? overview.totalTips)}
-            </span>
+        </div>
+        <div className="rounded-lg border border-orange-100/90 bg-white p-4 shadow-sm">
+          <p className="text-sm font-bold text-zinc-900 mb-3">Labor & Hours</p>
+          <div className="space-y-1.5 text-sm">
+            <div className="flex justify-between">
+              <span className="text-zinc-500">Working Hours</span>
+              <span className="font-bold tabular-nums">
+                {formatHoursLabel(overview.totalHours)}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-zinc-500">Est. Labor Cost</span>
+              <span className="font-bold tabular-nums">
+                {overview.laborConfigured ? money(overview.estimatedPay) : "—"}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-zinc-500">Clocked In</span>
+              <span className="font-bold tabular-nums">{overview.clockedIn || 0}</span>
+            </div>
           </div>
-          <div className="flex justify-between">
-            <span className="text-zinc-500">Gratuities</span>
-            <span className="font-semibold tabular-nums text-zinc-400">$0.00</span>
+        </div>
+        <div className="rounded-lg border border-orange-100/90 bg-white p-4 shadow-sm">
+          <p className="text-sm font-bold text-zinc-900 mb-3">Orders</p>
+          <div className="space-y-1.5 text-sm">
+            <div className="flex justify-between">
+              <span className="text-zinc-500">Completed</span>
+              <span className="font-bold tabular-nums">
+                {overview.completedOrders || 0}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-zinc-500">Service Charges</span>
+              <span className="font-bold tabular-nums">
+                {money(overview.serviceCharges)}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-zinc-500">Cancellations</span>
+              <span className="font-bold tabular-nums">{overview.cancelCount || 0}</span>
+            </div>
           </div>
         </div>
       </div>
-      <div className="rounded-lg border border-zinc-200 bg-white p-4">
-        <p className="text-sm font-semibold text-zinc-900 mb-3">Labor & Hours</p>
-        <div className="space-y-1.5 text-sm">
-          <div className="flex justify-between">
-            <span className="text-zinc-500">Working Hours</span>
-            <span className="font-semibold tabular-nums">
-              {formatHoursLabel(overview.totalHours)}
-            </span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-zinc-500">Est. Labor Cost</span>
-            <span className="font-semibold tabular-nums">
-              {overview.laborConfigured ? money(overview.estimatedPay) : "—"}
-            </span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-zinc-500">Clocked In</span>
-            <span className="font-semibold tabular-nums">{overview.clockedIn || 0}</span>
-          </div>
-        </div>
-      </div>
-      <div className="rounded-lg border border-zinc-200 bg-white p-4">
-        <p className="text-sm font-semibold text-zinc-900 mb-3">Orders</p>
-        <div className="space-y-1.5 text-sm">
-          <div className="flex justify-between">
-            <span className="text-zinc-500">Completed</span>
-            <span className="font-semibold tabular-nums">
-              {overview.completedOrders || 0}
-            </span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-zinc-500">Service Charges</span>
-            <span className="font-semibold tabular-nums">
-              {money(overview.serviceCharges)}
-            </span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-zinc-500">Cancellations</span>
-            <span className="font-semibold tabular-nums">{overview.cancelCount || 0}</span>
-          </div>
-        </div>
-      </div>
-    </div>
+    </section>
   );
 }

@@ -20,7 +20,8 @@ export const GET = withAuth(async (request) => {
     const filename = employeePdfFilename(
       payload.labels.dateFrom,
       payload.labels.dateTo,
-      payload.labels.employeeName
+      payload.labels.employeeName,
+      payload.exportView || "Staff"
     );
 
     return new Response(new Uint8Array(buffer), {

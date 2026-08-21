@@ -41,12 +41,7 @@ export const PUT = withAuth(async (request, { params }) => {
         "Opening stock"
       );
     }
-    if (Object.prototype.hasOwnProperty.call(updateData, "openingStockPrice")) {
-      updateData.openingStockPrice = parseOptionalNonNeg(
-        updateData.openingStockPrice,
-        "Opening stock price"
-      );
-    }
+    delete updateData.openingStockPrice;
     delete updateData.salePrice;
 
     const updatedProduct = await StockProduct.findOneAndUpdate(

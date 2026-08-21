@@ -101,34 +101,26 @@ export const POST = withAuth(async (request) => {
 
     await newEntry.populate(stockInProductPopulate);
 
-    // Optional: update product opening stock qty/price from stock-in form
+    // Optional: update product opening stock from stock-in form
     const openingUpdates = (items || []).filter(
       (item) =>
-        item.product &&
-        (Object.prototype.hasOwnProperty.call(item, "openingStock") ||
-          Object.prototype.hasOwnProperty.call(item, "openingStockPrice"))
+        item.product && Object.prototype.hasOwnProperty.call(item, "openingStock")
     );
     if (openingUpdates.length) {
       await Promise.all(
         openingUpdates.map(async (item) => {
-          const $set = { updatedBy: request.user.id };
-          if (Object.prototype.hasOwnProperty.call(item, "openingStock")) {
-            const raw = item.openingStock;
-            $set.openingStock =
-              raw === "" || raw === null || raw === undefined
-                ? null
-                : Number(raw);
-          }
-          if (Object.prototype.hasOwnProperty.call(item, "openingStockPrice")) {
-            const raw = item.openingStockPrice;
-            $set.openingStockPrice =
-              raw === "" || raw === null || raw === undefined
-                ? null
-                : Number(raw);
-          }
+          const raw = item.openingStock;
           await StockProduct.findOneAndUpdate(
             { _id: item.product, restaurant: request.restaurant },
-            { $set }
+            {
+              $set: {
+                updatedBy: request.user.id,
+                openingStock:
+                  raw === "" || raw === null || raw === undefined
+                    ? null
+                    : Number(raw),
+              },
+            }
           );
         })
       );

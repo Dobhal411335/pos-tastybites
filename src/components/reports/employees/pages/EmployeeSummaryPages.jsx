@@ -25,6 +25,8 @@ export default function EmployeeSalesReport() {
       title="Sales Performance"
       description="Gross and net sales attributed to staff who processed orders."
       section="summary"
+      exportView="sales"
+      detailMode="sales"
     >
       {({ data, loading, openEmployee }) => {
         const rows = data?.performance || [];
@@ -46,6 +48,8 @@ export default function EmployeeSalesReport() {
           <div className="space-y-4">
             <EmployeeKpiCards
               loading={loading}
+              title="Sales highlights"
+              description="Gross, net, orders, and cancellations for this period"
               items={[
                 { label: "Total Sales", value: grossSales, money: true },
                 { label: "Net Sales", value: netSales, money: true },
@@ -164,6 +168,8 @@ export function EmployeeTipsReport() {
       title="Tips & Gratuity"
       description="Allocated tips by tip % or earned tips from processed orders."
       section="summary"
+      exportView="tips"
+      detailMode="tips"
     >
       {({ data, loading, openEmployee }) => {
         const tipEmployees = data?.tips?.employees || [];
@@ -172,10 +178,6 @@ export function EmployeeTipsReport() {
         const receiving = tipEmployees.filter((r) => Number(r.tips) > 0).length;
         const tipOrders = tipEmployees.reduce((s, r) => s + (Number(r.orders) || 0), 0);
         const avgTip = tipOrders > 0 ? (Number(totals.tips) || 0) / tipOrders : 0;
-        const tipPct =
-          Number(totals.collectedTips) > 0
-            ? ((Number(totals.tips) || 0) / Number(totals.collectedTips)) * 100
-            : 0;
 
         if (!loading && tipEmployees.length === 0) {
           return <ReportEmpty message="No tip data for this period." />;
@@ -185,30 +187,23 @@ export function EmployeeTipsReport() {
           <div className="space-y-4">
             <EmployeeKpiCards
               loading={loading}
+              title="Tips highlights"
+              description="Earned allocation vs tips collected on orders"
               items={[
-                { label: "Total Tips", value: totals.tips, money: true },
+                { label: "Earned Tips", value: totals.tips, money: true },
+                { label: "Collected Tips", value: totals.collectedTips, money: true },
+                { label: "Shareable Pool", value: totals.shareableTipPool ?? totals.tipPool, money: true },
+                { label: "Avg Earned / Order", value: avgTip, money: true },
                 { label: "Gratuity", value: "—", hint: "Not tracked" },
-                { label: "Average Tip", value: avgTip, money: true },
-                { label: "Avg Tip %", value: `${Number(tipPct || 0).toFixed(1)}%` },
                 { label: "Receiving Tips", value: receiving },
               ]}
             />
             <div className="rounded-lg border border-dashed border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-500">
-              Gratuity is not stored separately. Service charges are on the Service Charges report.
+              Own-tip staff keep tips on their orders. Tip-% staff share the pool after own-tip collections are excluded. Gratuity is not stored separately.
             </div>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
               <ChartCard
-                title="Tips over time"
-                loading={loading}
-                empty={!charts.tipsOverTime?.some((r) => Number(r.tips) > 0)}
-              >
-                <NamedBarChart
-                  data={(charts.tipsOverTime || []).map((r) => ({ label: r.label, value: r.tips }))}
-                  color="#3b82f6"
-                />
-              </ChartCard>
-              <ChartCard
-                title="Tips by employee"
+                title="Earned tips by employee"
                 loading={loading}
                 empty={!charts.tipsByEmployee?.some((r) => Number(r.tips) > 0)}
               >
@@ -217,6 +212,16 @@ export function EmployeeTipsReport() {
                     label: r.label,
                     value: r.tips,
                   }))}
+                  color="#3b82f6"
+                />
+              </ChartCard>
+              <ChartCard
+                title="Collected tips over time"
+                loading={loading}
+                empty={!charts.tipsOverTime?.some((r) => Number(r.tips) > 0)}
+              >
+                <NamedBarChart
+                  data={(charts.collectedTipsOverTime || charts.tipsOverTime || []).map((r) => ({ label: r.label, value: r.tips }))}
                   color="#3b82f6"
                 />
               </ChartCard>
@@ -230,10 +235,10 @@ export function EmployeeTipsReport() {
                     <TableRow className="bg-zinc-50">
                       <TableHead>Employee</TableHead>
                       <TableHead className="text-right">Orders</TableHead>
-                      <TableHead className="text-right">Tips</TableHead>
-                      <TableHead className="text-right">Gratuity</TableHead>
-                      <TableHead className="text-right">Tip %</TableHead>
-                      <TableHead className="text-right">Avg Tip</TableHead>
+                      <TableHead className="text-right">Mode</TableHead>
+                      <TableHead className="text-right">Collected</TableHead>
+                      <TableHead className="text-right">Earned</TableHead>
+                      <TableHead className="text-right">Avg Collected</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -250,11 +255,11 @@ export function EmployeeTipsReport() {
                           </p>
                         </TableCell>
                         <TableCell className="text-right tabular-nums">{row.orders}</TableCell>
-                        <TableCell className="text-right tabular-nums">{money(row.tips)}</TableCell>
-                        <TableCell className="text-right text-zinc-400">—</TableCell>
-                        <TableCell className="text-right tabular-nums">
+                        <TableCell className="text-right text-xs">
                           {row.receiveOwnTips ? "Own" : `${row.tipPercent || 0}%`}
                         </TableCell>
+                        <TableCell className="text-right tabular-nums">{money(row.collectedTips)}</TableCell>
+                        <TableCell className="text-right tabular-nums">{money(row.tips)}</TableCell>
                         <TableCell className="text-right tabular-nums">{money(row.averageTip)}</TableCell>
                       </TableRow>
                     ))}
@@ -275,6 +280,8 @@ export function EmployeeServiceChargesReport() {
       title="Service Charges"
       description="Service charges on orders processed by each employee."
       section="summary"
+      exportView="service"
+      detailMode="service"
     >
       {({ data, loading, openEmployee }) => {
         const rows = (data?.performance || []).filter(
@@ -297,6 +304,8 @@ export function EmployeeServiceChargesReport() {
           <div className="space-y-4">
             <EmployeeKpiCards
               loading={loading}
+              title="Service charge highlights"
+              description="Service charges on orders processed by staff"
               items={[
                 { label: "Total Service Charges", value: total, money: true },
                 { label: "Staff with charges", value: withSc },
@@ -375,6 +384,8 @@ export function EmployeeHoursReport() {
       title="Working Hours Summary"
       description="Regular, overtime, and total hours from clock records."
       section="summary"
+      exportView="hours"
+      detailMode="hours"
       showShift
       showStatus={false}
       showPayment={false}
@@ -392,6 +403,8 @@ export function EmployeeHoursReport() {
           <div className="space-y-4">
             <EmployeeKpiCards
               loading={loading}
+              title="Working hours highlights"
+              description="Regular, overtime, and total hours for this period"
               items={[
                 { label: "Total Hours", value: formatHoursLabel(overview.totalHours) },
                 { label: "Regular", value: formatHoursLabel(overview.regularHours) },
@@ -400,6 +413,20 @@ export function EmployeeHoursReport() {
               ]}
             />
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+              <ChartCard
+                title="Hours over time"
+                loading={loading}
+                empty={!charts.hoursOverTime?.some((r) => Number(r.hours) > 0)}
+              >
+                <NamedBarChart
+                  data={(charts.hoursOverTime || []).map((r) => ({
+                    label: r.label,
+                    value: r.hours,
+                  }))}
+                  moneyValue={false}
+                  color="#8b5cf6"
+                />
+              </ChartCard>
               <ChartCard
                 title="Hours by employee"
                 loading={loading}
@@ -451,7 +478,7 @@ export function EmployeeHoursReport() {
                         <TableCell className="text-right tabular-nums">
                           {formatHoursLabel(row.hours)}
                         </TableCell>
-                        <TableCell className="text-right tabular-nums">—</TableCell>
+                        <TableCell className="text-right tabular-nums">{row.daysWorked || 0}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -471,6 +498,8 @@ export function EmployeeLaborReport() {
       title="Hourly Labor Cost"
       description="Estimated labor cost from hourly rates and worked hours."
       section="summary"
+      exportView="labor"
+      detailMode="labor"
       showShift
       showStatus={false}
       showPayment={false}
@@ -491,6 +520,8 @@ export function EmployeeLaborReport() {
           <div className="space-y-4">
             <EmployeeKpiCards
               loading={loading}
+              title="Labor cost highlights"
+              description="Estimated pay from hourly rates × worked hours"
               items={[
                 { label: "Total Labor Cost", value: overview.estimatedPay, money: true },
                 { label: "Regular Pay", value: overview.regularPay, money: true },

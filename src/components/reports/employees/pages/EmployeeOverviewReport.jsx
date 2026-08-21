@@ -21,6 +21,8 @@ export default function EmployeeOverviewReport() {
       title="Overview"
       description="Staff performance snapshot for the selected period."
       section="summary"
+      exportView="overview"
+      detailMode="profile"
       showShift
     >
       {({ data, loading, openEmployee }) => {
@@ -44,6 +46,8 @@ export default function EmployeeOverviewReport() {
 
             <EmployeeKpiCards
               loading={loading}
+              title="Staff snapshot"
+              description="Headcount, tips, and labor at a glance"
               items={[
                 { label: "Total Staff", value: overview.totalStaff || 0 },
                 { label: "Active Staff", value: overview.activeStaff || 0 },
@@ -167,7 +171,7 @@ export default function EmployeeOverviewReport() {
             </div>
 
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500 mb-2">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-800 mb-2">
                 Top performers
               </p>
               {loading ? (
@@ -179,7 +183,7 @@ export default function EmployeeOverviewReport() {
                       key={row.employeeId}
                       type="button"
                       onClick={() => openEmployee(row.employeeId, row)}
-                      className="min-w-52 shrink-0 rounded-xl border border-zinc-200 bg-white p-3 text-left hover:border-orange-300 transition-colors"
+                      className="min-w-52 shrink-0 rounded-xl border border-zinc-200 bg-white p-3 text-left hover:border-orange-500 hover:bg-orange-300 hover:text-black transition-colors"
                     >
                       <div className="flex items-center gap-2 mb-2">
                         <span className="text-xs font-bold text-orange-600">

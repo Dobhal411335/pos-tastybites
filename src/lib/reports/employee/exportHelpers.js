@@ -113,11 +113,94 @@ function slugName(name) {
   return slug || "Staff";
 }
 
-export function employeeReportFilename(dateFrom, dateTo, ext, employeeName) {
+export const EXPORT_VIEWS = {
+  overview: {
+    id: "overview",
+    title: "Overview",
+    apiSection: "summary",
+    slug: "Overview",
+  },
+  sales: {
+    id: "sales",
+    title: "Sales Performance",
+    apiSection: "summary",
+    slug: "Sales",
+  },
+  tips: {
+    id: "tips",
+    title: "Tips & Gratuity",
+    apiSection: "summary",
+    slug: "Tips",
+  },
+  service: {
+    id: "service",
+    title: "Service Charges",
+    apiSection: "summary",
+    slug: "Service-Charges",
+  },
+  hours: {
+    id: "hours",
+    title: "Working Hours Summary",
+    apiSection: "summary",
+    slug: "Hours",
+  },
+  labor: {
+    id: "labor",
+    title: "Hourly Labor Cost",
+    apiSection: "summary",
+    slug: "Labor",
+  },
+  clock: {
+    id: "clock",
+    title: "Clock In / Out",
+    apiSection: "attendance",
+    slug: "Clock",
+  },
+  timesheet: {
+    id: "timesheet",
+    title: "Timesheet Details",
+    apiSection: "attendance",
+    slug: "Timesheet",
+  },
+  orders: {
+    id: "orders",
+    title: "Staff Order List",
+    apiSection: "orders",
+    slug: "Orders",
+  },
+  cancellations: {
+    id: "cancellations",
+    title: "Cancellation Report",
+    apiSection: "cancellations",
+    slug: "Cancellations",
+  },
+  "tips-by-payment": {
+    id: "tips-by-payment",
+    title: "Tips by Payment Method",
+    apiSection: "tipsbypayment",
+    slug: "Tips-By-Payment",
+  },
+};
+
+export function resolveExportView(raw) {
+  const key = String(raw || "overview").toLowerCase().trim();
+  const aliases = {
+    summary: "overview",
+    tipsbypayment: "tips-by-payment",
+    attendance: "clock",
+    "service-charges": "service",
+    "tips-by-payment": "tips-by-payment",
+  };
+  const resolved = aliases[key] || key;
+  return EXPORT_VIEWS[resolved] || EXPORT_VIEWS.overview;
+}
+
+export function employeeReportFilename(dateFrom, dateTo, ext, employeeName, viewSlug) {
   const from = dateFrom || "report";
   const to = dateTo || from;
+  const view = slugName(viewSlug || "Staff");
   if (employeeName) {
-    return `Employee-Report-${slugName(employeeName)}-${from}-to-${to}.${ext}`;
+    return `Employee-${view}-${slugName(employeeName)}-${from}-to-${to}.${ext}`;
   }
-  return `Employee-Staff-Report-${from}-to-${to}.${ext}`;
+  return `Employee-${view}-${from}-to-${to}.${ext}`;
 }

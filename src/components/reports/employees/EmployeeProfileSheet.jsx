@@ -664,32 +664,6 @@ function EmployeeProfileBody({
           ) : null}
         </div>
       </div>
-
-      <div className="flex flex-wrap gap-1 border-b border-zinc-200 pb-2">
-        {TABS.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            onClick={() => setTab(item.id)}
-            className={`rounded-md px-2.5 py-1 text-xs font-semibold transition-colors ${
-              tab === item.id
-                ? "bg-orange-500 text-white"
-                : "text-zinc-600 hover:bg-zinc-100"
-            }`}
-          >
-            {item.label}
-          </button>
-        ))}
-      </div>
-
-      {tab === "gratuity" ? (
-        <div className="rounded-lg border border-dashed border-zinc-200 bg-zinc-50 px-4 py-8 text-center">
-          <p className="text-sm text-zinc-500">
-            Gratuity is not tracked separately in this system. Use Tips for voluntary tips and
-            Service Charges for auto charges.
-          </p>
-        </div>
-      ) : (
       <>
       <Separator className="bg-black/20"/>
       <div>
@@ -956,7 +930,6 @@ function EmployeeProfileBody({
         </div>
       </div>
       </>
-      )}
     </div>
   );
 }

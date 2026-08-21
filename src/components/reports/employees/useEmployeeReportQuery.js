@@ -177,7 +177,7 @@ export function useEmployeeReport(section = "summary", options = {}) {
   };
 }
 
-export function useEmployeeDetailLoader(filters) {
+export function useEmployeeDetailLoader(filters, detailMode = "profile") {
   const [selectedEmployeeId, setSelectedEmployeeId] = useState(null);
   const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [detail, setDetail] = useState(null);
@@ -200,6 +200,7 @@ export function useEmployeeDetailLoader(filters) {
           section: "detail",
         });
         params.set("employeeId", employeeId);
+        params.set("detailFocus", detailMode || "profile");
         const res = await fetch(`/api/admin/reports/employees?${params}`, {
           credentials: "include",
           cache: "no-store",
@@ -214,7 +215,7 @@ export function useEmployeeDetailLoader(filters) {
         setDetailLoading(false);
       }
     },
-    [filters]
+    [filters, detailMode]
   );
 
   const closeSheet = useCallback((open) => {
@@ -257,5 +258,6 @@ export function useEmployeeDetailLoader(filters) {
     closeSheet,
     openOrder,
     setOrderDetail,
+    detailMode,
   };
 }

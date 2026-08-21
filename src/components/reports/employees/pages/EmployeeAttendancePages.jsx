@@ -30,6 +30,8 @@ export default function EmployeeClockReport() {
       title="Clock In / Out"
       description="Attendance punches for the selected period."
       section="attendance"
+      exportView="clock"
+      detailMode="clock"
       paginate
       showShift
       showStatus={false}
@@ -62,6 +64,8 @@ export default function EmployeeClockReport() {
           <div className="space-y-4">
             <EmployeeKpiCards
               loading={loading}
+              title="Clock-in highlights"
+              description="Attendance punches and hours for this period"
               items={[
                 { label: "Total Hours", value: formatHoursLabel(summary.totalHours) },
                 { label: "Average Hours", value: formatHoursLabel(summary.averageHours) },
@@ -171,6 +175,9 @@ export function EmployeeTimesheetReport() {
       title="Timesheet Details"
       description="Scheduled vs actual worked time from attendance logs."
       section="attendance"
+      exportView="timesheet"
+      detailMode="clock"
+      showScheduleInSheet
       paginate
       showShift
       showStatus={false}
@@ -179,6 +186,10 @@ export function EmployeeTimesheetReport() {
       {({ data, loading, openEmployee, applyFilters, filters, timezone }) => {
         const rows = data?.rows || [];
         const pagination = data?.pagination || {};
+        const summary = data?.summary || {};
+        const pageHours = rows.reduce((s, r) => s + (Number(r.workedHours) || 0), 0);
+        const pageOt = rows.reduce((s, r) => s + (Number(r.overtimeHours) || 0), 0);
+        const incomplete = rows.filter((r) => r.isIncomplete).length;
 
         if (!loading && rows.length === 0) {
           return <ReportEmpty message="No timesheet records for this period." />;
@@ -186,6 +197,23 @@ export function EmployeeTimesheetReport() {
 
         return (
           <div className="space-y-4">
+            <EmployeeKpiCards
+              loading={loading}
+              title="Timesheet highlights"
+              description="Scheduled vs actual punches for this period"
+              items={[
+                {
+                  label: "Total Hours",
+                  value: formatHoursLabel(summary.totalHours ?? pageHours),
+                },
+                {
+                  label: "Overtime",
+                  value: formatHoursLabel(summary.overtimeHours ?? pageOt),
+                },
+                { label: "Punches", value: pagination.total || rows.length },
+                { label: "Open shifts", value: incomplete },
+              ]}
+            />
             <div className="rounded-lg border border-zinc-200 bg-white overflow-hidden">
               {loading ? (
                 <div className="p-4"><TableSkeleton cols={9} /></div>

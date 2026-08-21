@@ -26,10 +26,6 @@ export async function getStockLevels({ restaurantId, category, type }) {
   const levels = products.map((product) => {
     const pid = product._id.toString();
     const openingStock = Number(product.openingStock) || 0;
-    const openingStockPrice =
-      product.openingStockPrice === null || product.openingStockPrice === undefined
-        ? null
-        : Number(product.openingStockPrice);
     const totalIn = sumStockInQuantityForProduct(allIns, pid);
     const totalOut = allOuts
       .filter((o) => o.product?.toString() === pid)
@@ -45,7 +41,6 @@ export async function getStockLevels({ restaurantId, category, type }) {
       status: product.status,
       purchasePrice: product.purchasePrice,
       openingStock,
-      openingStockPrice,
       totalIn,
       totalOut,
       currentBalance,

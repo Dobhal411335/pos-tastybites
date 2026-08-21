@@ -95,14 +95,14 @@ export default function EmployeeReportToolbar({
     <div className="space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
+          <p className="text-[11px] font-bold uppercase tracking-wide text-orange-600">
             Employee & Staff Reports
           </p>
-          <h1 className="text-xl font-semibold tracking-tight text-zinc-900">
+          <h1 className="text-2xl font-bold tracking-tight text-zinc-900">
             {title}
           </h1>
           {description ? (
-            <p className="mt-1 text-sm text-zinc-500">{description}</p>
+            <p className="mt-1 text-sm font-medium text-zinc-600">{description}</p>
           ) : null}
         </div>
         <div className="flex flex-wrap items-center gap-2">

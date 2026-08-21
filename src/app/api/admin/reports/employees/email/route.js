@@ -47,7 +47,11 @@ export const POST = withAuth(async (request) => {
       overview: payload.overview,
       pdfBuffer,
       excelBuffer,
-      rowCount: payload.rows.length,
+      rowCount:
+        (payload.rows || []).length ||
+        (payload.methods || []).length ||
+        (payload.earnedByEmployee || []).length ||
+        0,
     });
 
     return sendSuccess(

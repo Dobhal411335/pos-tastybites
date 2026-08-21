@@ -200,11 +200,6 @@ export default function InventoryProductSheet({
                     {qty(product.openingStock)}
                     {unit ? ` ${unit}` : ""}
                   </p>
-                  {product.openingStockPrice != null ? (
-                    <p className="text-xs text-zinc-500 mt-0.5">
-                      @ {money(product.openingStockPrice)}
-                    </p>
-                  ) : null}
                 </StatCell>
                 <StatCell label="Stock In">
                   <p className="text-lg font-semibold tabular-nums text-emerald-700">

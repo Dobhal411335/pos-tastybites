@@ -72,7 +72,6 @@ function newLine() {
     selectedProductDetails: null,
     openingBalance: "0.00",
     openingStock: "",
-    openingStockPrice: "",
     filteredProducts: [],
   };
 }
@@ -207,7 +206,8 @@ export default function StockInPage() {
       selectedProductDetails: null,
       openingBalance: "0.00",
       openingStock: "",
-      openingStockPrice: "",
+      unitPrice: "",
+      value: "",
       filteredProducts: allProducts.filter(
         (p) => categoryIdOf(p) === categoryId
       ),
@@ -216,20 +216,32 @@ export default function StockInPage() {
 
   const handleProductChange = async (lineId, productId) => {
     const product = allProducts.find((p) => p._id === productId);
-    updateLine(lineId, {
-      productName: productId,
-      selectedProductDetails: product || null,
-      openingBalance: "…",
-      openingStock:
-        product?.openingStock === null || product?.openingStock === undefined
-          ? ""
-          : String(product.openingStock),
-      openingStockPrice:
-        product?.openingStockPrice === null ||
-        product?.openingStockPrice === undefined
-          ? ""
-          : String(product.openingStockPrice),
-    });
+    const unitPrice =
+      product?.purchasePrice !== null && product?.purchasePrice !== undefined
+        ? Number(product.purchasePrice).toFixed(2)
+        : "";
+    setLines((prev) =>
+      prev.map((line) => {
+        if (line.id !== lineId) return line;
+        const qty = Number(line.qty);
+        const next = {
+          ...line,
+          productName: productId,
+          selectedProductDetails: product || null,
+          openingBalance: "…",
+          openingStock:
+            product?.openingStock === null || product?.openingStock === undefined
+              ? ""
+              : String(product.openingStock),
+          unitPrice,
+          value:
+            unitPrice !== "" && line.qty !== "" && !Number.isNaN(qty)
+              ? (qty * Number(unitPrice)).toFixed(2)
+              : line.value,
+        };
+        return next;
+      })
+    );
     const balance = await calculateOpeningBalance(productId);
     setLines((prev) =>
       prev.map((line) =>
@@ -305,8 +317,6 @@ export default function StockInPage() {
       unitPrice: line.unitPrice,
       value: line.value,
       openingStock: line.openingStock === "" ? null : line.openingStock,
-      openingStockPrice:
-        line.openingStockPrice === "" ? null : line.openingStockPrice,
     }));
 
     const incomplete = prepared.some(
@@ -401,11 +411,6 @@ export default function StockInPage() {
             product?.openingStock === null || product?.openingStock === undefined
               ? ""
               : String(product.openingStock),
-          openingStockPrice:
-            product?.openingStockPrice === null ||
-            product?.openingStockPrice === undefined
-              ? ""
-              : String(product.openingStockPrice),
           filteredProducts: allProducts.filter((p) => categoryIdOf(p) === catId),
         };
       })
@@ -837,51 +842,6 @@ export default function StockInPage() {
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="p-6">
-                      {line.selectedProductDetails && (
-                        <div className="mb-5 rounded-lg border border-amber-100 bg-amber-50/60 p-4">
-                          <p className="text-[12px] font-bold uppercase tracking-wider text-amber-800 mb-3">
-                            Opening stock (optional — edit to update product)
-                          </p>
-                          <div className="flex flex-col sm:flex-row gap-4 items-end">
-                            <div className="space-y-2 w-full sm:w-40">
-                              <label className="text-[14px] font-semibold text-zinc-900">
-                                Opening qty
-                              </label>
-                              <Input
-                                type="number"
-                                step="0.01"
-                                min="0"
-                                placeholder="0"
-                                value={line.openingStock}
-                                onChange={(e) =>
-                                  updateLine(line.id, {
-                                    openingStock: e.target.value,
-                                  })
-                                }
-                                className="h-11 text-[15px] bg-white border-zinc-200 focus:ring-[#F97316] font-medium"
-                              />
-                            </div>
-                            <div className="space-y-2 flex-1">
-                              <label className="text-[14px] font-semibold text-zinc-900">
-                                Opening price ($)
-                              </label>
-                              <Input
-                                type="number"
-                                step="0.01"
-                                min="0"
-                                placeholder="0.00"
-                                value={line.openingStockPrice}
-                                onChange={(e) =>
-                                  updateLine(line.id, {
-                                    openingStockPrice: e.target.value,
-                                  })
-                                }
-                                className="h-11 text-[15px] bg-white border-zinc-200 focus:ring-[#F97316] font-medium"
-                              />
-                            </div>
-                          </div>
-                        </div>
-                      )}
                       <div className="flex flex-col sm:flex-row gap-4 items-end">
                         <div className="space-y-2 w-full sm:w-32">
                           <label className="text-[14px] font-semibold text-zinc-900">
@@ -910,6 +870,7 @@ export default function StockInPage() {
                           <Input
                             type="number"
                             step="0.01"
+                            min="0"
                             placeholder="25.00"
                             value={line.unitPrice}
                             onChange={(e) =>

@@ -78,7 +78,6 @@ export default function StockProductsPage() {
     purchaseAmount: "",
     minStock: "",
     openingStock: "",
-    openingStockPrice: "",
   });
 
   // Dialog States for adding new Type / Unit
@@ -91,10 +90,6 @@ export default function StockProductsPage() {
   // Delete Dialog state
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState(null);
-
-  useEffect(() => {
-    fetchInitialData();
-  }, []);
 
   const fetchInitialData = async () => {
     try {
@@ -123,7 +118,9 @@ export default function StockProductsPage() {
       setLoading(false);
     }
   };
-
+  useEffect(() => {
+    fetchInitialData();
+  }, []);
   const fetchProducts = async () => {
     try {
       const res = await fetch("/api/stock/products");
@@ -150,11 +147,6 @@ export default function StockProductsPage() {
         product.openingStock === null || product.openingStock === undefined
           ? ""
           : String(product.openingStock),
-      openingStockPrice:
-        product.openingStockPrice === null ||
-        product.openingStockPrice === undefined
-          ? ""
-          : String(product.openingStockPrice),
     });
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -207,10 +199,6 @@ export default function StockProductsPage() {
         minStock: formData.minStock === "" ? null : Number(formData.minStock),
         openingStock:
           formData.openingStock === "" ? null : Number(formData.openingStock),
-        openingStockPrice:
-          formData.openingStockPrice === ""
-            ? null
-            : Number(formData.openingStockPrice),
       };
 
       const res = await fetch(url, {
@@ -244,7 +232,6 @@ export default function StockProductsPage() {
       purchaseAmount: "",
       minStock: "",
       openingStock: "",
-      openingStockPrice: "",
     });
   };
 
@@ -561,7 +548,7 @@ export default function StockProductsPage() {
               <Card className="shadow-sm border-zinc-200 bg-white overflow-hidden">
                 <CardHeader className="bg-zinc-50/50 border-b border-zinc-100 pb-4">
                   <CardTitle className="text-[16px] font-bold text-zinc-900">
-                    Pricing Matrix
+                  Opening Balance Matrix
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-6">
@@ -614,53 +601,26 @@ export default function StockProductsPage() {
                       />
                     </div>
                   </div>
-                  <div className="mt-6 flex w-full flex-col gap-6 md:flex-row md:items-end">
-                    <div className="flex w-full flex-1 flex-col gap-2">
-                      <div className="space-y-1">
-                        <label className="text-[14px] font-semibold text-zinc-900">
-                          Opening stock
-                        </label>
-                        <p className="text-[12px] text-zinc-500 font-medium">
-                          Optional starting quantity before stock in/out
-                          movements.
-                        </p>
-                      </div>
-                      <Input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        name="openingStock"
-                        placeholder="e.g. 50"
-                        value={formData.openingStock}
-                        onChange={handleChange}
-                        className="h-11 w-full text-[15px] bg-white border-zinc-200 focus:ring-[#F97316]"
-                      />
+                  <div className="mt-6 flex w-full flex-col gap-2">
+                    <div className="space-y-1">
+                      <label className="text-[14px] font-semibold text-zinc-900">
+                        Opening stock
+                      </label>
+                      <p className="text-[12px] text-zinc-500 font-medium">
+                        Optional starting quantity before stock in/out
+                        movements. Unit cost uses the purchase price above.
+                      </p>
                     </div>
-                    <div className="flex w-full flex-1 flex-col gap-2">
-                      <div className="space-y-1">
-                        <label className="text-[14px] font-semibold text-zinc-900">
-                          Opening stock price ($)
-                        </label>
-                        <p className="text-[12px] text-zinc-500 font-medium">
-                          Optional unit price for the opening quantity.
-                        </p>
-                      </div>
-                      <div className="relative w-full">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-zinc-400">
-                          $
-                        </span>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          name="openingStockPrice"
-                          placeholder="Amount"
-                          value={formData.openingStockPrice}
-                          onChange={handleChange}
-                          className="h-11 w-full pl-8 text-[15px] bg-white border-zinc-200 focus:ring-[#F97316]"
-                        />
-                      </div>
-                    </div>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      name="openingStock"
+                      placeholder="e.g. 50"
+                      value={formData.openingStock}
+                      onChange={handleChange}
+                      className="h-11 w-full max-w-md text-[15px] bg-white border-zinc-200 focus:ring-[#F97316]"
+                    />
                   </div>
                 </CardContent>
               </Card>
@@ -811,17 +771,10 @@ export default function StockProductsPage() {
                           </span>
                         </TableCell>
                         <TableCell className="px-6 py-4">
-                          <div className="flex flex-col gap-0.5">
-                            <span className="text-[14px] font-semibold text-zinc-900">
-                              {p.openingStock != null ? p.openingStock : "—"}
-                              {p.unit?.name ? ` ${p.unit.name}` : ""}
-                            </span>
-                            <span className="text-[12px] text-zinc-500">
-                              {p.openingStockPrice != null
-                                ? `$${Number(p.openingStockPrice).toFixed(2)}`
-                                : "No open. price"}
-                            </span>
-                          </div>
+                          <span className="text-[14px] font-semibold text-zinc-900">
+                            {p.openingStock != null ? p.openingStock : "—"}
+                            {p.unit?.name ? ` ${p.unit.name}` : ""}
+                          </span>
                         </TableCell>
                         <TableCell className="px-6 py-4 text-center">
                           <button

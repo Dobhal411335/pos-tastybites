@@ -52,7 +52,6 @@ export const POST = withAuth(async (request) => {
       purchasePrice,
       minStock,
       openingStock,
-      openingStockPrice,
       status,
     } = data;
 
@@ -69,7 +68,6 @@ export const POST = withAuth(async (request) => {
       purchasePrice: Number(purchasePrice),
       minStock: parseMinStock(minStock),
       openingStock: parseOptionalNonNeg(openingStock, "Opening stock"),
-      openingStockPrice: parseOptionalNonNeg(openingStockPrice, "Opening stock price"),
       status: status !== undefined ? status : true,
       createdBy: request.user.id
     });

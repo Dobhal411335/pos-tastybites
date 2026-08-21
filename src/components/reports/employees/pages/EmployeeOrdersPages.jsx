@@ -60,6 +60,8 @@ export default function EmployeeOrdersReport() {
         title="Staff Order List"
         description="Orders attributed to the employee who processed them."
         section="orders"
+        exportView="orders"
+        detailMode="orders"
         paginate
         showSearch
         searchPlaceholder="Search order #"
@@ -74,26 +76,44 @@ export default function EmployeeOrdersReport() {
 
           return (
             <div className="space-y-4">
-              <div className="rounded-lg border border-zinc-200 bg-white overflow-x-auto">
+              <EmployeeKpiCards
+                loading={loading}
+                title="Order list highlights"
+                description="Orders processed by staff in this period"
+                items={[
+                  { label: "Orders shown", value: rows.length },
+                  { label: "Total matching", value: pagination.total || rows.length },
+                  {
+                    label: "Page",
+                    value: `${pagination.page || filters.page || 1} / ${pagination.pages || 1}`,
+                  },
+                  {
+                    label: "Order total",
+                    value: rows.reduce((s, r) => s + (Number(r.totalAmount) || 0), 0),
+                    money: true,
+                  },
+                ]}
+              />
+              <div className="w-full rounded-lg border border-zinc-200 bg-white overflow-x-auto">
                 {loading ? (
                   <div className="p-4"><TableSkeleton cols={8} /></div>
                 ) : (
-                  <Table>
+                  <Table className="min-w-[1480px] table-fixed">
                     <TableHeader>
                       <TableRow className="bg-zinc-50">
-                        <TableHead>Order</TableHead>
-                        <TableHead>Date/Time</TableHead>
-                        <TableHead>Employee</TableHead>
-                        <TableHead>Table</TableHead>
-                        <TableHead>Items</TableHead>
-                        <TableHead className="text-right">Subtotal</TableHead>
-                        <TableHead className="text-right">Discount</TableHead>
-                        <TableHead className="text-right">Tax</TableHead>
-                        <TableHead className="text-right">Svc</TableHead>
-                        <TableHead className="text-right">Tip</TableHead>
-                        <TableHead className="text-right">Total</TableHead>
-                        <TableHead>Payment</TableHead>
-                        <TableHead>Status</TableHead>
+                        <TableHead className="w-[88px]">Order</TableHead>
+                        <TableHead className="w-[120px]">Date/Time</TableHead>
+                        <TableHead className="w-[140px]">Employee</TableHead>
+                        <TableHead className="w-[200px]">Table</TableHead>
+                        <TableHead className="w-[180px]">Items</TableHead>
+                        <TableHead className="w-[96px] text-right">Subtotal</TableHead>
+                        <TableHead className="w-[88px] text-right">Discount</TableHead>
+                        <TableHead className="w-[80px] text-right">Tax</TableHead>
+                        <TableHead className="w-[80px] text-right">Svc</TableHead>
+                        <TableHead className="w-[80px] text-right">Tip</TableHead>
+                        <TableHead className="w-[96px] text-right">Total</TableHead>
+                        <TableHead className="w-[100px]">Payment</TableHead>
+                        <TableHead className="w-[100px]">Status</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -103,16 +123,16 @@ export default function EmployeeOrdersReport() {
                           className="cursor-pointer hover:bg-orange-50/40"
                           onClick={() => openOrder(row.orderId)}
                         >
-                          <TableCell className="font-semibold text-sm">
+                          <TableCell className="font-semibold text-sm whitespace-nowrap">
                             #{row.orderNumber}
                           </TableCell>
-                          <TableCell className="text-sm tabular-nums">
+                          <TableCell className="text-sm tabular-nums whitespace-nowrap">
                             <p>{formatDateTz(row.createdAt, timezone)}</p>
                             <p className="text-xs text-zinc-400">
                               {formatTimeTz(row.createdAt, timezone)}
                             </p>
                           </TableCell>
-                          <TableCell>
+                          <TableCell className="whitespace-nowrap">
                             <button
                               type="button"
                               className="text-left"
@@ -131,30 +151,34 @@ export default function EmployeeOrdersReport() {
                               </p>
                             </button>
                           </TableCell>
-                          <TableCell className="text-sm">{row.tableNo || "—"}</TableCell>
-                          <TableCell className="text-xs text-zinc-600 max-w-40 truncate">
+                          <TableCell className="text-sm whitespace-nowrap">
+                            {row.tableNo || "—"}
+                          </TableCell>
+                          <TableCell className="text-xs text-zinc-600 truncate">
                             {row.itemSummary || `${row.itemCount || 0} items`}
                           </TableCell>
-                          <TableCell className="text-right tabular-nums text-sm">
+                          <TableCell className="text-right tabular-nums text-sm whitespace-nowrap">
                             {money(row.subTotal)}
                           </TableCell>
-                          <TableCell className="text-right tabular-nums text-sm">
+                          <TableCell className="text-right tabular-nums text-sm whitespace-nowrap">
                             {money(row.discountTotal)}
                           </TableCell>
-                          <TableCell className="text-right tabular-nums text-sm">
+                          <TableCell className="text-right tabular-nums text-sm whitespace-nowrap">
                             {money(row.taxTotal)}
                           </TableCell>
-                          <TableCell className="text-right tabular-nums text-sm">
+                          <TableCell className="text-right tabular-nums text-sm whitespace-nowrap">
                             {money(row.serviceChargeTotal)}
                           </TableCell>
-                          <TableCell className="text-right tabular-nums text-sm">
+                          <TableCell className="text-right tabular-nums text-sm whitespace-nowrap">
                             {money(row.tipAmount)}
                           </TableCell>
-                          <TableCell className="text-right tabular-nums text-sm font-semibold">
+                          <TableCell className="text-right tabular-nums text-sm font-semibold whitespace-nowrap">
                             {money(row.totalAmount)}
                           </TableCell>
-                          <TableCell className="text-xs">{row.paymentLabel || "—"}</TableCell>
-                          <TableCell>
+                          <TableCell className="text-xs whitespace-nowrap">
+                            {row.paymentLabel || "—"}
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap">
                             <Badge
                               className={`border-none text-[10px] ${
                                 STATUS_BADGE[row.status] || "bg-zinc-100 text-zinc-600"
@@ -232,6 +256,8 @@ export function EmployeeCancellationsReport() {
       title="Cancellation Report"
       description="Cancelled and waived orders by employee."
       section="cancellations"
+      exportView="cancellations"
+      detailMode="cancellations"
       paginate
       showSearch
       searchPlaceholder="Search order #"
@@ -250,6 +276,8 @@ export function EmployeeCancellationsReport() {
           <div className="space-y-4">
             <EmployeeKpiCards
               loading={loading}
+              title="Cancellation highlights"
+              description="Cancelled and waived order totals for this period"
               items={[
                 { label: "Total Cancellations", value: overview.totalCancellations || 0 },
                 { label: "Cancelled Amount", value: overview.cancelledAmount, money: true },
@@ -391,13 +419,16 @@ export function EmployeeTipsByPaymentReport() {
   return (
     <EmployeeReportPageShell
       title="Tips by Payment Method"
-      description="Collected tips grouped by cash, card, gift card, or other."
+      description="Collected tips by tender, plus earned allocation by tip mode."
       section="tipsbypayment"
+      exportView="tips-by-payment"
+      detailMode="tipsByPayment"
     >
       {({ data, loading, openEmployee }) => {
         const overview = data?.overview || {};
         const methods = data?.methods || [];
         const byEmployee = data?.byEmployee || [];
+        const earnedByEmployee = data?.earnedByEmployee || [];
         const charts = data?.charts || {};
 
         if (!loading && methods.length === 0) {
@@ -408,8 +439,12 @@ export function EmployeeTipsByPaymentReport() {
           <div className="space-y-4">
             <EmployeeKpiCards
               loading={loading}
+              title="Tips by payment highlights"
+              description="Collected by tender and earned tip allocation"
               items={[
-                { label: "Total Tips", value: overview.totalTips, money: true },
+                { label: "Collected Tips", value: overview.totalTips, money: true },
+                { label: "Earned Tips", value: overview.totalEarned, money: true },
+                { label: "Shareable Pool", value: overview.shareableTipPool, money: true },
                 { label: "Tipped Orders", value: overview.totalOrders || 0 },
                 { label: "Average Tip", value: overview.averageTip, money: true },
                 { label: "Methods", value: overview.methods || 0 },
@@ -420,19 +455,22 @@ export function EmployeeTipsByPaymentReport() {
             ) : null}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
               <ChartCard
-                title="Tips by method"
+                title="Collected tips by method"
                 loading={loading}
                 empty={!charts.tipsByMethod?.length}
               >
                 <DonutChart data={charts.tipsByMethod || []} />
               </ChartCard>
               <ChartCard
-                title="Method amounts"
+                title="Earned tips by employee"
                 loading={loading}
-                empty={!methods.length}
+                empty={!charts.earnedByEmployee?.some((r) => Number(r.value) > 0)}
               >
                 <NamedBarChart
-                  data={methods.map((r) => ({ label: r.method, value: r.tips }))}
+                  data={(charts.earnedByEmployee || []).slice(0, 10).map((r) => ({
+                    label: r.label,
+                    value: r.value,
+                  }))}
                 />
               </ChartCard>
             </div>
@@ -445,9 +483,9 @@ export function EmployeeTipsByPaymentReport() {
                     <TableRow className="bg-zinc-50">
                       <TableHead>Payment Method</TableHead>
                       <TableHead className="text-right">Orders</TableHead>
-                      <TableHead className="text-right">Tips</TableHead>
+                      <TableHead className="text-right">Collected Tips</TableHead>
                       <TableHead className="text-right">Average Tip</TableHead>
-                      <TableHead className="text-right">Tip %</TableHead>
+                      <TableHead className="text-right">Tip % of sales</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -470,7 +508,51 @@ export function EmployeeTipsByPaymentReport() {
             </div>
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500 mb-2">
-                Employee breakdown
+                Earned tips by employee
+              </p>
+              <div className="rounded-lg border border-zinc-200 bg-white overflow-hidden mb-4">
+                {loading ? (
+                  <div className="p-4"><TableSkeleton /></div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-zinc-50">
+                        <TableHead>Employee</TableHead>
+                        <TableHead className="text-right">Mode</TableHead>
+                        <TableHead className="text-right">Collected</TableHead>
+                        <TableHead className="text-right">Earned</TableHead>
+                        <TableHead className="text-right">Tip orders</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {earnedByEmployee.map((row) => (
+                        <TableRow
+                          key={row.employeeId}
+                          className="cursor-pointer hover:bg-orange-50/40"
+                          onClick={() => openEmployee(row.employeeId, row)}
+                        >
+                          <TableCell>
+                            <p className="text-sm font-semibold">{row.name}</p>
+                            <p className="text-xs text-zinc-500">{row.role}</p>
+                          </TableCell>
+                          <TableCell className="text-right text-xs">
+                            {row.receiveOwnTips ? "Own" : `${row.tipPercent || 0}%`}
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums">
+                            {money(row.collectedTips)}
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums">
+                            {money(row.earnedTips)}
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums">{row.orders}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </div>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500 mb-2">
+                Collected by employee × method
               </p>
               <div className="rounded-lg border border-zinc-200 bg-white overflow-hidden">
                 {loading ? (

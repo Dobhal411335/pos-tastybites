@@ -162,7 +162,6 @@ function snapshotFromRow(row, tab) {
       unit: row.unit,
       currentBalance: row.currentBalance,
       openingStock: row.openingStock,
-      openingStockPrice: row.openingStockPrice,
       unitsInPeriod: row.unitsInPeriod,
       unitsOutPeriod: row.unitsOutPeriod,
       stockStatus: row.stockStatus,
