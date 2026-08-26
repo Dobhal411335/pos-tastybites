@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAdmin } from "@/context/AdminContext";
 import {
@@ -11,7 +10,6 @@ import {
   UserSearch,
   Receipt,
   Globe,
-  ChefHat,
   Mail,
   Percent,
   Boxes,
@@ -43,6 +41,11 @@ import {
   Coffee,
   Megaphone,
   ChevronLeft,
+  Printer,
+  FileText,
+  ShoppingBasket,
+  ChevronsRight,
+  ChevronDown,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -83,6 +86,153 @@ const EMPTY_STATS = {
   orderChart: EMPTY_CHART,
   revenueChart: EMPTY_CHART,
 };
+
+/** Shortcuts shown beside Report Module */
+const REPORT_SHORTCUTS = [
+  {
+    href: "/admin/reports/admin/eod",
+    label: "End-of-Day (EOD) Report",
+    icon: Printer,
+  },
+  {
+    href: "/admin/reports/financial/orders",
+    label: "Itemized Sales Report",
+    icon: Printer,
+    chevron: true,
+  },
+  {
+    href: "/admin/tax/details",
+    label: "Tax Details Section",
+    icon: FileText,
+  },
+  {
+    href: "/admin/floor-plan/new",
+    label: "Create Floor Plan",
+    icon: LayoutGrid,
+    chevron: true,
+  },
+  {
+    href: "/admin/reports/financial/tips",
+    label: "Staff Tips / Gratuities",
+    icon: Users,
+  },
+  {
+    href: "/admin/menu/products",
+    label: "Create Menu Product",
+    icon: ShoppingBasket,
+    chevron: true,
+  },
+];
+
+/** Remaining quick links under Quick Links section */
+const QUICK_ACTION_LINKS = [
+  {
+    href: "/admin/menu/categories",
+    label: "Create Menu Category",
+    icon: UtensilsCrossed,
+  },
+  {
+    href: "/admin/tax",
+    label: "Create Tax / Govt Fee",
+    icon: Percent,
+  },
+  {
+    href: "/admin/employee/lists",
+    label: "Staff Portal All Employee",
+    icon: Users,
+  },
+  {
+    href: "/admin/reports/financial/invoices",
+    label: "Today Order Invoices",
+    icon: Receipt,
+  },
+  {
+    href: "/admin/promotions/discounts",
+    label: "Create Discount / Offer",
+    icon: Tag,
+  },
+  {
+    href: "/admin/employee/shifts",
+    label: "Shifts & Scheduling",
+    icon: CalendarDays,
+  },
+  {
+    href: "/admin/reports/financial",
+    label: "Total Sales Summary",
+    icon: DollarSign,
+  },
+  {
+    href: "/admin/promotions/offers",
+    label: "Create Festive Offer",
+    icon: Gift,
+  },
+  {
+    href: "/admin/reports/employees",
+    label: "Employee & Staff Reports Log",
+    icon: ClipboardList,
+  },
+  {
+    href: "/admin/promotions/giftcards",
+    label: "Create Gift Card",
+    icon: Gift,
+  },
+  {
+    href: "/admin/giftcard/issue",
+    label: "Issue GiftCard",
+    icon: Gift,
+  },
+  {
+    href: "/admin/stock/out",
+    label: "Low Stock / Out-of-Stock Report",
+    icon: Package,
+  },
+  {
+    href: "/admin/reports/admin/audit",
+    label: "Audit & Exception Reports",
+    icon: FileText,
+  },
+  {
+    href: "/admin/stock",
+    label: "Stock Control / Inventory Management",
+    icon: Boxes,
+  },
+  {
+    href: "/admin/web",
+    label: "Email Marketing",
+    icon: Mail,
+  },
+];
+
+/** All dashboard destinations (category views + legacy list) */
+const DASHBOARD_QUICK_LINKS = [
+  { href: "/admin/menu", label: "Create Menu", icon: UtensilsCrossed },
+  { href: "/admin/floor-plan", label: "Floor Management", icon: LayoutGrid },
+  { href: "/admin/employee", label: "Staff Portal", icon: Users },
+  { href: "/admin/promotions", label: "Season Promotions", icon: Gift },
+  { href: "/admin/giftcard", label: "Issue GiftCard", icon: Gift },
+  { href: "/admin/tax", label: "Configure Tax And Fees", icon: Percent },
+  { href: "/admin/users", label: "Master Admin Users", icon: UserPlus },
+  { href: "/admin/settings", label: "System Settings", icon: Settings },
+  { href: "/admin/stock", label: "Stock Control", icon: Boxes },
+  { href: "/admin/web", label: "Web Console", icon: Globe },
+  { href: "/admin/reports/guests", label: "Guest Directory", icon: UserSearch },
+  {
+    href: "/admin/reports/financial",
+    label: "Financial & Accounting",
+    icon: DollarSign,
+  },
+  {
+    href: "/admin/reports/employees",
+    label: "Employee & Staff Reports",
+    icon: Users,
+  },
+  { href: "/admin/reports/admin", label: "Admin Reports", icon: ClipboardList },
+  {
+    href: "/admin/reports/inventory",
+    label: "Inventory & Stock Reports",
+    icon: Package,
+  },
+];
 
 function formatMoney(value) {
   return `$${Number(value || 0).toLocaleString("en-US", {
@@ -440,60 +590,102 @@ export default function AdminDashboardPage() {
               DYNAMIC CATEGORY VIEW
              ────────────────────────────────────────── */}
           {!activeCategory ? (
-            <section>
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-2xl font-black text-slate-900">
-                  Dashboard Modules
-                </h2>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                <ModuleCard
-                  onClick={() => setActiveCategory("core")}
-                  icon={UtensilsCrossed}
-                  color="orange"
-                  title="Core Modules"
-                  stat="Setup"
-                  desc="Configure menu, floor plan, staff, taxes, and settings."
-                  actionLabel="View Modules"
-                />
-                <ModuleCard
-                  onClick={() => setActiveCategory("quick")}
-                  icon={Boxes}
-                  color="emerald"
-                  title="Quick Actions"
-                  stat="Fast"
-                  desc="Instant stock, menu, floor, and staff updates."
-                  actionLabel="View Modules"
-                />
-                <ModuleCard
-                  onClick={() => setActiveCategory("web")}
-                  icon={Globe}
-                  color="blue"
-                  title="Web Portal"
-                  stat="Cloud"
-                  desc="Secure cloud dashboard and remote reporting."
-                  actionLabel="View Modules"
-                />
-                <ModuleCard
-                  onClick={() => setActiveCategory("reports")}
-                  icon={BarChart3}
-                  color="rose"
-                  title="Report Module"
-                  stat="Data"
-                  desc="Guest directory, sales, orders, payments, employees, and day closing."
-                  actionLabel="View Modules"
-                />
-                <ModuleCard
-                  onClick={handleLogout}
-                  icon={LogOut}
-                  color="rose"
-                  title="Sign Out"
-                  stat="Action"
-                  desc="Log out of the admin panel and return to the login screen."
-                  actionLabel="Sign Out"
-                />
-              </div>
-            </section>
+            <div className="space-y-10">
+              <section>
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-2xl font-black text-slate-900">
+                    Dashboard Modules
+                  </h2>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  <ModuleCard
+                    onClick={() => setActiveCategory("core")}
+                    icon={UtensilsCrossed}
+                    color="orange"
+                    title="Core Modules"
+                    stat="Setup"
+                    desc="Configure menu, floor plan, staff, taxes, and settings."
+                    actionLabel="View Modules"
+                  />
+                  <ModuleCard
+                    onClick={() => setActiveCategory("quick")}
+                    icon={Boxes}
+                    color="emerald"
+                    title="Quick Actions"
+                    stat="Fast"
+                    desc="Instant stock, menu, floor, and staff updates."
+                    actionLabel="View Modules"
+                  />
+                  <ModuleCard
+                    onClick={() => setActiveCategory("web")}
+                    icon={Globe}
+                    color="blue"
+                    title="Web Portal"
+                    stat="Cloud"
+                    desc="Secure cloud dashboard and remote reporting."
+                    actionLabel="View Modules"
+                  />
+                </div>
+              </section>
+
+              {/* Report Module + report shortcuts */}
+              <section className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-stretch">
+                <div className="lg:col-span-1">
+                  <ModuleCard
+                    onClick={() => setActiveCategory("reports")}
+                    icon={BarChart3}
+                    color="rose"
+                    title="Report Module"
+                    stat="Data"
+                    desc="Guest, inventory, invoices, financial, and stock logs."
+                    actionLabel="View Modules"
+                  />
+                </div>
+                <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-3 content-start">
+                  {REPORT_SHORTCUTS.map((link) => (
+                    <QuickLinkButton
+                      key={link.href}
+                      href={link.href}
+                      label={link.label}
+                      icon={link.icon}
+                      chevron={link.chevron}
+                      tone="report"
+                    />
+                  ))}
+                </div>
+              </section>
+
+              {/* Remaining quick links */}
+              <section className="rounded-2xl border border-slate-200/80 bg-white p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
+                <div className="flex items-center justify-between gap-3 mb-6">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center">
+                      <Boxes className="w-5 h-5 text-emerald-600" />
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-black text-slate-900">
+                        Quick Links
+                      </h2>
+                      <p className="text-sm text-slate-500 font-medium">
+                        Instant stock, menu, floor, and staff updates.
+                      </p>
+                    </div>
+                  </div>
+                  <ChevronDown className="w-5 h-5 text-slate-400" />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {QUICK_ACTION_LINKS.map((link, index) => (
+                    <QuickLinkButton
+                      key={link.href}
+                      href={link.href}
+                      label={link.label}
+                      icon={link.icon}
+                      highlight={index === 0}
+                    />
+                  ))}
+                </div>
+              </section>
+            </div>
           ) : (
             <div>
               <Button
@@ -584,7 +776,7 @@ export default function AdminDashboardPage() {
                   <h2 className="text-2xl font-black text-slate-900 mb-6">
                     Quick Actions And Useful
                   </h2>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
                     <ModuleCard
                       href="/admin/stock"
                       icon={Boxes}
@@ -593,6 +785,16 @@ export default function AdminDashboardPage() {
                       stat="Inventory"
                       desc="Quick stock adjustments, item additions, and batch tracking."
                     />
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {DASHBOARD_QUICK_LINKS.map((link) => (
+                      <QuickLinkButton
+                        key={link.href}
+                        href={link.href}
+                        label={link.label}
+                        icon={link.icon}
+                      />
+                    ))}
                   </div>
                 </section>
               )}
@@ -673,6 +875,58 @@ export default function AdminDashboardPage() {
 /* ─────────────────────────────────────────────────────────────────────
    SUB-COMPONENTS (Pro Max Styled)
    ───────────────────────────────────────────────────────────────────── */
+
+function QuickLinkButton({
+  href,
+  label,
+  icon: Icon,
+  chevron = false,
+  highlight = false,
+  tone = "default",
+}) {
+  const isReport = tone === "report";
+
+  return (
+    <Link
+      href={href}
+      className={`group flex items-center gap-3 rounded-xl border px-4 py-5 text-left text-md font-bold transition-all duration-200 ${
+        highlight
+          ? "border-orange-500 bg-orange-500 text-white shadow-md shadow-orange-500/25 hover:bg-orange-600"
+          : isReport
+            ? "border-slate-200 bg-white text-slate-900 shadow-sm hover:border-rose-300 hover:bg-rose-50 hover:shadow-md"
+            : "border-slate-200 bg-white text-slate-900 shadow-sm hover:border-orange-300 hover:bg-orange-50 hover:shadow-md"
+      }`}
+    >
+      {Icon ? (
+        <span
+          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${
+            highlight
+              ? "bg-white/20 text-white"
+              : isReport
+                ? "bg-rose-100 text-rose-600 group-hover:bg-rose-200"
+                : "bg-slate-100 text-slate-700 group-hover:bg-orange-100 group-hover:text-orange-600"
+          }`}
+        >
+          <Icon className="h-4 w-4" />
+        </span>
+      ) : null}
+      <span className="flex-1 leading-snug">{label}</span>
+      {chevron ? (
+        <ChevronsRight
+          className={`h-4 w-4 shrink-0 ${
+            highlight ? "text-white/80" : "text-slate-400 group-hover:text-orange-500"
+          }`}
+        />
+      ) : (
+        <ArrowRight
+          className={`h-4 w-4 shrink-0 opacity-0 transition-all group-hover:opacity-100 group-hover:translate-x-0.5 ${
+            highlight ? "text-white opacity-100" : "text-slate-400"
+          }`}
+        />
+      )}
+    </Link>
+  );
+}
 
 /**
  * Module Card — Large Bento Box style
