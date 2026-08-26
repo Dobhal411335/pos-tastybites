@@ -9,7 +9,7 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import DateTimeDisplay from "@/components/common/DateTimeDisplay";
 import { useAdmin } from "@/context/AdminContext";
-
+import { Badge } from "@/components/ui/badge";
 export default function TopNavbar({ onMenuToggle }) {
   const router = useRouter();
   const { adminUser, companyInfo } = useAdmin();
@@ -22,7 +22,7 @@ export default function TopNavbar({ onMenuToggle }) {
       const res = await fetch("/api/auth/logout", { method: "POST" });
       if (res.ok) {
         toast.success("Logged out successfully.");
-        router.replace("/login");
+        router.replace("/admin/login");
       }
     } catch (err) {
       toast.error("Logout failed. Please try again.");
@@ -32,7 +32,6 @@ export default function TopNavbar({ onMenuToggle }) {
   return (
     <header className="print:hidden sticky top-0 z-40 h-16 border-b border-stone-200 bg-[#F7F7F7]">
       <div className="grid h-full grid-cols-[280px_1fr_auto] items-center px-5">
-
         {/* LEFT */}
         <div className="flex items-center gap-4">
           <Button
@@ -44,10 +43,7 @@ export default function TopNavbar({ onMenuToggle }) {
             <Menu className="h-5 w-5" />
           </Button>
 
-          <Link
-            href="/admin/dashboard"
-            className="flex items-center gap-3"
-          >
+          <Link href="/admin/dashboard" className="flex items-center gap-3">
             <Image
               src={logoSrc}
               alt="Logo"
@@ -69,7 +65,6 @@ export default function TopNavbar({ onMenuToggle }) {
 
         {/* RIGHT */}
         <div className="flex items-center justify-end gap-3">
-
           <Link
             href="/admin/dashboard"
             className="group hidden xl:flex items-center gap-3 rounded-xl border border-stone-200 bg-white px-4 py-2 shadow-sm transition hover:border-orange-300 hover:bg-orange-50"
@@ -89,18 +84,22 @@ export default function TopNavbar({ onMenuToggle }) {
             </div>
           </Link>
 
-          <div className="hidden lg:flex items-center gap-3 rounded-xl border border-stone-200 bg-white px-4 py-2 shadow-sm">
-            <UserCircle className="h-5 w-5 text-zinc-500" />
+          <div className="hidden lg:flex items-center gap-3 rounded-xl border border-stone-200 bg-white px-3 py-2 shadow-sm">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-orange-100">
+              <UserCircle className="h-5 w-5 text-orange-600" />
+            </div>
 
             <div className="leading-tight">
-              <p className="text-xs text-zinc-500">
-                Administrator
-              </p>
+              <p className="text-xs text-zinc-500">Administrator</p>
 
               <p className="text-sm font-semibold text-zinc-900">
-                {adminName}
+                {adminUser?.name || "System Admin"}
               </p>
             </div>
+
+            <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">
+              Online
+            </Badge>
           </div>
 
           <Button
@@ -120,9 +119,7 @@ export default function TopNavbar({ onMenuToggle }) {
             <LogOut className="h-4 w-4" />
             Logout
           </Button>
-
         </div>
-
       </div>
     </header>
   );

@@ -45,7 +45,7 @@ export function SocketProvider({ children, restaurantId, floorId, employeeId }) 
       ) {
         return;
       }
-      window.location.assign("/login");
+      window.location.assign("/sales/login");
     });
 
     // Reconnect recovery: we might want to tell listeners a reconnect happened

@@ -7,6 +7,10 @@ import {
   eachBusinessDate,
 } from "@/lib/reports/financial/datePresets";
 import {
+  formatRestaurantDate,
+  formatRestaurantTime,
+} from "@/lib/reports/financial/format";
+import {
   baseOrderMatch,
   dateRangeBounds,
   ORDER_STATUSES,
@@ -25,6 +29,26 @@ import {
 import { adminReportMeta } from "./query";
 import { paymentBreakdownFromKpis } from "./kpis";
 
+const ORDERS_LIMIT = 75;
+
+const ORDER_LIST_PROJECT = {
+  _id: 1,
+  orderNumber: 1,
+  createdAt: 1,
+  updatedAt: 1,
+  status: 1,
+  paymentStatus: 1,
+  paymentMethod: 1,
+  source: 1,
+  tableNo: 1,
+  partyName: 1,
+  guestName: 1,
+  guestCount: 1,
+  totalAmount: 1,
+  tipAmount: 1,
+  employeeName: 1,
+};
+
 function priorPeriodBounds(dateFrom, dateTo) {
   const days = Math.max(1, eachBusinessDate(dateFrom, dateTo).length);
   const prevTo = addDaysYmd(dateFrom, -1);
@@ -39,6 +63,25 @@ function ticketAverage(grossSales, orderCount) {
 function pctDelta(current, previous) {
   if (!previous) return current === 0 ? 0 : 100;
   return r2(((current - previous) / Math.abs(previous)) * 100);
+}
+
+function mapOrderRow(order, tz) {
+  return {
+    id: String(order._id),
+    orderNumber: order.orderNumber,
+    date: formatRestaurantDate(order.updatedAt || order.createdAt, tz),
+    time: formatRestaurantTime(order.updatedAt || order.createdAt, tz),
+    status: order.status,
+    paymentStatus: order.paymentStatus,
+    paymentMethod: order.paymentMethod || "—",
+    source: order.source || "POS",
+    table: order.tableNo || "—",
+    guest: order.partyName || order.guestName || "—",
+    guestCount: order.guestCount == null ? null : Number(order.guestCount),
+    total: r2(order.totalAmount),
+    tips: r2(order.tipAmount),
+    employee: order.employeeName || "Unknown",
+  };
 }
 
 async function kitchenSnapshot({ restaurantId, dateFrom, dateTo, employeeId }) {
@@ -121,6 +164,20 @@ export async function buildAdminDailySummary({ restaurantId, ...filters }) {
                 },
               },
             ],
+            staffMeals: [
+              {
+                $match: {
+                  $or: [{ source: "STAFF" }, { status: "WAIVED" }],
+                },
+              },
+              { $count: "count" },
+            ],
+            orders: [
+              { $sort: { updatedAt: -1, _id: -1 } },
+              { $limit: ORDERS_LIMIT },
+              ...EMPLOYEE_LOOKUP,
+              { $project: ORDER_LIST_PROJECT },
+            ],
           },
         },
       ]),
@@ -130,6 +187,14 @@ export async function buildAdminDailySummary({ restaurantId, ...filters }) {
         {
           $facet: {
             kpis: [{ $group: KPI_GROUP }],
+            guests: [
+              {
+                $group: {
+                  _id: null,
+                  guests: { $sum: { $ifNull: ["$guestCount", 0] } },
+                },
+              },
+            ],
             byDay: [seriesByDay(tz)],
             byEmployee: [
               {
@@ -214,6 +279,14 @@ export async function buildAdminDailySummary({ restaurantId, ...filters }) {
     counts.total += row.count;
   }
 
+  const openCount =
+    counts.PENDING + counts.CONFIRMED + counts.COMPLETED;
+  const staffMeals = statusFacet?.staffMeals?.[0]?.count || 0;
+  const guests = paidFacet?.guests?.[0]?.guests || 0;
+  const orders = (statusFacet?.orders || []).map((row) =>
+    mapOrderRow(row, tz)
+  );
+
   const kpis = roundKpis(paidFacet?.kpis?.[0] || emptyKpis());
   const priorKpis = roundKpis(priorKpiRow || emptyKpis());
   const avgTicket = ticketAverage(kpis.grossSales, kpis.orderCount);
@@ -241,6 +314,8 @@ export async function buildAdminDailySummary({ restaurantId, ...filters }) {
       refunded: "Refunds are not recorded in the POS yet.",
       kitchen:
         "Avg print time is createdAt to printedAt on printed KOTs. Prep/ready/served is not stored.",
+      guests: "Guests are summed from guestCount on paid orders only.",
+      staffMeals: "Staff meals include source STAFF and waived orders.",
     },
     counts: {
       total: counts.total,
@@ -249,9 +324,18 @@ export async function buildAdminDailySummary({ restaurantId, ...filters }) {
       confirmed: counts.CONFIRMED,
       cancelled: counts.CANCELLED,
       waived: counts.WAIVED,
+      open: openCount,
+      staffMeals,
       voided: 0,
       refunded: 0,
     },
+    statusStrip: [
+      { key: "paid", label: "Paid", value: counts.PAID },
+      { key: "open", label: "Open", value: openCount },
+      { key: "cancelled", label: "Cancelled", value: counts.CANCELLED },
+      { key: "waived", label: "Waived", value: counts.WAIVED },
+      { key: "staff", label: "Staff", value: staffMeals },
+    ],
     kpis: {
       grossSales: kpis.grossSales,
       discounts: kpis.discounts,
@@ -263,6 +347,7 @@ export async function buildAdminDailySummary({ restaurantId, ...filters }) {
       orderCount: kpis.orderCount,
       avgTicket,
       expectedDeposit: kpis.collected,
+      guests,
       refunds: 0,
       voids: 0,
     },
@@ -277,6 +362,8 @@ export async function buildAdminDailySummary({ restaurantId, ...filters }) {
     paymentBreakdown,
     byEmployee: paidFacet?.byEmployee || [],
     topItems: paidFacet?.topItems || [],
+    orders,
+    ordersTruncated: counts.total > ORDERS_LIMIT,
     charts: {
       salesOverTime: byDay.map((d) => ({ date: d.date, value: d.netSales })),
       ordersByStatus: [

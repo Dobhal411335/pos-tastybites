@@ -12,7 +12,7 @@ export function useEmployeeSessionRefresh({ enabled = true } = {}) {
     const refresh = async () => {
       const ok = await refreshEmployeeSession();
       if (!ok) {
-        window.location.assign('/login');
+        window.location.assign('/sales/login');
       }
     };
 

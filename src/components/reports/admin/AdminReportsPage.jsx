@@ -6,17 +6,15 @@ import {
   Activity,
   ChefHat,
   ClipboardList,
-  FileSpreadsheet,
-  FileText,
-  Loader2,
+  List,
   ShieldCheck,
   Sunset,
   TrendingUp,
   Wallet,
+  Wine,
 } from "lucide-react";
-import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
 import AdminReportFilters from "./AdminReportFilters";
+import AdminExportDialog from "./AdminExportDialog";
 import ActivitySection from "./ActivitySection";
 import RevenueSection from "./RevenueSection";
 import DailySummarySection from "./DailySummarySection";
@@ -37,6 +35,13 @@ export const ADMIN_SECTIONS = [
     icon: ClipboardList,
     subtitle: "End of day reconciliation for the current location.",
     href: "/admin/reports/admin",
+  },
+  {
+    id: "today-order",
+    label: "Today Order List",
+    icon: List,
+    subtitle: "Today's order list for the current location.",
+    href: "/admin/reports/admin/today-order",
   },
   {
     id: "revenue",
@@ -74,6 +79,13 @@ export const ADMIN_SECTIONS = [
     href: "/admin/reports/admin/kitchen",
   },
   {
+    id: "Bar",
+    label: "Bar Log",
+    icon: Wine,
+    subtitle: "Bar tickets for the selected period.",
+    href: "/admin/reports/admin/bar",
+  },
+  {
     id: "expenses",
     label: "Personal Expense",
     icon: Wallet,
@@ -101,12 +113,14 @@ const EXPORTABLE = new Set([
   "kitchen",
 ]);
 
-export default function AdminReportsPage({ section: sectionProp = "daily-summary" }) {
+export default function AdminReportsPage({
+  section: sectionProp = "daily-summary",
+}) {
   const router = useRouter();
   const section = SECTION_IDS.has(sectionProp) ? sectionProp : "daily-summary";
 
   const [filters, setFilters] = useState(DEFAULT_ADMIN_FILTERS);
-  const [downloading, setDownloading] = useState(null);
+  const [exportOpen, setExportOpen] = useState(false);
   const stableFilters = useMemo(() => filters, [filters]);
 
   const paginate = PAGINATED.has(section);
@@ -118,46 +132,24 @@ export default function AdminReportsPage({ section: sectionProp = "daily-summary
 
   const current = ADMIN_SECTIONS.find((item) => item.id === section);
   const TitleIcon = current?.icon || ClipboardList;
+  const canExport = EXPORTABLE.has(section);
 
   const setPage = (page) => {
     setFilters((prev) => ({ ...prev, page }));
   };
 
-  const handleDownload = async (kind) => {
-    if (!EXPORTABLE.has(section)) return;
-    setDownloading(kind);
-    try {
-      const qs = adminQueryString(filters, { paginate: true, section });
-      const res = await fetch(`/api/admin/reports/admin/${kind}?${qs}`, {
-        credentials: "include",
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.message || `Failed to download ${kind}`);
-      }
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `Admin-${section}-${
-        report.data?.meta?.dateFrom || "report"
-      }-to-${report.data?.meta?.dateTo || "report"}.${
-        kind === "excel" ? "xlsx" : "pdf"
-      }`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-      toast.success(`${kind === "excel" ? "Excel" : "PDF"} downloaded`);
-    } catch (err) {
-      toast.error(err.message || "Download failed");
-    } finally {
-      setDownloading(null);
-    }
+  const clearFilters = () => {
+    setFilters({ ...DEFAULT_ADMIN_FILTERS });
   };
 
-  const exportDisabled = !!downloading || report.loading;
-  const canExport = EXPORTABLE.has(section);
+  const exportQuery = adminQueryString(filters, {
+    paginate: true,
+    section,
+  });
+
+  const dateFrom =
+    report.data?.meta?.dateFrom || filters.dateFrom || "";
+  const dateTo = report.data?.meta?.dateTo || filters.dateTo || "";
 
   return (
     <div className="flex flex-col gap-8 min-w-0">
@@ -165,10 +157,7 @@ export default function AdminReportsPage({ section: sectionProp = "daily-summary
         <div>
           <div className="flex items-center gap-3 mb-2">
             <div className="w-10 h-10 rounded-lg bg-zinc-100 flex items-center justify-center">
-              <TitleIcon
-                className="h-5 w-5 text-zinc-700"
-                strokeWidth={1.75}
-              />
+              <TitleIcon className="h-5 w-5 text-zinc-700" strokeWidth={1.75} />
             </div>
             <h1 className="text-[32px] leading-10 font-bold text-zinc-900 m-0 tracking-tight">
               {current?.label || "Admin Reports"}
@@ -179,41 +168,16 @@ export default function AdminReportsPage({ section: sectionProp = "daily-summary
               "Operational activity, revenue, closing, audit, and kitchen logs."}
           </p>
         </div>
-        <div className="flex flex-col sm:flex-row gap-3 sm:items-end">
-          <AdminReportFilters
-            value={filters}
-            onChange={setFilters}
-            section={section}
-          />
-          {canExport ? (
-            <div className="flex gap-2 shrink-0">
-              <Button
-                variant="outline"
-                disabled={exportDisabled}
-                onClick={() => handleDownload("pdf")}
-              >
-                {downloading === "pdf" ? (
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                ) : (
-                  <FileText className="h-4 w-4 mr-2" strokeWidth={1.75} />
-                )}
-                PDF
-              </Button>
-              <Button
-                variant="outline"
-                disabled={exportDisabled}
-                onClick={() => handleDownload("excel")}
-              >
-                {downloading === "excel" ? (
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                ) : (
-                  <FileSpreadsheet className="h-4 w-4 mr-2" strokeWidth={1.75} />
-                )}
-                Excel
-              </Button>
-            </div>
-          ) : null}
-        </div>
+        <AdminReportFilters
+          value={filters}
+          onChange={setFilters}
+          section={section}
+          loading={report.loading}
+          canExport={canExport}
+          onRefresh={report.reload}
+          onClear={clearFilters}
+          onExport={() => setExportOpen(true)}
+        />
       </div>
 
       <div className="min-w-0">
@@ -252,6 +216,18 @@ export default function AdminReportsPage({ section: sectionProp = "daily-summary
         ) : null}
         {section === "expenses" ? <ExpensePlaceholder /> : null}
       </div>
+
+      <AdminExportDialog
+        key={exportOpen ? "admin-export-open" : "admin-export-closed"}
+        open={exportOpen}
+        onOpenChange={setExportOpen}
+        exportQuery={exportQuery}
+        reportTitle={current?.label || "Admin Report"}
+        dateFrom={dateFrom}
+        dateTo={dateTo}
+        section={section}
+        disabled={report.loading}
+      />
     </div>
   );
 }

@@ -28,7 +28,10 @@ export async function proxy(request) {
   // We are renaming employee to sales
   const isAdminPage = pathname.startsWith('/admin');
   const isSalesPage = pathname.startsWith('/sales');
-  const isAuthPage = pathname === '/login' || pathname === '/sales/login';
+  const isAuthPage =
+    pathname === '/login' ||
+    pathname === '/sales/login' ||
+    pathname === '/admin/login';
 
   let adminPayload = null;
   if (adminToken) {
@@ -70,7 +73,10 @@ export async function proxy(request) {
     pathname === '/apple-touch-icon.png' ||
     pathname.startsWith('/android-chrome-') ||
     pathname === '/site.webmanifest' ||
+    pathname === '/sw.js' ||
+    pathname.startsWith('/icons/') ||
     pathname.startsWith('/uploads') ||
+    pathname.endsWith('/manifest.webmanifest') ||
     /\.(?:ico|png|jpg|jpeg|gif|webp|svg|woff2?|ttf|eot|txt|xml|webmanifest|json|map)$/i.test(pathname);
   
   // To avoid rewriting already prefixed paths (e.g., API routes or static files)
@@ -96,31 +102,41 @@ export async function proxy(request) {
   // Auth Protection Logic (applying on the resolved targetPath)
   const isTargetAdmin = targetPath.startsWith('/admin');
   const isTargetSales = targetPath.startsWith('/sales');
+  const isAdminLogin = targetPath === '/admin/login';
+  const isSalesLogin = targetPath === '/sales/login';
+  const isPwaPublic =
+    isStaticAsset ||
+    pathname === '/sw.js' ||
+    pathname.endsWith('/manifest.webmanifest');
 
-  if (isTargetAdmin) {
+  if (isPwaPublic) {
+    response = NextResponse.next({ request: { headers: requestHeaders } });
+  } else if (isTargetAdmin && !isAdminLogin) {
     if (!adminPayload) {
-      response = NextResponse.redirect(new URL('/login', request.url));
+      response = NextResponse.redirect(new URL('/admin/login', request.url));
     } else {
       // If we need to rewrite
       response = targetPath !== pathname 
         ? NextResponse.rewrite(new URL(targetPath, request.url), { request: { headers: requestHeaders } })
         : NextResponse.next({ request: { headers: requestHeaders } });
     }
-  } else if (isTargetSales && targetPath !== '/sales/login') {
+  } else if (isTargetSales && !isSalesLogin) {
     if (!employeePayload && !adminPayload && !employeeRefreshValid) {
-      response = NextResponse.redirect(new URL('/login', request.url));
+      // Path hosts → /sales/login; sales subdomain keeps /login (rewritten to /sales/login)
+      const salesLoginPath = isSales ? '/login' : '/sales/login';
+      response = NextResponse.redirect(new URL(salesLoginPath, request.url));
     } else {
       response = targetPath !== pathname 
         ? NextResponse.rewrite(new URL(targetPath, request.url), { request: { headers: requestHeaders } })
         : NextResponse.next({ request: { headers: requestHeaders } });
     }
-  } else if (isAuthPage || targetPath === '/sales/login') {
+  } else if (isAuthPage || isSalesLogin || isAdminLogin) {
     // Only bounce away from login when the ACCESS token is still valid.
     // A leftover refresh cookie must not trap staff on /floor after the session dies.
     if (isSales && (adminPayload || employeePayload)) {
       response = NextResponse.redirect(new URL('/floor', request.url));
     } else if (isPos && adminPayload) {
-      response = NextResponse.redirect(new URL('/admin/dashboard', request.url));
+      response = NextResponse.redirect(new URL('/dashboard', request.url));
     } else if (adminPayload) {
       response = NextResponse.redirect(new URL('/admin/dashboard', request.url));
     } else if (employeePayload) {
@@ -142,9 +158,8 @@ export async function proxy(request) {
 }
 
 export const config = {
-  // Match all request paths except static assets (root favicon files, images, fonts, etc.)
+  // Match all request paths except static assets (root favicon files, images, fonts, SW, manifests)
   matcher: [
-    '/((?!_next/static|_next/image|favicon\\.ico|favicon-|apple-touch-icon\\.png|android-chrome-|site\\.webmanifest|.*\\.(?:ico|png|jpg|jpeg|gif|webp|svg|woff2?|ttf|eot|txt|xml|webmanifest)$).*)',
+    '/((?!_next/static|_next/image|favicon\\.ico|favicon-|apple-touch-icon\\.png|android-chrome-|site\\.webmanifest|sw\\.js|icons/|.*\\.(?:ico|png|jpg|jpeg|gif|webp|svg|woff2?|ttf|eot|txt|xml|webmanifest)$).*)',
   ],
 };
-

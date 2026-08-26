@@ -153,7 +153,7 @@ export default function AdminDashboardPage() {
       const res = await fetch("/api/auth/logout", { method: "POST" });
       if (res.ok) {
         toast.success("Logged out successfully.");
-        window.location.href = "/login";
+        window.location.href = "/admin/login";
       }
     } catch (err) {
       toast.error("Logout failed. Please try again.");

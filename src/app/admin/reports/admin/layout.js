@@ -16,6 +16,14 @@ const SIDEBAR_GROUPS = [
         exact: true,
       },
       {
+        label: "Today Order List",
+        href: "/admin/reports/admin/today-order",
+      },
+      {
+        label: "Bar Log",
+        href: "/admin/reports/admin/bar",
+      },
+      {
         label: "Revenue Generated",
         href: "/admin/reports/admin/revenue",
       },
@@ -34,6 +42,10 @@ const SIDEBAR_GROUPS = [
       {
         label: "Kitchen Log",
         href: "/admin/reports/admin/kitchen",
+      },
+      {
+        label: "Bar Log",
+        href: "/admin/reports/admin/bar",
       },
       {
         label: "Personal Expense",

@@ -126,7 +126,7 @@ export default function EmployeeTopNav({
     } catch {
       toast.message("Signing out…");
     } finally {
-      window.location.assign("/login");
+      window.location.assign("/sales/login");
     }
   };
 
@@ -169,7 +169,7 @@ export default function EmployeeTopNav({
       clearTimeout(timeout);
       if (res.ok) {
         toast.success("Restaurant closed. All employees logged out.");
-        window.location.assign("/login");
+        window.location.assign("/sales/login");
         return;
       }
       const data = await res.json().catch(() => ({}));

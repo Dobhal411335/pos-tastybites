@@ -7,8 +7,7 @@ export default function EmployeeIndexPage() {
   const router = useRouter();
 
   useEffect(() => {
-    // Simply redirect /admin directly to /login by default
-    router.replace("/login");
+    router.replace("/sales/login");
   }, [router]);
 
   return (

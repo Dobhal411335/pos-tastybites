@@ -1,10 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { format } from "date-fns";
-import { CalendarDays } from "lucide-react";
-import { DatePicker } from "@/components/ui/date-picker";
-import { Label } from "@/components/ui/label";
+import { Download, Filter, RefreshCw, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { DateRangePicker } from "@/components/ui/date-range-picker";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -14,14 +19,11 @@ import {
 } from "@/components/ui/select";
 import { employeeLabel } from "./useAdminReport";
 
-const PRESETS = [
+const DATE_PRESETS = [
   { value: "TODAY", label: "Today" },
-  { value: "YESTERDAY", label: "Yesterday" },
-  { value: "THIS_WEEK", label: "This Week" },
-  { value: "LAST_WEEK", label: "Last Week" },
-  { value: "THIS_MONTH", label: "This Month" },
-  { value: "LAST_MONTH", label: "Last Month" },
-  { value: "CUSTOM", label: "Custom Range" },
+  { value: "THIS_WEEK", label: "Week" },
+  { value: "THIS_MONTH", label: "Month" },
+  { value: "CUSTOM", label: "Custom" },
 ];
 
 const PAYMENT_OPTIONS = [
@@ -72,16 +74,27 @@ function dateToYmd(date) {
   return date ? format(date, "yyyy-MM-dd") : "";
 }
 
-function Field({ label, children }) {
+function FilterField({ label, children }) {
   return (
-    <div className="space-y-2 min-w-[140px]">
-      <Label className="text-[13px] font-semibold text-zinc-800">{label}</Label>
+    <div className="space-y-1">
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
+        {label}
+      </p>
       {children}
     </div>
   );
 }
 
-export default function AdminReportFilters({ value, onChange, section }) {
+export default function AdminReportFilters({
+  value,
+  onChange,
+  section,
+  loading = false,
+  canExport = false,
+  onRefresh,
+  onClear,
+  onExport,
+}) {
   const [employees, setEmployees] = useState([]);
   const showDate = section !== "eod" && section !== "expenses";
   const showEmployee =
@@ -93,6 +106,40 @@ export default function AdminReportFilters({ value, onChange, section }) {
   const showActivityEvent = section === "activity";
   const showAuditEvent = section === "audit";
   const showKotStatus = section === "kitchen";
+
+  const hasExtraFilters =
+    showEmployee ||
+    showPayment ||
+    showActivityEvent ||
+    showAuditEvent ||
+    showKotStatus;
+
+  const activeFilterCount = useMemo(() => {
+    let count = 0;
+    if (showEmployee && value.employeeId && value.employeeId !== "ALL") count += 1;
+    if (showPayment && value.paymentMethod && value.paymentMethod !== "ALL") {
+      count += 1;
+    }
+    if (
+      (showActivityEvent || showAuditEvent) &&
+      value.eventType &&
+      value.eventType !== "ALL"
+    ) {
+      count += 1;
+    }
+    if (showKotStatus && value.kotStatus && value.kotStatus !== "ALL") count += 1;
+    return count;
+  }, [
+    showEmployee,
+    showPayment,
+    showActivityEvent,
+    showAuditEvent,
+    showKotStatus,
+    value.employeeId,
+    value.paymentMethod,
+    value.eventType,
+    value.kotStatus,
+  ]);
 
   useEffect(() => {
     if (!showEmployee) return undefined;
@@ -113,146 +160,205 @@ export default function AdminReportFilters({ value, onChange, section }) {
     };
   }, [showEmployee]);
 
-  if (!showDate && !showEmployee && !showPayment) return null;
-
   const patch = (next) => {
     onChange((prev) => ({ ...prev, ...next, page: 1 }));
   };
 
+  const handlePreset = (preset) => {
+    if (preset === "CUSTOM") {
+      const today = format(new Date(), "yyyy-MM-dd");
+      patch({
+        preset,
+        dateFrom: value.dateFrom || today,
+        dateTo: value.dateTo || today,
+      });
+      return;
+    }
+    patch({ preset, dateFrom: "", dateTo: "" });
+  };
+
+  const uiPreset = DATE_PRESETS.some((p) => p.value === value.preset)
+    ? value.preset
+    : "CUSTOM";
+
   const eventOptions = showActivityEvent ? ACTIVITY_EVENTS : AUDIT_EVENTS;
 
-  return (
-    <div className="flex flex-wrap gap-4 items-end">
-      {showDate ? (
-        <div className="flex items-center gap-2 rounded-full bg-zinc-100 px-4 py-2">
-          <CalendarDays className="h-[18px] w-[18px] text-zinc-500 shrink-0" />
-          <Select
-            value={value.preset}
-            onValueChange={(preset) => {
-              if (preset === "CUSTOM") {
-                const today = format(new Date(), "yyyy-MM-dd");
-                patch({
-                  preset,
-                  dateFrom: value.dateFrom || today,
-                  dateTo: value.dateTo || today,
-                });
-              } else {
-                patch({ preset });
-              }
-            }}
-          >
-            <SelectTrigger className="h-8 w-[160px] border-0 bg-transparent shadow-none px-0 font-semibold text-[13px] text-zinc-900 focus:ring-0">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {PRESETS.map((p) => (
-                <SelectItem key={p.value} value={p.value}>
-                  {p.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      ) : null}
+  if (!showDate && !hasExtraFilters && !canExport && !onRefresh) {
+    return null;
+  }
 
-      {showDate && value.preset === "CUSTOM" ? (
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      {showDate ? (
         <>
-          <Field label="From">
-            <DatePicker
-              value={ymdToDate(value.dateFrom)}
-              onChange={(d) => patch({ dateFrom: dateToYmd(d) })}
-              className="h-11 w-[170px]"
+          <div className="flex rounded-md border border-zinc-200 bg-white p-0.5">
+            {DATE_PRESETS.map((preset) => (
+              <button
+                key={preset.value}
+                type="button"
+                onClick={() => handlePreset(preset.value)}
+                className={`rounded px-2.5 py-1.5 text-xs font-semibold transition-colors ${
+                  uiPreset === preset.value
+                    ? "bg-orange-500 text-white"
+                    : "text-zinc-600 hover:bg-zinc-50"
+                }`}
+              >
+                {preset.label}
+              </button>
+            ))}
+          </div>
+          {uiPreset === "CUSTOM" ? (
+            <DateRangePicker
+              dateFrom={ymdToDate(value.dateFrom)}
+              dateTo={ymdToDate(value.dateTo)}
+              onChange={({ from, to }) =>
+                patch({
+                  preset: "CUSTOM",
+                  dateFrom: dateToYmd(from),
+                  dateTo: dateToYmd(to || from),
+                })
+              }
+              className="h-9"
             />
-          </Field>
-          <Field label="To">
-            <DatePicker
-              value={ymdToDate(value.dateTo)}
-              onChange={(d) => patch({ dateTo: dateToYmd(d) })}
-              className="h-11 w-[170px]"
-            />
-          </Field>
+          ) : null}
         </>
       ) : null}
 
-      {showEmployee ? (
-        <Field label="Employee">
-          <Select
-            value={value.employeeId || "ALL"}
-            onValueChange={(employeeId) => patch({ employeeId })}
-          >
-            <SelectTrigger className="h-11 w-[180px] bg-white">
-              <SelectValue placeholder="All employees" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="ALL">All employees</SelectItem>
-              {employees.map((emp) => (
-                <SelectItem key={String(emp._id)} value={String(emp._id)}>
-                  {employeeLabel(emp)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </Field>
+      {hasExtraFilters ? (
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="outline" size="sm" className="h-9 gap-1.5">
+              <Filter className="h-3.5 w-3.5" />
+              Filters
+              {activeFilterCount > 0 ? (
+                <span className="ml-0.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-orange-500 px-1.5 text-[10px] font-bold text-white">
+                  {activeFilterCount}
+                </span>
+              ) : null}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent align="end" className="w-80 space-y-3 bg-white p-4">
+            {showEmployee ? (
+              <FilterField label="Employee">
+                <Select
+                  value={value.employeeId || "ALL"}
+                  onValueChange={(employeeId) => patch({ employeeId })}
+                >
+                  <SelectTrigger className="h-9 bg-white">
+                    <SelectValue placeholder="All employees" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-white max-h-60">
+                    <SelectItem value="ALL">All employees</SelectItem>
+                    {employees.map((emp) => (
+                      <SelectItem key={String(emp._id)} value={String(emp._id)}>
+                        {employeeLabel(emp)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </FilterField>
+            ) : null}
+
+            {showPayment ? (
+              <FilterField label="Payment method">
+                <Select
+                  value={value.paymentMethod || "ALL"}
+                  onValueChange={(paymentMethod) => patch({ paymentMethod })}
+                >
+                  <SelectTrigger className="h-9 bg-white">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-white">
+                    {PAYMENT_OPTIONS.map((s) => (
+                      <SelectItem key={s.value} value={s.value}>
+                        {s.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </FilterField>
+            ) : null}
+
+            {showActivityEvent || showAuditEvent ? (
+              <FilterField label="Event type">
+                <Select
+                  value={value.eventType || "ALL"}
+                  onValueChange={(eventType) => patch({ eventType })}
+                >
+                  <SelectTrigger className="h-9 bg-white">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-white">
+                    {eventOptions.map((s) => (
+                      <SelectItem key={s.value} value={s.value}>
+                        {s.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </FilterField>
+            ) : null}
+
+            {showKotStatus ? (
+              <FilterField label="KOT status">
+                <Select
+                  value={value.kotStatus || "ALL"}
+                  onValueChange={(kotStatus) => patch({ kotStatus })}
+                >
+                  <SelectTrigger className="h-9 bg-white">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-white">
+                    {KOT_STATUSES.map((s) => (
+                      <SelectItem key={s.value} value={s.value}>
+                        {s.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </FilterField>
+            ) : null}
+          </PopoverContent>
+        </Popover>
       ) : null}
 
-      {showPayment ? (
-        <Field label="Payment method">
-          <Select
-            value={value.paymentMethod || "ALL"}
-            onValueChange={(paymentMethod) => patch({ paymentMethod })}
-          >
-            <SelectTrigger className="h-11 w-[150px] bg-white">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {PAYMENT_OPTIONS.map((s) => (
-                <SelectItem key={s.value} value={s.value}>
-                  {s.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </Field>
+      {onClear ? (
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-9 gap-1.5"
+          onClick={onClear}
+        >
+          <X className="h-3.5 w-3.5" />
+          Clear
+        </Button>
       ) : null}
 
-      {showActivityEvent || showAuditEvent ? (
-        <Field label="Event type">
-          <Select
-            value={value.eventType || "ALL"}
-            onValueChange={(eventType) => patch({ eventType })}
-          >
-            <SelectTrigger className="h-11 w-[210px] bg-white">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {eventOptions.map((s) => (
-                <SelectItem key={s.value} value={s.value}>
-                  {s.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </Field>
+      {onRefresh ? (
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-9 gap-1.5"
+          onClick={onRefresh}
+          disabled={loading}
+        >
+          <RefreshCw
+            className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`}
+          />
+          Refresh
+        </Button>
       ) : null}
 
-      {showKotStatus ? (
-        <Field label="KOT status">
-          <Select
-            value={value.kotStatus || "ALL"}
-            onValueChange={(kotStatus) => patch({ kotStatus })}
-          >
-            <SelectTrigger className="h-11 w-[150px] bg-white">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {KOT_STATUSES.map((s) => (
-                <SelectItem key={s.value} value={s.value}>
-                  {s.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </Field>
+      {canExport && onExport ? (
+        <Button
+          size="sm"
+          className="h-9 gap-1.5 bg-orange-500 text-white hover:bg-orange-600"
+          onClick={onExport}
+          disabled={loading}
+        >
+          <Download className="h-3.5 w-3.5" />
+          Export
+        </Button>
       ) : null}
     </div>
   );

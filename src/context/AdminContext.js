@@ -1,17 +1,28 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 
 const AdminContext = createContext(null);
 
+function isAdminLoginPath(pathname) {
+  return pathname === "/admin/login" || pathname === "/login";
+}
+
 export function AdminProvider({ children }) {
   const router = useRouter();
+  const pathname = usePathname();
   const [adminUser, setAdminUser] = useState(null);
   const [companyInfo, setCompanyInfo] = useState(null);
   const [ready, setReady] = useState(false);
+  const isLoginPage = isAdminLoginPath(pathname);
 
   useEffect(() => {
+    if (isLoginPage) {
+      setReady(true);
+      return;
+    }
+
     const init = async () => {
       try {
         // Run auth + company info fetch in parallel — single round trip per session
@@ -21,7 +32,7 @@ export function AdminProvider({ children }) {
         ]);
 
         if (!authRes.ok) {
-          router.replace("/login");
+          router.replace("/admin/login");
           return;
         }
 
@@ -29,7 +40,7 @@ export function AdminProvider({ children }) {
         if (authData.success && authData.data) {
           setAdminUser(authData.data);
         } else {
-          router.replace("/login");
+          router.replace("/admin/login");
           return;
         }
 
@@ -40,14 +51,14 @@ export function AdminProvider({ children }) {
           }
         }
       } catch {
-        router.replace("/login");
+        router.replace("/admin/login");
       } finally {
         setReady(true);
       }
     };
 
     init();
-  }, [router]);
+  }, [router, isLoginPage]);
 
   return (
     <AdminContext.Provider value={{ adminUser, companyInfo, ready }}>
