@@ -4,17 +4,17 @@
   "private": true,
   "type": "module",
   "main": "electron/main.js",
-  "author": "Tasty Bites",
-  "description": "Tasty Bites POS desktop client for Windows",
+  "description": "Tasty Bites restaurant POS and management platform",
   "scripts": {
     "dev": "node server.js",
     "build": "next build",
     "start": "NODE_ENV=production node server.js",
     "lint": "eslint",
-    "electron": "electron .",
-    "electron:dev": "concurrently -k \"npm run dev\" \"wait-on http://localhost:3000 && electron .\"",
-    "electron:build": "npx electron-builder --win",
-    "electron:build:dir": "npx electron-builder --win --dir"
+    "install:production": "npm ci --omit=dev",
+    "electron": "npm run start --prefix desktop",
+    "electron:dev": "npm run dev --prefix desktop",
+    "electron:build": "npm run build:win --prefix desktop",
+    "electron:build:dir": "npm run build:dir --prefix desktop"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -85,55 +85,8 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
-    "concurrently": "^9.1.2",
-    "electron": "^35.0.0",
     "eslint": "^9",
     "eslint-config-next": "16.2.10",
-    "tailwindcss": "^4",
-    "wait-on": "^8.0.1",
-    "electron-builder": "^25.1.8"
-  },
-  "build": {
-    "appId": "com.tastybites.pos",
-    "productName": "Tasty Bites POS",
-    "copyright": "Copyright © Tasty Bites",
-    "directories": {
-      "output": "dist",
-      "buildResources": "electron/build"
-    },
-    "files": [
-      "electron/**/*",
-      "package.json"
-    ],
-    "extraResources": [
-      {
-        "from": "public/icons/POS.png",
-        "to": "icons/POS.png"
-      }
-    ],
-    "win": {
-      "target": [
-        {
-          "target": "nsis",
-          "arch": ["x64"]
-        }
-      ],
-      "icon": "public/icons/sales-512.png",
-      "artifactName": "Tasty-Bites-POS-Setup-${version}.${ext}"
-    },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true,
-      "shortcutName": "Tasty Bites POS",
-      "uninstallDisplayName": "Tasty Bites POS"
-    },
-    "publish": [
-      {
-        "provider": "generic",
-        "url": "https://YOUR-CDN-OR-STORAGE/releases/pos-desktop/"
-      }
-    ]
+    "tailwindcss": "^4"
   }
 }

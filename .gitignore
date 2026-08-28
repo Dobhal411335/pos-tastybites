@@ -20,6 +20,8 @@
 # production
 /build
 /dist
+/desktop/node_modules
+/desktop/dist
 
 # electron installers (upload to CDN or public/downloads/ for releases)
 public/downloads/*.exe

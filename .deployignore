@@ -1,0 +1,13 @@
+# Do not upload these to Hostinger / production server
+node_modules
+desktop/node_modules
+.next
+dist
+desktop/dist
+.git
+*.exe
+*.blockmap
+electron-builder.yml
+coverage
+.env
+.env.*
