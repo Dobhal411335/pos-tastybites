@@ -458,7 +458,7 @@ export default function TodayOrdersPage() {
         <div className="bg-white px-4 py-3 border-b border-zinc-200 shrink-0 z-10 space-y-3">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2 min-w-0">
-              <Button variant="ghost" onClick={() => router.push("/sales/floor")} className="h-10 px-2 border bg-red-500 hover:bg-red-600 text-white shrink-0">
+              <Button variant="ghost" onClick={() => router.push("/floor")} className="h-10 px-2 border bg-red-500 hover:bg-red-600 text-white shrink-0">
                 <ArrowLeft className="w-4 h-4 mr-1" /> Floor
               </Button>
               <h1 className="text-xl font-bold text-zinc-900 leading-none truncate py-1">Today&apos;s Orders</h1>

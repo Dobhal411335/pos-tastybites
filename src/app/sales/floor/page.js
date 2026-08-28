@@ -265,7 +265,7 @@ export default function SalesFloorPage() {
     selectedFloorIdRef.current = nextId;
     setSelectedFloorId(nextId);
     storeFloorId(nextId);
-    router.replace(`/sales/floor?floor=${encodeURIComponent(nextId)}`, {
+    router.replace(`/floor?floor=${encodeURIComponent(nextId)}`, {
       scroll: false,
     });
     loadData(nextId);

@@ -6,7 +6,7 @@ import Restaurant from "@/models/Restaurant";
 import { sendSuccess } from "@/utils/apiResponse";
 import { sendError } from "@/utils/errorHandler";
 import { logger } from "@/utils/logger";
-import { getNextOrderNumber } from "@/utils/generateOrderNumber"; 
+import { getNextOrderNumber, getNextInvoiceNumber } from "@/utils/generateOrderNumber"; 
 import OperationalAuditLog from "@/models/OperationalAuditLog";
 import { createKotPrintJob, createBarReceiptPrintJob } from "@/lib/printing/printJobService";
 import { createNotification } from "@/lib/notifications/notificationService";
@@ -396,9 +396,11 @@ export const POST = withAuth(async (request) => {
 
       // Create new direct order
       const orderNumber = await getNextOrderNumber(request.restaurant);
+      const invoiceNumber = await getNextInvoiceNumber(request.restaurant);
       const createPayload = {
         restaurantId: request.restaurant,
         orderNumber,
+        invoiceNumber,
         items: formattedItems.map((item) => ({ ...item, sentQty: item.qty })),
         subTotal,
         taxTotal,
@@ -611,9 +613,11 @@ export const POST = withAuth(async (request) => {
     } else {
       // Create New Order
       const orderNumber = await getNextOrderNumber(request.restaurant);
+      const invoiceNumber = await getNextInvoiceNumber(request.restaurant);
       const newOrder = await Order.create({
         restaurantId: request.restaurant,
         orderNumber,
+        invoiceNumber,
         items: formattedItems.map(item => ({ ...item, sentQty: item.qty })),
         subTotal,
         taxTotal,

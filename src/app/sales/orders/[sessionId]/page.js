@@ -1328,10 +1328,10 @@ export default function OrderPage() {
           : null,
       );
     if (floorId) {
-      router.push(`/sales/floor?floor=${encodeURIComponent(floorId)}`);
+      router.push(`/floor?floor=${encodeURIComponent(floorId)}`);
       return;
     }
-    router.push("/sales/floor");
+    router.push("/floor");
   };
 
   const handleReleaseTable = async (shouldRelease) => {

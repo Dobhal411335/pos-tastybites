@@ -68,7 +68,7 @@ function relativeTime(date) {
 function hrefFor(n) {
   if (n.tableSessionId) return `/sales/orders/${n.tableSessionId}`;
   if (n.printJobId) return `/sales/print-jobs/${n.printJobId}`;
-  if (n.type?.startsWith("TABLE")) return "/sales/floor";
+  if (n.type?.startsWith("TABLE")) return "/floor";
   if (n.type === "EMPLOYEE_LOGIN" || n.type === "EMPLOYEE_LOGOUT") return null;
   return null;
 }
@@ -253,7 +253,7 @@ export default function NotificationsPage() {
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => router.push("/sales/floor")}
+              onClick={() => router.push("/floor")}
             >
               <ArrowLeft className="w-5 h-5" />
             </Button>

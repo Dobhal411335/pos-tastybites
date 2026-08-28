@@ -31,6 +31,7 @@ const CustomerReceipt = ({
 
   const {
     orderNumber,
+    invoiceNumber,
     items = [],
     subTotal = 0,
     taxTotal = 0,
@@ -157,6 +158,12 @@ const CustomerReceipt = ({
             <span className="text-zinc-500">Order #:</span>{" "}
             <span className="receipt-bold">{orderNumber}</span>
           </span>
+          <span>
+            <span className="text-zinc-500">Invoice No:</span>{" "}
+            <span className="receipt-bold">{invoiceNumber || "—"}</span>
+          </span>
+        </div>
+        <div className="flex justify-between gap-2">
           <span>
             <span className="text-zinc-500">Server:</span>{" "}
             <span className="receipt-bold">{serverName || "Server"}</span>

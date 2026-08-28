@@ -40,7 +40,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 const PRIMARY_NAV = [
-  { label: "Floor", href: "/sales/floor", icon: Grid2X2 },
+  { label: "Floor", href: "/floor", icon: Grid2X2 },
   { label: "Orders", href: "/sales/today", icon: ShoppingBag },
 ];
 
@@ -81,8 +81,8 @@ const quickActionClass =
   "flex h-[58px] w-[58px] items-center justify-center rounded-[18px] bg-white text-stone-800 shadow-[6px_6px_14px_rgba(0,0,0,0.08),-3px_-3px_10px_rgba(255,255,255,0.9)] ring-1 ring-stone-100/80 transition-all duration-200 group-hover:-translate-y-0.5 group-hover:shadow-[8px_8px_18px_rgba(0,0,0,0.1)]";
 
 function navActive(pathname, href) {
-  if (href === "/sales/floor") {
-    return pathname === "/sales/floor" || pathname?.startsWith("/sales/orders");
+  if (href === "/floor") {
+    return pathname === "/floor" || pathname?.startsWith("/sales/orders");
   }
   return pathname === href || pathname?.startsWith(href + "/");
 }
@@ -193,7 +193,7 @@ export default function EmployeeTopNav({
         {/* LEFT — brand */}
         <div className="flex items-center gap-2.5 min-w-0 shrink-0">
           <Link
-            href="/sales/floor"
+            href="/floor"
             className="flex items-center gap-2.5 min-w-0"
           >
             <Image
@@ -488,7 +488,7 @@ export default function EmployeeTopNav({
                 className="bg-orange-500 hover:bg-orange-600 text-white"
               >
                 <Link
-                  href="/sales/floor"
+                  href="/floor"
                   onClick={() => setCloseBlockedOpen(false)}
                 >
                   Go to Floor

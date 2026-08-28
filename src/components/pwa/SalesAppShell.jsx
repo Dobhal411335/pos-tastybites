@@ -13,7 +13,7 @@ import NotificationSoundPrompt from "@/components/common/NotificationSoundPrompt
 export default function SalesAppShell({ children }) {
   const pathname = usePathname();
   const isLoginPage = pathname === "/sales/login" || pathname === "/login";
-  const isFloorPage = pathname === "/sales/floor" || pathname === "/floor";
+  const isFloorPage = pathname === "/floor";
   const isTodayOrdersPage = pathname === "/sales/today" || pathname === "/today";
   const lockViewport = isFloorPage || isTodayOrdersPage;
   const [employeeUser, setEmployeeUser] = useState(null);

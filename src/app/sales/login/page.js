@@ -74,7 +74,7 @@ export default function SalesLoginPage() {
 
   const redirectAfterLogin = () => {
     const onSalesHost = window.location.hostname.includes("sales");
-    window.location.assign(onSalesHost ? "/sales/floor" : "/sales/floor");
+    window.location.assign(onSalesHost ? "/floor" : "/floor");
   };
 
   const finishSuccessfulLogin = (firstName, employeeId) => {

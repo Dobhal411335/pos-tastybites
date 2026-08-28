@@ -38,6 +38,7 @@ const OrderSchema = new mongoose.Schema(
   {
     restaurantId: { type: mongoose.Schema.Types.ObjectId, ref: 'Restaurant', index: true },
     orderNumber: { type: String, required: true, unique: true },
+    invoiceNumber: { type: String, unique: true, sparse: true },
     items: [OrderItemSchema],
     subTotal: { type: Number, required: true },
     taxTotal: { type: Number, default: 0 },

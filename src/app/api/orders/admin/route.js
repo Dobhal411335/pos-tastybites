@@ -4,7 +4,7 @@ import Order from "@/models/Order";
 import { sendSuccess } from "@/utils/apiResponse";
 import { sendError } from "@/utils/errorHandler";
 import { logger } from "@/utils/logger";
-import { getNextOrderNumber } from "@/utils/generateOrderNumber";
+import { getNextOrderNumber, getNextInvoiceNumber } from "@/utils/generateOrderNumber";
 
 // POST - Create a new admin order
 export const POST = withAuth(async (request) => {
@@ -17,10 +17,12 @@ export const POST = withAuth(async (request) => {
     }
 
     const orderNumber = await getNextOrderNumber(request.restaurant);
+    const invoiceNumber = await getNextInvoiceNumber(request.restaurant);
     
     const newOrder = await Order.create({
       restaurantId: request.restaurant,
       orderNumber,
+      invoiceNumber,
       items: items.map(item => ({
         menuItemId: item.id,
         name: item.name,

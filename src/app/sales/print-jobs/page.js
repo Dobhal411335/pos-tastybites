@@ -179,7 +179,7 @@ export default function PrintJobsPage() {
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => router.push("/sales/floor")}
+              onClick={() => router.push("/floor")}
               className="text-zinc-500"
             >
               <ArrowLeft className="w-4 h-4 mr-1" />

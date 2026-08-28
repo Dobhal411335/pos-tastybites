@@ -69,7 +69,7 @@ function notificationHref(n) {
   if (n.type === "EMPLOYEE_LOGIN" || n.type === "EMPLOYEE_LOGOUT") return null;
   if (n.tableSessionId) return `/sales/orders/${n.tableSessionId}`;
   if (n.printJobId) return `/sales/print-jobs/${n.printJobId}`;
-  if (n.type?.startsWith("TABLE")) return "/sales/floor";
+  if (n.type?.startsWith("TABLE")) return "/floor";
   return "/sales/notifications";
 }
 

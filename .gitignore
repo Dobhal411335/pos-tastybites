@@ -19,6 +19,11 @@
 
 # production
 /build
+/dist
+
+# electron installers (upload to CDN or public/downloads/ for releases)
+public/downloads/*.exe
+public/downloads/*.blockmap
 
 # misc
 .DS_Store

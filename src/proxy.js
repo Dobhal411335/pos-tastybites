@@ -85,6 +85,15 @@ export async function proxy(request) {
     !pathname.startsWith('/_next') &&
     !isStaticAsset
   ) {
+    // Canonical public URL is /floor (not /sales/floor)
+    if (pathname === '/sales/floor') {
+      const dest = new URL('/floor', request.url);
+      dest.search = request.nextUrl.search;
+      response = NextResponse.redirect(dest);
+      response.headers.set('x-request-id', reqId);
+      return response;
+    }
+
     if (isSales && pathname === '/login') {
       targetPath = '/sales/login';
     } else if (isSales && pathname === '/') {
@@ -96,6 +105,15 @@ export async function proxy(request) {
       targetPath = `/admin${pathname === '/' ? '/dashboard' : pathname}`;
     } else if (pathname !== '/login' && isSales && !isSalesPage && !isAdminPage) {
       targetPath = `/sales${pathname}`;
+    } else if (
+      !isPos &&
+      !isSales &&
+      !isAdminPage &&
+      !isSalesPage &&
+      pathname === '/floor'
+    ) {
+      // Path-based host: /floor → /sales/floor (App Router folder; browser stays /floor)
+      targetPath = '/sales/floor';
     }
   }
 
@@ -140,7 +158,7 @@ export async function proxy(request) {
     } else if (adminPayload) {
       response = NextResponse.redirect(new URL('/admin/dashboard', request.url));
     } else if (employeePayload) {
-      response = NextResponse.redirect(new URL('/sales/floor', request.url));
+      response = NextResponse.redirect(new URL('/floor', request.url));
     } else {
       response = targetPath !== pathname
         ? NextResponse.rewrite(new URL(targetPath, request.url), { request: { headers: requestHeaders } })
