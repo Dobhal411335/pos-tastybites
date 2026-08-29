@@ -25,6 +25,8 @@ jobs:
         run: npm install --prefix desktop
 
       - name: Build Mac .dmg
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npm run electron:build:mac
 
       - name: Upload .dmg file
