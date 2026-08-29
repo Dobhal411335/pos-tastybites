@@ -1,8 +1,10 @@
 {
   "name": "restaurant",
   "version": "1.0.0",
+  "author": "Tasty Bites",
   "private": true,
   "type": "module",
+  
   "main": "electron/main.js",
   "description": "Tasty Bites restaurant POS and management platform",
   "scripts": {
@@ -14,6 +16,7 @@
     "electron": "npm run start --prefix desktop",
     "electron:dev": "npm run dev --prefix desktop",
     "electron:build": "npm run build:win --prefix desktop",
+    "electron:build:mac": "npm run build:mac --prefix desktop",
     "electron:build:dir": "npm run build:dir --prefix desktop"
   },
   "dependencies": {

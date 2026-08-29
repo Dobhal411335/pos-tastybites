@@ -8,6 +8,7 @@ import {
   isPackagedApp,
 } from './config.js';
 import { initAutoUpdater } from './updater.js';
+import { registerPrintIpc } from './printIpc.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -107,6 +108,7 @@ async function loadWithRetry(window, url, attempt = 0) {
 }
 
 app.whenReady().then(() => {
+  registerPrintIpc();
   createWindow();
 
   app.on('activate', () => {

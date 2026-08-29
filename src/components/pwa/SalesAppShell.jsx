@@ -9,6 +9,7 @@ import { AuthProvider } from "@/components/providers/AuthProvider";
 import { employeeFetch } from "@/lib/employeeFetch";
 import { useEmployeeSessionRefresh } from "@/hooks/useEmployeeSessionRefresh";
 import NotificationSoundPrompt from "@/components/common/NotificationSoundPrompt";
+import ElectronPrintAgent from "@/components/printing/ElectronPrintAgent";
 
 export default function SalesAppShell({ children }) {
   const pathname = usePathname();
@@ -81,6 +82,7 @@ export default function SalesAppShell({ children }) {
             </main>
           </div>
           <NotificationSoundPrompt />
+          <ElectronPrintAgent />
         </div>
       </AuthProvider>
     </SocketProvider>

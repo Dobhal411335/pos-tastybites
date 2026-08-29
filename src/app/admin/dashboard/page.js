@@ -768,6 +768,14 @@ export default function AdminDashboardPage() {
                       stat="Setup"
                       desc="Configure payment gateways, hardware peripherals, and receipt templates."
                     />
+                    <ModuleCard
+                      href="/admin/printers"
+                      icon={Printer}
+                      color="slate"
+                      title="Printer Configuration"
+                      stat="Hardware"
+                      desc="Register kitchen, bar, and receipt printers by IP for the sales print queue."
+                    />
                   </div>
                 </section>
               )}
