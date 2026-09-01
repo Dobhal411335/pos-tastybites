@@ -72,7 +72,11 @@ export const withAuth = (handler, allowedRoles = []) => {
         let expandedRoles = allowedRoles.map(r => r.toUpperCase());
         // Automatically allow new Admin roles if legacy ADMIN is required
         if (expandedRoles.includes('ADMIN')) {
-          expandedRoles.push('SUPER ADMIN');
+          expandedRoles.push('SUPER ADMIN', 'MASTER TERMINAL');
+        }
+        
+        if (expandedRoles.includes('MANAGER')) {
+          expandedRoles.push('MANAGER TERMINAL');
         }
         
         // Automatically allow all floor staff variations if SERVER or EMPLOYEE is required

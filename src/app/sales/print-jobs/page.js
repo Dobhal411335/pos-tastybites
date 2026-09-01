@@ -47,6 +47,7 @@ export default function PrintJobsPage() {
   const router = useRouter();
   const { socket } = useSocket();
   const [jobs, setJobs] = useState([]);
+  const [printers, setPrinters] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("ALL");
   const [busyId, setBusyId] = useState(null);
@@ -68,10 +69,29 @@ export default function PrintJobsPage() {
     }
   }, [filter]);
 
+  const fetchPrinters = useCallback(async () => {
+    try {
+      const res = await fetch("/api/sales/printers");
+      const json = await res.json();
+      if (json.success) setPrinters(json.data || []);
+    } catch {
+      // optional enrichment — ignore
+    }
+  }, []);
+
   useEffect(() => {
     setLoading(true);
     fetchJobs();
   }, [fetchJobs]);
+
+  useEffect(() => {
+    fetchPrinters();
+  }, [fetchPrinters]);
+
+  const printerNameFor = (target) => {
+    const match = printers.find((p) => p.target === target);
+    return match?.name || null;
+  };
 
   useEffect(() => {
     if (!socket) return;
@@ -271,6 +291,11 @@ export default function PrintJobsPage() {
                         : job.printerTarget === "COUNTER"
                           ? "Counter"
                           : "Front"}
+                      {printerNameFor(job.printerTarget) && (
+                        <span className="block text-[10px] text-zinc-400 truncate">
+                          {printerNameFor(job.printerTarget)}
+                        </span>
+                      )}
                     </div>
                     <div className="text-xs text-zinc-500">
                       {moment(job.createdAt).format("HH:mm")}

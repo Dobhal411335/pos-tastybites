@@ -15,7 +15,28 @@ import ShiftHistory from "@/models/employee/ShiftHistory";
 import RegisteredDevice from "@/models/RegisteredDevice";
 import { sendEmployeeCredentials } from "@/lib/brevo/sendEmployeeCredentials";
 import { generateActivationCode } from "@/utils/crypto";
-import Restaurant from "@/models/Restaurant"
+import Restaurant from "@/models/Restaurant";
+
+async function checkMasterManagerConflict(restaurantId, role, excludeEmployeeId = null) {
+  if (role !== "Master Terminal" && role !== "Manager Terminal") return;
+
+  const query = {
+    restaurant: restaurantId,
+    role: { $in: ["Master Terminal", "Manager Terminal"] }
+  };
+  if (excludeEmployeeId) {
+    query._id = { $ne: excludeEmployeeId };
+  }
+
+  const existing = await Employee.findOne(query).select("_id role").lean();
+  if (existing) {
+    throw Object.assign(
+      new Error(`A ${existing.role} already exists for this restaurant. Only one admin-level terminal account is allowed.`),
+      { status: 409 }
+    );
+  }
+}
+
 function normalizeHourlyPaid(hourlyPaid) {
   if (!hourlyPaid) return undefined;
   const hours = Number(hourlyPaid.totalWorkingHours);
@@ -235,6 +256,12 @@ export const POST = withAuth(async (request) => {
       return sendError(new Error("First name, last name, email, and phone number are required"), "Missing fields", 400);
     }
 
+    try {
+      await checkMasterManagerConflict(request.restaurant, role || "Staff");
+    } catch (roleErr) {
+      return sendError(roleErr, roleErr.message, roleErr.status || 400);
+    }
+
     // Check unique email and phone
     const existingEmail = await Employee.findOne({ email: email.toLowerCase() });
     if (existingEmail) {
@@ -339,6 +366,14 @@ export const PUT = withAuth(async (request) => {
     }
 
     if (action === "updateEmployee") {
+      if (role) {
+        try {
+          await checkMasterManagerConflict(request.restaurant, role, _id);
+        } catch (roleErr) {
+          return sendError(roleErr, roleErr.message, roleErr.status || 400);
+        }
+      }
+      
       const previousTemplateId = existing.defaultShiftTemplate
         ? String(existing.defaultShiftTemplate)
         : null;
@@ -620,6 +655,14 @@ export const PUT = withAuth(async (request) => {
       } catch (err) {
         logger.error(`Error sending new device token to ${existing.email}`, err);
         return sendError(err, "Device token generated but failed to send email", 500);
+      }
+    }
+
+    if (role) {
+      try {
+        await checkMasterManagerConflict(request.restaurant, role, _id);
+      } catch (roleErr) {
+        return sendError(roleErr, roleErr.message, roleErr.status || 400);
       }
     }
 

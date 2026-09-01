@@ -37,12 +37,7 @@ export default function CreateServerAccountPage() {
   // Default Shift Assignment
   const [defaultShiftTemplate, setDefaultShiftTemplate] = useState("");
   const [templates, setTemplates] = useState([]);
-
-  const [roles, setRoles] = useState([]);
-  const [isAddRoleOpen, setIsAddRoleOpen] = useState(false);
-  const [newRoleName, setNewRoleName] = useState("");
-  const [addingRole, setAddingRole] = useState(false);
-
+  const [existingAdminTerminal, setExistingAdminTerminal] = useState(null);
   const [isEditMode, setIsEditMode] = useState(false);
   const [editId, setEditId] = useState(null);
 
@@ -57,6 +52,17 @@ export default function CreateServerAccountPage() {
   })();
 
   useEffect(() => {
+    if (role === "Master Terminal") {
+      setTotalWorkingHours("");
+      setAmountPerHour("");
+      setOvertimeAmountPerHour("");
+      setTipPercent("");
+      setReceiveOwnTips(false);
+      setStaffDiscount("");
+    }
+  }, [role]);
+
+  useEffect(() => {
     // Check if we are in edit mode
     const searchParams = new URLSearchParams(window.location.search);
     const id = searchParams.get("id");
@@ -68,19 +74,10 @@ export default function CreateServerAccountPage() {
     // Fetch available roles and templates
     const fetchInitialData = async () => {
       try {
-        const [rolesRes, templatesRes, employeesRes] = await Promise.all([
-          fetch("/api/roles"),
+        const [templatesRes, employeesRes] = await Promise.all([
           fetch("/api/employees/shifts?action=templates", { cache: "no-store" }),
           fetch("/api/employees", { cache: "no-store" }),
         ]);
-
-        const rolesJson = await rolesRes.json();
-        if (rolesJson.success) {
-          setRoles(rolesJson.data);
-          if (!rolesJson.data.find(r => r.name === role) && rolesJson.data.length > 0 && !id) {
-            setRole(rolesJson.data[0].name);
-          }
-        }
 
         const templatesJson = await templatesRes.json();
         if (templatesJson.success) {
@@ -95,6 +92,14 @@ export default function CreateServerAccountPage() {
             return sum + (Number(emp.tipPercent) || 0);
           }, 0);
           setAllocatedTipPercent(used);
+          
+          const adminEmp = (employeesJson.data || []).find(emp => 
+            (emp.role === "Master Terminal" || emp.role === "Manager Terminal") && 
+            (!id || String(emp._id) !== String(id))
+          );
+          if (adminEmp) {
+            setExistingAdminTerminal(adminEmp.role);
+          }
         }
 
         if (id) {
@@ -245,31 +250,7 @@ export default function CreateServerAccountPage() {
     }
   };
 
-  const handleAddRole = async () => {
-    if (!newRoleName.trim()) return;
-    setAddingRole(true);
-    try {
-      const res = await fetch("/api/roles", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newRoleName.trim() })
-      });
-      const json = await res.json();
-      if (json.success) {
-        setRoles([...roles, json.data]);
-        setRole(json.data.name);
-        setIsAddRoleOpen(false);
-        setNewRoleName("");
-        toast.success("Role added successfully");
-      } else {
-        toast.error(json.message || "Failed to add role");
-      }
-    } catch (err) {
-      toast.error("An error occurred while adding role");
-    } finally {
-      setAddingRole(false);
-    }
-  };
+
 
   return (
     <div className="flex flex-col overflow-hidden min-h-screen" style={{ backgroundColor: PALETTE.canvas, color: PALETTE.ink }}>
@@ -422,18 +403,11 @@ export default function CreateServerAccountPage() {
                           <SelectValue placeholder="Select role..." />
                         </SelectTrigger>
                         <SelectContent className="bg-white max-h-60 overflow-y-auto">
-                          {roles.map(r => (
-                            <SelectItem key={r.name} value={r.name}>{r.name}</SelectItem>
-                          ))}
+                          <SelectItem value="Master Terminal" disabled={!!existingAdminTerminal}>Master Terminal</SelectItem>
+                          <SelectItem value="Manager Terminal" disabled={!!existingAdminTerminal}>Manager Terminal</SelectItem>
+                          <SelectItem value="Staff">Staff</SelectItem>
                         </SelectContent>
                       </Select>
-                      <Button
-                        type="button"
-                        onClick={() => setIsAddRoleOpen(true)}
-                        className="h-12 w-12 shrink-0 bg-stone-100 text-stone-600 hover:bg-stone-200 border border-stone-200"
-                      >
-                        <UserPlus className="h-5 w-5" />
-                      </Button>
                     </div>
                   </div>
 
@@ -471,6 +445,7 @@ export default function CreateServerAccountPage() {
                           step="any"
                           placeholder="e.g. 8"
                           value={totalWorkingHours}
+                          disabled={role === "Master Terminal"}
                           onChange={(e) => setTotalWorkingHours(e.target.value)}
                           className="h-12 text-[15px] bg-white border-zinc-200 focus:ring-[#1e40af]"
                         />
@@ -485,6 +460,7 @@ export default function CreateServerAccountPage() {
                           step="any"
                           placeholder="e.g. 10"
                           value={amountPerHour}
+                          disabled={role === "Master Terminal"}
                           onChange={(e) => setAmountPerHour(e.target.value)}
                           className="h-12 text-[15px] bg-white border-zinc-200 focus:ring-[#1e40af]"
                         />
@@ -515,6 +491,7 @@ export default function CreateServerAccountPage() {
                       step="any"
                       placeholder="Overtime rate per hour"
                       value={overtimeAmountPerHour}
+                      disabled={role === "Master Terminal"}
                       onChange={(e) => setOvertimeAmountPerHour(e.target.value)}
                       className="h-12 text-[15px] bg-white border-zinc-200 focus:ring-[#1e40af]"
                     />
@@ -533,7 +510,7 @@ export default function CreateServerAccountPage() {
                       step="any"
                       placeholder={`0 – ${remainingTipPercent}`}
                       value={tipPercent}
-                      disabled={receiveOwnTips}
+                      disabled={receiveOwnTips || role === "Master Terminal"}
                       onChange={(e) => {
                         setTipPercent(e.target.value);
                         if (e.target.value !== "") setReceiveOwnTips(false);
@@ -547,6 +524,7 @@ export default function CreateServerAccountPage() {
                       <Checkbox
                         id="receiveOwnTips"
                         checked={receiveOwnTips}
+                        disabled={role === "Master Terminal"}
                         onCheckedChange={(checked) => {
                           const next = checked === true;
                           setReceiveOwnTips(next);
@@ -577,6 +555,7 @@ export default function CreateServerAccountPage() {
                       min="0"
                       placeholder="Enter for percent"
                       value={staffDiscount}
+                      disabled={role === "Master Terminal"}
                       onChange={(e) => setStaffDiscount(e.target.value)}
                       className="h-12 text-[15px] bg-white border-zinc-200 focus:ring-[#1e40af]"
                     />
@@ -631,38 +610,7 @@ export default function CreateServerAccountPage() {
           </Card>
 
         </div>
-        <Dialog open={isAddRoleOpen} onOpenChange={setIsAddRoleOpen}>
-          <DialogContent className="sm:max-w-106.25 bg-white">
-            <DialogHeader>
-              <DialogTitle>Add New Role</DialogTitle>
-              <DialogDescription>
-                Create a new custom role for your restaurant.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <div className="grid grid-cols-4 items-center gap-4">
-                <label htmlFor="name" className="text-right text-[14px] font-semibold text-zinc-900">
-                  Name
-                </label>
-                <Input
-                  id="name"
-                  value={newRoleName}
-                  onChange={(e) => setNewRoleName(e.target.value)}
-                  placeholder="e.g. Bartender"
-                  className="col-span-3 h-10 border-zinc-200 focus:ring-[#1e40af]"
-                />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setIsAddRoleOpen(false)}>
-                Cancel
-              </Button>
-              <Button type="button" onClick={handleAddRole} disabled={addingRole || !newRoleName.trim()} className="bg-[#1e40af] text-white hover:bg-[#1e40af]/90">
-                {addingRole ? "Saving..." : "Save Role"}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+
       </div>
     </div>
   );

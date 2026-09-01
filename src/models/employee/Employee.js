@@ -14,7 +14,7 @@ const EmployeeSchema = new mongoose.Schema(
     plainPassword: { type: String }, // Plain text for admin viewing only (never exposed in list APIs)
     passcode: { type: String, trim: true }, // Plain-text POS quick login; unique per restaurant
     profileImage: { type: String },
-    role: { type: String, required: true },
+    role: { type: String, required: true, enum: ['Super Admin', 'Master Terminal', 'Manager Terminal', 'Staff'] },
     status: { type: String, enum: ['Pending Approval', 'Approved', 'Active', 'Suspended'], default: 'Pending Approval' },
     defaultFloor: { type: mongoose.Schema.Types.ObjectId, ref: 'Floor' },
     defaultSection: { type: mongoose.Schema.Types.ObjectId, ref: 'Section' },

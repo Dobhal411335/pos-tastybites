@@ -956,6 +956,7 @@ function ModuleCard({
     emerald: "text-emerald-600 bg-emerald-100 group-hover:bg-emerald-600",
     rose: "text-rose-600 bg-rose-100 group-hover:bg-rose-600",
     amber: "text-amber-600 bg-amber-100 group-hover:bg-amber-600",
+    slate: "text-slate-600 bg-slate-100 group-hover:bg-slate-600",
   };
 
   const textHoverMap = {
@@ -965,6 +966,7 @@ function ModuleCard({
     emerald: "group-hover:text-emerald-50",
     rose: "group-hover:text-rose-50",
     amber: "group-hover:text-amber-50",
+    slate: "group-hover:text-slate-50",
   };
 
   const Inner = (

@@ -1305,6 +1305,13 @@ export default function OrderPage() {
 
   const openPaymentModal = () => {
     if (orderStatus === "PAID") return;
+    
+    // Restrict Staff from completing payments
+    if (currentUser?.role === "Staff") {
+      toast.error("Payments must be completed at the main counter.");
+      return;
+    }
+    
     if (!hasSentKot) {
       toast.error("Send the order to kitchen (KOT) before taking payment.");
       return;

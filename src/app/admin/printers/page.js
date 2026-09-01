@@ -3,7 +3,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import {
   Loader2,
-  Plus,
   Printer,
   Pencil,
   Trash2,
@@ -370,7 +369,7 @@ export default function AdminPrintersPage() {
       </Card>
 
       <DeleteDialog
-        open={Boolean(deleteTarget)}
+        isOpen={Boolean(deleteTarget)}
         onOpenChange={(open) => !open && setDeleteTarget(null)}
         onConfirm={handleDelete}
         title="Delete printer?"

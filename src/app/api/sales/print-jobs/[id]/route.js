@@ -14,15 +14,20 @@ import {
   assertPrintAdminRole,
 } from "@/lib/printing/printJobService";
 
+/** Floor staff + admins — Electron print agent needs job detail for ESC/POS. */
+const PRINT_JOB_READ_ROLES = [
+  ...SALES_PRINT_ROLES,
+  "SUPER ADMIN",
+  "EMPLOYEE",
+  "STAFF",
+];
+
 /**
  * GET /api/sales/print-jobs/[id]
- * Full job + order data for thermal preview (authorized sales/admin only).
+ * Full job + order data for thermal preview and Electron auto-print.
  */
 export const GET = withAuth(async (request, { params }) => {
   try {
-    const denied = assertPrintAdminRole(request.role);
-    if (denied) return denied;
-
     const { id } = await params;
     const job = await PrintJob.findById(id)
       .populate("requestedBy", "firstName lastName name")
@@ -76,7 +81,7 @@ export const GET = withAuth(async (request, { params }) => {
     logger.error("Failed to get print job", error);
     return sendError(error, "Failed to get print job", 500);
   }
-}, SALES_PRINT_ROLES);
+}, PRINT_JOB_READ_ROLES);
 
 /**
  * PATCH /api/sales/print-jobs/[id]
