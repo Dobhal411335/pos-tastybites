@@ -27,6 +27,19 @@ function actorTypeFromRequest(request) {
   return isSalesAdminRole(role) || role === "Manager" ? "Admin" : "Employee";
 }
 
+/** Emit to floor room and restaurant room (same pattern as print jobs). */
+function emitFloorTableEvent(eventName, restaurantId, floorId, payload) {
+  if (!global.io) return;
+  const floor = resolveDocumentId(floorId);
+  const restaurant = resolveDocumentId(restaurantId);
+  if (floor) {
+    global.io.to(`floor:${floor}`).emit(eventName, payload);
+  }
+  if (restaurant) {
+    global.io.to(`restaurant:${restaurant}`).emit(eventName, payload);
+  }
+}
+
 // GET - List active sessions for a floor, or get a specific session
 export const GET = withAuth(async (request) => {
   try {
@@ -193,13 +206,16 @@ export const POST = withAuth(async (request) => {
           ])
         : table.tableNumber;
 
-    if (global.io) {
-      global.io.to(`floor:${table.floor}`).emit('table:assigned', {
+    emitFloorTableEvent(
+      "table:assigned",
+      request.restaurant,
+      table.floor,
+      {
         sessionId: session._id,
         tableId: table._id,
         tableIds: collectSessionTableIds(session),
-      });
-    }
+      },
+    );
 
     await createNotification({
       restaurantId: request.restaurant,
@@ -267,7 +283,10 @@ export const PUT = withAuth(async (request) => {
         newValue: { guestCount: session.guestCount }
       });
 
-      if (global.io) global.io.to(`floor:${session.floor}`).emit('table:updated', { sessionId: session._id, guestCount: session.guestCount });
+      emitFloorTableEvent("table:updated", request.restaurant, session.floor, {
+        sessionId: session._id,
+        guestCount: session.guestCount,
+      });
       
       return sendSuccess(session, "Session updated successfully");
     }
@@ -329,7 +348,11 @@ export const PUT = withAuth(async (request) => {
         });
       }
       
-      if (global.io) global.io.to(`floor:${session.floor}`).emit('table:released', { sessionId: session._id, tableId: session.primaryTable, tableIds: releasedIds });
+      emitFloorTableEvent("table:released", request.restaurant, session.floor, {
+        sessionId: session._id,
+        tableId: session.primaryTable,
+        tableIds: releasedIds,
+      });
 
       const releasedTables = await Table.find({ _id: { $in: releasedIds } }).select("tableNumber").lean();
       const releasedLabel = joinTableNumbers(releasedTables.map((t) => t.tableNumber));
@@ -353,7 +376,10 @@ export const PUT = withAuth(async (request) => {
       session.status = "PAYMENT_PENDING";
       await session.save();
       
-      if (global.io) global.io.to(`floor:${session.floor}`).emit('table:updated', { sessionId: session._id, status: "PAYMENT_PENDING" });
+      emitFloorTableEvent("table:updated", request.restaurant, session.floor, {
+        sessionId: session._id,
+        status: "PAYMENT_PENDING",
+      });
       
       return sendSuccess(session, "Session status updated to payment pending");
     }
@@ -399,7 +425,12 @@ export const PUT = withAuth(async (request) => {
         newValue: { newEmployeeId, previousEmployeeId }
       });
 
-      if (global.io) global.io.to(`floor:${session.floor}`).emit('table:transferred', { sessionId: session._id, newEmployeeId });
+      emitFloorTableEvent(
+        "table:transferred",
+        request.restaurant,
+        session.floor,
+        { sessionId: session._id, newEmployeeId },
+      );
 
       const transferredTable = await Table.findById(session.primaryTable).select("tableNumber").lean();
       await createNotification({
@@ -474,13 +505,11 @@ export const PUT = withAuth(async (request) => {
         }
       });
 
-      if (global.io) {
-        global.io.to(`floor:${session.floor}`).emit('table:updated', {
-          sessionId: session._id,
-          effectiveSeatCount: nextSeatCount,
-          linkedTableIds: (session.linkedTables || []).map((id) => String(id)),
-        });
-      }
+      emitFloorTableEvent("table:updated", request.restaurant, session.floor, {
+        sessionId: session._id,
+        effectiveSeatCount: nextSeatCount,
+        linkedTableIds: (session.linkedTables || []).map((id) => String(id)),
+      });
 
       return sendSuccess(session, "Table reconfigured successfully");
     }
