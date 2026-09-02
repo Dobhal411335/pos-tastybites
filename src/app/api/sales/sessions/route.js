@@ -22,6 +22,8 @@ import {
   syncSessionOrderTableLabels,
 } from "@/lib/orders/sessionTables";
 
+import { getSocketServer } from "@/lib/socketServer";
+
 function actorTypeFromRequest(request) {
   const role = request.role || request.user?.role;
   return isSalesAdminRole(role) || role === "Manager" ? "Admin" : "Employee";
@@ -29,14 +31,18 @@ function actorTypeFromRequest(request) {
 
 /** Emit to floor room and restaurant room (same pattern as print jobs). */
 function emitFloorTableEvent(eventName, restaurantId, floorId, payload) {
-  if (!global.io) return;
+  const io = getSocketServer();
+  if (!io) {
+    logger.warn(`Socket emit skipped (${eventName}): io not attached`);
+    return;
+  }
   const floor = resolveDocumentId(floorId);
   const restaurant = resolveDocumentId(restaurantId);
   if (floor) {
-    global.io.to(`floor:${floor}`).emit(eventName, payload);
+    io.to(`floor:${floor}`).emit(eventName, payload);
   }
   if (restaurant) {
-    global.io.to(`restaurant:${restaurant}`).emit(eventName, payload);
+    io.to(`restaurant:${restaurant}`).emit(eventName, payload);
   }
 }
 

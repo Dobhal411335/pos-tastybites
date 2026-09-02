@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { usePathname } from "next/navigation";
 import EmployeeTopNav from "@/components/employee/EmployeeTopNav";
 import { Loader2 } from "lucide-react";
@@ -46,6 +46,22 @@ export default function SalesAppShell({ children }) {
     verifyAuth();
   }, [pathname, isLoginPage]);
 
+  const restaurantId = useMemo(() => {
+    const user = employeeUser?.employee || employeeUser;
+    const raw = user?.restaurant;
+    if (!raw) return null;
+    if (typeof raw === "string") return raw;
+    if (typeof raw === "object") {
+      return String(raw._id || raw.id || "") || null;
+    }
+    return String(raw);
+  }, [employeeUser]);
+
+  const employeeId = useMemo(() => {
+    const user = employeeUser?.employee || employeeUser;
+    return user?._id || user?.id || null;
+  }, [employeeUser]);
+
   if (isLoginPage) {
     return children;
   }
@@ -59,26 +75,26 @@ export default function SalesAppShell({ children }) {
   }
 
   return (
-    <SocketProvider
-      employeeId={(employeeUser?.employee || employeeUser)?._id || (employeeUser?.employee || employeeUser)?.id}
-      restaurantId={(employeeUser?.employee || employeeUser)?.restaurant}
-    >
+    <SocketProvider employeeId={employeeId} restaurantId={restaurantId}>
       <AuthProvider user={employeeUser?.employee || employeeUser}>
         <div className="h-dvh max-h-dvh overflow-hidden bg-[#FAFAFA] flex flex-col antialiased text-zinc-900 font-sans">
           <EmployeeTopNav
             employeeName={
-              (employeeUser?.employee || employeeUser)?.firstName && (employeeUser?.employee || employeeUser)?.lastName
+              (employeeUser?.employee || employeeUser)?.firstName &&
+              (employeeUser?.employee || employeeUser)?.lastName
                 ? `${(employeeUser?.employee || employeeUser).firstName} ${(employeeUser?.employee || employeeUser).lastName}`
-                : (employeeUser?.employee || employeeUser)?.name || (employeeUser?.employee || employeeUser)?.firstName || ""
+                : (employeeUser?.employee || employeeUser)?.name ||
+                  (employeeUser?.employee || employeeUser)?.firstName ||
+                  ""
             }
             employeeRole={(employeeUser?.employee || employeeUser)?.role || "Server"}
             onMenuToggle={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
           />
           <div className="flex-1 flex overflow-hidden relative min-h-0">
-            <main className={`flex-1 min-h-0 ${lockViewport ? "overflow-hidden" : "overflow-y-auto"}`}>
-              <div className="mx-auto max-w-8xl h-full min-h-0">
-                {children}
-              </div>
+            <main
+              className={`flex-1 min-h-0 ${lockViewport ? "overflow-hidden" : "overflow-y-auto"}`}
+            >
+              <div className="mx-auto max-w-8xl h-full min-h-0">{children}</div>
             </main>
           </div>
           <NotificationSoundPrompt />

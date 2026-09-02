@@ -13,9 +13,10 @@ export const GET = withAuth(async (request) => {
   try {
     const { searchParams } = new URL(request.url);
     const floorId = searchParams.get("floorId");
+    const restaurantId = request.restaurant;
 
-    // 1. Fetch all active floors
-    const floors = await Floor.find({ restaurant: request.restaurant, isActive: true })
+    // 1. Fetch all active floors (small collection)
+    const floors = await Floor.find({ restaurant: restaurantId, isActive: true })
       .select("_id name width height")
       .lean();
 
@@ -28,29 +29,50 @@ export const GET = withAuth(async (request) => {
     const matchedFloor = floors.find((f) => f._id.toString() === requestedId);
     const activeFloorId = (matchedFloor || floors[0])._id.toString();
 
-    const tables = await Table.find({ floor: activeFloorId, restaurant: request.restaurant }).lean();
+    // 3. Tables + sessions in parallel (main latency win)
+    const [tables, sessions] = await Promise.all([
+      Table.find({ floor: activeFloorId, restaurant: restaurantId })
+        .select("_id tableNumber x y width height rotation shape seats section")
+        .lean(),
+      TableSession.find({
+        floor: activeFloorId,
+        restaurant: restaurantId,
+        isSessionOpen: true,
+      })
+        .select(
+          "_id sessionId primaryTable linkedTables assignedEmployee guestCount effectiveSeatCount status openedAt",
+        )
+        .populate("assignedEmployee", "firstName lastName name")
+        .lean(),
+    ]);
 
-    // 4. Fetch active TableSessions for the active floor
-    const sessions = await TableSession.find({
-      floor: activeFloorId,
-      restaurant: request.restaurant,
-      isSessionOpen: true
-    })
-      .populate("assignedEmployee", "firstName lastName name")
-      .lean();
+    // 4. Active orders only when there are open sessions
+    let activeOrders = [];
+    if (sessions.length > 0) {
+      const sessionIds = sessions.map((s) => s._id);
+      activeOrders = await Order.find({
+        tableSession: { $in: sessionIds },
+        status: {
+          $in: [
+            "PENDING",
+            "CONFIRMED",
+            "Draft",
+            "Sent to Kitchen",
+            "Preparing",
+            "Ready",
+            "Served",
+          ],
+        },
+        paymentStatus: { $nin: ["PAID", "Paid"] },
+      })
+        .select("tableSession processedBy")
+        .populate("processedBy", "firstName lastName name")
+        .lean();
+    }
 
-    // 5. Check active orders for these sessions
-    const sessionIds = sessions.map(s => s._id);
-    const activeOrders = await Order.find({
-      tableSession: { $in: sessionIds },
-      status: { $in: ["PENDING", "CONFIRMED", "Draft", "Sent to Kitchen", "Preparing", "Ready", "Served"] },
-      paymentStatus: { $nin: ["PAID", "Paid"] }
-    })
-      .select("tableSession processedBy")
-      .populate("processedBy", "firstName lastName name")
-      .lean();
-    
-    const sessionsWithOrders = new Set(activeOrders.map(o => o.tableSession.toString()));
+    const sessionsWithOrders = new Set(
+      activeOrders.map((o) => o.tableSession.toString()),
+    );
     const orderTakerBySession = new Map();
     for (const order of activeOrders) {
       const sid = order.tableSession?.toString();

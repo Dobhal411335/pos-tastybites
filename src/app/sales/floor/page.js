@@ -142,17 +142,24 @@ export default function SalesFloorPage() {
     }
   }, []);
 
-  const loadData = useCallback(async (floorIdOverride) => {
+  const currentUserRef = React.useRef(null);
+  currentUserRef.current = currentUser;
+
+  const loadData = useCallback(async (floorIdOverride, options = {}) => {
+    const silent = Boolean(options.silent);
     try {
       if (!hasLoadedRef.current) setLoading(true);
-      else setFloorLoading(true);
-      // Fetch user — /api/auth/me returns the Employee or POS Admin document.
-      const userRes = await employeeFetch("/api/auth/me");
-      const userData = await userRes.json();
-      let user = null;
-      if (userRes.ok && userData.success && userData.data) {
-        user = userData.data.employee || userData.data;
-        setCurrentUser(user);
+      else if (!silent) setFloorLoading(true);
+
+      let user = currentUserRef.current;
+      if (!silent || !user) {
+        const userRes = await employeeFetch("/api/auth/me");
+        const userData = await userRes.json();
+        if (userRes.ok && userData.success && userData.data) {
+          user = userData.data.employee || userData.data;
+          setCurrentUser(user);
+          currentUserRef.current = user;
+        }
       }
 
       const preferredFloor =
@@ -175,20 +182,24 @@ export default function SalesFloorPage() {
           setSelectedFloorId(nextId);
           storeFloorId(nextId);
         }
-      } else {
+      } else if (!silent) {
         toast.error(floorJson.message || "Failed to load floor data");
         return;
       }
 
-      const empRes = await employeeFetch("/api/sales/employees");
-      const empData = await empRes.json();
-      if (empRes.ok && empData.success) {
-        setActiveEmployees(empData.data || []);
+      // Heavy side-loads only on full (non-silent) refresh
+      if (!silent) {
+        const empRes = await employeeFetch("/api/sales/employees");
+        const empData = await empRes.json();
+        if (empRes.ok && empData.success) {
+          setActiveEmployees(empData.data || []);
+        }
+        await loadOnlineStaff();
       }
-
-      await loadOnlineStaff();
     } catch (err) {
-      toast.error("Failed to load floor data");
+      if (!silent) {
+        toast.error("Failed to load floor data");
+      }
     } finally {
       hasLoadedRef.current = true;
       setLoading(false);
@@ -196,14 +207,31 @@ export default function SalesFloorPage() {
     }
   }, [loadOnlineStaff]);
 
-  const reloadCurrentFloor = useCallback(() => {
-    loadData(
-      selectedFloorIdRef.current ||
-        readStoredFloorId() ||
-        readUrlFloorId() ||
-        undefined,
-    );
-  }, [loadData]);
+  const reloadCurrentFloor = useCallback(
+    (options = {}) => {
+      loadData(
+        selectedFloorIdRef.current ||
+          readStoredFloorId() ||
+          readUrlFloorId() ||
+          undefined,
+        options,
+      );
+    },
+    [loadData],
+  );
+
+  const reloadCurrentFloorRef = React.useRef(reloadCurrentFloor);
+  reloadCurrentFloorRef.current = reloadCurrentFloor;
+
+  const reloadDebounceRef = React.useRef(null);
+  const scheduleSilentFloorReload = useCallback(() => {
+    if (reloadDebounceRef.current) {
+      clearTimeout(reloadDebounceRef.current);
+    }
+    reloadDebounceRef.current = setTimeout(() => {
+      reloadCurrentFloorRef.current({ silent: true });
+    }, 150);
+  }, []);
 
   useEffect(() => {
     const stored = readUrlFloorId() || readStoredFloorId();
@@ -214,44 +242,54 @@ export default function SalesFloorPage() {
     loadData(stored || undefined);
 
     const handleReconnect = () => {
-      reloadCurrentFloor();
+      scheduleSilentFloorReload();
     };
 
     window.addEventListener("socket:reconnect", handleReconnect);
-
-    // Refresh online list periodically (login/logout has no dedicated socket event yet)
     const onlineTimer = setInterval(loadOnlineStaff, 30000);
-
-    if (socket) {
-      socket.on("table:assigned", reloadCurrentFloor);
-      socket.on("table:updated", reloadCurrentFloor);
-      socket.on("table:released", reloadCurrentFloor);
-      socket.on("table:transferred", reloadCurrentFloor);
-      socket.on("order:created", reloadCurrentFloor);
-      socket.on("order:updated", reloadCurrentFloor);
-      socket.on("payment:completed", reloadCurrentFloor);
-      socket.on("NEW_PRINT_JOB", () => {
-        toast.message("New print job queued", {
-          description: "Open Print Jobs to preview / test.",
-        });
-      });
-    }
 
     return () => {
       window.removeEventListener("socket:reconnect", handleReconnect);
       clearInterval(onlineTimer);
-      if (socket) {
-        socket.off("table:assigned", reloadCurrentFloor);
-        socket.off("table:updated", reloadCurrentFloor);
-        socket.off("table:released", reloadCurrentFloor);
-        socket.off("table:transferred", reloadCurrentFloor);
-        socket.off("order:created", reloadCurrentFloor);
-        socket.off("order:updated", reloadCurrentFloor);
-        socket.off("payment:completed", reloadCurrentFloor);
-        socket.off("NEW_PRINT_JOB");
+      if (reloadDebounceRef.current) {
+        clearTimeout(reloadDebounceRef.current);
       }
     };
-  }, [socket, loadData, reloadCurrentFloor, loadOnlineStaff]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount once
+  }, []);
+
+  // Socket events: silent floor-only refresh (no spinner, no /auth/me /employees)
+  useEffect(() => {
+    if (!socket) return;
+
+    const onFloorEvent = () => {
+      scheduleSilentFloorReload();
+    };
+
+    socket.on("table:assigned", onFloorEvent);
+    socket.on("table:updated", onFloorEvent);
+    socket.on("table:released", onFloorEvent);
+    socket.on("table:transferred", onFloorEvent);
+    socket.on("order:created", onFloorEvent);
+    socket.on("order:updated", onFloorEvent);
+    socket.on("payment:completed", onFloorEvent);
+    socket.on("NEW_PRINT_JOB", () => {
+      toast.message("New print job queued", {
+        description: "Open Print Jobs to preview / test.",
+      });
+    });
+
+    return () => {
+      socket.off("table:assigned", onFloorEvent);
+      socket.off("table:updated", onFloorEvent);
+      socket.off("table:released", onFloorEvent);
+      socket.off("table:transferred", onFloorEvent);
+      socket.off("order:created", onFloorEvent);
+      socket.off("order:updated", onFloorEvent);
+      socket.off("payment:completed", onFloorEvent);
+      socket.off("NEW_PRINT_JOB");
+    };
+  }, [socket, scheduleSilentFloorReload]);
 
   useEffect(() => {
     if (socket && selectedFloorId) {

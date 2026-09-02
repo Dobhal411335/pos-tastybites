@@ -69,7 +69,7 @@ const OrderSchema = new mongoose.Schema(
     guestCountryCode: { type: String, default: null }, // e.g. +1
     guestEmail: { type: String, default: null }, // optional guest email
     tableNo: { type: String }, // Legacy string reference
-    tableSession: { type: mongoose.Schema.Types.ObjectId, ref: 'TableSession' },
+    tableSession: { type: mongoose.Schema.Types.ObjectId, ref: 'TableSession', index: true },
     table: { type: mongoose.Schema.Types.ObjectId, ref: 'Table' },
     floor: { type: mongoose.Schema.Types.ObjectId, ref: 'Floor' },
     status: { type: String, enum: ['PENDING', 'CONFIRMED', 'COMPLETED', 'PAID', 'CANCELLED', 'WAIVED'], default: 'PENDING' },

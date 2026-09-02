@@ -4,6 +4,7 @@ import nextEnv from '@next/env';
 import next from 'next';
 import { Server } from 'socket.io';
 import { logger } from './src/utils/logger.js';
+import { setSocketServer } from './src/lib/socketServer.js';
 
 nextEnv.loadEnvConfig(process.cwd());
 
@@ -45,8 +46,8 @@ app.prepare().then(() => {
     },
   });
 
-  // Attach io to global so App Router API routes can use `global.io`
-  global.io = io;
+  // Attach io so App Router API routes can emit (module singleton + global)
+  setSocketServer(io);
 
   io.use(async (socket, nextMiddleware) => {
     try {

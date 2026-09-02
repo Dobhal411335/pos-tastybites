@@ -109,6 +109,7 @@ TableSessionSchema.index(
   { unique: true, partialFilterExpression: { isSessionOpen: true } }
 );
 TableSessionSchema.index({ linkedTables: 1, isSessionOpen: 1 });
+TableSessionSchema.index({ restaurant: 1, floor: 1, isSessionOpen: 1 });
 
 if (
   mongoose.models.TableSession &&
