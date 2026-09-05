@@ -35,9 +35,11 @@ export const POST = withAuth(async (request, { params }) => {
       printerId: String(printer._id),
       name: printer.name,
       target: printer.target,
-      host: printer.host,
-      port: printer.port,
-      connectionType: printer.connectionType,
+      host: printer.host || null,
+      port: printer.port || null,
+      connectionType: printer.connectionType || "LAN",
+      systemPrinterName: printer.systemPrinterName || null,
+      location: printer.location || null,
       requestedAt: new Date().toISOString(),
     };
 
@@ -45,9 +47,12 @@ export const POST = withAuth(async (request, { params }) => {
       .to(`restaurant:${request.restaurant}`)
       .emit("PRINTER_TEST", payload);
 
+    const isUsb = String(printer.connectionType || "").toUpperCase() === "USB";
     return sendSuccess(
       payload,
-      "Test print signal sent. Ensure Tasty Bites POS desktop is open on the restaurant network.",
+      isUsb
+        ? "Test print signal sent. Ensure the local print bridge is running on this laptop."
+        : "Test print signal sent. Ensure Tasty Bites POS desktop is open on the restaurant network.",
     );
   } catch (error) {
     logger.error("Failed to send printer test", error);

@@ -26,6 +26,7 @@ const CustomerReceipt = ({
   taxBreakdown = [],
   serverName,
   guestCount,
+  isReprint = false,
 }) => {
   if (!order) return null;
 
@@ -63,10 +64,15 @@ const CustomerReceipt = ({
   const thankYou =
     restaurantDetails?.thankYouMessage || "Thank You! Please Come Again!";
 
-  const hstAmount =
-    taxBreakdown.length > 0
-      ? taxBreakdown.reduce((sum, t) => sum + Number(t.amount || 0), 0)
-      : Number(taxTotal || 0);
+  const hstAmount = (() => {
+    const fromProp = Array.isArray(taxBreakdown) ? taxBreakdown : [];
+    const fromOrder = Array.isArray(order.taxBreakdown) ? order.taxBreakdown : [];
+    const lines = fromProp.length ? fromProp : fromOrder;
+    if (lines.length > 0) {
+      return lines.reduce((sum, t) => sum + Number(t.amount || 0), 0);
+    }
+    return Number(taxTotal || 0);
+  })();
 
   const tip = Number(tipAmount || 0);
   const discount = Number(discountTotal || 0);
@@ -143,6 +149,11 @@ const CustomerReceipt = ({
         <h1 className="text-base receipt-bold mb-1 uppercase tracking-wide">
           {restName}
         </h1>
+        {isReprint && (
+          <div className="text-xs receipt-bold tracking-wider text-center mb-1">
+            *** REPRINT ***
+          </div>
+        )}
         <div className="text-[9px] text-nowrap">{restAddress}</div>
         <div className="text-[9px] mt-0.5">{restPhone}</div>
         <div className="mt-2 text-[10px]">

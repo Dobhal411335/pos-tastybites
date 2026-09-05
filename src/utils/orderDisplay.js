@@ -69,7 +69,7 @@ export function joinTableNumbers(numbers) {
   return unique.join(", ");
 }
 
-/** Numbers + floor only, e.g. "02, 03, 04 · Main Hall Area" */
+/** Numbers + floor only, e.g. "02, 03, 04. Main Hall Area" */
 export function formatTableNumbersWithFloor(tableNo, floorName) {
   const parsed = stripFloorSuffix(tableNo);
   const numbers = joinTableNumbers([parsed.tables || tableNo]);
@@ -77,10 +77,10 @@ export function formatTableNumbersWithFloor(tableNo, floorName) {
   if (!numbers) return floor;
   if (!floor) return numbers;
   if (numbers.toLowerCase().includes(floor.toLowerCase())) return numbers;
-  return `${numbers} · ${floor}`;
+  return `${numbers}.${floor}`;
 }
 
-/** One "Table" word, then numbers, then floor: "Table 02, 03, 04 · Main Hall Area" */
+/** One "Table" word, then numbers, then floor: "Table 02, 03, 04. Main Hall Area" */
 export function formatTableLocation(tableNo, floorName) {
   const body = formatTableNumbersWithFloor(tableNo, floorName);
   if (!body) return "";

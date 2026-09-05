@@ -3,6 +3,7 @@ import Order from "@/models/Order";
 import TableSession from "@/models/floor/TableSession";
 import Employee from "@/models/employee/Employee";
 import Restaurant from "@/models/Restaurant";
+import Floor from "@/models/floor/Floor";
 import OperationalAuditLog from "@/models/OperationalAuditLog";
 import { sendSuccess } from "@/utils/apiResponse";
 import { sendError } from "@/utils/errorHandler";
@@ -423,9 +424,12 @@ export const POST = withAuth(async (request) => {
     let processedByName = null;
     try {
       const creditEmployeeId = order.processedBy || request.user.id;
-      const [emp, restaurant] = await Promise.all([
+      const [emp, restaurant, floorDoc] = await Promise.all([
         Employee.findById(creditEmployeeId).select("firstName lastName name").lean(),
         Restaurant.findById(order.restaurantId).select("name").lean(),
+        order.floor
+          ? Floor.findById(order.floor).select("name").lean()
+          : Promise.resolve(null),
       ]);
       processedByName =
         emp?.name ||
@@ -438,6 +442,7 @@ export const POST = withAuth(async (request) => {
         guestCount: receiptGuestCount,
         serverName: processedByName,
         restaurantName: restaurant?.name || null,
+        floorName: order.floorName || floorDoc?.name || null,
       });
       printJobId = job?._id || null;
     } catch (printErr) {

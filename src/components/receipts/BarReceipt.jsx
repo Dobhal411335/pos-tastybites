@@ -32,6 +32,7 @@ const BarReceipt = ({
     guestCount != null && guestCount !== ""
       ? Number(guestCount)
       : null;
+  const brand = restaurantName || "TASTY BITES";
 
   return (
     <div
@@ -39,11 +40,9 @@ const BarReceipt = ({
       style={{ width: "var(--print-width, 80mm)" }}
     >
       <div className="text-center mb-2">
-        {restaurantName && (
-          <div className="text-[12px] receipt-bold uppercase mb-1">
-            {restaurantName}
-          </div>
-        )}
+        <div className="text-[14px] receipt-bold uppercase mb-1">
+          {brand}
+        </div>
         <h1 className="text-base receipt-bold underline mb-1 uppercase">
           Bar Receipt
         </h1>
@@ -126,7 +125,7 @@ const BarReceipt = ({
                 </span>
                 <span className="receipt-bold leading-tight">
                   {item.productCode ? `${item.productCode} ` : ""}
-                  {item.name}
+                  {item.name || item.productName || "Item"}
                   {item.size && item.size !== "Standard"
                     ? ` (${item.size})`
                     : ""}

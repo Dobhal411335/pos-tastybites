@@ -24,6 +24,12 @@ const PrintJobSchema = new mongoose.Schema(
       enum: ["RECEIPT", "KITCHEN", "COUNTER"],
       required: true,
     },
+    /** Optional resolved PrinterConfig at job creation */
+    printerId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "PrinterConfig",
+      default: null,
+    },
     status: {
       type: String,
       enum: ["QUEUED", "PRINTING", "PRINTED", "FAILED", "CANCELLED"],
@@ -41,6 +47,12 @@ const PrintJobSchema = new mongoose.Schema(
     requestedBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Employee",
+    },
+    parentPrintJobId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "PrintJob",
+      default: null,
+      index: true,
     },
     /**
      * Lightweight job-specific data only (not a full order dump).

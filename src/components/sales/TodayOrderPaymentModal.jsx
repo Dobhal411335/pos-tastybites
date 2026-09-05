@@ -692,7 +692,7 @@ export default function TodayOrderPaymentModal({
                       </span>
                     </div>
                     <div className="flex justify-between text-sm font-semibold text-zinc-500">
-                      <span>Tax</span>
+                      <span>HST</span>
                       <span className="text-zinc-900">
                         ${totalTax.toFixed(2)}
                       </span>

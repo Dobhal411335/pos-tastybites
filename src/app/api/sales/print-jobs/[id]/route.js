@@ -4,6 +4,7 @@ import Order from "@/models/Order";
 import Restaurant from "@/models/Restaurant";
 import TableSession from "@/models/floor/TableSession";
 import Employee from "@/models/employee/Employee";
+import Floor from "@/models/floor/Floor";
 import { sendSuccess } from "@/utils/apiResponse";
 import { sendError } from "@/utils/errorHandler";
 import { logger } from "@/utils/logger";
@@ -31,6 +32,8 @@ export const GET = withAuth(async (request, { params }) => {
     const { id } = await params;
     const job = await PrintJob.findById(id)
       .populate("requestedBy", "firstName lastName name")
+      .populate("parentPrintJobId", "status printType createdAt attemptCount")
+      .populate("printerId", "name target connectionType systemPrinterName host port location enabled")
       .lean();
 
     if (!job) {
@@ -66,14 +69,33 @@ export const GET = withAuth(async (request, { params }) => {
       }
     }
 
+    let floorName =
+      job.metadata?.floorName || order?.floorName || order?.floor?.name || null;
+    if (!floorName && order?.floor) {
+      const floor = await Floor.findById(order.floor).select("name").lean();
+      floorName = floor?.name || null;
+    }
+
+    const orderWithFloor = order
+      ? {
+          ...order,
+          floorName: floorName || null,
+          partyName:
+            order.partyName ||
+            job.metadata?.partyName ||
+            order.guestName ||
+            null,
+        }
+      : order;
+
     return sendSuccess(
       {
         job,
-        order,
+        order: orderWithFloor,
         restaurant,
         guestCount,
         serverName,
-        kotItems: job.metadata?.kotItems || [],
+        kotItems: job.metadata?.kotItems || job.metadata?.barItems || [],
       },
       "Print job retrieved"
     );
@@ -97,15 +119,18 @@ export const PATCH = withAuth(async (request, { params }) => {
     const action = body?.action;
 
     if (action === "mark_printed") {
-      const job = await markPrintJobPrinted(id, {
-        restaurantId: request.restaurant,
-      });
-      return sendSuccess(job, "Print job marked as printed");
+      return sendError(
+        new Error("Forbidden"),
+        "Manually marking jobs as printed is disabled. Status updates must be confirmed by the print pipeline.",
+        403
+      );
     }
 
     if (action === "retry") {
       const { job, result } = await retryPrintJob(id, {
-        runNow: body?.runNow !== false,
+        // Default: requeue + emit NEW_PRINT_JOB for print-bridge / Electron.
+        // Opt-in runNow uses the server mock/star adapter only.
+        runNow: body?.runNow === true,
         simulateFailure: !!body?.simulateFailure,
         restaurantId: request.restaurant,
       });

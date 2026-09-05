@@ -16,6 +16,7 @@ const KitchenOrderTicket = ({
   serverName,
   guestCount,
   specialNote,
+  isReprint = false,
 }) => {
   if (!order || !kotItems.length) return null;
 
@@ -27,6 +28,7 @@ const KitchenOrderTicket = ({
   const note = specialNote || order.specialNote;
   const partyLabel = partyName || guestName || (isDirectSaleOrder(order) ? "Walk-in" : "");
   const directSale = isDirectSaleOrder(order);
+  const brand = restaurantName || "TASTY BITES";
 
   const groupedItems = kotItems.reduce((acc, item) => {
     const groupName = isOfferItem(item) ? "Offers" : item.category || "ITEMS";
@@ -41,14 +43,17 @@ const KitchenOrderTicket = ({
       style={{ width: "var(--print-width, 80mm)" }}
     >
       <div className="text-center mb-3">
-        {restaurantName && (
-          <div className="text-[10px] receipt-bold uppercase mb-1">
-            {restaurantName}
-          </div>
-        )}
-        <h1 className="text-base receipt-bold underline mb-2 uppercase">
+        <div className="text-[11px] receipt-bold uppercase mb-1">
+          {brand}
+        </div>
+        <h1 className="text-base receipt-bold underline mb-1 uppercase">
           KOT
         </h1>
+        {isReprint && (
+          <div className="text-xs receipt-bold tracking-wider text-center mb-1">
+            *** REPRINT ***
+          </div>
+        )}
 
         <div className="text-sm receipt-bold mb-1">
           {directSale
@@ -101,7 +106,7 @@ const KitchenOrderTicket = ({
                     </span>
                     <span className="receipt-bold text-xs leading-tight">
                       {item.productCode ? `${item.productCode} ` : ""}
-                      {item.name}
+                      {item.name || item.productName || "Item"}
                       {item.size && item.size !== "Standard"
                         ? ` (${item.size})`
                         : ""}

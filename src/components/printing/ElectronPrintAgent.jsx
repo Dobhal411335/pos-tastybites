@@ -17,9 +17,15 @@ function isElectronDesktop() {
   );
 }
 
+function isNetworkPrinter(printer) {
+  const type = String(printer?.connectionType || "LAN").toUpperCase();
+  return type === "LAN" || type === "NETWORK";
+}
+
 /**
  * Listens for print jobs on the sales Socket.IO connection and sends
- * ESC/POS bytes to configured LAN printers via Electron IPC.
+ * ESC/POS bytes to configured LAN/NETWORK printers via Electron IPC.
+ * USB jobs are handled by the local Windows print-bridge — skipped here.
  * No-op in a normal browser.
  */
 export default function ElectronPrintAgent() {
@@ -58,7 +64,10 @@ export default function ElectronPrintAgent() {
 
     const findPrinter = (target) =>
       printersRef.current.find(
-        (p) => p.enabled !== false && p.target === target,
+        (p) =>
+          p.enabled !== false &&
+          p.target === target &&
+          isNetworkPrinter(p),
       );
 
     const sendToPrinter = async (printer, dataBase64) => {
@@ -70,13 +79,16 @@ export default function ElectronPrintAgent() {
     };
 
     const handleTest = async (payload) => {
+      if (payload?.connectionType && !isNetworkPrinter(payload)) {
+        return;
+      }
+
       const printer =
         printersRef.current.find((p) => p._id === payload?.printerId) ||
         printersRef.current.find((p) => p.target === payload?.target) ||
         payload;
 
-      if (!printer?.host) {
-        toast.error("No printer configured for test print");
+      if (!isNetworkPrinter(printer) || !printer?.host) {
         return;
       }
 
@@ -85,6 +97,7 @@ export default function ElectronPrintAgent() {
         target: printer.target || payload?.target,
         host: printer.host,
         port: printer.port || payload?.port || 9100,
+        connectionType: printer.connectionType || "LAN",
       });
 
       const result = await sendToPrinter(printer, dataBase64);
@@ -99,6 +112,13 @@ export default function ElectronPrintAgent() {
       const jobId = payload?.printJobId;
       if (!jobId || processingRef.current.has(jobId)) return;
 
+      if (
+        payload?.connectionType &&
+        String(payload.connectionType).toUpperCase() === "USB"
+      ) {
+        return;
+      }
+
       processingRef.current.add(jobId);
 
       try {
@@ -110,12 +130,20 @@ export default function ElectronPrintAgent() {
 
         const printer = findPrinter(payload?.printerTarget);
         if (!printer) {
+          const anyUsb = printersRef.current.find(
+            (p) =>
+              p.target === payload?.printerTarget &&
+              String(p.connectionType || "").toUpperCase() === "USB",
+          );
+          if (anyUsb) {
+            return;
+          }
           await employeeFetch(`/api/sales/print-jobs/${jobId}/complete`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               success: false,
-              errorMessage: `No enabled printer for target ${payload?.printerTarget}`,
+              errorMessage: `No enabled network printer for target ${payload?.printerTarget}`,
             }),
           });
           return;
@@ -135,6 +163,7 @@ export default function ElectronPrintAgent() {
           order,
           kotItems,
           restaurantName: restaurant?.name || job?.metadata?.restaurantName,
+          restaurantDetails: restaurant || null,
           serverName,
           guestCount,
         });

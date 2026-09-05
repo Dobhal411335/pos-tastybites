@@ -265,28 +265,40 @@ export async function repricePosCartItems({
           item.addonChoiceSelections,
           matchedAddon?.choiceOptions || [],
         );
+        name = matchedAddon?.name || addonName || product.name;
+        productCode = product.productCode || "";
+        category = item.category || "ITEMS";
+        productType = normalizeProductType(product.productType);
       } else {
         unitPrice =
           resolveVariantUnitPrice(product, sizes) + addonExtra(product, options);
-      }
 
-      if (product.taxData && (product.taxData.totalPercentage || product.taxData.totalFixed)) {
-        unitTax = taxFromTaxData(product.taxData, unitPrice);
-      } else if (product.taxes?.length) {
-        unitTax = taxFromTaxDocs(product.taxes, unitPrice);
-      } else {
-        unitTax = taxFromTaxDocs(globalTaxes, unitPrice);
-      }
+        if (product.taxData && (product.taxData.totalPercentage || product.taxData.totalFixed)) {
+          unitTax = taxFromTaxData(product.taxData, unitPrice);
+        } else if (product.taxes?.length) {
+          unitTax = taxFromTaxDocs(product.taxes, unitPrice);
+        } else {
+          unitTax = taxFromTaxDocs(globalTaxes, unitPrice);
+        }
 
-      name = product.name;
-      productCode = product.productCode || "";
-      category = item.category || "ITEMS";
-      productType = normalizeProductType(product.productType);
-      if (!isExtraLine) {
+        name = product.name;
+        productCode = product.productCode || "";
+        category = item.category || "ITEMS";
+        productType = normalizeProductType(product.productType);
         choiceSelections = filterProductChoiceSelections(
           item.choiceSelections,
           product.choiceOptions,
         );
+      }
+
+      if (isExtraLine) {
+        if (product.taxData && (product.taxData.totalPercentage || product.taxData.totalFixed)) {
+          unitTax = taxFromTaxData(product.taxData, unitPrice);
+        } else if (product.taxes?.length) {
+          unitTax = taxFromTaxDocs(product.taxes, unitPrice);
+        } else {
+          unitTax = taxFromTaxDocs(globalTaxes, unitPrice);
+        }
       }
     }
 

@@ -119,6 +119,10 @@ export default function OrderDetailBody({ order }) {
   const taxBreakdown = Array.isArray(order.taxBreakdown) ? order.taxBreakdown : [];
   const discount = Number(order.discountTotal || 0);
   const taxTotal = Number(order.taxTotal || 0);
+  const hstAmount =
+    taxBreakdown.length > 0
+      ? taxBreakdown.reduce((sum, t) => sum + Number(t.amount || 0), 0)
+      : taxTotal;
   const serviceCharge = Number(order.serviceChargeTotal || 0);
   const tip = Number(order.tipAmount || 0);
   const giftUsed = Number(order.giftcardUsedAmount || 0);
@@ -294,18 +298,7 @@ export default function OrderDetailBody({ order }) {
         </h3>
         <TotalsRow label="Subtotal" value={order.subTotal} muted />
         <TotalsRow label={discountLabel} value={discount} muted negative={discount > 0} />
-        {taxBreakdown.length > 0 ? (
-          taxBreakdown.map((tax, idx) => (
-            <TotalsRow
-              key={tax.taxId || `${tax.name}-${idx}`}
-              label={tax.name ? `${tax.name}${tax.rate ? ` (${tax.rate}%)` : ""}` : "Tax"}
-              value={tax.amount}
-              muted
-            />
-          ))
-        ) : (
-          <TotalsRow label="Tax" value={taxTotal} muted />
-        )}
+        {hstAmount > 0 && <TotalsRow label="HST" value={hstAmount} muted />}
         <TotalsRow
           label={order.serviceChargeName || "Service charge"}
           value={serviceCharge}

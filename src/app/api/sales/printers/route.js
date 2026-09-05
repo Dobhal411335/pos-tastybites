@@ -24,7 +24,9 @@ export const GET = withAuth(async (request) => {
       restaurant: request.restaurant,
       enabled: true,
     })
-      .select("name target host port connectionType enabled")
+      .select(
+        "name type target host port connectionType systemPrinterName location enabled",
+      )
       .sort({ target: 1 })
       .lean();
 

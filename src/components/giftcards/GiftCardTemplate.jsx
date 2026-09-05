@@ -17,11 +17,13 @@ export default function GiftCardTemplate({ card, index }) {
       {/* LEFT STUB (30%) */}
       <div className="w-[30%] flex flex-col h-full relative">
         {/* Top Header */}
-        <div className="bg-black text-white p-2 flex flex-col justify-center h-[20%] print:bg-black! print:text-white print:color-adjust-exact">
+        <div className="bg-black text-white p-2 flex flex-col justify-center h-[20%] overflow-visible print:bg-black! print:text-white print:color-adjust-exact">
           <div className={`${yellowtail.className} text-[#E3B12F] text-[22px] leading-none print:text-[#E3B12F]`}>Tasty Bites</div>
-          <div className="text-[9px] mt-1 font-bold flex gap-1 items-end">
-            Card Number:
-            <span className="flex-1 border-b border-[#FFD700] pb-3 inline-block h-2">{card.code}</span>
+          <div className="text-[8px] mt-1 font-bold flex gap-1 items-baseline min-w-0 w-full leading-tight">
+            <span className="shrink-0">Card Number:</span>
+            <span className="min-w-0 flex-1 border-b border-[#FFD700] whitespace-nowrap tracking-tight">
+              {card.code}
+            </span>
           </div>
         </div>
 

@@ -297,6 +297,9 @@ export default function OrderPage() {
   const [printOrderData, setPrintOrderData] = useState(null);
   const [printKotItems, setPrintKotItems] = useState([]);
   const [printTaxBreakdown, setPrintTaxBreakdown] = useState([]);
+  const [restaurantDetails, setRestaurantDetails] = useState({
+    name: "TASTY BITES",
+  });
   const [redirectAfterPrint, setRedirectAfterPrint] = useState(false);
   const [serverName, setServerName] = useState("Server");
   const [kotCartFingerprint, setKotCartFingerprint] = useState(null);
@@ -1042,7 +1045,7 @@ export default function OrderPage() {
       );
       newLines.push({
         id: selectedProduct._id,
-        name: selectedProduct.name,
+        name: addon.name || selectedProduct.name,
         productCode: selectedProduct.productCode || "",
         category: selectedProduct.category?.name || "ITEMS",
         price: unitPrice,
@@ -1108,7 +1111,7 @@ export default function OrderPage() {
     const tableNo = getDisplayTableNo();
     const guestCount = sessionData?.guestCount;
     if (tableNo && guestCount != null) {
-      return `${tableNo} · ${guestCount} guest${guestCount === 1 ? "" : "s"}`;
+      return `${tableNo} .${guestCount} guest${guestCount === 1 ? "" : "s"}`;
     }
     if (tableNo) return `${tableNo}`;
     if (guestCount != null) {
@@ -1209,6 +1212,12 @@ export default function OrderPage() {
           };
           setPrintOrderData(printPayload);
           setPrintKotItems(json.data.kotPayload);
+          if (json.data.restaurantName) {
+            setRestaurantDetails((prev) => ({
+              ...prev,
+              name: json.data.restaurantName,
+            }));
+          }
           setPrintType(isBarTicket ? "bar" : "kot");
           setRedirectAfterPrint(false);
           setIsPrintModalOpen(true);
@@ -1410,7 +1419,7 @@ export default function OrderPage() {
                     ? "Staff Order"
                     : isLegacyNew
                       ? guestTable
-                        ? `${guestTable} · Takeaway`
+                        ? `${guestTable} . Takeaway`
                         : "Takeaway"
                       : getDisplayTableNo() || "Loading table..."}
               </p>
@@ -2704,6 +2713,7 @@ export default function OrderPage() {
         order={printOrderData}
         kotItems={printKotItems}
         taxBreakdown={printTaxBreakdown}
+        restaurantDetails={restaurantDetails}
         serverName={serverName}
         guestCount={printOrderData?.guestCount ?? sessionData?.guestCount}
       />

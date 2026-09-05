@@ -893,6 +893,9 @@ export default function TodayOrdersPage() {
         printType={printType}
         order={selectedOrder}
         kotItems={selectedOrder?.items || []}
+        restaurantDetails={{
+          name: selectedOrder?.restaurantName || "TASTY BITES",
+        }}
         guestCount={selectedOrder?.guestCount}
         specialNote={selectedOrder?.specialNote}
         serverName={getPlacerName(selectedOrder || {})}

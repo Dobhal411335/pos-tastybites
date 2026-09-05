@@ -186,12 +186,22 @@ async function enqueueOrderTicketPrintJob({
   guestCount,
   routeToKitchen,
 }) {
-  if (!ticketItems?.length) return { job: null, ticketType: routeToKitchen ? "KOT" : "BAR_RECEIPT" };
+  if (!ticketItems?.length) {
+    return {
+      job: null,
+      ticketType: routeToKitchen ? "KOT" : "BAR_RECEIPT",
+      restaurantName: null,
+    };
+  }
   try {
-    const [serverName, restaurant] = await Promise.all([
+    const [serverName, restaurant, floorDoc] = await Promise.all([
       resolveServerName(order.processedBy || employeeId),
       Restaurant.findById(order.restaurantId).select("name").lean(),
+      order.floor
+        ? Floor.findById(order.floor).select("name").lean()
+        : Promise.resolve(null),
     ]);
+    const floorName = order.floorName || floorDoc?.name || null;
     const common = {
       order,
       requestedBy: employeeId,
@@ -199,6 +209,7 @@ async function enqueueOrderTicketPrintJob({
       serverName,
       restaurantName: restaurant?.name || null,
       specialNote: order.specialNote,
+      floorName,
     };
 
     if (routeToKitchen) {
@@ -206,17 +217,25 @@ async function enqueueOrderTicketPrintJob({
         ...common,
         kotItems: ticketItems,
       });
-      return { job, ticketType: "KOT" };
+      return {
+        job,
+        ticketType: "KOT",
+        restaurantName: restaurant?.name || null,
+      };
     }
 
     const { job } = await createBarReceiptPrintJob({
       ...common,
       barItems: ticketItems,
     });
-    return { job, ticketType: "BAR_RECEIPT" };
+    return {
+      job,
+      ticketType: "BAR_RECEIPT",
+      restaurantName: restaurant?.name || null,
+    };
   } catch (err) {
     logger.error("Failed to create ticket PrintJob (order still saved)", err);
-    return { job: null, ticketType: routeToKitchen ? "KOT" : "BAR_RECEIPT" };
+    return { job: null, ticketType: routeToKitchen ? "KOT" : "BAR_RECEIPT", restaurantName: null };
   }
 }
 
@@ -354,7 +373,7 @@ export const POST = withAuth(async (request) => {
         if (!order.processedBy) order.processedBy = employeeId;
         await order.save();
 
-        const { job: printJob, ticketType } = await enqueueOrderTicketPrintJob({
+        const { job: printJob, ticketType, restaurantName } = await enqueueOrderTicketPrintJob({
           order,
           ticketItems: kotPayload,
           employeeId,
@@ -388,6 +407,7 @@ export const POST = withAuth(async (request) => {
             printJobId: printJob?._id || null,
             ticketType,
             processedByName: serverName,
+            restaurantName,
           },
           routeToKitchen ? "Order updated successfully" : "Bar ticket updated successfully",
           200,
@@ -432,7 +452,7 @@ export const POST = withAuth(async (request) => {
       const newOrder = await Order.create(createPayload);
 
       const kotPayload = formattedItems;
-      const { job: printJob, ticketType } = await enqueueOrderTicketPrintJob({
+      const { job: printJob, ticketType, restaurantName } = await enqueueOrderTicketPrintJob({
         order: newOrder,
         ticketItems: kotPayload,
         employeeId,
@@ -466,6 +486,7 @@ export const POST = withAuth(async (request) => {
           printJobId: printJob?._id || null,
           ticketType,
           processedByName: serverName,
+          restaurantName,
         },
         routeToKitchen
           ? "Order sent to kitchen successfully"
@@ -561,7 +582,7 @@ export const POST = withAuth(async (request) => {
         orderId: order._id
       });
 
-      const { job: printJob, ticketType } = await enqueueOrderTicketPrintJob({
+      const { job: printJob, ticketType, restaurantName } = await enqueueOrderTicketPrintJob({
         order,
         ticketItems: kotPayload,
         employeeId,
@@ -604,6 +625,7 @@ export const POST = withAuth(async (request) => {
           printJobId: printJob?._id || null,
           ticketType,
           processedByName: serverName,
+          restaurantName,
         },
         routeToKitchen
           ? "Order updated successfully"
@@ -667,7 +689,7 @@ export const POST = withAuth(async (request) => {
       });
 
       const kotPayload = formattedItems;
-      const { job: printJob, ticketType } = await enqueueOrderTicketPrintJob({
+      const { job: printJob, ticketType, restaurantName } = await enqueueOrderTicketPrintJob({
         order: newOrder,
         ticketItems: kotPayload,
         employeeId,
@@ -708,6 +730,7 @@ export const POST = withAuth(async (request) => {
           printJobId: printJob?._id || null,
           ticketType,
           processedByName: serverName,
+          restaurantName,
         },
         routeToKitchen
           ? "Order sent to kitchen successfully"

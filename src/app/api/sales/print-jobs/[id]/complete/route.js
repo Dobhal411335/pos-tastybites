@@ -46,7 +46,7 @@ export const POST = withAuth(async (request, { params }) => {
 
     job.status = "FAILED";
     job.failedAt = new Date();
-    job.errorMessage = body?.errorMessage || "Electron print failed";
+    job.errorMessage = body?.errorMessage || "Print agent failed";
     job.attemptCount = (job.attemptCount || 0) + 1;
     await job.save();
 

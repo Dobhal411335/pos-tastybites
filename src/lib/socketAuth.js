@@ -35,12 +35,15 @@ async function verifyJwt(token) {
 }
 
 /**
- * Resolve Socket.IO auth context from handshake cookies.
+ * Resolve Socket.IO auth context from handshake cookies or auth.token.
  * Supports admin `token`, employee access token, or activated `device_token`.
+ * Print-bridge may pass `handshake.auth.token` (admin JWT).
  */
 export async function resolveSocketAuth(handshake) {
   const cookies = parseCookieHeader(handshake?.headers?.cookie || "");
-  const adminToken = cookies.token;
+  const authToken =
+    typeof handshake?.auth?.token === "string" ? handshake.auth.token : null;
+  const adminToken = cookies.token || authToken;
   const employeeToken = cookies.employee_access_token;
   const deviceToken = cookies.device_token;
 
