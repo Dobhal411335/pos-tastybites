@@ -17,8 +17,21 @@ const BarReceipt = ({
   specialNote,
   isReprint = false,
 }) => {
-  const items = barItems?.length ? barItems : [];
-  if (!order || !items.length) return null;
+  const items = barItems?.length ? barItems : (order?.items || []);
+  if (!order || !items.length) {
+    return (
+      <div
+        className="thermal-receipt receipt-font p-6 bg-white text-black text-center"
+        style={{ width: "var(--print-width, 80mm)" }}
+      >
+        <div className="text-[11px] receipt-bold uppercase mb-1">
+          {restaurantName || order?.restaurantName || "TASTY BITES"}
+        </div>
+        <h1 className="text-sm receipt-bold underline mb-2 uppercase">Bar Receipt</h1>
+        <p className="text-xs text-zinc-500 font-medium">No items found for this bar ticket.</p>
+      </div>
+    );
+  }
 
   const { orderNumber, tableNo, guestName, partyName, createdAt } = order;
   const tableLabel = formatTableNumbersWithFloor(

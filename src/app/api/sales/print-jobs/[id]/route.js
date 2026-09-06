@@ -10,7 +10,6 @@ import { sendError } from "@/utils/errorHandler";
 import { logger } from "@/utils/logger";
 import {
   SALES_PRINT_ROLES,
-  markPrintJobPrinted,
   retryPrintJob,
   assertPrintAdminRole,
 } from "@/lib/printing/printJobService";
@@ -43,37 +42,63 @@ export const GET = withAuth(async (request, { params }) => {
       return sendError(new Error("Forbidden"), "Access denied", 403);
     }
 
-    const order = await Order.findById(job.orderId).lean();
-    const restaurant = await Restaurant.findById(job.restaurantId)
-      .select("name phone address email")
-      .lean();
+    // Fetch Order (with populated references) and Restaurant concurrently in parallel
+    const [order, restaurant] = await Promise.all([
+      job.orderId
+        ? Order.findById(job.orderId)
+            .populate("tableSession", "guestCount")
+            .populate("processedBy", "firstName lastName name")
+            .populate("floor", "name")
+            .lean()
+        : null,
+      Restaurant.findById(job.restaurantId)
+        .select("name phone address email")
+        .lean(),
+    ]);
 
     let guestCount = job.metadata?.guestCount ?? null;
     if (guestCount == null && order?.tableSession) {
-      const session = await TableSession.findById(order.tableSession)
-        .select("guestCount")
-        .lean();
-      guestCount = session?.guestCount ?? null;
+      if (typeof order.tableSession === "object" && order.tableSession.guestCount != null) {
+        guestCount = order.tableSession.guestCount;
+      } else {
+        const session = await TableSession.findById(order.tableSession)
+          .select("guestCount")
+          .lean();
+        guestCount = session?.guestCount ?? null;
+      }
     }
 
     let serverName = job.metadata?.serverName || null;
     if (!serverName && order?.processedBy) {
-      const emp = await Employee.findById(order.processedBy)
-        .select("firstName lastName name")
-        .lean();
-      if (emp) {
+      if (typeof order.processedBy === "object") {
         serverName =
-          emp.name ||
-          [emp.firstName, emp.lastName].filter(Boolean).join(" ") ||
+          order.processedBy.name ||
+          [order.processedBy.firstName, order.processedBy.lastName]
+            .filter(Boolean)
+            .join(" ") ||
           null;
+      } else {
+        const emp = await Employee.findById(order.processedBy)
+          .select("firstName lastName name")
+          .lean();
+        if (emp) {
+          serverName =
+            emp.name ||
+            [emp.firstName, emp.lastName].filter(Boolean).join(" ") ||
+            null;
+        }
       }
     }
 
     let floorName =
-      job.metadata?.floorName || order?.floorName || order?.floor?.name || null;
+      job.metadata?.floorName || order?.floorName || null;
     if (!floorName && order?.floor) {
-      const floor = await Floor.findById(order.floor).select("name").lean();
-      floorName = floor?.name || null;
+      if (typeof order.floor === "object" && order.floor?.name) {
+        floorName = order.floor.name;
+      } else {
+        const floor = await Floor.findById(order.floor).select("name").lean();
+        floorName = floor?.name || null;
+      }
     }
 
     const orderWithFloor = order

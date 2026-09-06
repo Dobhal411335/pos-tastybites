@@ -51,6 +51,11 @@ const MENU_LINKS = [
     icon: FileBarChart2,
   },
   {
+    label: "Today Sales",
+    href: "/sales/today-sales",
+    icon: ShoppingBag,
+  },
+  {
     label: "Print Jobs",
     href: "/sales/print-jobs",
     icon: Printer,
@@ -60,6 +65,7 @@ const MENU_LINKS = [
     href: "/sales/notifications",
     icon: BellRing,
   },
+
 ];
 
 const TABLE_STATUS = [

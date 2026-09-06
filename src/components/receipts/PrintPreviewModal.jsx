@@ -21,6 +21,7 @@ const PrintPreviewModal = ({
   kotItems = [], 
   taxBreakdown = [],
   restaurantDetails = null,
+  restaurantName = null,
   serverName,
   guestCount,
   specialNote,
@@ -29,6 +30,31 @@ const PrintPreviewModal = ({
   const [isReprint, setIsReprint] = useState(Boolean(order?.isReprint));
 
   if (!isOpen || !order) return null;
+
+  const resolvedRestaurantName =
+    restaurantName ||
+    restaurantDetails?.name ||
+    order?.restaurantName ||
+    "TASTY BITES";
+
+  const resolvedKotItems =
+    kotItems && kotItems.length > 0
+      ? kotItems
+      : order?.items || [];
+
+  const resolvedTaxBreakdown =
+    taxBreakdown && taxBreakdown.length > 0
+      ? taxBreakdown
+      : order?.taxBreakdown || [];
+
+  const resolvedGuestCount =
+    guestCount ?? order?.guestCount;
+
+  const resolvedSpecialNote =
+    specialNote || order?.specialNote;
+
+  const resolvedServerName =
+    serverName || order?.processedByName;
 
   const handleReprint = async () => {
     const orderId = order?._id || order?.id;
@@ -45,11 +71,11 @@ const PrintPreviewModal = ({
         body: JSON.stringify({
           orderId: String(orderId),
           printType,
-          kotItems,
-          guestCount,
-          serverName,
-          specialNote,
-          restaurantName: restaurantDetails?.name,
+          kotItems: resolvedKotItems,
+          guestCount: resolvedGuestCount,
+          serverName: resolvedServerName,
+          specialNote: resolvedSpecialNote,
+          restaurantName: resolvedRestaurantName,
         }),
       });
       const json = await res.json();
@@ -94,32 +120,32 @@ const PrintPreviewModal = ({
             {printType === 'customer' && (
               <CustomerReceipt 
                 order={order} 
-                taxBreakdown={taxBreakdown} 
-                restaurantDetails={restaurantDetails} 
-                serverName={serverName}
-                guestCount={guestCount}
+                taxBreakdown={resolvedTaxBreakdown} 
+                restaurantDetails={restaurantDetails || { name: resolvedRestaurantName }} 
+                serverName={resolvedServerName}
+                guestCount={resolvedGuestCount}
                 isReprint={isReprint}
               />
             )}
             {printType === 'kot' && (
               <KitchenOrderTicket 
                 order={order} 
-                kotItems={kotItems} 
-                restaurantName={restaurantDetails?.name}
-                serverName={serverName}
-                guestCount={guestCount}
-                specialNote={specialNote}
+                kotItems={resolvedKotItems} 
+                restaurantName={resolvedRestaurantName}
+                serverName={resolvedServerName}
+                guestCount={resolvedGuestCount}
+                specialNote={resolvedSpecialNote}
                 isReprint={isReprint}
               />
             )}
             {printType === 'bar' && (
               <BarReceipt
                 order={order}
-                barItems={kotItems}
-                restaurantName={restaurantDetails?.name}
-                serverName={serverName}
-                guestCount={guestCount}
-                specialNote={specialNote}
+                barItems={resolvedKotItems}
+                restaurantName={resolvedRestaurantName}
+                serverName={resolvedServerName}
+                guestCount={resolvedGuestCount}
+                specialNote={resolvedSpecialNote}
                 isReprint={isReprint}
               />
             )}

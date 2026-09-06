@@ -70,10 +70,15 @@ export default function EodReportPage({
       const qs = new URLSearchParams({
         date: businessDate,
         preferSaved: preferLive ? "0" : "1",
+        _t: String(Date.now()),
       });
       const res = await fetchFn(`/api/eod?${qs}`, {
         credentials: "include",
         cache: "no-store",
+        headers: {
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+          Pragma: "no-cache",
+        },
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.success) {
@@ -97,7 +102,14 @@ export default function EodReportPage({
     if (!showHistory) return;
     setHistoryLoading(true);
     try {
-      const res = await fetchFn("/api/eod/history", { credentials: "include" });
+      const res = await fetchFn(`/api/eod/history?_t=${Date.now()}`, {
+        credentials: "include",
+        cache: "no-store",
+        headers: {
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+          Pragma: "no-cache",
+        },
+      });
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.success) {
         setHistory(data.data.history || []);
@@ -127,9 +139,15 @@ export default function EodReportPage({
       const qs = new URLSearchParams({
         date: businessDate,
         preferSaved: preferLive ? "0" : "1",
+        _t: String(Date.now()),
       });
       const res = await fetchFn(`/api/eod/${kind}?${qs}`, {
         credentials: "include",
+        cache: "no-store",
+        headers: {
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+          Pragma: "no-cache",
+        },
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -171,7 +189,7 @@ export default function EodReportPage({
       }
       setReport(data.data.report);
       setSaved(true);
-      setPreferLive(false);
+      setPreferLive(true);
       if (!data.data.reconciliation?.ok) {
         toast.warning(
           "Report saved — totals require attention before relying on them."
@@ -203,12 +221,14 @@ export default function EodReportPage({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {saved ? (
+          {saved && !preferLive ? (
             <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100">
               Saved snapshot
             </Badge>
           ) : (
-            <Badge variant="outline">Live data</Badge>
+            <Badge variant="outline" className="border-emerald-300 text-emerald-800 bg-emerald-50">
+              Current live data
+            </Badge>
           )}
         </div>
       </div>
@@ -225,7 +245,7 @@ export default function EodReportPage({
                 onChange={(e) => {
                   const next = e.target.value;
                   setBusinessDate(next);
-                  setPreferLive(next === todayLocalISO());
+                  setPreferLive(true);
                 }}
                 className="w-[180px]"
               />

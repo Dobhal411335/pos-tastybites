@@ -46,7 +46,7 @@ export default function EodEmailDialog({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ date: businessDate, to, preferSaved: true }),
+        body: JSON.stringify({ date: businessDate, to, preferSaved: false }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.success) {

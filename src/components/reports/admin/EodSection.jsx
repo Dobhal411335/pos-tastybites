@@ -29,9 +29,13 @@ export default function EodSection() {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch("/api/employees/close-restaurant", {
+        const res = await fetch(`/api/employees/close-restaurant?_t=${Date.now()}`, {
           credentials: "include",
           cache: "no-store",
+          headers: {
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            Pragma: "no-cache",
+          },
         });
         const json = await res.json();
         if (!cancelled && json.success) {

@@ -7,14 +7,25 @@ import {
 } from "@/lib/eod/getEodReportForDate";
 import { isValidBusinessDate, todayBusinessDate } from "@/lib/eod/eodHelpers";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+export const fetchCache = "force-no-store";
+
+const NO_CACHE_HEADERS = {
+  "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0",
+  Pragma: "no-cache",
+  Expires: "0",
+};
+
 /**
- * GET /api/eod?date=YYYY-MM-DD&preferSaved=1
+ * GET /api/eod?date=YYYY-MM-DD&preferSaved=0
+ * Defaults to live current data unless preferSaved=1 is explicitly passed.
  */
 export const GET = withAuth(async (request) => {
   try {
     const { searchParams } = new URL(request.url);
     const date = searchParams.get("date") || todayBusinessDate();
-    const preferSaved = searchParams.get("preferSaved") !== "0";
+    const preferSaved = searchParams.get("preferSaved") === "1";
 
     if (!isValidBusinessDate(date)) {
       return sendError(new Error("Bad Request"), "Invalid date. Use YYYY-MM-DD.", 400);
@@ -29,7 +40,9 @@ export const GET = withAuth(async (request) => {
 
     return sendSuccess(
       { report, saved, businessDate: date },
-      saved ? "Saved End-of-Day report" : "Live End-of-Day report"
+      saved ? "Saved End-of-Day report" : "Live End-of-Day report",
+      200,
+      NO_CACHE_HEADERS
     );
   } catch (error) {
     console.error("EOD GET error:", error);

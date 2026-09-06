@@ -7,14 +7,18 @@ import {
 import { exportEodExcel, eodExcelFilename } from "@/lib/eod/exportEodExcel";
 import { isValidBusinessDate, todayBusinessDate } from "@/lib/eod/eodHelpers";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+export const fetchCache = "force-no-store";
+
 /**
- * GET /api/eod/excel?date=YYYY-MM-DD&preferSaved=1
+ * GET /api/eod/excel?date=YYYY-MM-DD&preferSaved=0
  */
 export const GET = withAuth(async (request) => {
   try {
     const { searchParams } = new URL(request.url);
     const date = searchParams.get("date") || todayBusinessDate();
-    const preferSaved = searchParams.get("preferSaved") !== "0";
+    const preferSaved = searchParams.get("preferSaved") === "1";
 
     if (!isValidBusinessDate(date)) {
       return sendError(new Error("Bad Request"), "Invalid date. Use YYYY-MM-DD.", 400);
@@ -36,7 +40,9 @@ export const GET = withAuth(async (request) => {
         "Content-Type":
           "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         "Content-Disposition": `attachment; filename="${filename}"`,
-        "Cache-Control": "no-store",
+        "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0",
+        Pragma: "no-cache",
+        Expires: "0",
       },
     });
   } catch (error) {

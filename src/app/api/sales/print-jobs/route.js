@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import { withAuth } from "@/utils/auth";
 import PrintJob from "@/models/PrintJob";
 import Order from "@/models/Order";
@@ -32,6 +33,7 @@ export const GET = withAuth(async (request) => {
     const printerTarget = searchParams.get("printerTarget");
     const printerId = searchParams.get("printerId");
     const search = searchParams.get("search") || searchParams.get("orderNumber");
+    const isReprint = searchParams.get("reprint");
     const startDate = searchParams.get("startDate");
     const endDate = searchParams.get("endDate");
     const page = Math.max(1, Number(searchParams.get("page")) || 1);
@@ -79,7 +81,28 @@ export const GET = withAuth(async (request) => {
       ];
     }
 
-    const [jobs, total] = await Promise.all([
+    if (isReprint === "true") {
+      const reprintCondition = [
+        { parentPrintJobId: { $ne: null } },
+        { "metadata.isReprint": true },
+        { attemptCount: { $gt: 1 } },
+      ];
+      if (query.$or) {
+        query.$and = [{ $or: query.$or }, { $or: reprintCondition }];
+        delete query.$or;
+      } else {
+        query.$or = reprintCondition;
+      }
+    }
+
+    const restObjectId = mongoose.Types.ObjectId.isValid(request.restaurant)
+      ? new mongoose.Types.ObjectId(String(request.restaurant))
+      : request.restaurant;
+
+    const statsBaseMatch = { restaurantId: restObjectId };
+    if (query.createdAt) statsBaseMatch.createdAt = query.createdAt;
+
+    const [jobs, total, statsAgg] = await Promise.all([
       PrintJob.find(query)
         .sort({ createdAt: -1 })
         .skip(skip)
@@ -89,7 +112,60 @@ export const GET = withAuth(async (request) => {
         .populate("parentPrintJobId", "status printType createdAt")
         .lean(),
       PrintJob.countDocuments(query),
+      PrintJob.aggregate([
+        { $match: statsBaseMatch },
+        {
+          $group: {
+            _id: null,
+            total: { $sum: 1 },
+            receiptCount: {
+              $sum: { $cond: [{ $eq: ["$printType", "RECEIPT"] }, 1, 0] },
+            },
+            kotCount: {
+              $sum: { $cond: [{ $eq: ["$printType", "KOT"] }, 1, 0] },
+            },
+            barCount: {
+              $sum: { $cond: [{ $eq: ["$printType", "BAR_RECEIPT"] }, 1, 0] },
+            },
+            reprintCount: {
+              $sum: {
+                $cond: [
+                  {
+                    $or: [
+                      { $ne: ["$parentPrintJobId", null] },
+                      { $eq: ["$metadata.isReprint", true] },
+                      { $gt: ["$attemptCount", 1] },
+                    ],
+                  },
+                  1,
+                  0,
+                ],
+              },
+            },
+            printedCount: {
+              $sum: { $cond: [{ $eq: ["$status", "PRINTED"] }, 1, 0] },
+            },
+            failedCount: {
+              $sum: { $cond: [{ $eq: ["$status", "FAILED"] }, 1, 0] },
+            },
+            queuedCount: {
+              $sum: { $cond: [{ $eq: ["$status", "QUEUED"] }, 1, 0] },
+            },
+          },
+        },
+      ]),
     ]);
+
+    const stats = statsAgg?.[0] || {
+      total,
+      receiptCount: 0,
+      kotCount: 0,
+      barCount: 0,
+      reprintCount: 0,
+      printedCount: 0,
+      failedCount: 0,
+      queuedCount: 0,
+    };
 
     const totalPages = Math.ceil(total / limit) || 1;
 
@@ -98,6 +174,7 @@ export const GET = withAuth(async (request) => {
         success: true,
         message: "Print jobs retrieved",
         data: jobs,
+        stats,
         pagination: {
           page,
           limit,

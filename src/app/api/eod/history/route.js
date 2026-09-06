@@ -4,6 +4,16 @@ import { sendError } from "@/utils/errorHandler";
 import EodReport from "@/models/EodReport";
 import { EOD_ALLOWED_ROLES } from "@/lib/eod/getEodReportForDate";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+export const fetchCache = "force-no-store";
+
+const NO_CACHE_HEADERS = {
+  "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0",
+  Pragma: "no-cache",
+  Expires: "0",
+};
+
 /**
  * GET /api/eod/history
  */
@@ -43,7 +53,7 @@ export const GET = withAuth(async (request) => {
       };
     });
 
-    return sendSuccess({ history }, "EOD history");
+    return sendSuccess({ history }, "EOD history", 200, NO_CACHE_HEADERS);
   } catch (error) {
     console.error("EOD history error:", error);
     return sendError(error, "Failed to load EOD history", 500);

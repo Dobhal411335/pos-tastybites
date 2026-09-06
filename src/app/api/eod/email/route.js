@@ -11,6 +11,10 @@ import { exportEodPdf } from "@/lib/eod/exportEodPdf";
 import { sendEodReportEmail } from "@/lib/brevo/sendEodReportEmail";
 import { isValidBusinessDate, todayBusinessDate } from "@/lib/eod/eodHelpers";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+export const fetchCache = "force-no-store";
+
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /**
@@ -34,7 +38,7 @@ export const POST = withAuth(async (request) => {
       return sendError(new Error("Bad Request"), "A valid email address is required", 400);
     }
 
-    const preferSaved = body.preferSaved !== false;
+    const preferSaved = body.preferSaved === true;
     const { report } = await getEodReportForDate({
       restaurantId: request.restaurant,
       businessDate: date,

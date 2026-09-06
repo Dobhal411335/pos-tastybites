@@ -464,7 +464,7 @@ export function buildKotTicket({
   const note = job?.metadata?.specialNote || order?.specialNote;
   const items = kotItems.length
     ? kotItems
-    : job?.metadata?.kotItems || [];
+    : job?.metadata?.kotItems || order?.items || [];
   const reprint =
     isReprint ||
     Boolean(job?.parentPrintJobId || job?.metadata?.isReprint) ||
@@ -579,7 +579,7 @@ export function buildBarTicket({
   const note = job?.metadata?.specialNote || order?.specialNote;
   const items = kotItems.length
     ? kotItems
-    : job?.metadata?.barItems || job?.metadata?.kotItems || [];
+    : job?.metadata?.barItems || job?.metadata?.kotItems || order?.items || [];
   const reprint =
     isReprint ||
     Boolean(job?.parentPrintJobId || job?.metadata?.isReprint) ||

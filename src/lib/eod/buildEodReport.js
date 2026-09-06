@@ -54,9 +54,16 @@ export async function buildEodReport({
   ] = await Promise.all([
       Order.find({
         restaurantId: rid,
-        paymentStatus: "PAID",
+        $or: [{ paymentStatus: "PAID" }, { status: "PAID" }],
         status: { $nin: ["CANCELLED", "WAIVED"] },
-        updatedAt: { $gte: start, $lt: end },
+        $and: [
+          {
+            $or: [
+              { updatedAt: { $gte: start, $lt: end } },
+              { createdAt: { $gte: start, $lt: end } },
+            ],
+          },
+        ],
       })
         .populate("processedBy", "firstName lastName name")
         .populate("table", "section tableNumber")
@@ -64,7 +71,10 @@ export async function buildEodReport({
       Order.find({
         restaurantId: rid,
         status: "CANCELLED",
-        updatedAt: { $gte: start, $lt: end },
+        $or: [
+          { updatedAt: { $gte: start, $lt: end } },
+          { createdAt: { $gte: start, $lt: end } },
+        ],
       })
         .select("totalAmount subTotal")
         .lean(),
@@ -93,7 +103,10 @@ export async function buildEodReport({
         {
           $match: {
             restaurantId: rid,
-            updatedAt: { $gte: start, $lt: end },
+            $or: [
+              { updatedAt: { $gte: start, $lt: end } },
+              { createdAt: { $gte: start, $lt: end } },
+            ],
           },
         },
         {
