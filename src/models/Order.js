@@ -46,6 +46,7 @@ const OrderSchema = new mongoose.Schema(
     serviceChargeName: { type: String, default: null },
     discountTotal: { type: Number, default: 0 },
     discountCode: { type: String, default: null },
+    discountPercent: { type: Number, default: null },
     giftcardCode: { type: String, default: null },
     giftcardUsedAmount: { type: Number, default: 0 },
     totalAmount: { type: Number, required: true },

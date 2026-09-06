@@ -31,7 +31,9 @@ const BarReceipt = ({
   const covers =
     guestCount != null && guestCount !== ""
       ? Number(guestCount)
-      : null;
+      : order?.guestCount != null && order.guestCount !== ""
+        ? Number(order.guestCount)
+        : null;
   const brand = restaurantName || "TASTY BITES";
 
   return (
@@ -97,9 +99,12 @@ const BarReceipt = ({
 
       {note && (
         <>
-          <div className="text-[11px] mb-2">
-            <div className="receipt-bold uppercase mb-0.5">Notes</div>
-            <div>{note}</div>
+          <div className="receipt-divider border-t border-black border-dashed my-2" />
+          <div className="p-2 border-2 border-black border-dashed rounded text-xs bg-zinc-50 mb-2">
+            <div className="receipt-bold uppercase text-[10px] tracking-wider mb-0.5">
+              SPECIAL INSTRUCTIONS / NOTES:
+            </div>
+            <div className="receipt-bold text-xs">{note}</div>
           </div>
         </>
       )}
@@ -149,6 +154,11 @@ const BarReceipt = ({
                       {line.text}
                     </div>
                   ))}
+                </div>
+              )}
+              {(item.notes || item.specialInstructions) && (
+                <div className="pl-7 mt-0.5 text-[10px] italic receipt-bold text-zinc-800">
+                  Note: {item.notes || item.specialInstructions}
                 </div>
               )}
             </div>

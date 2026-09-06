@@ -337,6 +337,7 @@ export async function repricePosCartItems({
 
   let discountTotal = 0;
   let resolvedDiscountCode = null;
+  let resolvedDiscountPercent = null;
   const staffPercent = normalizeStaffDiscountPercent(staffDiscountPercent);
   if (staffPercent > 0) {
     discountTotal = Math.min(
@@ -344,6 +345,7 @@ export async function repricePosCartItems({
       subTotal,
     );
     resolvedDiscountCode = STAFF_DISCOUNT_CODE;
+    resolvedDiscountPercent = staffPercent;
   } else if (discountCode) {
     const code = String(discountCode).trim().toUpperCase();
     const coupon = await Coupon.findOne({
@@ -367,12 +369,25 @@ export async function repricePosCartItems({
       throw err;
     }
     if (coupon.discountType === "percent") {
+      resolvedDiscountPercent = Number(coupon.value) || 0;
       discountTotal = r2((subTotal * (Number(coupon.value) || 0)) / 100);
     } else {
       discountTotal = r2(Number(coupon.value) || 0);
+      if (subTotal > 0 && discountTotal > 0) {
+        resolvedDiscountPercent = Math.round((discountTotal / subTotal) * 1000) / 10;
+      }
     }
     discountTotal = Math.min(discountTotal, subTotal);
     resolvedDiscountCode = coupon.code;
+  }
+
+  // Prorate sales tax if a discount is applied (tax is charged on net sales in POS)
+  if (discountTotal > 0 && subTotal > 0) {
+    const taxableRatio = Math.max(0, subTotal - discountTotal) / subTotal;
+    taxTotal = r2(taxTotal * taxableRatio);
+    for (const item of formattedItems) {
+      item.tax = r2(item.tax * taxableRatio);
+    }
   }
 
   let serviceChargeTotal = 0;
@@ -398,6 +413,7 @@ export async function repricePosCartItems({
     serviceChargeName,
     discountTotal,
     discountCode: resolvedDiscountCode,
+    discountPercent: resolvedDiscountPercent,
     totalAmount,
   };
 }

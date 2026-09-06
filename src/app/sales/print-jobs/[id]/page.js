@@ -96,7 +96,16 @@ export default function PrintJobDetailPage() {
   }, [id]);
 
   useEffect(() => {
-    fetchJob();
+    let cancelled = false;
+    void (async () => {
+      await Promise.resolve();
+      if (!cancelled) {
+        await fetchJob();
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [fetchJob]);
 
   // Socket updates
@@ -492,42 +501,132 @@ export default function PrintJobDetailPage() {
                 </div>
 
                 {/* Financial breakdown */}
-                {order.totalAmount != null && (
-                  <div className="border-t border-zinc-100 pt-2 text-xs space-y-1 text-zinc-600">
-                    <div className="flex justify-between">
-                      <span>Subtotal</span>
-                      <span>${(order.subTotal || 0).toFixed(2)}</span>
-                    </div>
-                    {order.discountTotal > 0 && (
-                      <div className="flex justify-between text-emerald-700">
-                        <span>Discount {order.discountCode ? `(${order.discountCode})` : ""}</span>
-                        <span>-${order.discountTotal.toFixed(2)}</span>
-                      </div>
-                    )}
-                    {order.taxTotal > 0 && (
+                {order.totalAmount != null && (() => {
+                  const discountPct =
+                    order.discountPercent != null
+                      ? Number(order.discountPercent)
+                      : order.subTotal > 0 && order.discountTotal > 0
+                        ? Math.round(
+                            (order.discountTotal / order.subTotal) * 1000,
+                          ) / 10
+                        : null;
+                  const discountLabel =
+                    discountPct != null && discountPct > 0
+                      ? `Discount (${discountPct}%)`
+                      : order.discountTotal > 0
+                        ? `Discount ($${order.discountTotal.toFixed(2)})`
+                        : "Discount";
+
+                  const totalHstRate = (() => {
+                    const breakdownRatesSum = (order.taxBreakdown || []).reduce(
+                      (sum, t) => sum + (Number(t.rate) || 0),
+                      0,
+                    );
+                    if (breakdownRatesSum > 0)
+                      return Math.round(breakdownRatesSum * 10) / 10;
+                    const taxableBase = Math.max(
+                      0,
+                      (order.subTotal || 0) - (order.discountTotal || 0),
+                    );
+                    if (taxableBase > 0 && (order.taxTotal || 0) > 0) {
+                      return (
+                        Math.round(
+                          ((order.taxTotal || 0) / taxableBase) * 1000,
+                        ) / 10
+                      );
+                    }
+                    if (
+                      (order.subTotal || 0) > 0 &&
+                      (order.taxTotal || 0) > 0
+                    ) {
+                      return (
+                        Math.round(
+                          ((order.taxTotal || 0) / (order.subTotal || 0)) * 1000,
+                        ) / 10
+                      );
+                    }
+                    return null;
+                  })();
+                  const hstLabel =
+                    totalHstRate != null && totalHstRate > 0
+                      ? `HST (${totalHstRate}%)`
+                      : "HST";
+
+                  return (
+                    <div className="border-t border-zinc-100 pt-2 text-xs space-y-1 text-zinc-600">
                       <div className="flex justify-between">
-                        <span>Tax / HST</span>
-                        <span>${order.taxTotal.toFixed(2)}</span>
+                        <span>Subtotal</span>
+                        <span>${(order.subTotal || 0).toFixed(2)}</span>
                       </div>
-                    )}
-                    {order.tipAmount > 0 && (
-                      <div className="flex justify-between">
-                        <span>Tip</span>
-                        <span>${order.tipAmount.toFixed(2)}</span>
+                      {order.discountTotal > 0 && (
+                        <>
+                          <div className="flex justify-between text-emerald-700">
+                            <span>{discountLabel}</span>
+                            <span>-${order.discountTotal.toFixed(2)}</span>
+                          </div>
+                          <div className="flex justify-between text-zinc-500">
+                            <span>Net Subtotal</span>
+                            <span>
+                              $
+                              {Math.max(
+                                0,
+                                (order.subTotal || 0) -
+                                  (order.discountTotal || 0),
+                              ).toFixed(2)}
+                            </span>
+                          </div>
+                        </>
+                      )}
+                      {(order.taxTotal > 0 ||
+                        (order.discountTotal > 0 && totalHstRate > 0)) && (
+                        <div className="flex justify-between font-medium text-zinc-700">
+                          <span>{hstLabel}</span>
+                          <span>${(order.taxTotal || 0).toFixed(2)}</span>
+                        </div>
+                      )}
+                      {order.serviceChargeTotal > 0 && (
+                        <div className="flex justify-between">
+                          <span>
+                            {order.serviceChargeName || "Service Charge"}
+                          </span>
+                          <span>
+                            ${Number(order.serviceChargeTotal).toFixed(2)}
+                          </span>
+                        </div>
+                      )}
+                      {order.tipAmount > 0 && (
+                        <>
+                          <div className="flex justify-between">
+                            <span>Order Total</span>
+                            <span>${(order.totalAmount || 0).toFixed(2)}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span>
+                              Tip{" "}
+                              {order.tipMethod ? `(${order.tipMethod})` : ""}
+                            </span>
+                            <span>${order.tipAmount.toFixed(2)}</span>
+                          </div>
+                        </>
+                      )}
+                      <div className="flex justify-between font-bold text-zinc-900 border-t border-zinc-200 pt-1 text-sm">
+                        <span>Grand Total</span>
+                        <span>
+                          $
+                          {(
+                            (order.totalAmount || 0) + (order.tipAmount || 0)
+                          ).toFixed(2)}
+                        </span>
                       </div>
-                    )}
-                    <div className="flex justify-between font-bold text-zinc-900 border-t border-zinc-200 pt-1 text-sm">
-                      <span>Total</span>
-                      <span>${(order.totalAmount || 0).toFixed(2)}</span>
+                      {order.paymentMethod && (
+                        <div className="flex justify-between text-[11px] text-zinc-500 pt-0.5">
+                          <span>Payment Method</span>
+                          <span>{order.paymentMethod}</span>
+                        </div>
+                      )}
                     </div>
-                    {order.paymentMethod && (
-                      <div className="flex justify-between text-[11px] text-zinc-500 pt-0.5">
-                        <span>Payment Method</span>
-                        <span>{order.paymentMethod}</span>
-                      </div>
-                    )}
-                  </div>
-                )}
+                  );
+                })()}
               </div>
             )}
           </div>
@@ -582,6 +681,7 @@ export default function PrintJobDetailPage() {
                   ) : (
                     <CustomerReceipt
                       order={order}
+                      taxBreakdown={order?.taxBreakdown}
                       restaurantDetails={restaurant}
                       serverName={serverName || job.metadata?.serverName}
                       guestCount={guestCount ?? job.metadata?.guestCount}

@@ -7,16 +7,30 @@ import { sendError } from "@/utils/errorHandler";
 import { createNotification } from "@/lib/notifications/notificationService";
 
 /** Roles that may administer the print queue (not plain floor EMPLOYEE). */
-export const SALES_PRINT_ROLES = ["ADMIN", "MANAGER", "SERVER", "BARTENDER"];
+export const SALES_PRINT_ROLES = [
+  "ADMIN",
+  "SUPER ADMIN",
+  "MASTER TERMINAL",
+  "MANAGER",
+  "MANAGER TERMINAL",
+  "SERVER",
+  "BARTENDER",
+  "STAFF",
+  "EMPLOYEE",
+  "WAIT STAFF",
+];
 
 const PRINT_ADMIN_ALLOW = new Set([
   "ADMIN",
   "SUPER ADMIN",
+  "MASTER TERMINAL",
   "MANAGER",
+  "MANAGER TERMINAL",
   "SERVER",
   "BARTENDER",
   "EMPLOYEE",
   "STAFF",
+  "WAIT STAFF",
 ]);
 
 /**
@@ -526,6 +540,118 @@ export async function reprintPrintJob(
     if (err?.code === 11000 && idempotencyKey) {
       const existing = await PrintJob.findOne({
         restaurantId: original.restaurantId,
+        idempotencyKey,
+      });
+      if (existing) return { job: existing, created: false };
+    }
+    throw err;
+  }
+}
+
+/**
+ * Reprint a ticket for an order.
+ * If a prior PrintJob exists for this order & printType, it will clone and reprint it.
+ * If none exists, it will construct a new PrintJob marked with isReprint: true.
+ */
+export async function reprintOrderTicket({
+  orderId,
+  printType = "RECEIPT",
+  kotItems = [],
+  guestCount,
+  serverName,
+  specialNote,
+  restaurantName,
+  requestedBy,
+  restaurantId,
+  idempotencyKey,
+}) {
+  const normalizedType = (() => {
+    const s = String(printType || "").toUpperCase();
+    if (s === "CUSTOMER" || s === "RECEIPT") return "RECEIPT";
+    if (s === "BAR" || s === "BAR_RECEIPT") return "BAR_RECEIPT";
+    return "KOT";
+  })();
+
+  // 1. Try to find the latest existing print job for this order and print type
+  const existingJob = await PrintJob.findOne({
+    restaurantId,
+    orderId,
+    printType: normalizedType,
+  }).sort({ createdAt: -1 });
+
+  if (existingJob) {
+    return reprintPrintJob(existingJob._id, {
+      requestedBy,
+      restaurantId,
+      idempotencyKey,
+    });
+  }
+
+  // 2. If no prior PrintJob exists, fetch the order document to build a new print job marked as reprint
+  const order = await Order.findById(orderId).lean();
+  if (!order) {
+    throw Object.assign(new Error("Order not found"), { statusCode: 404 });
+  }
+
+  const printerTarget =
+    normalizedType === "RECEIPT"
+      ? "RECEIPT"
+      : normalizedType === "BAR_RECEIPT"
+        ? "COUNTER"
+        : "KITCHEN";
+
+  const printerConfig = await resolvePrinterConfig(restaurantId, printerTarget);
+  const floorId = order.floor || null;
+  const orderNumber = order.orderNumber || null;
+
+  const metadata = {
+    orderNumber,
+    isReprint: true,
+    tableNo: order.tableNo || null,
+    guestName: order.guestName || null,
+    partyName: order.partyName || order.guestName || null,
+    floorName: order.floorName || null,
+    serverName: serverName || null,
+    restaurantName: restaurantName || null,
+    guestCount: guestCount ?? order.guestCount ?? null,
+    specialNote: specialNote || order.specialNote || null,
+  };
+
+  const rawItems =
+    Array.isArray(kotItems) && kotItems.length > 0 ? kotItems : order.items || [];
+  if (normalizedType === "KOT") {
+    metadata.kotItems = rawItems;
+  } else if (normalizedType === "BAR_RECEIPT") {
+    metadata.barItems = rawItems;
+    metadata.kotItems = rawItems;
+  }
+
+  try {
+    const job = await PrintJob.create({
+      restaurantId,
+      orderId: order._id,
+      printType: normalizedType,
+      printerTarget,
+      printerId: printerConfig?._id || null,
+      status: "QUEUED",
+      attemptCount: 0,
+      requestedBy: requestedBy || null,
+      metadata,
+      idempotencyKey: idempotencyKey || undefined,
+    });
+
+    const payload = toPrintJobEventPayload(job, orderNumber, printerConfig);
+    emitPrintEvent("NEW_PRINT_JOB", restaurantId, floorId, payload);
+
+    logger.info(
+      `Reprint PrintJob created for order: ${job._id} type=${job.printType} order=${orderNumber || order._id}`
+    );
+
+    return { job, created: true };
+  } catch (err) {
+    if (err?.code === 11000 && idempotencyKey) {
+      const existing = await PrintJob.findOne({
+        restaurantId,
         idempotencyKey,
       });
       if (existing) return { job: existing, created: false };

@@ -64,15 +64,31 @@ const CustomerReceipt = ({
   const thankYou =
     restaurantDetails?.thankYouMessage || "Thank You! Please Come Again!";
 
-  const hstAmount = (() => {
+  const resolvedTaxBreakdown = (() => {
     const fromProp = Array.isArray(taxBreakdown) ? taxBreakdown : [];
-    const fromOrder = Array.isArray(order.taxBreakdown) ? order.taxBreakdown : [];
+    const fromOrder = Array.isArray(order.taxBreakdown)
+      ? order.taxBreakdown
+      : [];
     const lines = fromProp.length ? fromProp : fromOrder;
-    if (lines.length > 0) {
-      return lines.reduce((sum, t) => sum + Number(t.amount || 0), 0);
+    return lines;
+  })();
+
+  const hstAmount = (() => {
+    if (resolvedTaxBreakdown.length > 0) {
+      return resolvedTaxBreakdown.reduce(
+        (sum, t) => sum + Number(t.amount || 0),
+        0,
+      );
     }
     return Number(taxTotal || 0);
   })();
+
+  const resolvedGuests =
+    guestCount != null && guestCount !== ""
+      ? guestCount
+      : order.guestCount != null && order.guestCount !== ""
+        ? order.guestCount
+        : null;
 
   const tip = Number(tipAmount || 0);
   const discount = Number(discountTotal || 0);
@@ -82,6 +98,61 @@ const CustomerReceipt = ({
   const card = Number(cardAmount || 0);
   const orderTotal = Number(totalAmount || 0);
   const grandTotal = orderTotal + tip;
+
+  const discountPct = (() => {
+    if (order.discountPercent != null && Number(order.discountPercent) > 0) {
+      return Number(order.discountPercent);
+    }
+    const numSub = Number(subTotal || 0);
+    const numDisc = Number(discount || 0);
+    if (numSub > 0 && numDisc > 0) {
+      return Math.round((numDisc / numSub) * 1000) / 10;
+    }
+    return null;
+  })();
+
+  const discountLabel = (() => {
+    if (discountPct != null && discountPct > 0) {
+      return `Discount (${discountPct}%)`;
+    }
+    if (discount > 0) {
+      return `Discount ($${discount.toFixed(2)})`;
+    }
+    return "Discount";
+  })();
+
+  const totalHstRate = (() => {
+    const breakdownRatesSum = resolvedTaxBreakdown.reduce(
+      (sum, t) => sum + (Number(t.rate) || 0),
+      0,
+    );
+    if (breakdownRatesSum > 0) {
+      return Math.round(breakdownRatesSum * 10) / 10;
+    }
+    const taxableBase = Math.max(
+      0,
+      Number(subTotal || 0) - Number(discount || 0),
+    );
+    if (taxableBase > 0 && hstAmount > 0) {
+      return Math.round((hstAmount / taxableBase) * 1000) / 10;
+    }
+    if (
+      Number(subTotal || 0) > 0 &&
+      (hstAmount > 0 || Number(taxTotal || 0) > 0)
+    ) {
+      return (
+        Math.round(
+          (Number(taxTotal || hstAmount) / Number(subTotal)) * 1000,
+        ) / 10
+      );
+    }
+    return null;
+  })();
+
+  const hstLabel =
+    totalHstRate != null && totalHstRate > 0
+      ? `HST (${totalHstRate}%)`
+      : "HST";
 
   const methodStr = String(paymentMethod || "");
   const cardLabelMatch = methodStr.match(/Card\s*-\s*([^+/]+)/i);
@@ -179,6 +250,12 @@ const CustomerReceipt = ({
             <span className="text-zinc-500">Server:</span>{" "}
             <span className="receipt-bold">{serverName || "Server"}</span>
           </span>
+          {resolvedGuests != null && (
+            <span>
+              <span className="text-zinc-500">Guests:</span>{" "}
+              <span className="receipt-bold">{resolvedGuests}</span>
+            </span>
+          )}
         </div>
         <div className="flex justify-between gap-2">
           {shouldShowTable(order) && (
@@ -222,22 +299,26 @@ const CustomerReceipt = ({
 
       <div className="receipt-divider" />
 
-      {/* Totals + payment */}
+      {/* Totals */}
       <div className="mb-2 space-y-1 text-[11px]">
         <Row label="Subtotal" value={money(subTotal)} muted />
         {discount > 0 && (
-          <Row
-            label={
-              order.source === "STAFF" ||
-              String(discountCode || "").toUpperCase() === "STAFF"
-                ? "Staff Discount"
-                : "Discount"
-            }
-            value={`-${money(discount).slice(1)}`}
-            muted
-          />
+          <>
+            <Row
+              label={discountLabel}
+              value={`-${money(discount).slice(1)}`}
+              muted
+            />
+            <Row
+              label="Net Amount"
+              value={money(Math.max(0, Number(subTotal || 0) - discount))}
+              muted
+            />
+          </>
         )}
-        {hstAmount > 0 && <Row label="HST" value={money(hstAmount)} muted />}
+        {(hstAmount > 0 || (discount > 0 && totalHstRate > 0)) && (
+          <Row label={hstLabel} value={money(hstAmount)} muted />
+        )}
         {serviceCharge > 0 && (
           <Row
             label={serviceChargeName || "Server Charge"}
@@ -245,12 +326,22 @@ const CustomerReceipt = ({
             muted
           />
         )}
-        {tip > 0 && <Row label={tipLabel} value={money(tip)} muted />}
+        {tip > 0 && (
+          <>
+            <Row label="Order Total" value={money(orderTotal)} muted />
+            <Row label={tipLabel} value={money(tip)} muted />
+          </>
+        )}
+      </div>
+
+      <div className="receipt-divider border-t border-black my-1" />
+      <div className="mb-2 text-[12px]">
+        <Row label="TOTAL" value={money(grandTotal)} bold />
       </div>
 
       {hasPaymentSplit && (
         <>
-          <div className="receipt-divider" />
+          <div className="receipt-divider border-t border-black border-dashed my-1.5" />
           <div className="mb-2 space-y-1 text-[11px]">
             <div className="receipt-bold uppercase text-[10px] mb-1">
               Payment Method
@@ -266,10 +357,6 @@ const CustomerReceipt = ({
           </div>
         </>
       )}
-
-      <div className="mb-2 pt-1 text-[11px]">
-        <Row label="TOTAL" value={money(grandTotal)} bold />
-      </div>
 
       <div className="receipt-divider" />
       <div className="text-center text-[10px] space-y-1">

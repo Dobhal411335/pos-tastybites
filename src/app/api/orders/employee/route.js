@@ -104,7 +104,16 @@ async function enrichOrdersWithProcessedBy(orders) {
     ),
   ];
 
-  const [employees, floors] = await Promise.all([
+  const sessionIds = [
+    ...new Set(
+      orders
+        .map((o) => o.tableSession)
+        .filter(Boolean)
+        .map((s) => String(s?._id || s.id || s))
+    ),
+  ];
+
+  const [employees, floors, sessions] = await Promise.all([
     ids.length
       ? Employee.find({ _id: { $in: ids } })
           .select("firstName lastName name role")
@@ -113,9 +122,15 @@ async function enrichOrdersWithProcessedBy(orders) {
     floorIds.length
       ? Floor.find({ _id: { $in: floorIds } }).select("name").lean()
       : [],
+    sessionIds.length
+      ? TableSession.find({ _id: { $in: sessionIds } })
+          .select("_id status isSessionOpen closedAt")
+          .lean()
+      : [],
   ]);
   const empMap = new Map(employees.map((e) => [String(e._id), e]));
   const floorMap = new Map(floors.map((f) => [String(f._id), f.name]));
+  const sessionMap = new Map(sessions.map((s) => [String(s._id), s]));
 
   return orders.map((order) => {
     const rawId = order.processedBy ? String(order.processedBy._id || order.processedBy) : null;
@@ -125,12 +140,30 @@ async function enrichOrdersWithProcessedBy(orders) {
       floorMap.get(String(order.floor?._id || order.floor)) ||
       null;
 
+    const rawSessionId = order.tableSession
+      ? String(order.tableSession._id || order.tableSession.id || order.tableSession)
+      : null;
+    const sessionDoc = rawSessionId ? sessionMap.get(rawSessionId) : null;
+    const isSessionOpen = sessionDoc ? Boolean(sessionDoc.isSessionOpen) : false;
+    const sessionStatus = sessionDoc ? sessionDoc.status : null;
+
     return {
       ...order,
       processedByName: formatPersonName(emp),
       processedByRole: emp?.role || null,
       floorName,
       tableNo: formatTableLocation(order.tableNo, floorName),
+      tableSession: sessionDoc
+        ? {
+            ...(typeof order.tableSession === "object" ? order.tableSession : {}),
+            _id: sessionDoc._id,
+            id: sessionDoc._id,
+            status: sessionDoc.status,
+            isSessionOpen,
+          }
+        : order.tableSession,
+      isSessionOpen,
+      sessionStatus,
     };
   });
 }
@@ -299,6 +332,7 @@ export const POST = withAuth(async (request) => {
       serviceChargeName,
       discountTotal,
       discountCode,
+      discountPercent,
       totalAmount,
     } = priced;
 
@@ -358,6 +392,7 @@ export const POST = withAuth(async (request) => {
         order.serviceChargeName = serviceChargeName || null;
         order.discountTotal = discountTotal;
         order.discountCode = discountCode || null;
+        order.discountPercent = discountPercent ?? null;
         order.totalAmount = totalAmount;
         order.specialNote = specialNote;
         order.guestName = directPartyName;
@@ -428,6 +463,7 @@ export const POST = withAuth(async (request) => {
         serviceChargeName: serviceChargeName || null,
         discountTotal,
         discountCode: discountCode || null,
+        discountPercent: discountPercent ?? null,
         totalAmount,
         specialNote: specialNote,
         guestName: directPartyName,
@@ -538,6 +574,7 @@ export const POST = withAuth(async (request) => {
       order.serviceChargeName = serviceChargeName || null;
       order.discountTotal = discountTotal;
       order.discountCode = discountCode || null;
+      order.discountPercent = discountPercent ?? null;
       order.totalAmount = totalAmount;
       order.specialNote = specialNote;
       order.floor = session.floor?._id || session.floor || order.floor;
@@ -647,6 +684,7 @@ export const POST = withAuth(async (request) => {
         serviceChargeName: serviceChargeName || null,
         discountTotal,
         discountCode: discountCode || null,
+        discountPercent: discountPercent ?? null,
         totalAmount,
         specialNote: specialNote,
         
@@ -754,23 +792,41 @@ export const GET = withAuth(async (request) => {
     const today = searchParams.get("today");
     
     if (orderId) {
-      const order = await Order.findOne({
+      let order = await Order.findOne({
         _id: orderId,
         restaurantId: request.restaurant,
         source: { $in: ["WALK_IN", "STAFF", "POS"] },
         status: { $in: ["PENDING", "CONFIRMED"] },
       }).lean();
 
+      if (!order) {
+        order = await Order.findOne({
+          _id: orderId,
+          restaurantId: request.restaurant,
+          source: { $in: ["WALK_IN", "STAFF", "POS"] },
+          status: { $nin: ["CANCELLED", "WAIVED"] },
+        }).lean();
+      }
+
       const [enriched] = order ? await enrichOrdersWithProcessedBy([order]) : [null];
       return sendSuccess(enriched, "Direct order retrieved");
     }
 
     if (sessionId) {
-      // Fetch the active order for this session to load the cart
-      const order = await Order.findOne({
+      // Fetch the active order for this session to load the cart (prefer PENDING/CONFIRMED first)
+      let order = await Order.findOne({
         tableSession: sessionId,
+        restaurantId: request.restaurant,
         status: { $in: ["PENDING", "CONFIRMED"] }
-      }).lean();
+      }).sort({ createdAt: -1 }).lean();
+
+      if (!order) {
+        order = await Order.findOne({
+          tableSession: sessionId,
+          restaurantId: request.restaurant,
+          status: { $nin: ["CANCELLED", "WAIVED"] }
+        }).sort({ createdAt: -1 }).lean();
+      }
       
       const [enriched] = order ? await enrichOrdersWithProcessedBy([order]) : [null];
       return sendSuccess(enriched, "Session order retrieved");

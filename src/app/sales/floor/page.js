@@ -480,14 +480,15 @@ export default function SalesFloorPage() {
     // Reliable comparison: session owner uses MongoDB _id
     const isMineSession =
       session && session.assignedEmployeeId === currentUserId;
+    const isPaidSession = session && session.status === "PAYMENT_PENDING";
 
     if (!session) {
       setSelectedTable(table);
       setSelectedLinkedTableIds([]);
       setGuestCount(table.seats || 2);
       setShowStartSession(true);
-    } else if (isMineSession || isAdmin) {
-      // Occupied by me (or I am admin)
+    } else if (isMineSession || isAdmin || isPaidSession) {
+      // Occupied by me (or I am admin, or table is paid and ready for release)
       setSelectedTable({ ...table, session });
       setActionView("MAIN");
       setShowTableActions(true);

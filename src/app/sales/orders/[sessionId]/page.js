@@ -1280,7 +1280,7 @@ export default function OrderPage() {
   };
 
   const subtotal = cart.reduce((sum, item) => sum + item.price * item.qty, 0);
-  const totalTax = cart.reduce(
+  const rawTotalTax = cart.reduce(
     (sum, item) => sum + (item.tax || 0) * item.qty,
     0,
   );
@@ -1289,13 +1289,17 @@ export default function OrderPage() {
       ? (subtotal * appliedDiscount.value) / 100
       : Math.min(appliedDiscount.value, subtotal)
     : 0;
-  const total = subtotal - discountAmount + totalTax;
+  const taxableRatio =
+    subtotal > 0 ? Math.max(0, subtotal - discountAmount) / subtotal : 1;
+  const totalTax = Math.round(rawTotalTax * taxableRatio * 100) / 100;
+  const total = Math.max(0, subtotal - discountAmount + totalTax);
 
   const hasSentKot =
     Boolean(activeOrder) &&
     orderStatus !== "Draft" &&
     kotCartFingerprint === getCartFingerprint(cart);
-  const canPay = hasSentKot && cart.length > 0 && orderStatus !== "PAID";
+  const isPaid = orderStatus === "PAID" || activeOrder?.paymentStatus === "PAID";
+  const canPay = hasSentKot && cart.length > 0 && !isPaid;
 
   // After KOT, persisted order totals are authoritative (server reprices items).
   const billingSubtotal =
@@ -1313,7 +1317,7 @@ export default function OrderPage() {
   const billingTotal = billingSubtotal - billingDiscount + billingTaxTotal;
 
   const openPaymentModal = () => {
-    if (orderStatus === "PAID") return;
+    if (orderStatus === "PAID" || isPaid) return;
     
     // Restrict Staff from completing payments
     if (currentUser?.role === "Staff") {
@@ -1667,14 +1671,30 @@ export default function OrderPage() {
                 Order{" "}
                 {activeOrder?.orderNumber ? `#${activeOrder.orderNumber}` : ""}
               </h2>
+              {isPaid && (
+                <span className="ml-1.5 px-2 py-0.5 text-[11px] font-black rounded-md bg-emerald-100 text-emerald-800 tracking-wide">
+                  PAID
+                </span>
+              )}
             </div>
-            <button
-              className="text-red-500 hover:text-red-600 text-[13px] font-bold disabled:opacity-50"
-              onClick={() => setIsClearOrderModalOpen(true)}
-              disabled={cart.length === 0}
-            >
-              Clear All
-            </button>
+            {isPaid && hasTableSession ? (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 px-3 text-xs font-bold text-orange-600 border-orange-200 bg-orange-50 hover:bg-orange-100 shadow-none"
+                onClick={() => setIsReleaseModalOpen(true)}
+              >
+                Release Table
+              </Button>
+            ) : (
+              <button
+                className="text-red-500 hover:text-red-600 text-[13px] font-bold disabled:opacity-50"
+                onClick={() => setIsClearOrderModalOpen(true)}
+                disabled={cart.length === 0}
+              >
+                Clear All
+              </button>
+            )}
           </div>
           <div className="flex-1 bg-zinc-50 overflow-y-auto custom-scrollbar">
             <div className="p-4 space-y-4">
@@ -1841,13 +1861,23 @@ export default function OrderPage() {
               {(hasSentKot ? billingDiscount : discountAmount) > 0 && (
                 <div className="flex justify-between text-sm font-semibold text-green-600">
                   <span>
-                    {isStaffOrder || appliedDiscount?.code === "STAFF"
-                      ? "Staff Discount"
-                      : `Discount${
-                          appliedDiscount?.code
-                            ? ` (${appliedDiscount.code})`
-                            : ""
-                        }`}
+                    {(() => {
+                      const curDisc = hasSentKot
+                        ? billingDiscount
+                        : discountAmount;
+                      const curSub = hasSentKot ? billingSubtotal : subtotal;
+                      const curPct =
+                        curSub > 0 && curDisc > 0
+                          ? Math.round((curDisc / curSub) * 1000) / 10
+                          : null;
+                      if (curPct != null && curPct > 0) {
+                        return `Discount (${curPct}%)`;
+                      }
+                      if (curDisc > 0) {
+                        return `Discount ($${curDisc.toFixed(2)})`;
+                      }
+                      return "Discount";
+                    })()}
                   </span>
                   <span>
                     -$
@@ -1856,7 +1886,21 @@ export default function OrderPage() {
                 </div>
               )}
               <div className="flex justify-between text-sm font-semibold text-zinc-500">
-                <span>HST</span>
+                <span>
+                  {(() => {
+                    const curTax = hasSentKot ? billingTaxTotal : totalTax;
+                    const curSub = hasSentKot ? billingSubtotal : subtotal;
+                    const curDisc = hasSentKot
+                      ? billingDiscount
+                      : discountAmount;
+                    const taxable = Math.max(0, curSub - curDisc);
+                    const rate =
+                      taxable > 0 && curTax > 0
+                        ? Math.round((curTax / taxable) * 1000) / 10
+                        : null;
+                    return rate != null && rate > 0 ? `HST (${rate}%)` : "HST";
+                  })()}
+                </span>
                 <span className="text-zinc-900">
                   ${(hasSentKot ? billingTaxTotal : totalTax).toFixed(2)}
                 </span>
@@ -1872,24 +1916,38 @@ export default function OrderPage() {
             <div className="flex gap-2">
               <Button
                 onClick={handleSendToKitchen}
-                disabled={cart.length === 0 || isSubmitting || hasSentKot}
+                disabled={cart.length === 0 || isSubmitting || hasSentKot || isPaid}
                 className="flex-1 h-14 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm rounded-xl shadow-none disabled:opacity-50"
               >
                 {isSubmitting ? (
                   <Loader2 className="w-5 h-5 animate-spin" />
-                ) : hasSentKot ? (
+                ) : hasSentKot || isPaid ? (
                   "KOT Sent"
                 ) : (
                   "Kitchen / KOT"
                 )}
               </Button>
-              <Button
-                onClick={openPaymentModal}
-                disabled={!canPay}
-                className="flex-1 h-14 bg-red-600 hover:bg-red-700 text-white font-bold text-sm rounded-xl shadow-none disabled:opacity-50"
-              >
-                {orderStatus === "PAID" ? "Paid" : "Pay Now"}
-              </Button>
+              {isPaid && hasTableSession ? (
+                <Button
+                  onClick={() => setIsReleaseModalOpen(true)}
+                  disabled={isReleasingTable}
+                  className="flex-1 h-14 bg-orange-500 hover:bg-orange-600 text-white font-bold text-sm rounded-xl shadow-none"
+                >
+                  {isReleasingTable ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : (
+                    "Release Table"
+                  )}
+                </Button>
+              ) : (
+                <Button
+                  onClick={openPaymentModal}
+                  disabled={!canPay}
+                  className="flex-1 h-14 bg-red-600 hover:bg-red-700 text-white font-bold text-sm rounded-xl shadow-none disabled:opacity-50"
+                >
+                  {isPaid ? "Paid" : "Pay Now"}
+                </Button>
+              )}
             </div>
           </div>
         </div>
@@ -2668,19 +2726,27 @@ export default function OrderPage() {
                 Do you want to release this table now?
               </p>
             </div>
-            <div className="p-5 flex gap-3">
+            <div className="p-5 flex gap-2">
+              <Button
+                variant="outline"
+                disabled={isReleasingTable}
+                onClick={() => setIsReleaseModalOpen(false)}
+                className="flex-1 h-12 rounded-xl font-bold border-zinc-200 text-zinc-700 shadow-none text-xs sm:text-sm"
+              >
+                Stay on Order
+              </Button>
               <Button
                 variant="outline"
                 disabled={isReleasingTable}
                 onClick={() => handleReleaseTable(false)}
-                className="flex-1 h-12 rounded-xl font-bold border-zinc-200 text-zinc-700 shadow-none"
+                className="flex-1 h-12 rounded-xl font-bold border-zinc-300 text-zinc-800 shadow-none text-xs sm:text-sm"
               >
                 No, Go to Floor
               </Button>
               <Button
                 disabled={isReleasingTable}
                 onClick={() => handleReleaseTable(true)}
-                className="flex-1 h-12 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-bold shadow-none"
+                className="flex-1 h-12 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-bold shadow-none text-xs sm:text-sm"
               >
                 {isReleasingTable ? <Loader2 className="w-5 h-5 animate-spin" /> : "Yes, Release"}
               </Button>

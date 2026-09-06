@@ -42,6 +42,7 @@ export const POST = withAuth(async (request) => {
       splitAmount,
       discountTotal,
       discountCode,
+      discountPercent,
       guestName,
       partyName,
       guestCount,
@@ -100,6 +101,7 @@ export const POST = withAuth(async (request) => {
       );
       order.discountTotal = staffDiscountTotal;
       order.discountCode = staffDiscountTotal > 0 ? STAFF_DISCOUNT_CODE : null;
+      order.discountPercent = staffPercent > 0 ? staffPercent : null;
     } else {
       if (discountTotal !== undefined && discountTotal !== null) {
         const incomingDiscount = r2(discountTotal);
@@ -117,9 +119,29 @@ export const POST = withAuth(async (request) => {
           ? String(discountCode).trim().toUpperCase()
           : null;
       }
+      if (discountPercent !== undefined && discountPercent !== null) {
+        order.discountPercent = Number(discountPercent) || null;
+      } else if (subTotal > 0 && order.discountTotal > 0) {
+        order.discountPercent =
+          Math.round((order.discountTotal / subTotal) * 1000) / 10;
+      }
     }
 
     const resolvedDiscount = r2(order.discountTotal);
+    let resolvedTaxTotal = taxTotal;
+    if (resolvedDiscount > 0 && subTotal > 0) {
+      const rawBaseTax =
+        Array.isArray(order.items) && order.items.length > 0
+          ? order.items.reduce(
+              (s, it) => s + (Number(it.tax || 0) * Number(it.qty || 1)),
+              0,
+            )
+          : taxTotal;
+      const taxableRatio = Math.max(0, subTotal - resolvedDiscount) / subTotal;
+      resolvedTaxTotal = r2(rawBaseTax * taxableRatio);
+      order.taxTotal = resolvedTaxTotal;
+    }
+
     const wantsServiceCharge =
       applyServiceCharge === true ||
       (applyServiceCharge !== false &&
@@ -169,7 +191,7 @@ export const POST = withAuth(async (request) => {
     order.serviceChargeTotal = workingServiceCharge;
 
     order.totalAmount = r2(
-      Math.max(0, subTotal - resolvedDiscount + taxTotal + workingServiceCharge),
+      Math.max(0, subTotal - resolvedDiscount + resolvedTaxTotal + workingServiceCharge),
     );
 
     // Client `amount` may only confirm the server-computed total — never overwrite it.
@@ -259,6 +281,21 @@ export const POST = withAuth(async (request) => {
       order.giftcardUsedAmount = giftCardDebitAmount;
     }
 
+    // Clean up paymentMethod if gift card was not actually debited
+    if (!order.giftcardUsedAmount || order.giftcardUsedAmount <= 0) {
+      order.giftcardUsedAmount = 0;
+      order.paymentMethod = String(order.paymentMethod || "")
+        .replace(/\bGift\s*Card\s*\+\s*/i, "")
+        .replace(/\s*\+\s*Gift\s*Card\b/i, "")
+        .trim();
+      if (!order.paymentMethod || /^Gift\s*Card$/i.test(order.paymentMethod)) {
+        order.paymentMethod =
+          methodLabel && !/gift\s*card/i.test(methodLabel)
+            ? methodLabel
+            : "Card";
+      }
+    }
+
     // Persist party / customer name for the bill
     if (partyName !== undefined || guestName !== undefined) {
       const resolvedPartyName = (partyName || guestName || "").trim() || null;
@@ -342,6 +379,18 @@ export const POST = withAuth(async (request) => {
       }
     }
 
+    // Ensure cardAmount does not exceed actual grand total due after cash and gift card
+    if (order.cardAmount != null && order.cardAmount > 0) {
+      const due = r2(order.totalAmount);
+      const tip = r2(order.tipAmount);
+      const gc = r2(order.giftcardUsedAmount);
+      const cash = r2(order.cashAmount);
+      const maxCardTender = r2(Math.max(0, due + tip - gc - cash));
+      if (order.cardAmount > maxCardTender) {
+        order.cardAmount = maxCardTender;
+      }
+    }
+
     try {
       order.taxBreakdown = await buildTaxBreakdownForOrder(
         order,
@@ -378,11 +427,16 @@ export const POST = withAuth(async (request) => {
     let receiptGuestCount = order.guestCount ?? null;
     let session = null;
 
-    // If this order is linked to a session, optionally update the session status to PAYMENT_PENDING if not already
-    // Actually, if it's paid, the session is now ready to be RELEASED.
-    if (sessionId) {
+    // If this order is linked to a session, update the session status to PAYMENT_PENDING if all active orders are paid
+    const resolvedSessionId = sessionId
+      ? (typeof sessionId === "object" ? sessionId._id || sessionId.id : sessionId)
+      : (order.tableSession && typeof order.tableSession === "object"
+          ? order.tableSession._id || order.tableSession.id
+          : order.tableSession);
+
+    if (resolvedSessionId) {
       session = await TableSession.findOne({
-        _id: sessionId,
+        _id: resolvedSessionId,
         restaurant: request.restaurant,
       });
       if (session) {
@@ -391,31 +445,51 @@ export const POST = withAuth(async (request) => {
           await order.save();
         }
         receiptGuestCount = order.guestCount ?? session.guestCount ?? null;
-      }
-      
-      if (global.io && session) {
-        global.io.to(`floor:${session.floor}`).emit('payment:completed', { orderId: order._id, sessionId });
-      }
 
-      // Audit Log
-      if (session) {
+        // Ensure this order is tracked in session.activeOrders
+        if (!session.activeOrders.some((id) => String(id) === String(order._id))) {
+          session.activeOrders.push(order._id);
+        }
+
+        // Check if there are any remaining unpaid active orders for this session
+        const unpaidCount = await Order.countDocuments({
+          restaurantId: request.restaurant,
+          $or: [
+            { _id: { $in: session.activeOrders } },
+            { tableSession: session._id },
+          ],
+          paymentStatus: { $ne: "PAID" },
+          status: { $nin: ["CANCELLED", "WAIVED", "PAID"] },
+        });
+
+        if (unpaidCount === 0 && session.status !== "RELEASED") {
+          session.status = "PAYMENT_PENDING";
+        }
+        await session.save();
+
+        if (global.io) {
+          global.io.to(`floor:${session.floor}`).emit("payment:completed", { orderId: order._id, sessionId: session._id });
+          global.io.to(`floor:${session.floor}`).emit("table:updated", { sessionId: session._id, status: session.status });
+          global.io.to(`restaurant:${request.restaurant}`).emit("payment:completed", { orderId: order._id, sessionId: session._id });
+        }
+
+        // Audit Log
         await OperationalAuditLog.create({
           restaurantId: request.restaurant,
           actorId: request.user.id,
-          actorType: request.user.role === 'Admin' || request.user.role === 'Super Admin' || request.user.role === 'Manager' ? 'Admin' : 'Employee',
+          actorType: request.user.role === "Admin" || request.user.role === "Super Admin" || request.user.role === "Manager" ? "Admin" : "Employee",
           actorName: request.user.name || request.user.firstName,
-          action: 'PAYMENT_COMPLETED',
+          action: "PAYMENT_COMPLETED",
           floorId: session.floor,
           tableId: session.primaryTable,
-          tableSessionId: sessionId,
+          tableSessionId: session._id,
           orderId: order._id,
-          newValue: { method }
+          newValue: { method },
         });
       }
-
     } else if (global.io) {
       // If no session, broadcast to restaurant or something
-      global.io.to(`restaurant:${order.restaurantId}`).emit('payment:completed', { orderId: order._id });
+      global.io.to(`restaurant:${order.restaurantId}`).emit("payment:completed", { orderId: order._id });
     }
 
     // Receipt PrintJob — only after successful payment (not on order create).

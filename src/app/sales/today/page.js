@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
+import { useSocket } from "@/components/providers/SocketProvider";
 import PrintPreviewModal from "@/components/receipts/PrintPreviewModal";
 import TodayOrderPaymentModal from "@/components/sales/TodayOrderPaymentModal";
 import {
@@ -119,6 +120,7 @@ function getPaymentType(order) {
 
 export default function TodayOrdersPage() {
   const router = useRouter();
+  const { socket } = useSocket();
   const [activeTab, setActiveTab] = useState("All");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedOrder, setSelectedOrder] = useState(null);
@@ -139,9 +141,8 @@ export default function TodayOrdersPage() {
   const [isWaiving, setIsWaiving] = useState(false);
 
   const fetchOrders = useCallback(async ({ silent = false } = {}) => {
+    await Promise.resolve();
     if (silent) setRefreshing(true);
-    else setLoading(true);
-
     try {
       const res = await fetch("/api/orders/employee?today=true");
       const data = await res.json();
@@ -162,8 +163,37 @@ export default function TodayOrdersPage() {
   }, []);
 
   useEffect(() => {
-    fetchOrders();
+    let ignore = false;
+    const run = async () => {
+      await fetchOrders();
+    };
+    run();
+    return () => {
+      ignore = true;
+    };
   }, [fetchOrders]);
+
+  useEffect(() => {
+    if (!socket) return;
+
+    const onOrderOrTableChange = () => {
+      fetchOrders({ silent: true });
+    };
+
+    socket.on("table:released", onOrderOrTableChange);
+    socket.on("table:updated", onOrderOrTableChange);
+    socket.on("order:created", onOrderOrTableChange);
+    socket.on("order:updated", onOrderOrTableChange);
+    socket.on("payment:completed", onOrderOrTableChange);
+
+    return () => {
+      socket.off("table:released", onOrderOrTableChange);
+      socket.off("table:updated", onOrderOrTableChange);
+      socket.off("order:created", onOrderOrTableChange);
+      socket.off("order:updated", onOrderOrTableChange);
+      socket.off("payment:completed", onOrderOrTableChange);
+    };
+  }, [socket, fetchOrders]);
 
   useEffect(() => {
     const loadServiceTax = async () => {
@@ -372,9 +402,42 @@ export default function TodayOrdersPage() {
         toast.success("Table released.");
         setIsReleaseModalOpen(false);
         setReleaseOrder(null);
+        setSelectedOrder((prev) =>
+          prev
+            ? {
+                ...prev,
+                isSessionOpen: false,
+                sessionStatus: "RELEASED",
+                tableSession:
+                  typeof prev.tableSession === "object"
+                    ? { ...prev.tableSession, isSessionOpen: false, status: "RELEASED" }
+                    : prev.tableSession,
+              }
+            : null,
+        );
         await fetchOrders({ silent: true });
       } else {
-        toast.error(json.message || "Failed to release table.");
+        if (json.message && json.message.toLowerCase().includes("already released")) {
+          toast.info("Table is already released.");
+          setIsReleaseModalOpen(false);
+          setReleaseOrder(null);
+          setSelectedOrder((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  isSessionOpen: false,
+                  sessionStatus: "RELEASED",
+                  tableSession:
+                    typeof prev.tableSession === "object"
+                      ? { ...prev.tableSession, isSessionOpen: false, status: "RELEASED" }
+                      : prev.tableSession,
+                }
+              : null,
+          );
+          await fetchOrders({ silent: true });
+        } else {
+          toast.error(json.message || "Failed to release table.");
+        }
       }
     } catch (err) {
       toast.error("Failed to release table.");
@@ -438,6 +501,23 @@ export default function TodayOrdersPage() {
     !isOrderPaid(selectedOrder) &&
     ["PENDING", "CONFIRMED"].includes(orderStatusUpper);
   const showPayNow = canWaive;
+
+  const isTableSessionOpen =
+    Boolean(
+      selectedOrder?.isSessionOpen ||
+      (typeof selectedOrder?.tableSession === "object" && selectedOrder.tableSession?.isSessionOpen),
+    ) &&
+    selectedOrder?.sessionStatus !== "RELEASED" &&
+    selectedOrder?.tableSession?.status !== "RELEASED";
+
+  const canReleaseTable =
+    Boolean(selectedOrder) &&
+    !isOnlineOrder &&
+    isOrderPaid(selectedOrder) &&
+    Boolean(getOrderSessionId(selectedOrder)) &&
+    isTableSessionOpen &&
+    orderStatusUpper !== "CANCELLED" &&
+    orderStatusUpper !== "WAIVED";
 
   const openPaymentModal = () => {
     if (!selectedOrder) return;
@@ -623,14 +703,14 @@ export default function TodayOrdersPage() {
 
       {selectedOrder && (
         <div
-          className="fixed top-16 bottom-12 left-0 right-0 bg-black/20 z-20"
+          className="fixed top-16 bottom-0 left-0 right-0 bg-black/20 z-20"
           onClick={closePanel}
           aria-hidden="true"
         />
       )}
 
       <div 
-        className={`fixed top-16 bottom-12 right-0 w-[400px] xl:w-[450px] bg-white border-l border-zinc-200 shadow-2xl transition-transform duration-300 z-30 flex flex-col ${
+        className={`fixed top-16 bottom-0 right-0 w-[400px] xl:w-[450px] bg-white border-l border-zinc-200 shadow-2xl transition-transform duration-300 z-30 flex flex-col ${
           selectedOrder ? "translate-x-0" : "translate-x-full"
         }`}
         onClick={(e) => e.stopPropagation()}
@@ -804,36 +884,137 @@ export default function TodayOrdersPage() {
 
               <div className="h-px bg-zinc-100"></div>
 
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between text-zinc-500 font-medium">
-                  <span className="text-zinc-800">Subtotal</span>
-                  <span className="text-zinc-900">${(selectedOrder.subTotal || 0).toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between text-zinc-500 font-medium">
-                  <span className="text-zinc-800">Tax</span>
-                  <span className="text-zinc-900">${(selectedOrder.taxTotal || 0).toFixed(2)}</span>
-                </div>
-                {Number(selectedOrder.discountTotal || 0) > 0 && (
-                  <div className="flex justify-between text-zinc-500 font-medium">
-                    <span className="text-zinc-800">Discount{selectedOrder.discountCode ? ` (${selectedOrder.discountCode})` : ""}</span>
-                    <span className="text-zinc-900">-${Number(selectedOrder.discountTotal).toFixed(2)}</span>
+              {(() => {
+                const discountPct =
+                  selectedOrder.discountPercent != null
+                    ? Number(selectedOrder.discountPercent)
+                    : selectedOrder.subTotal > 0 && selectedOrder.discountTotal > 0
+                      ? Math.round(
+                          (selectedOrder.discountTotal / selectedOrder.subTotal) *
+                            1000,
+                        ) / 10
+                      : null;
+                const discountLabel =
+                  discountPct != null && discountPct > 0
+                    ? `Discount (${discountPct}%)`
+                    : Number(selectedOrder.discountTotal) > 0
+                      ? `Discount ($${Number(selectedOrder.discountTotal).toFixed(2)})`
+                      : "Discount";
+
+                const totalHstRate = (() => {
+                  const breakdownRatesSum = (
+                    selectedOrder.taxBreakdown || []
+                  ).reduce((sum, t) => sum + (Number(t.rate) || 0), 0);
+                  if (breakdownRatesSum > 0)
+                    return Math.round(breakdownRatesSum * 10) / 10;
+                  const taxableBase = Math.max(
+                    0,
+                    (selectedOrder.subTotal || 0) -
+                      (selectedOrder.discountTotal || 0),
+                  );
+                  if (taxableBase > 0 && (selectedOrder.taxTotal || 0) > 0) {
+                    return (
+                      Math.round(
+                        ((selectedOrder.taxTotal || 0) / taxableBase) * 1000,
+                      ) / 10
+                    );
+                  }
+                  return null;
+                })();
+                const hstLabel =
+                  totalHstRate != null && totalHstRate > 0
+                    ? `HST (${totalHstRate}%)`
+                    : "HST";
+
+                return (
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between text-zinc-500 font-medium">
+                      <span className="text-zinc-800">Subtotal</span>
+                      <span className="text-zinc-900">
+                        ${(selectedOrder.subTotal || 0).toFixed(2)}
+                      </span>
+                    </div>
+                    {Number(selectedOrder.discountTotal || 0) > 0 && (
+                      <>
+                        <div className="flex justify-between text-zinc-500 font-medium">
+                          <span className="text-emerald-700">
+                            {discountLabel}
+                          </span>
+                          <span className="text-emerald-700">
+                            -${Number(selectedOrder.discountTotal).toFixed(2)}
+                          </span>
+                        </div>
+                        <div className="flex justify-between text-zinc-500 font-medium">
+                          <span className="text-zinc-800">Net Subtotal</span>
+                          <span className="text-zinc-900">
+                            $
+                            {Math.max(
+                              0,
+                              (selectedOrder.subTotal || 0) -
+                                (selectedOrder.discountTotal || 0),
+                            ).toFixed(2)}
+                          </span>
+                        </div>
+                      </>
+                    )}
+                    {(Number(selectedOrder.taxTotal || 0) > 0 ||
+                      (Number(selectedOrder.discountTotal || 0) > 0 &&
+                        totalHstRate > 0)) && (
+                      <div className="flex justify-between text-zinc-500 font-medium">
+                        <span className="text-zinc-800">{hstLabel}</span>
+                        <span className="text-zinc-900">
+                          ${(selectedOrder.taxTotal || 0).toFixed(2)}
+                        </span>
+                      </div>
+                    )}
+                    {Number(selectedOrder.serviceChargeTotal || 0) > 0 && (
+                      <div className="flex justify-between text-zinc-500 font-medium">
+                        <span className="text-zinc-800">
+                          {selectedOrder.serviceChargeName || "Service Charge"}
+                        </span>
+                        <span className="text-zinc-900">
+                          ${Number(selectedOrder.serviceChargeTotal).toFixed(2)}
+                        </span>
+                      </div>
+                    )}
+                    {Number(selectedOrder.tipAmount || 0) > 0 && (
+                      <>
+                        <div className="flex justify-between text-zinc-500 font-medium">
+                          <span className="text-zinc-800">Order Total</span>
+                          <span className="text-zinc-900">
+                            ${Number(selectedOrder.totalAmount || 0).toFixed(2)}
+                          </span>
+                        </div>
+                        <div className="flex justify-between text-zinc-500 font-medium">
+                          <span className="text-zinc-800">
+                            Tip
+                            {selectedOrder.tipMethod
+                              ? ` (${selectedOrder.tipMethod})`
+                              : ""}
+                          </span>
+                          <span className="text-zinc-900">
+                            ${Number(selectedOrder.tipAmount || 0).toFixed(2)}
+                          </span>
+                        </div>
+                      </>
+                    )}
+                    <div className="flex justify-between text-lg font-bold text-zinc-900 pt-2 border-t border-zinc-200 mt-2">
+                      <span className="text-zinc-800">Total</span>
+                      <span>
+                        ${getOrderGrandTotal(selectedOrder).toFixed(2)}
+                      </span>
+                    </div>
+                    {selectedOrder.paymentMethod && (
+                      <div className="flex justify-between text-xs text-zinc-500 pt-1 border-t border-zinc-100">
+                        <span>Payment Method</span>
+                        <span className="font-medium text-zinc-700">
+                          {selectedOrder.paymentMethod}
+                        </span>
+                      </div>
+                    )}
                   </div>
-                )}
-                {Number(selectedOrder.giftcardUsedAmount || 0) > 0 && (
-                  <div className="flex justify-between text-zinc-500 font-medium">
-                    <span className="text-zinc-800">Gift Card</span>
-                    <span className="text-zinc-900">-${Number(selectedOrder.giftcardUsedAmount).toFixed(2)}</span>
-                  </div>
-                )}
-                <div className="flex justify-between text-zinc-500 font-medium">
-                  <span className="text-zinc-800">Tip</span>
-                  <span className="text-zinc-900">${Number(selectedOrder.tipAmount || 0).toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between text-lg font-bold text-zinc-900 pt-2 border-t border-zinc-200 mt-2">
-                  <span className="text-zinc-800">Total</span>
-                  <span>${getOrderGrandTotal(selectedOrder).toFixed(2)}</span>
-                </div>
-              </div>
+                );
+              })()}
 
             </div>
 
@@ -865,6 +1046,22 @@ export default function TodayOrdersPage() {
                   className="w-full h-11 rounded border-slate-400 bg-slate-700 text-white hover:bg-slate-800 hover:text-white font-bold shadow-none"
                 >
                   Waive Off
+                </Button>
+              )}
+              {canReleaseTable && (
+                <Button
+                  onClick={() => {
+                    setReleaseOrder(selectedOrder);
+                    setIsReleaseModalOpen(true);
+                  }}
+                  disabled={isReleasingTable}
+                  className="w-full h-11 rounded bg-orange-500 hover:bg-orange-600 text-white font-bold shadow-none"
+                >
+                  {isReleasingTable ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : (
+                    "Release Table"
+                  )}
                 </Button>
               )}
               <Button

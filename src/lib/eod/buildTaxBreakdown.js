@@ -42,6 +42,11 @@ export async function buildTaxBreakdownForOrder(order, restaurantId) {
   };
 
   let usedProductTaxes = false;
+  const subTotal = Number(order.subTotal || 0);
+  const discountTotal = Number(order.discountTotal || 0);
+  const taxableRatio =
+    subTotal > 0 ? Math.max(0, subTotal - discountTotal) / subTotal : 1;
+
   for (const item of items) {
     const product = item.menuItemId
       ? productById.get(String(item.menuItemId))
@@ -49,7 +54,8 @@ export async function buildTaxBreakdownForOrder(order, restaurantId) {
     const taxes = product?.taxes?.filter((t) => t && t.status !== "Inactive");
     if (!taxes?.length) continue;
     usedProductTaxes = true;
-    const lineBase = (Number(item.price) || 0) * (Number(item.qty) || 0);
+    const lineBase =
+      (Number(item.price) || 0) * (Number(item.qty) || 0) * taxableRatio;
     for (const tax of taxes) {
       const isPercent =
         String(tax.type || "")
@@ -57,7 +63,7 @@ export async function buildTaxBreakdownForOrder(order, restaurantId) {
           .includes("percent");
       const amount = isPercent
         ? (lineBase * (Number(tax.value) || 0)) / 100
-        : (Number(tax.value) || 0) * (Number(item.qty) || 0);
+        : (Number(tax.value) || 0) * (Number(item.qty) || 0) * taxableRatio;
       addTax(tax, amount);
     }
   }

@@ -349,6 +349,12 @@ function writeTicketItem(e, item, { qtySep = "x", includeSeats = false } = {}) {
   for (const line of getReceiptModifierLines(item)) {
     writeWrapped(e, `       ${line}`);
   }
+  if (item.notes || item.specialInstructions) {
+    writeWrapped(
+      e,
+      `       Note: ${toPrinterText(item.notes || item.specialInstructions)}`,
+    );
+  }
 }
 
 /** Legacy export — wraps long names instead of unicode truncation. */
@@ -383,6 +389,12 @@ function writeReceiptItem(e, item) {
   }
   for (const line of getReceiptModifierLines(item)) {
     writeWrapped(e, `   ${line}`);
+  }
+  if (item.notes || item.specialInstructions) {
+    writeWrapped(
+      e,
+      `   Note: ${toPrinterText(item.notes || item.specialInstructions)}`,
+    );
   }
 }
 
@@ -481,8 +493,14 @@ export function buildKotTicket({
   e.line(`Sent: ${formatSentAt(order?.createdAt || job?.createdAt)}`);
   if (serverName) e.line(`Server: ${toPrinterText(serverName)}`);
   if (partyLabel) e.line(`Party: ${toPrinterText(partyLabel)}`);
-  if (guestCount != null && guestCount !== "") {
-    e.line(`Guests: ${guestCount}`);
+  const resolvedGuests =
+    guestCount != null && guestCount !== ""
+      ? guestCount
+      : order?.guestCount != null && order?.guestCount !== ""
+        ? order?.guestCount
+        : null;
+  if (resolvedGuests != null) {
+    e.line(`Guests: ${resolvedGuests}`);
   }
 
   e.line(divider("="));
@@ -553,7 +571,11 @@ export function buildBarTicket({
     job?.metadata?.guestName ||
     (directSale ? "Walk-in" : "");
   const covers =
-    guestCount != null && guestCount !== "" ? Number(guestCount) : null;
+    guestCount != null && guestCount !== ""
+      ? Number(guestCount)
+      : order?.guestCount != null && order?.guestCount !== ""
+        ? Number(order.guestCount)
+        : null;
   const note = job?.metadata?.specialNote || order?.specialNote;
   const items = kotItems.length
     ? kotItems
@@ -716,11 +738,60 @@ export function buildReceiptTicket({
   const regularItems = items.filter((item) => !isOfferItem(item));
   const offerItems = items.filter((item) => isOfferItem(item));
 
-  const discountLabel =
-    order?.source === "STAFF" ||
-    String(order?.discountCode || "").toUpperCase() === "STAFF"
-      ? "Staff Discount"
-      : "Discount";
+  const discountPct = (() => {
+    if (order?.discountPercent != null && Number(order.discountPercent) > 0) {
+      return Number(order.discountPercent);
+    }
+    const numSub = Number(order?.subTotal || 0);
+    const numDisc = Number(discount || 0);
+    if (numSub > 0 && numDisc > 0) {
+      return Math.round((numDisc / numSub) * 1000) / 10;
+    }
+    return null;
+  })();
+
+  const discountLabel = (() => {
+    if (discountPct != null && discountPct > 0) {
+      return `Discount (${discountPct}%)`;
+    }
+    if (discount > 0) {
+      return `Discount ($${discount.toFixed(2)})`;
+    }
+    return "Discount";
+  })();
+
+  const totalHstRate = (() => {
+    const breakdownRatesSum = taxBreakdown.reduce(
+      (sum, t) => sum + (Number(t.rate) || 0),
+      0,
+    );
+    if (breakdownRatesSum > 0) {
+      return Math.round(breakdownRatesSum * 10) / 10;
+    }
+    const taxableBase = Math.max(
+      0,
+      Number(order?.subTotal || 0) - Number(discount || 0),
+    );
+    if (taxableBase > 0 && hstAmount > 0) {
+      return Math.round((hstAmount / taxableBase) * 1000) / 10;
+    }
+    if (
+      Number(order?.subTotal || 0) > 0 &&
+      (hstAmount > 0 || Number(order?.taxTotal || 0) > 0)
+    ) {
+      return (
+        Math.round(
+          (Number(order?.taxTotal || hstAmount) / Number(order.subTotal)) * 1000,
+        ) / 10
+      );
+    }
+    return null;
+  })();
+
+  const hstLabel =
+    totalHstRate != null && totalHstRate > 0
+      ? `HST (${totalHstRate}%)`
+      : "HST";
 
   e.init();
 
@@ -750,8 +821,14 @@ export function buildReceiptTicket({
   if (partyLabel || !shouldShowTable({ ...order, tableNo })) {
     e.line(`Party: ${toPrinterText(partyLabel || "Walk-in")}`);
   }
-  if (guestCount != null && guestCount !== "") {
-    e.line(`Guests: ${guestCount}`);
+  const resolvedGuests =
+    guestCount != null && guestCount !== ""
+      ? guestCount
+      : order?.guestCount != null && order?.guestCount !== ""
+        ? order?.guestCount
+        : null;
+  if (resolvedGuests != null) {
+    e.line(`Guests: ${resolvedGuests}`);
   }
   e.line(`HST: ${toPrinterText(hstNumber)}`);
 
@@ -773,9 +850,15 @@ export function buildReceiptTicket({
     e.line(
       formatTwoColumnLine(discountLabel, `-${money(discount).slice(1)}`),
     );
+    e.line(
+      formatTwoColumnLine(
+        "Net Amount",
+        money(Math.max(0, Number(order?.subTotal || 0) - discount)),
+      ),
+    );
   }
-  if (hstAmount > 0) {
-    e.line(formatTwoColumnLine("HST", money(hstAmount)));
+  if (hstAmount > 0 || (discount > 0 && totalHstRate > 0)) {
+    e.line(formatTwoColumnLine(hstLabel, money(hstAmount)));
   }
   if (serviceCharge > 0) {
     e.line(
@@ -786,8 +869,14 @@ export function buildReceiptTicket({
     );
   }
   if (tip > 0) {
+    e.line(formatTwoColumnLine("Order Total", money(orderTotal)));
     e.line(formatTwoColumnLine(tipLabel, money(tip)));
   }
+
+  e.line(divider("-"));
+  e.bold(true)
+    .line(formatTwoColumnLine("TOTAL", money(grandTotal)))
+    .bold(false);
 
   if (hasPaymentSplit) {
     e.line(divider("-"));
@@ -806,11 +895,6 @@ export function buildReceiptTicket({
       );
     }
   }
-
-  e.line("");
-  e.bold(true)
-    .line(formatTwoColumnLine("TOTAL", money(grandTotal)))
-    .bold(false);
 
   e.line(divider("-"));
   e.align(1).bold(true).line(toPrinterText(thankYou)).bold(false);

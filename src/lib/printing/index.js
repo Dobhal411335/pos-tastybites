@@ -10,6 +10,7 @@ export {
   executePrintJob,
   retryPrintJob,
   reprintPrintJob,
+  reprintOrderTicket,
   markPrintJobPrinted,
   toPrintJobEventPayload,
   SALES_PRINT_ROLES,

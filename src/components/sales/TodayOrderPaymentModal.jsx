@@ -97,15 +97,29 @@ export default function TodayOrderPaymentModal({
     }
   };
 
-  const resolvedSessionId = sessionId ?? order?.tableSession;
+  const rawSession = sessionId ?? order?.tableSession;
+  const resolvedSessionId =
+    rawSession && typeof rawSession === "object"
+      ? rawSession._id || rawSession.id || null
+      : rawSession || null;
 
   const subtotal = Number(order?.subTotal || 0);
-  const totalTax = Number(order?.taxTotal || 0);
+  const rawBaseTax =
+    Array.isArray(order?.items) && order.items.length > 0
+      ? order.items.reduce(
+          (s, it) => s + (Number(it.tax || 0) * Number(it.qty || 1)),
+          0,
+        )
+      : Number(order?.taxTotal || 0);
   const discountAmount = appliedDiscount
     ? appliedDiscount.type === "%"
       ? (subtotal * appliedDiscount.value) / 100
       : Math.min(Number(appliedDiscount.value) || 0, subtotal)
-    : 0;
+    : Number(order?.discountTotal || 0);
+  const taxableRatio =
+    subtotal > 0 ? Math.max(0, subtotal - discountAmount) / subtotal : 1;
+  const totalTax = round2(rawBaseTax * taxableRatio);
+
   const canOfferServiceCharge = isActiveServiceTax(serviceTax);
   const computedServiceCharge = canOfferServiceCharge
     ? computeOrderServiceCharge({
@@ -120,8 +134,37 @@ export default function TodayOrderPaymentModal({
     : null;
   const total = Math.max(
     0,
-    subtotal - discountAmount + totalTax + serviceChargeTotal,
+    round2(subtotal - discountAmount + totalTax + serviceChargeTotal),
   );
+
+  const modalDiscountPct =
+    appliedDiscount?.type === "%"
+      ? Number(appliedDiscount.value)
+      : subtotal > 0 && discountAmount > 0
+        ? Math.round((discountAmount / subtotal) * 1000) / 10
+        : null;
+
+  const modalDiscountLabel =
+    modalDiscountPct != null && modalDiscountPct > 0
+      ? `Discount (${modalDiscountPct}%)`
+      : discountAmount > 0
+        ? `Discount ($${discountAmount.toFixed(2)})`
+        : "Discount";
+
+  const modalHstRate = (() => {
+    const breakdownRatesSum = (order?.taxBreakdown || []).reduce(
+      (sum, t) => sum + (Number(t.rate) || 0),
+      0,
+    );
+    if (breakdownRatesSum > 0) return Math.round(breakdownRatesSum * 10) / 10;
+    const taxableBase = Math.max(0, subtotal - discountAmount);
+    if (taxableBase > 0 && totalTax > 0) {
+      return Math.round((totalTax / taxableBase) * 1000) / 10;
+    }
+    return null;
+  })();
+  const modalHstLabel =
+    modalHstRate != null && modalHstRate > 0 ? `HST (${modalHstRate}%)` : "HST";
 
   // Amounts already committed when switching via "Rest with …"
   const lockedCard = round2(Math.max(0, lockedCardAmount));
@@ -478,11 +521,27 @@ export default function TodayOrderPaymentModal({
 
       if (parts.length === 0) {
         resolvedPaymentMethod =
-          giftCardUsedAmount > 0 ? "Gift Card" : paymentMethod;
+          giftCardUsedAmount > 0
+            ? "Gift Card"
+            : paymentMethod === "GiftCard"
+              ? "Cash"
+              : paymentMethod;
       } else if (parts.length === 1) {
         resolvedPaymentMethod = parts[0];
       } else {
         resolvedPaymentMethod = parts.join(" + ");
+      }
+
+      // Ensure tender amounts do not exceed the actual payable total + tip
+      const payableTotalWithTip = round2(total + tip);
+      if (resolvedCardAmount > 0) {
+        const maxCard = round2(
+          Math.max(
+            0,
+            payableTotalWithTip - resolvedCashAmount - giftCardUsedAmount,
+          ),
+        );
+        resolvedCardAmount = Math.min(resolvedCardAmount, maxCard);
       }
 
       const paymentPayload = {
@@ -494,6 +553,12 @@ export default function TodayOrderPaymentModal({
         tipMethod: tip > 0 ? tipMethod : null,
         discountTotal: discountAmount,
         discountCode: appliedDiscount ? appliedDiscount.code : null,
+        discountPercent:
+          appliedDiscount?.type === "%"
+            ? Number(appliedDiscount.value)
+            : subtotal > 0 && discountAmount > 0
+              ? Math.round((discountAmount / subtotal) * 1000) / 10
+              : null,
         guestName: partyName,
         partyName,
         guestCount: order.guestCount ?? null,
@@ -692,7 +757,7 @@ export default function TodayOrderPaymentModal({
                       </span>
                     </div>
                     <div className="flex justify-between text-sm font-semibold text-zinc-500">
-                      <span>HST</span>
+                      <span>{modalHstLabel}</span>
                       <span className="text-zinc-900">
                         ${totalTax.toFixed(2)}
                       </span>
@@ -709,14 +774,7 @@ export default function TodayOrderPaymentModal({
                     )}
                     {discountAmount > 0 && (
                       <div className="flex justify-between text-sm font-semibold text-green-600">
-                        <span>
-                          Discount
-                          {appliedDiscount?.label
-                            ? ` (${appliedDiscount.label})`
-                            : appliedDiscount?.code
-                              ? ` (${appliedDiscount.code})`
-                              : ""}
-                        </span>
+                        <span>{modalDiscountLabel}</span>
                         <span>-${discountAmount.toFixed(2)}</span>
                       </div>
                     )}
@@ -772,7 +830,11 @@ export default function TodayOrderPaymentModal({
                               {appliedDiscount.code}
                             </p>
                             <p className="text-sm font-bold text-green-700">
-                              -${discountAmount.toFixed(2)}
+                              {appliedDiscount.type === "%"
+                                ? `${appliedDiscount.value}% off · -$${discountAmount.toFixed(2)}`
+                                : modalDiscountPct != null && modalDiscountPct > 0
+                                  ? `${modalDiscountPct}% off · -$${discountAmount.toFixed(2)}`
+                                  : `-$${discountAmount.toFixed(2)}`}
                             </p>
                           </div>
                         </div>

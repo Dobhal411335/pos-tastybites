@@ -26,9 +26,16 @@ const KitchenOrderTicket = ({
     order.floorName || order.floor?.name,
   );
   const note = specialNote || order.specialNote;
-  const partyLabel = partyName || guestName || (isDirectSaleOrder(order) ? "Walk-in" : "");
+  const partyLabel =
+    partyName || guestName || (isDirectSaleOrder(order) ? "Walk-in" : "");
   const directSale = isDirectSaleOrder(order);
   const brand = restaurantName || "TASTY BITES";
+  const resolvedGuestCount =
+    guestCount != null && guestCount !== ""
+      ? guestCount
+      : order.guestCount != null && order.guestCount !== ""
+        ? order.guestCount
+        : null;
 
   const groupedItems = kotItems.reduce((acc, item) => {
     const groupName = isOfferItem(item) ? "Offers" : item.category || "ITEMS";
@@ -79,6 +86,11 @@ const KitchenOrderTicket = ({
             <span className="receipt-bold">Server:</span> {serverName}
           </div>
         )}
+        {resolvedGuestCount != null && (
+          <div>
+            <span className="receipt-bold">Guests:</span> {resolvedGuestCount}
+          </div>
+        )}
         {partyLabel && (
           <div>
             <span className="receipt-bold">Party:</span> {partyLabel}
@@ -99,37 +111,47 @@ const KitchenOrderTicket = ({
                 const modifierLines = getReceiptModifierLines(item);
 
                 return (
-                <div key={itemIdx}>
-                  <div className="flex items-start">
-                    <span className="receipt-bold mr-2 text-xs whitespace-nowrap">
-                      {item.qty} ×
-                    </span>
-                    <span className="receipt-bold text-xs leading-tight">
-                      {item.productCode ? `${item.productCode} ` : ""}
-                      {item.name || item.productName || "Item"}
-                      {item.size && item.size !== "Standard"
-                        ? ` (${item.size})`
-                        : ""}
-                    </span>
+                  <div key={itemIdx}>
+                    <div className="flex items-start">
+                      <span className="receipt-bold mr-2 text-xs whitespace-nowrap">
+                        {item.qty} ×
+                      </span>
+                      <span className="receipt-bold text-xs leading-tight">
+                        {item.productCode ? `${item.productCode} ` : ""}
+                        {item.name || item.productName || "Item"}
+                        {item.size && item.size !== "Standard"
+                          ? ` (${item.size})`
+                          : ""}
+                      </span>
+                    </div>
+                    {item.seat && (
+                      <div className="pl-7 text-[10px] font-semibold text-zinc-700">
+                        Seat: {item.seat}
+                      </div>
+                    )}
+                    {item.course && (
+                      <div className="pl-7 text-[10px] italic">
+                        Course: {item.course}
+                      </div>
+                    )}
+                    {modifierLines.length > 0 && (
+                      <div className="pl-7 mt-1 space-y-0.5">
+                        {modifierLines.map((line, lineIdx) => (
+                          <div
+                            key={`${line.kind}-${lineIdx}`}
+                            className="text-[11px] font-semibold italic"
+                          >
+                            {line.text}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {(item.notes || item.specialInstructions) && (
+                      <div className="pl-7 mt-0.5 text-[10px] italic receipt-bold text-zinc-800">
+                        Note: {item.notes || item.specialInstructions}
+                      </div>
+                    )}
                   </div>
-                  {item.course && (
-                    <div className="pl-7 text-[10px] italic">
-                      Course: {item.course}
-                    </div>
-                  )}
-                  {modifierLines.length > 0 && (
-                    <div className="pl-7 mt-1 space-y-0.5">
-                      {modifierLines.map((line, lineIdx) => (
-                        <div
-                          key={`${line.kind}-${lineIdx}`}
-                          className="text-[11px] font-semibold italic"
-                        >
-                          {line.text}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
                 );
               })}
             </div>
@@ -139,9 +161,12 @@ const KitchenOrderTicket = ({
 
       {note && (
         <>
-          <div className="receipt-divider border-t border-black border-dashed" />
-          <div className="text-xs mt-2">
-            <span className="receipt-bold">NOTES:</span> {note}
+          <div className="receipt-divider border-t border-black border-dashed my-2" />
+          <div className="p-2 border-2 border-black border-dashed rounded text-xs bg-zinc-50">
+            <div className="receipt-bold uppercase text-[10px] tracking-wider mb-0.5">
+              SPECIAL INSTRUCTIONS / NOTES:
+            </div>
+            <div className="receipt-bold text-xs">{note}</div>
           </div>
         </>
       )}
