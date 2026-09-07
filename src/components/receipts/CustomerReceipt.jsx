@@ -93,7 +93,13 @@ const CustomerReceipt = ({
   const tip = Number(tipAmount || 0);
   const discount = Number(discountTotal || 0);
   const serviceCharge = Number(serviceChargeTotal || 0);
-  const giftUsed = Number(giftcardUsedAmount || 0);
+  const giftUsed = Number(
+    order.giftcardUsedAmount ??
+      order.giftCardUsedAmount ??
+      order.giftCardUsed ??
+      giftcardUsedAmount ??
+      0,
+  );
   const cash = Number(cashAmount || 0);
   const card = Number(cardAmount || 0);
   const orderTotal = Number(totalAmount || 0);
@@ -154,7 +160,7 @@ const CustomerReceipt = ({
       ? `HST (${totalHstRate}%)`
       : "HST";
 
-  const methodStr = String(paymentMethod || "");
+  const methodStr = String(order.paymentMethod || paymentMethod || "").trim();
   const cardLabelMatch = methodStr.match(/Card\s*-\s*([^+/]+)/i);
   const cardLabel = cardLabelMatch
     ? `Card (${cardLabelMatch[1].trim()})`
@@ -178,7 +184,7 @@ const CustomerReceipt = ({
   })();
 
   const hasPaymentSplit =
-    giftUsed > 0 || cash > 0 || card > 0 || Boolean(paymentMethod);
+    giftUsed > 0 || cash > 0 || card > 0 || Boolean(methodStr);
 
   const regularItems = items.filter((item) => !isOfferItem(item));
   const offerItems = items.filter((item) => isOfferItem(item));
@@ -284,9 +290,11 @@ const CustomerReceipt = ({
           <span>ITEM</span>
           <span>AMOUNT</span>
         </div>
+        <div className="receipt-divider" />
         {regularItems.map((item, idx) => renderReceiptItem(item, idx))}
         {offerItems.length > 0 ? (
           <div className={regularItems.length > 0 ? "mt-2" : ""}>
+            {regularItems.length > 0 && <div className="receipt-divider mb-2" />}
             <div className="receipt-bold uppercase text-[10px] mb-1.5 pb-0.5 border-b border-zinc-300">
               Offers
             </div>
@@ -351,8 +359,21 @@ const CustomerReceipt = ({
             )}
             {cash > 0 && <Row label="Cash" value={money(cash)} />}
             {card > 0 && <Row label={cardLabel} value={money(card)} />}
-            {giftUsed <= 0 && cash <= 0 && card <= 0 && paymentMethod && (
-              <Row label="Paid via" value={paymentMethod} />
+            {giftUsed <= 0 && cash <= 0 && card <= 0 && methodStr && (
+              <Row
+                label={
+                  methodStr.includes('+')
+                    ? methodStr
+                    : /gift/i.test(methodStr)
+                    ? "Gift Card"
+                    : /cash/i.test(methodStr)
+                    ? "Cash"
+                    : /card/i.test(methodStr)
+                    ? cardLabel
+                    : methodStr
+                }
+                value={money(grandTotal > 0 ? grandTotal : orderTotal)}
+              />
             )}
           </div>
         </>

@@ -107,7 +107,10 @@ export const GET = withAuth(async (request) => {
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
-        .populate("orderId", "orderNumber tableNo guestName status paymentStatus totalAmount")
+        .populate(
+          "orderId",
+          "orderNumber invoiceNumber tableNo guestName partyName status paymentStatus totalAmount paymentMethod cashAmount cardAmount giftcardUsedAmount tipAmount tipMethod discountTotal discountPercent subTotal taxTotal items taxBreakdown"
+        )
         .populate("requestedBy", "firstName lastName name")
         .populate("parentPrintJobId", "status printType createdAt")
         .lean(),

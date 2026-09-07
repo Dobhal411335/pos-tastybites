@@ -700,22 +700,44 @@ export function buildReceiptTicket({
       ? taxBreakdown.reduce((sum, t) => sum + Number(t.amount || 0), 0)
       : Number(order?.taxTotal || 0);
 
-  const tip = Number(order?.tipAmount || 0);
-  const discount = Number(order?.discountTotal || 0);
-  const serviceCharge = Number(order?.serviceChargeTotal || 0);
-  const giftUsed = Number(order?.giftcardUsedAmount || 0);
-  const cash = Number(order?.cashAmount || 0);
-  const card = Number(order?.cardAmount || 0);
-  const orderTotal = Number(order?.totalAmount || 0);
+  const rawOrder = order || {};
+  const meta = job?.metadata || {};
+
+  const methodStr = String(
+    rawOrder.paymentMethod ||
+    meta.paymentMethod ||
+    rawOrder.method ||
+    meta.method ||
+    "",
+  ).trim();
+
+  const tip = Number(rawOrder.tipAmount ?? meta.tipAmount ?? 0);
+  const discount = Number(rawOrder.discountTotal ?? meta.discountTotal ?? 0);
+  const serviceCharge = Number(
+    rawOrder.serviceChargeTotal ?? meta.serviceChargeTotal ?? 0,
+  );
+  const giftUsed = Number(
+    rawOrder.giftcardUsedAmount ??
+    rawOrder.giftCardUsedAmount ??
+    rawOrder.giftCardUsed ??
+    meta.giftcardUsedAmount ??
+    meta.giftCardUsedAmount ??
+    meta.giftCardUsed ??
+    0,
+  );
+  const cash = Number(rawOrder.cashAmount ?? meta.cashAmount ?? 0);
+  const card = Number(rawOrder.cardAmount ?? meta.cardAmount ?? 0);
+  const orderTotal = Number(
+    rawOrder.totalAmount ?? meta.totalAmount ?? rawOrder.amount ?? 0,
+  );
   const grandTotal = orderTotal + tip;
 
-  const methodStr = String(order?.paymentMethod || "");
   const cardLabelMatch = methodStr.match(/Card\s*-\s*([^+/]+)/i);
   const cardLabel = cardLabelMatch
     ? `Card (${cardLabelMatch[1].trim()})`
     : "Card";
 
-  const tipMethod = String(order?.tipMethod || "").trim();
+  const tipMethod = String(rawOrder.tipMethod || meta.tipMethod || "").trim();
   let tipLabel = "Tip";
   if (tip > 0) {
     if (/gift/i.test(tipMethod)) tipLabel = "Tip (Gift Card)";
@@ -732,7 +754,7 @@ export function buildReceiptTicket({
   }
 
   const hasPaymentSplit =
-    giftUsed > 0 || cash > 0 || card > 0 || Boolean(order?.paymentMethod);
+    giftUsed > 0 || cash > 0 || card > 0 || Boolean(methodStr);
 
   const items = order?.items || [];
   const regularItems = items.filter((item) => !isOfferItem(item));
@@ -834,10 +856,11 @@ export function buildReceiptTicket({
 
   e.line(divider("-"));
   e.bold(true).line(formatTwoColumnLine("ITEM", "AMOUNT")).bold(false);
+  e.line(divider("-"));
 
   for (const item of regularItems) writeReceiptItem(e, item);
   if (offerItems.length) {
-    if (regularItems.length) e.line("");
+    if (regularItems.length) e.line(divider("-"));
     e.bold(true).line("OFFERS").bold(false);
     e.line(divider("-"));
     for (const item of offerItems) writeReceiptItem(e, item);
@@ -886,13 +909,19 @@ export function buildReceiptTicket({
     }
     if (cash > 0) e.line(formatTwoColumnLine("Cash", money(cash)));
     if (card > 0) e.line(formatTwoColumnLine(cardLabel, money(card)));
-    if (giftUsed <= 0 && cash <= 0 && card <= 0 && order?.paymentMethod) {
-      e.line(
-        formatTwoColumnLine(
-          "Paid via",
-          toPrinterText(order.paymentMethod),
-        ),
-      );
+    if (giftUsed <= 0 && cash <= 0 && card <= 0 && methodStr) {
+      const displayAmount = grandTotal > 0 ? money(grandTotal) : money(orderTotal);
+      if (methodStr.includes('+')) {
+        e.line(formatTwoColumnLine(toPrinterText(methodStr), displayAmount));
+      } else if (/gift/i.test(methodStr)) {
+        e.line(formatTwoColumnLine("Gift Card", displayAmount));
+      } else if (/cash/i.test(methodStr)) {
+        e.line(formatTwoColumnLine("Cash", displayAmount));
+      } else if (/card/i.test(methodStr)) {
+        e.line(formatTwoColumnLine(cardLabel, displayAmount));
+      } else {
+        e.line(formatTwoColumnLine(toPrinterText(methodStr), displayAmount));
+      }
     }
   }
 

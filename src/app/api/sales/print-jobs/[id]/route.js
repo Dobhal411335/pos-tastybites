@@ -110,6 +110,58 @@ export const GET = withAuth(async (request, { params }) => {
             job.metadata?.partyName ||
             order.guestName ||
             null,
+          paymentMethod:
+            order.paymentMethod ||
+            job.metadata?.paymentMethod ||
+            null,
+          cashAmount:
+            order.cashAmount ??
+            job.metadata?.cashAmount ??
+            null,
+          cardAmount:
+            order.cardAmount ??
+            job.metadata?.cardAmount ??
+            null,
+          giftcardUsedAmount:
+            order.giftcardUsedAmount ??
+            job.metadata?.giftcardUsedAmount ??
+            null,
+          tipAmount:
+            order.tipAmount ??
+            job.metadata?.tipAmount ??
+            null,
+          tipMethod:
+            order.tipMethod ??
+            job.metadata?.tipMethod ??
+            null,
+          serviceChargeTotal:
+            order.serviceChargeTotal ??
+            job.metadata?.serviceChargeTotal ??
+            null,
+          serviceChargeName:
+            order.serviceChargeName ??
+            job.metadata?.serviceChargeName ??
+            null,
+          discountTotal:
+            order.discountTotal ??
+            job.metadata?.discountTotal ??
+            null,
+          discountPercent:
+            order.discountPercent ??
+            job.metadata?.discountPercent ??
+            null,
+          subTotal:
+            order.subTotal ??
+            job.metadata?.subTotal ??
+            null,
+          taxTotal:
+            order.taxTotal ??
+            job.metadata?.taxTotal ??
+            null,
+          totalAmount:
+            order.totalAmount ??
+            job.metadata?.totalAmount ??
+            null,
         }
       : order;
 
