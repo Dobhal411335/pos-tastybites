@@ -58,7 +58,10 @@ function getPlacerName(order) {
 }
 
 function getPaymentType(order) {
-  if (String(order?.status || "").toUpperCase() === "WAIVED") {
+  const status = String(order?.status || "").toUpperCase();
+  const paymentStatus = String(order?.paymentStatus || "").toUpperCase();
+
+  if (status === "WAIVED" || paymentStatus === "WAIVED") {
     return {
       label: "Waived",
       Icon: Wallet,
@@ -66,11 +69,13 @@ function getPaymentType(order) {
     };
   }
 
-  const method = String(order?.paymentMethod || "").trim();
-  const usedGiftCard = Number(order?.giftcardUsedAmount || 0) > 0 || Boolean(order?.giftcardCode);
-  const lower = method.toLowerCase();
+  const rawMethod = String(order?.paymentMethod || "").trim();
+  const lower = rawMethod.toLowerCase();
+  const giftAmount = Number(order?.giftcardUsedAmount || 0);
+  const usedGiftCard = giftAmount > 0 || Boolean(order?.giftcardCode);
 
-  if (!method && !usedGiftCard) {
+  const isPaid = paymentStatus === "PAID" || status === "PAID";
+  if ((!rawMethod || lower === "unpaid") && !usedGiftCard && !isPaid) {
     return {
       label: "Unpaid",
       Icon: Wallet,
@@ -78,23 +83,78 @@ function getPaymentType(order) {
     };
   }
 
-  const isCard = lower.includes("card") && !lower.includes("gift");
-  const isCash = lower.includes("cash");
-  const isGift = lower.includes("gift");
+  // 1. Detect Gift Card
+  const hasGift = usedGiftCard || /\bgift\b/i.test(lower);
 
-  if (usedGiftCard && (isCard || isCash)) {
-    const cardType = method.replace(/^Card\s*-?\s*/i, "").trim();
-    const other = isCard
-      ? (cardType && cardType.toLowerCase() !== "card" ? `Card · ${cardType}` : "Card")
-      : "Cash";
+  // 2. Detect Cash
+  const cashAmount = order?.cashAmount != null ? Number(order.cashAmount) : null;
+  const hasCash = (cashAmount != null && cashAmount > 0) || /\bcash\b/i.test(lower);
+
+  // 3. Detect Card (ignore "card" if strictly inside "gift card")
+  const methodWithoutGift = lower
+    .replace(/gift\s*card/gi, "")
+    .replace(/\bgift\b/gi, "");
+  const cardAmount = order?.cardAmount != null ? Number(order.cardAmount) : null;
+  const hasCard =
+    (cardAmount != null && cardAmount > 0) ||
+    /\bcard\b/i.test(methodWithoutGift) ||
+    /\b(visa|mastercard|amex|discover|debit|interac)\b/i.test(lower);
+
+  // 4. Extract Card Brand
+  let cardBrand = null;
+  if (hasCard) {
+    const brandMatch = rawMethod.match(
+      /\b(visa|mastercard|amex|discover|debit|interac)\b/i,
+    );
+    if (brandMatch) {
+      const b = brandMatch[1].toLowerCase();
+      if (b === "visa") cardBrand = "Visa";
+      else if (b === "mastercard") cardBrand = "Mastercard";
+      else if (b === "amex") cardBrand = "Amex";
+      else if (b === "discover") cardBrand = "Discover";
+      else if (b === "debit") cardBrand = "Debit";
+      else if (b === "interac") cardBrand = "Interac";
+    } else {
+      const dashMatch = rawMethod.match(/card\s*[-·:]\s*([A-Za-z0-9]+)/i);
+      if (dashMatch && dashMatch[1]) {
+        const val = dashMatch[1].trim();
+        if (!/^(cash|gift|card)$/i.test(val)) {
+          cardBrand = val;
+        }
+      }
+    }
+  }
+
+  // Case A: Triple Split (Gift + Card + Cash)
+  if (hasGift && hasCard && hasCash) {
     return {
-      label: `Gift + ${other}`,
+      label: "Gift + Card + Cash",
       Icon: Gift,
       className: "bg-violet-50 text-violet-700 border-violet-200",
     };
   }
 
-  if (isGift || (usedGiftCard && !isCard && !isCash)) {
+  // Case B: Split Gift + Card
+  if (hasGift && hasCard) {
+    const cardPart = cardBrand ? `Card (${cardBrand})` : "Card";
+    return {
+      label: `Gift + ${cardPart}`,
+      Icon: Gift,
+      className: "bg-violet-50 text-violet-700 border-violet-200",
+    };
+  }
+
+  // Case C: Split Gift + Cash
+  if (hasGift && hasCash) {
+    return {
+      label: "Gift + Cash",
+      Icon: Gift,
+      className: "bg-violet-50 text-violet-700 border-violet-200",
+    };
+  }
+
+  // Case D: Gift Card Only
+  if (hasGift) {
     return {
       label: "Gift Card",
       Icon: Gift,
@@ -102,16 +162,27 @@ function getPaymentType(order) {
     };
   }
 
-  if (isCard) {
-    const cardType = method.replace(/^Card\s*-\s*/i, "").trim();
+  // Case E: Split Card + Cash
+  if (hasCard && hasCash) {
+    const cardPart = cardBrand ? `Card (${cardBrand})` : "Card";
     return {
-      label: cardType && cardType.toLowerCase() !== "card" ? `Card · ${cardType}` : "Card",
+      label: `${cardPart} + Cash`,
       Icon: CreditCard,
       className: "bg-sky-50 text-sky-700 border-sky-200",
     };
   }
 
-  if (isCash) {
+  // Case F: Card Only
+  if (hasCard) {
+    return {
+      label: cardBrand ? `Card · ${cardBrand}` : "Card",
+      Icon: CreditCard,
+      className: "bg-sky-50 text-sky-700 border-sky-200",
+    };
+  }
+
+  // Case G: Cash Only
+  if (hasCash) {
     return {
       label: "Cash",
       Icon: Banknote,
@@ -119,8 +190,13 @@ function getPaymentType(order) {
     };
   }
 
+  let fallbackLabel = rawMethod || "Other";
+  if (/cash/i.test(fallbackLabel) && /card/i.test(fallbackLabel)) {
+    fallbackLabel = "Card + Cash";
+  }
+
   return {
-    label: method,
+    label: fallbackLabel,
     Icon: Wallet,
     className: "bg-zinc-100 text-zinc-700 border-zinc-200",
   };
@@ -1104,18 +1180,56 @@ export default function EmployeeSalesPage() {
             {/* Drawer Footer Actions */}
             <div className="p-4 border-t border-zinc-200 shrink-0 bg-white space-y-2">
               {(() => {
-                const hasBarItems = Boolean(
-                  selectedOrder?.items?.some(
-                    (it) =>
-                      it.productType === "BAR" ||
-                      ["BAR", "WINE", "BEER", "DRINKS", "BEVERAGES", "COCKTAILS"].includes(
-                        String(it.category || "").toUpperCase()
-                      )
-                  )
-                );
+                const isBarOrderItem = (it) => {
+                  const pType = String(it?.productType || "").trim().toUpperCase();
+                  if (pType === "BAR") return true;
+
+                  const cat = String(it?.category || "").trim().toUpperCase();
+                  const barCategories = [
+                    "BAR",
+                    "WINE",
+                    "BEER",
+                    "DRINKS",
+                    "DRINK",
+                    "BEVERAGES",
+                    "BEVERAGE",
+                    "COCKTAILS",
+                    "COCKTAIL",
+                    "LIQUOR",
+                    "SPIRITS",
+                    "ALCOHOL",
+                    "BAR & ALCOHOL",
+                    "BAR / ALCOHOL",
+                    "HARD LIQUOR",
+                  ];
+                  if (barCategories.includes(cat)) return true;
+
+                  return (
+                    cat.includes("BAR") ||
+                    cat.includes("WINE") ||
+                    cat.includes("BEER") ||
+                    cat.includes("ALCOHOL") ||
+                    cat.includes("COCKTAIL") ||
+                    cat.includes("LIQUOR")
+                  );
+                };
+
+                const orderItems = selectedOrder?.items || [];
+                const hasBarItems = Boolean(orderItems.some(isBarOrderItem));
+                const hasKitchenItems =
+                  orderItems.length === 0 ? true : orderItems.some((it) => !isBarOrderItem(it));
+
+                const buttonCount =
+                  1 + (hasKitchenItems ? 1 : 0) + (hasBarItems ? 1 : 0);
+                const gridClass =
+                  buttonCount === 3
+                    ? "grid-cols-3"
+                    : buttonCount === 2
+                    ? "grid-cols-2"
+                    : "grid-cols-1";
 
                 return (
-                  <div className={`grid ${hasBarItems ? "grid-cols-3" : "grid-cols-2"} gap-2`}>
+                  <div className={`grid ${gridClass} gap-2`}>
                     <Button
                       onClick={() => {
                         setPrintType("customer");
@@ -1126,17 +1240,19 @@ export default function EmployeeSalesPage() {
                       <Printer className="w-3.5 h-3.5 mr-1" />
                       Receipt
                     </Button>
-                    <Button
-                      onClick={() => {
-                        setPrintType("kot");
-                        setIsPrintModalOpen(true);
-                      }}
-                      variant="outline"
-                      className="h-10 border-zinc-200 text-zinc-800 hover:bg-zinc-100 font-bold rounded-xl shadow-none text-xs"
-                    >
-                      <UtensilsCrossed className="w-3.5 h-3.5 mr-1 text-zinc-600" />
-                      KOT
-                    </Button>
+                    {hasKitchenItems && (
+                      <Button
+                        onClick={() => {
+                          setPrintType("kot");
+                          setIsPrintModalOpen(true);
+                        }}
+                        variant="outline"
+                        className="h-10 border-zinc-200 text-zinc-800 hover:bg-zinc-100 font-bold rounded-xl shadow-none text-xs"
+                      >
+                        <UtensilsCrossed className="w-3.5 h-3.5 mr-1 text-zinc-600" />
+                        KOT
+                      </Button>
+                    )}
                     {hasBarItems && (
                       <Button
                         onClick={() => {
@@ -1171,7 +1287,65 @@ export default function EmployeeSalesPage() {
         onClose={() => setIsPrintModalOpen(false)}
         order={selectedOrder}
         printType={printType}
-        kotItems={selectedOrder?.items || []}
+        kotItems={
+          printType === "bar"
+            ? (selectedOrder?.items || []).filter((it) => {
+                const pType = String(it?.productType || "").trim().toUpperCase();
+                if (pType === "BAR") return true;
+                const cat = String(it?.category || "").trim().toUpperCase();
+                return (
+                  [
+                    "BAR",
+                    "WINE",
+                    "BEER",
+                    "DRINKS",
+                    "DRINK",
+                    "BEVERAGES",
+                    "BEVERAGE",
+                    "COCKTAILS",
+                    "COCKTAIL",
+                    "LIQUOR",
+                    "SPIRITS",
+                    "ALCOHOL",
+                    "BAR & ALCOHOL",
+                    "BAR / ALCOHOL",
+                  ].includes(cat) ||
+                  cat.includes("BAR") ||
+                  cat.includes("WINE") ||
+                  cat.includes("BEER") ||
+                  cat.includes("ALCOHOL")
+                );
+              })
+            : printType === "kot"
+            ? (selectedOrder?.items || []).filter((it) => {
+                const pType = String(it?.productType || "").trim().toUpperCase();
+                if (pType === "BAR") return false;
+                const cat = String(it?.category || "").trim().toUpperCase();
+                return !(
+                  [
+                    "BAR",
+                    "WINE",
+                    "BEER",
+                    "DRINKS",
+                    "DRINK",
+                    "BEVERAGES",
+                    "BEVERAGE",
+                    "COCKTAILS",
+                    "COCKTAIL",
+                    "LIQUOR",
+                    "SPIRITS",
+                    "ALCOHOL",
+                    "BAR & ALCOHOL",
+                    "BAR / ALCOHOL",
+                  ].includes(cat) ||
+                  cat.includes("BAR") ||
+                  cat.includes("WINE") ||
+                  cat.includes("BEER") ||
+                  cat.includes("ALCOHOL")
+                );
+              })
+            : selectedOrder?.items || []
+        }
         taxBreakdown={selectedOrder?.taxBreakdown || []}
         restaurantDetails={{
           name: selectedOrder?.restaurantName || "TASTY BITES",

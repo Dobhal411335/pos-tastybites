@@ -235,7 +235,7 @@ export default function EodReportPage({
 
       <Card>
         <CardContent className="pt-6">
-          <div className="flex flex-col lg:flex-row gap-4 lg:items-end flex-wrap">
+          <div className="flex flex-col md:flex-row gap-4 md:items-end flex-wrap">
             <div className="space-y-1.5">
               <Label htmlFor="eod-date">Business Day</Label>
               <Input
