@@ -37,8 +37,8 @@ const OrderItemSchema = new mongoose.Schema({
 const OrderSchema = new mongoose.Schema(
   {
     restaurantId: { type: mongoose.Schema.Types.ObjectId, ref: 'Restaurant', index: true },
-    orderNumber: { type: String, required: true, unique: true },
-    invoiceNumber: { type: String, unique: true, sparse: true },
+    orderNumber: { type: String, required: true },
+    invoiceNumber: { type: String },
     items: [OrderItemSchema],
     subTotal: { type: Number, required: true },
     taxTotal: { type: Number, default: 0 },
@@ -87,6 +87,12 @@ const OrderSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+OrderSchema.index({ restaurantId: 1, orderNumber: 1 }, { unique: true });
+OrderSchema.index({ restaurantId: 1, invoiceNumber: 1 }, { unique: true, sparse: true });
+OrderSchema.index({ restaurantId: 1, createdAt: -1 });
+OrderSchema.index({ restaurantId: 1, status: 1, createdAt: -1 });
+OrderSchema.index({ restaurantId: 1, paymentStatus: 1, createdAt: -1 });
+OrderSchema.index({ restaurantId: 1, processedBy: 1, createdAt: -1 });
 OrderSchema.index({ restaurantId: 1, updatedAt: 1, paymentStatus: 1 });
 OrderSchema.index({ restaurantId: 1, updatedAt: 1, status: 1 });
 OrderSchema.index({ restaurantId: 1, processedBy: 1, updatedAt: 1 });

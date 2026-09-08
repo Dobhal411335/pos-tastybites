@@ -132,32 +132,31 @@ export async function redeemGiftCardAtomic({
   }
 
   if (sendEmail && giftcard.recipientEmail?.trim()) {
-    try {
-      const items = Array.isArray(orderDoc?.items)
-        ? orderDoc.items.map((item) => ({
-            name: item.name,
-            qty: item.qty,
-            price: item.price,
-            size: item.size,
-          }))
-        : [];
+    const items = Array.isArray(orderDoc?.items)
+      ? orderDoc.items.map((item) => ({
+          name: item.name,
+          qty: item.qty,
+          price: item.price,
+          size: item.size,
+        }))
+      : [];
 
-      await sendGiftCardUsedEmail({
-        email: giftcard.recipientEmail.trim(),
-        recipientName: giftcard.recipientName,
-        cardName: giftcard.name,
-        code: giftcard.code,
-        originalValue: giftcard.value,
-        amountUsed: amount,
-        remainingBalance: giftcard.balance,
-        orderNumber: orderDoc?.orderNumber || "",
-        partyName: orderDoc?.partyName || orderDoc?.guestName || "",
-        totalAmount: Number(orderDoc?.totalAmount) || 0,
-        items,
-      });
-    } catch (emailErr) {
+    // Dispatch email asynchronously so it does not block POS checkout/payment latency
+    sendGiftCardUsedEmail({
+      email: giftcard.recipientEmail.trim(),
+      recipientName: giftcard.recipientName,
+      cardName: giftcard.name,
+      code: giftcard.code,
+      originalValue: giftcard.value,
+      amountUsed: amount,
+      remainingBalance: giftcard.balance,
+      orderNumber: orderDoc?.orderNumber || "",
+      partyName: orderDoc?.partyName || orderDoc?.guestName || "",
+      totalAmount: Number(orderDoc?.totalAmount) || 0,
+      items,
+    }).catch((emailErr) => {
       logger.error(`Gift card redeemed but email failed for ${giftcard.code}`, emailErr);
-    }
+    });
   }
 
   return { ok: true, giftcard, amount };

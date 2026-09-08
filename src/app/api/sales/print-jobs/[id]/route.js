@@ -203,6 +203,40 @@ export const PATCH = withAuth(async (request, { params }) => {
       );
     }
 
+    if (action === "claim") {
+      const claimedJob = await PrintJob.findOneAndUpdate(
+        {
+          _id: id,
+          restaurantId: request.restaurant,
+          status: "QUEUED",
+        },
+        {
+          $set: {
+            status: "PRINTING",
+            startedAt: new Date(),
+          },
+          $inc: { attemptCount: 1 },
+        },
+        { new: true }
+      );
+
+      if (!claimedJob) {
+        return sendSuccess(
+          { claimed: false },
+          "Job already claimed or processed by another device"
+        );
+      }
+
+      if (global.io) {
+        const payload = toPrintJobEventPayload(claimedJob, claimedJob.metadata?.orderNumber);
+        global.io
+          .to(`restaurant:${claimedJob.restaurantId}`)
+          .emit("PRINT_JOB_UPDATED", payload);
+      }
+
+      return sendSuccess({ claimed: true, job: claimedJob }, "Print job claimed");
+    }
+
     if (action === "retry") {
       const { job, result } = await retryPrintJob(id, {
         // Default: requeue + emit NEW_PRINT_JOB for print-bridge / Electron.

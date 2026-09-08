@@ -34,5 +34,6 @@ EmployeeShiftSchema.index(
 
 // Fast lookup by employee + month for duplicate-generation prevention
 EmployeeShiftSchema.index({ employee: 1, month: 1, restaurant: 1 });
+EmployeeShiftSchema.index({ restaurant: 1, date: -1 });
 
 export default mongoose.models.EmployeeShift || mongoose.model('EmployeeShift', EmployeeShiftSchema);

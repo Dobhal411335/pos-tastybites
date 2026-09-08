@@ -52,4 +52,8 @@ const ProductSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+ProductSchema.index({ restaurant: 1, status: 1, category: 1 });
+ProductSchema.index({ restaurant: 1, category: 1 });
+ProductSchema.index({ restaurant: 1, name: 1 });
+
 export default mongoose.models.Product || mongoose.model('Product', ProductSchema);

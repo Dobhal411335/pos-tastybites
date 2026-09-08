@@ -213,6 +213,23 @@ export async function ensureTodayEmployeeActivityNotifications(restaurantId) {
     .populate("employee", "firstName lastName role employeeId")
     .lean();
 
+  if (!sessions.length) return;
+
+  const sessionIds = sessions.map((s) => String(s._id));
+  const existingDocs = await Notification.find({
+    restaurantId,
+    type: { $in: ["EMPLOYEE_LOGIN", "EMPLOYEE_LOGOUT"] },
+    "metadata.sessionId": { $in: sessionIds },
+  })
+    .select("type metadata.sessionId")
+    .lean();
+
+  const existingSet = new Set(
+    existingDocs.map((d) => `${d.type}:${d.metadata?.sessionId}`)
+  );
+
+  const newNotifications = [];
+
   for (const session of sessions) {
     const employee = session.employee;
     if (!employee) continue;
@@ -220,14 +237,8 @@ export async function ensureTodayEmployeeActivityNotifications(restaurantId) {
     const employeeName = `${employee.firstName} ${employee.lastName || ""}`.trim();
     const sessionId = String(session._id);
 
-    const loginExists = await Notification.exists({
-      restaurantId,
-      type: "EMPLOYEE_LOGIN",
-      "metadata.sessionId": sessionId,
-    });
-
-    if (!loginExists) {
-      await Notification.create({
+    if (!existingSet.has(`EMPLOYEE_LOGIN:${sessionId}`)) {
+      newNotifications.push({
         restaurantId,
         type: "EMPLOYEE_LOGIN",
         title: "Employee Clocked In",
@@ -249,21 +260,13 @@ export async function ensureTodayEmployeeActivityNotifications(restaurantId) {
       });
     }
 
-    if (!session.logoutTime) continue;
-
-    const logoutExists = await Notification.exists({
-      restaurantId,
-      type: "EMPLOYEE_LOGOUT",
-      "metadata.sessionId": sessionId,
-    });
-
-    if (!logoutExists) {
+    if (session.logoutTime && !existingSet.has(`EMPLOYEE_LOGOUT:${sessionId}`)) {
       const duration = session.duration || 0;
       const hours = Math.floor(duration / 3600);
       const minutes = Math.floor((duration % 3600) / 60);
       const durationLabel = hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
 
-      await Notification.create({
+      newNotifications.push({
         restaurantId,
         type: "EMPLOYEE_LOGOUT",
         title: "Employee Clocked Out",
@@ -286,6 +289,10 @@ export async function ensureTodayEmployeeActivityNotifications(restaurantId) {
         updatedAt: session.logoutTime,
       });
     }
+  }
+
+  if (newNotifications.length > 0) {
+    await Notification.insertMany(newNotifications);
   }
 }
 

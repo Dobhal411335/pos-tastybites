@@ -835,6 +835,10 @@ export const GET = withAuth(async (request) => {
     // Default: Get recent employee orders; today=true returns all restaurant orders for the day
     const employeeId = request.user.id;
     const restaurantId = request.restaurant;
+    const startDate = searchParams.get("startDate");
+    const endDate = searchParams.get("endDate");
+    const limitParam = searchParams.get("limit");
+    const limit = limitParam ? Math.min(Math.max(1, Number(limitParam) || 50), 1000) : 500;
     
     let query = { restaurantId };
     
@@ -846,10 +850,25 @@ export const GET = withAuth(async (request) => {
       query.createdAt = { $gte: start, $lte: end };
     } else {
       query.processedBy = employeeId;
+      if (startDate || endDate) {
+        query.createdAt = {};
+        if (startDate) {
+          const s = new Date(startDate);
+          if (!isNaN(s.getTime())) query.createdAt.$gte = s;
+        }
+        if (endDate) {
+          const e = new Date(endDate);
+          if (!isNaN(e.getTime())) {
+            if (endDate.length === 10) e.setHours(23, 59, 59, 999);
+            query.createdAt.$lte = e;
+          }
+        }
+      }
     }
 
     const orders = await Order.find(query)
       .sort({ createdAt: -1 })
+      .limit(limit)
       .lean();
 
     const enriched = await enrichOrdersWithProcessedBy(orders);

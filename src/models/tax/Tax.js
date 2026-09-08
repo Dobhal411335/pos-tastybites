@@ -13,4 +13,6 @@ const TaxSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+TaxSchema.index({ restaurant: 1, status: 1 });
+
 export default mongoose.models.Tax || mongoose.model('Tax', TaxSchema);

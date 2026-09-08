@@ -8,7 +8,7 @@ import {
   SALES_PRINT_ROLES,
   assertPrintAdminRole,
 } from "@/lib/printing/printJobService";
-
+import Employee from "@/models/employee/Employee";
 /**
  * GET /api/sales/print-jobs
  * Sales/admin print queue for the restaurant.
@@ -101,6 +101,7 @@ export const GET = withAuth(async (request) => {
 
     const statsBaseMatch = { restaurantId: restObjectId };
     if (query.createdAt) statsBaseMatch.createdAt = query.createdAt;
+    const includeStats = searchParams.get("stats") !== "0";
 
     const [jobs, total, statsAgg] = await Promise.all([
       PrintJob.find(query)
@@ -115,48 +116,50 @@ export const GET = withAuth(async (request) => {
         .populate("parentPrintJobId", "status printType createdAt")
         .lean(),
       PrintJob.countDocuments(query),
-      PrintJob.aggregate([
-        { $match: statsBaseMatch },
-        {
-          $group: {
-            _id: null,
-            total: { $sum: 1 },
-            receiptCount: {
-              $sum: { $cond: [{ $eq: ["$printType", "RECEIPT"] }, 1, 0] },
-            },
-            kotCount: {
-              $sum: { $cond: [{ $eq: ["$printType", "KOT"] }, 1, 0] },
-            },
-            barCount: {
-              $sum: { $cond: [{ $eq: ["$printType", "BAR_RECEIPT"] }, 1, 0] },
-            },
-            reprintCount: {
-              $sum: {
-                $cond: [
-                  {
-                    $or: [
-                      { $ne: ["$parentPrintJobId", null] },
-                      { $eq: ["$metadata.isReprint", true] },
-                      { $gt: ["$attemptCount", 1] },
+      includeStats
+        ? PrintJob.aggregate([
+            { $match: statsBaseMatch },
+            {
+              $group: {
+                _id: null,
+                total: { $sum: 1 },
+                receiptCount: {
+                  $sum: { $cond: [{ $eq: ["$printType", "RECEIPT"] }, 1, 0] },
+                },
+                kotCount: {
+                  $sum: { $cond: [{ $eq: ["$printType", "KOT"] }, 1, 0] },
+                },
+                barCount: {
+                  $sum: { $cond: [{ $eq: ["$printType", "BAR_RECEIPT"] }, 1, 0] },
+                },
+                reprintCount: {
+                  $sum: {
+                    $cond: [
+                      {
+                        $or: [
+                          { $ne: ["$parentPrintJobId", null] },
+                          { $eq: ["$metadata.isReprint", true] },
+                          { $gt: ["$attemptCount", 1] },
+                        ],
+                      },
+                      1,
+                      0,
                     ],
                   },
-                  1,
-                  0,
-                ],
+                },
+                printedCount: {
+                  $sum: { $cond: [{ $eq: ["$status", "PRINTED"] }, 1, 0] },
+                },
+                failedCount: {
+                  $sum: { $cond: [{ $eq: ["$status", "FAILED"] }, 1, 0] },
+                },
+                queuedCount: {
+                  $sum: { $cond: [{ $eq: ["$status", "QUEUED"] }, 1, 0] },
+                },
               },
             },
-            printedCount: {
-              $sum: { $cond: [{ $eq: ["$status", "PRINTED"] }, 1, 0] },
-            },
-            failedCount: {
-              $sum: { $cond: [{ $eq: ["$status", "FAILED"] }, 1, 0] },
-            },
-            queuedCount: {
-              $sum: { $cond: [{ $eq: ["$status", "QUEUED"] }, 1, 0] },
-            },
-          },
-        },
-      ]),
+          ])
+        : Promise.resolve([]),
     ]);
 
     const stats = statsAgg?.[0] || {

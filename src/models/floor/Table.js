@@ -45,5 +45,6 @@ const TableSchema = new mongoose.Schema(
 
 // Prevent duplicate table numbers within the same floor
 TableSchema.index({ tableNumber: 1, floor: 1, restaurant: 1 }, { unique: true });
+TableSchema.index({ restaurant: 1, floor: 1 });
 
 export default mongoose.models.Table || mongoose.model("Table", TableSchema);

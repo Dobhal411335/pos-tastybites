@@ -25,4 +25,7 @@ const CategorySchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+CategorySchema.index({ restaurant: 1, status: 1 });
+CategorySchema.index({ restaurant: 1, name: 1 });
+
 export default mongoose.models.Category || mongoose.model('Category', CategorySchema);

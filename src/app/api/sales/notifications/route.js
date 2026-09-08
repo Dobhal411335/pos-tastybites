@@ -6,7 +6,6 @@ import {
   listNotifications,
   countUnread,
   markAllNotificationsRead,
-  ensureTodayEmployeeActivityNotifications,
 } from '@/lib/notifications/notificationService';
 
 const ROLES = ['ADMIN', 'MANAGER', 'SERVER', 'BARTENDER', 'EMPLOYEE', 'DEVICE'];
@@ -29,10 +28,6 @@ export const GET = withSalesOrDeviceAuth(async (request) => {
     const filter = searchParams.get('filter') || 'ALL';
     const page = Number(searchParams.get('page')) || 1;
     const limit = Math.min(Number(searchParams.get('limit')) || 30, 100);
-
-    if (filter === 'ALL' || filter === 'Employees') {
-      await ensureTodayEmployeeActivityNotifications(restaurantId);
-    }
 
     const data = await listNotifications({
       restaurantId,

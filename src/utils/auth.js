@@ -38,7 +38,9 @@ export const withAuth = (handler, allowedRoles = []) => {
       }
 
       if (payload.sessionId) {
-        const session = await EmployeeSession.findById(payload.sessionId);
+        const session = await EmployeeSession.findById(payload.sessionId)
+          .select('status')
+          .lean();
         if (!session || session.status !== 'Active') {
           return sendError(new Error('Unauthorized'), 'Session expired or terminated', 401);
         }
@@ -53,7 +55,9 @@ export const withAuth = (handler, allowedRoles = []) => {
           if (!devicePayload || devicePayload.type !== 'device') {
             return sendError(new Error('Unauthorized'), 'Invalid device token', 401);
           }
-          const device = await RegisteredDevice.findById(devicePayload.deviceId);
+          const device = await RegisteredDevice.findById(devicePayload.deviceId)
+            .select('status activationStatus deviceTokenVersion restaurant deviceName deviceCode assignedFloor assignedEmployee')
+            .lean();
           if (!device || device.status !== 'Active' || device.activationStatus !== 'Activated') {
             return sendError(new Error('Forbidden'), 'Device is inactive', 403);
           }

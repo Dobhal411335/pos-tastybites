@@ -13,4 +13,6 @@ const ServiceTaxSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+ServiceTaxSchema.index({ restaurant: 1, status: 1 });
+
 export default mongoose.models.ServiceTax || mongoose.model('ServiceTax', ServiceTaxSchema);

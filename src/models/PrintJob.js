@@ -77,5 +77,7 @@ PrintJobSchema.index(
   { restaurantId: 1, idempotencyKey: 1 },
   { unique: true, partialFilterExpression: { idempotencyKey: { $type: "string" } } }
 );
+PrintJobSchema.index({ restaurantId: 1, createdAt: -1 });
+PrintJobSchema.index({ restaurantId: 1, status: 1, createdAt: -1 });
 
 export default mongoose.models.PrintJob || mongoose.model("PrintJob", PrintJobSchema);

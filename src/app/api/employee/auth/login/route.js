@@ -88,17 +88,31 @@ async function finishEmployeeLogin({
   userAgent,
   platform,
 }) {
-  employee.lastLoginAt = new Date();
-  employee.lastLoginIP = ip;
-  employee.lastLoginPlatform = platform;
-  employee.lastLoginBrowser = userAgent;
-  await employee.save();
+  const employeeUpdate = {
+    lastLoginAt: new Date(),
+    lastLoginIP: ip,
+    lastLoginPlatform: platform,
+    lastLoginBrowser: userAgent,
+  };
+  Object.assign(employee, employeeUpdate);
+  if (typeof employee.save === 'function') {
+    await employee.save();
+  } else if (employee?._id) {
+    await Employee.findByIdAndUpdate(employee._id, { $set: employeeUpdate });
+  }
 
-  device.lastLoginAt = new Date();
-  device.lastIPAddress = ip;
-  device.lastPlatform = platform;
-  device.lastBrowser = userAgent;
-  await device.save();
+  const deviceUpdate = {
+    lastLoginAt: new Date(),
+    lastIPAddress: ip,
+    lastPlatform: platform,
+    lastBrowser: userAgent,
+  };
+  Object.assign(device, deviceUpdate);
+  if (typeof device.save === 'function') {
+    await device.save();
+  } else if (device?._id) {
+    await RegisteredDevice.findByIdAndUpdate(device._id, { $set: deviceUpdate });
+  }
 
   const now = new Date();
   const { start: todayStart, end: todayEnd } = getAttendanceDayBounds(now);

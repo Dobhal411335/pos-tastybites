@@ -1,35 +1,34 @@
 import StockProduct from "@/models/stock/StockProduct";
-import StockIn from "@/models/stock/StockIn";
-import StockOut from "@/models/stock/StockOut";
 import Restaurant from "@/models/Restaurant";
 import StockCategory from "@/models/stock/StockCategory";
 import StockType from "@/models/stock/StockType";
 import "@/models/stock/StockUnit";
-import { sumStockInQuantityForProduct } from "@/lib/stock/normalizeStockIn";
+import {
+  aggregateStockInByProduct,
+  aggregateStockOutByProduct,
+} from "@/lib/reports/inventory/balance";
 
 export async function getStockLevels({ restaurantId, category, type }) {
   const query = { restaurant: restaurantId };
   if (category && category !== "all") query.category = category;
   if (type && type !== "all") query.type = type;
 
-  const [products, allIns, allOuts, restaurant] = await Promise.all([
+  const [products, inMap, outMap, restaurant] = await Promise.all([
     StockProduct.find(query)
       .populate("category", "name")
       .populate("type", "name")
       .populate("unit", "name")
       .lean(),
-    StockIn.find({ restaurant: restaurantId }).lean(),
-    StockOut.find({ restaurant: restaurantId }).lean(),
+    aggregateStockInByProduct({ restaurantId }),
+    aggregateStockOutByProduct({ restaurantId }),
     Restaurant.findById(restaurantId).select("name email").lean(),
   ]);
 
   const levels = products.map((product) => {
     const pid = product._id.toString();
     const openingStock = Number(product.openingStock) || 0;
-    const totalIn = sumStockInQuantityForProduct(allIns, pid);
-    const totalOut = allOuts
-      .filter((o) => o.product?.toString() === pid)
-      .reduce((sum, o) => sum + (Number(o.quantity) || 0), 0);
+    const totalIn = inMap.get(pid)?.totalIn || 0;
+    const totalOut = outMap.get(pid)?.totalOut || 0;
     const currentBalance = openingStock + totalIn - totalOut;
 
     return {
