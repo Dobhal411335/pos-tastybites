@@ -156,7 +156,9 @@ export default function IssueGiftCardPage() {
         code: formData.code.trim().toUpperCase(),
         value: Number(formData.value),
         recipientName: formData.recipientName,
-        recipientPhone: `${formData.countryCode} ${formData.phoneNumber}`,
+        recipientPhone: formData.phoneNumber?.trim()
+          ? `${formData.countryCode} ${formData.phoneNumber.trim()}`
+          : "",
         recipientEmail: formData.recipientEmail,
         issueDate: formData.issueDate ? formData.issueDate.toISOString() : new Date().toISOString(),
       };

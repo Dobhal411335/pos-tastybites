@@ -179,14 +179,42 @@ export function buildGiftCardSvg({
 </svg>`;
 }
 
+let cachedSharp = null;
+async function getSharpInstance() {
+  if (cachedSharp !== null) return cachedSharp || null;
+  try {
+    const mod = await import("sharp");
+    cachedSharp = mod.default || mod;
+    return cachedSharp;
+  } catch (err) {
+    try {
+      const mod = await import("next/node_modules/sharp/lib/index.js");
+      cachedSharp = mod.default || mod;
+      return cachedSharp;
+    } catch {
+      console.warn("Sharp is not available for image processing:", err?.message || err);
+      cachedSharp = false;
+      return null;
+    }
+  }
+}
+
 /**
  * Render gift card PNG (base64) for Brevo attachment.
+ * Returns base64 PNG string or null if sharp is unavailable.
  */
 export async function renderGiftCardPngBase64(cardData) {
-  const svg = buildGiftCardSvg(cardData);
-  const sharp = (await import("sharp")).default;
-  const png = await sharp(Buffer.from(svg))
-    .png({ quality: 90 })
-    .toBuffer();
-  return png.toString("base64");
+  try {
+    const sharp = await getSharpInstance();
+    if (!sharp) return null;
+
+    const svg = buildGiftCardSvg(cardData);
+    const png = await sharp(Buffer.from(svg))
+      .png({ quality: 90 })
+      .toBuffer();
+    return png.toString("base64");
+  } catch (err) {
+    console.warn("Failed to render gift card PNG with sharp:", err?.message || err);
+    return null;
+  }
 }

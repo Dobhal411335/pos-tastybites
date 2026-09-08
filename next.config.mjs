@@ -41,9 +41,8 @@ if (process.env.NODE_ENV !== "production") {
 
 const nextConfig = {
   reactStrictMode: false,
-  // Keep pdfkit/exceljs outside the bundler so AFM font data resolves from real node_modules
-  // (bundling rewrites __dirname to an invalid path like D:\ROOT\...).
-  serverExternalPackages: ["pdfkit", "fontkit", "exceljs"],
+  // Keep pdfkit/exceljs/sharp outside the bundler so native binaries/assets resolve from real node_modules
+  serverExternalPackages: ["pdfkit", "fontkit", "exceljs", "sharp"],
   outputFileTracingIncludes: {
     "/api/eod/pdf": ["./node_modules/pdfkit/js/data/**/*"],
     "/api/eod/email": ["./node_modules/pdfkit/js/data/**/*"],
