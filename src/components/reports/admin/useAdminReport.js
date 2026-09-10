@@ -11,6 +11,8 @@ export const DEFAULT_ADMIN_FILTERS = {
   paymentMethod: "ALL",
   eventType: "ALL",
   kotStatus: "ALL",
+  orderStatus: "ALL",
+  search: "",
   page: 1,
   pageSize: 25,
 };
@@ -33,6 +35,12 @@ export function adminQueryString(filters, { paginate = false, section } = {}) {
   }
   if (filters.kotStatus && filters.kotStatus !== "ALL") {
     params.set("kotStatus", filters.kotStatus);
+  }
+  if (filters.orderStatus && filters.orderStatus !== "ALL") {
+    params.set("orderStatus", filters.orderStatus);
+  }
+  if (filters.search && String(filters.search).trim()) {
+    params.set("search", String(filters.search).trim());
   }
   if (section) params.set("section", section);
   if (paginate) {

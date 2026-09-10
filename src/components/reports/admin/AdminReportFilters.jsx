@@ -5,6 +5,7 @@ import { format } from "date-fns";
 import { Download, Filter, RefreshCw, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
+import { Input } from "@/components/ui/input";
 import {
   Popover,
   PopoverContent,
@@ -21,6 +22,7 @@ import { employeeLabel } from "./useAdminReport";
 
 const DATE_PRESETS = [
   { value: "TODAY", label: "Today" },
+  { value: "YESTERDAY", label: "Yesterday" },
   { value: "THIS_WEEK", label: "Week" },
   { value: "THIS_MONTH", label: "Month" },
   { value: "CUSTOM", label: "Custom" },
@@ -63,6 +65,16 @@ const KOT_STATUSES = [
   { value: "CANCELLED", label: "Cancelled" },
 ];
 
+const ORDER_STATUSES = [
+  { value: "ALL", label: "All statuses" },
+  { value: "PENDING", label: "Pending" },
+  { value: "CONFIRMED", label: "Confirmed" },
+  { value: "COMPLETED", label: "Completed" },
+  { value: "PAID", label: "Paid" },
+  { value: "CANCELLED", label: "Cancelled" },
+  { value: "WAIVED", label: "Waived" },
+];
+
 function ymdToDate(ymd) {
   if (!ymd) return undefined;
   const [y, m, d] = ymd.split("-").map(Number);
@@ -96,23 +108,34 @@ export default function AdminReportFilters({
   onExport,
 }) {
   const [employees, setEmployees] = useState([]);
-  const showDate = section !== "eod" && section !== "expenses";
+  const [searchDraft, setSearchDraft] = useState(value.search || "");
+
+  const showDate = section !== "eod";
   const showEmployee =
     section === "revenue" ||
     section === "daily-summary" ||
+    section === "today-order" ||
     section === "audit" ||
-    section === "kitchen";
-  const showPayment = section === "revenue" || section === "daily-summary";
+    section === "kitchen" ||
+    section === "bar";
+  const showPayment =
+    section === "revenue" ||
+    section === "daily-summary" ||
+    section === "today-order";
   const showActivityEvent = section === "activity";
   const showAuditEvent = section === "audit";
-  const showKotStatus = section === "kitchen";
+  const showKotStatus = section === "kitchen" || section === "bar";
+  const showOrderStatus = section === "today-order";
+  const showSearch = section === "today-order";
 
   const hasExtraFilters =
     showEmployee ||
     showPayment ||
     showActivityEvent ||
     showAuditEvent ||
-    showKotStatus;
+    showKotStatus ||
+    showOrderStatus ||
+    showSearch;
 
   const activeFilterCount = useMemo(() => {
     let count = 0;
@@ -128,6 +151,10 @@ export default function AdminReportFilters({
       count += 1;
     }
     if (showKotStatus && value.kotStatus && value.kotStatus !== "ALL") count += 1;
+    if (showOrderStatus && value.orderStatus && value.orderStatus !== "ALL") {
+      count += 1;
+    }
+    if (showSearch && value.search && String(value.search).trim()) count += 1;
     return count;
   }, [
     showEmployee,
@@ -135,10 +162,14 @@ export default function AdminReportFilters({
     showActivityEvent,
     showAuditEvent,
     showKotStatus,
+    showOrderStatus,
+    showSearch,
     value.employeeId,
     value.paymentMethod,
     value.eventType,
     value.kotStatus,
+    value.orderStatus,
+    value.search,
   ]);
 
   useEffect(() => {
@@ -162,6 +193,11 @@ export default function AdminReportFilters({
 
   const patch = (next) => {
     onChange((prev) => ({ ...prev, ...next, page: 1 }));
+  };
+
+  const handleClear = () => {
+    setSearchDraft("");
+    if (onClear) onClear();
   };
 
   const handlePreset = (preset) => {
@@ -188,178 +224,229 @@ export default function AdminReportFilters({
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      {showDate ? (
-        <>
-          <div className="flex rounded-md border border-zinc-200 bg-white p-0.5">
-            {DATE_PRESETS.map((preset) => (
-              <button
-                key={preset.value}
-                type="button"
-                onClick={() => handlePreset(preset.value)}
-                className={`rounded px-2.5 py-1.5 text-xs font-semibold transition-colors ${
-                  uiPreset === preset.value
-                    ? "bg-orange-500 text-white"
-                    : "text-zinc-600 hover:bg-zinc-50"
-                }`}
-              >
-                {preset.label}
-              </button>
-            ))}
-          </div>
-          {uiPreset === "CUSTOM" ? (
-            <DateRangePicker
-              dateFrom={ymdToDate(value.dateFrom)}
-              dateTo={ymdToDate(value.dateTo)}
-              onChange={({ from, to }) =>
-                patch({
-                  preset: "CUSTOM",
-                  dateFrom: dateToYmd(from),
-                  dateTo: dateToYmd(to || from),
-                })
-              }
-              className="h-9"
-            />
-          ) : null}
-        </>
-      ) : null}
-
-      {hasExtraFilters ? (
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button variant="outline" size="sm" className="h-9 gap-1.5">
-              <Filter className="h-3.5 w-3.5" />
-              Filters
-              {activeFilterCount > 0 ? (
-                <span className="ml-0.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-orange-500 px-1.5 text-[10px] font-bold text-white">
-                  {activeFilterCount}
-                </span>
+    <div className="flex flex-col gap-3 min-w-0 w-full">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex flex-wrap items-center gap-2 min-w-0">
+          {showDate ? (
+            <>
+              <div className="flex flex-wrap rounded-md border border-zinc-200 bg-white p-0.5">
+                {DATE_PRESETS.map((preset) => (
+                  <button
+                    key={preset.value}
+                    type="button"
+                    onClick={() => handlePreset(preset.value)}
+                    className={`rounded px-2.5 py-1.5 text-xs font-semibold transition-colors ${
+                      uiPreset === preset.value
+                        ? "bg-orange-500 text-white"
+                        : "text-zinc-600 hover:bg-zinc-50"
+                    }`}
+                  >
+                    {preset.label}
+                  </button>
+                ))}
+              </div>
+              {uiPreset === "CUSTOM" ? (
+                <DateRangePicker
+                  dateFrom={ymdToDate(value.dateFrom)}
+                  dateTo={ymdToDate(value.dateTo)}
+                  onChange={({ from, to }) =>
+                    patch({
+                      preset: "CUSTOM",
+                      dateFrom: dateToYmd(from),
+                      dateTo: dateToYmd(to || from),
+                    })
+                  }
+                  className="h-9"
+                />
               ) : null}
+            </>
+          ) : null}
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2 min-w-0 lg:justify-end">
+          {showSearch ? (
+            <form
+              className="flex items-center gap-2 min-w-0 flex-1 sm:flex-initial"
+              onSubmit={(e) => {
+                e.preventDefault();
+                patch({ search: searchDraft.trim() });
+              }}
+            >
+              <Input
+                value={searchDraft}
+                onChange={(e) => setSearchDraft(e.target.value)}
+                placeholder="Search order / guest / table"
+                className="h-9 w-full sm:w-[220px] bg-white"
+              />
+              <Button type="submit" variant="outline" size="sm" className="h-9 shrink-0">
+                Search
+              </Button>
+            </form>
+          ) : null}
+
+          {hasExtraFilters ? (
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" className="h-9 gap-1.5 shrink-0">
+                  <Filter className="h-3.5 w-3.5" />
+                  Filters
+                  {activeFilterCount > 0 ? (
+                    <span className="ml-0.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-orange-500 px-1.5 text-[10px] font-bold text-white">
+                      {activeFilterCount}
+                    </span>
+                  ) : null}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-80 space-y-3 bg-white p-4">
+                {showEmployee ? (
+                  <FilterField label="Employee">
+                    <Select
+                      value={value.employeeId || "ALL"}
+                      onValueChange={(employeeId) => patch({ employeeId })}
+                    >
+                      <SelectTrigger className="h-9 bg-white">
+                        <SelectValue placeholder="All employees" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-white max-h-60">
+                        <SelectItem value="ALL">All employees</SelectItem>
+                        {employees.map((emp) => (
+                          <SelectItem
+                            key={String(emp._id)}
+                            value={String(emp._id)}
+                          >
+                            {employeeLabel(emp)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </FilterField>
+                ) : null}
+
+                {showPayment ? (
+                  <FilterField label="Payment method">
+                    <Select
+                      value={value.paymentMethod || "ALL"}
+                      onValueChange={(paymentMethod) => patch({ paymentMethod })}
+                    >
+                      <SelectTrigger className="h-9 bg-white">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="bg-white">
+                        {PAYMENT_OPTIONS.map((s) => (
+                          <SelectItem key={s.value} value={s.value}>
+                            {s.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </FilterField>
+                ) : null}
+
+                {showOrderStatus ? (
+                  <FilterField label="Order status">
+                    <Select
+                      value={value.orderStatus || "ALL"}
+                      onValueChange={(orderStatus) => patch({ orderStatus })}
+                    >
+                      <SelectTrigger className="h-9 bg-white">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="bg-white">
+                        {ORDER_STATUSES.map((s) => (
+                          <SelectItem key={s.value} value={s.value}>
+                            {s.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </FilterField>
+                ) : null}
+
+                {showActivityEvent || showAuditEvent ? (
+                  <FilterField label="Event type">
+                    <Select
+                      value={value.eventType || "ALL"}
+                      onValueChange={(eventType) => patch({ eventType })}
+                    >
+                      <SelectTrigger className="h-9 bg-white">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="bg-white">
+                        {eventOptions.map((s) => (
+                          <SelectItem key={s.value} value={s.value}>
+                            {s.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </FilterField>
+                ) : null}
+
+                {showKotStatus ? (
+                  <FilterField
+                    label={section === "bar" ? "Ticket status" : "KOT status"}
+                  >
+                    <Select
+                      value={value.kotStatus || "ALL"}
+                      onValueChange={(kotStatus) => patch({ kotStatus })}
+                    >
+                      <SelectTrigger className="h-9 bg-white">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="bg-white">
+                        {KOT_STATUSES.map((s) => (
+                          <SelectItem key={s.value} value={s.value}>
+                            {s.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </FilterField>
+                ) : null}
+              </PopoverContent>
+            </Popover>
+          ) : null}
+
+          {onClear ? (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9 gap-1.5 shrink-0"
+              onClick={handleClear}
+            >
+              <X className="h-3.5 w-3.5" />
+              Clear
             </Button>
-          </PopoverTrigger>
-          <PopoverContent align="end" className="w-80 space-y-3 bg-white p-4">
-            {showEmployee ? (
-              <FilterField label="Employee">
-                <Select
-                  value={value.employeeId || "ALL"}
-                  onValueChange={(employeeId) => patch({ employeeId })}
-                >
-                  <SelectTrigger className="h-9 bg-white">
-                    <SelectValue placeholder="All employees" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-white max-h-60">
-                    <SelectItem value="ALL">All employees</SelectItem>
-                    {employees.map((emp) => (
-                      <SelectItem key={String(emp._id)} value={String(emp._id)}>
-                        {employeeLabel(emp)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </FilterField>
-            ) : null}
+          ) : null}
 
-            {showPayment ? (
-              <FilterField label="Payment method">
-                <Select
-                  value={value.paymentMethod || "ALL"}
-                  onValueChange={(paymentMethod) => patch({ paymentMethod })}
-                >
-                  <SelectTrigger className="h-9 bg-white">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-white">
-                    {PAYMENT_OPTIONS.map((s) => (
-                      <SelectItem key={s.value} value={s.value}>
-                        {s.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </FilterField>
-            ) : null}
+          {onRefresh ? (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9 gap-1.5 shrink-0"
+              onClick={onRefresh}
+              disabled={loading}
+            >
+              <RefreshCw
+                className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`}
+              />
+              Refresh
+            </Button>
+          ) : null}
 
-            {showActivityEvent || showAuditEvent ? (
-              <FilterField label="Event type">
-                <Select
-                  value={value.eventType || "ALL"}
-                  onValueChange={(eventType) => patch({ eventType })}
-                >
-                  <SelectTrigger className="h-9 bg-white">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-white">
-                    {eventOptions.map((s) => (
-                      <SelectItem key={s.value} value={s.value}>
-                        {s.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </FilterField>
-            ) : null}
-
-            {showKotStatus ? (
-              <FilterField label="KOT status">
-                <Select
-                  value={value.kotStatus || "ALL"}
-                  onValueChange={(kotStatus) => patch({ kotStatus })}
-                >
-                  <SelectTrigger className="h-9 bg-white">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-white">
-                    {KOT_STATUSES.map((s) => (
-                      <SelectItem key={s.value} value={s.value}>
-                        {s.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </FilterField>
-            ) : null}
-          </PopoverContent>
-        </Popover>
-      ) : null}
-
-      {onClear ? (
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-9 gap-1.5"
-          onClick={onClear}
-        >
-          <X className="h-3.5 w-3.5" />
-          Clear
-        </Button>
-      ) : null}
-
-      {onRefresh ? (
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-9 gap-1.5"
-          onClick={onRefresh}
-          disabled={loading}
-        >
-          <RefreshCw
-            className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`}
-          />
-          Refresh
-        </Button>
-      ) : null}
-
-      {canExport && onExport ? (
-        <Button
-          size="sm"
-          className="h-9 gap-1.5 bg-orange-500 text-white hover:bg-orange-600"
-          onClick={onExport}
-          disabled={loading}
-        >
-          <Download className="h-3.5 w-3.5" />
-          Export
-        </Button>
-      ) : null}
+          {canExport && onExport ? (
+            <Button
+              size="sm"
+              className="h-9 gap-1.5 shrink-0 bg-orange-500 text-white hover:bg-orange-600"
+              onClick={onExport}
+              disabled={loading}
+            >
+              <Download className="h-3.5 w-3.5" />
+              Export
+            </Button>
+          ) : null}
+        </div>
+      </div>
     </div>
   );
 }

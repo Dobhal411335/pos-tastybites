@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle2, ChefHat, Clock, XCircle } from "lucide-react";
+import { CheckCircle2, Clock, Wine, XCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
   Table,
@@ -29,7 +29,7 @@ const STATUS_BADGE = {
   CANCELLED: "border-zinc-200 bg-zinc-100 text-zinc-600",
 };
 
-export default function KitchenSection({ data, loading, onPage }) {
+export default function BarSection({ data, loading, onPage }) {
   if (loading && !data) {
     return <AdminReportSkeleton cards={4} />;
   }
@@ -39,9 +39,9 @@ export default function KitchenSection({ data, loading, onPage }) {
       <div className="space-y-4">
         {data?.note ? <AdminNote>{data.note}</AdminNote> : null}
         <AdminEmptyState
-          icon={ChefHat}
-          title="No kitchen tickets"
-          message="No kitchen tickets for the selected period."
+          icon={Wine}
+          title="No bar tickets"
+          message="No bar tickets for the selected period."
         />
       </div>
     );
@@ -53,11 +53,7 @@ export default function KitchenSection({ data, loading, onPage }) {
     <div className="space-y-8">
       {data.note ? <AdminNote>{data.note}</AdminNote> : null}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6">
-        <AdminKpiCard
-          label="Total KOTs"
-          value={counts.total}
-          icon={ChefHat}
-        />
+        <AdminKpiCard label="Total tickets" value={counts.total} icon={Wine} />
         <AdminKpiCard
           label="Completed"
           value={counts.completed}
@@ -77,7 +73,7 @@ export default function KitchenSection({ data, loading, onPage }) {
         <Table>
           <TableHeader className="sticky top-0 z-10">
             <TableRow>
-              <TableHead className={TH_CLASS}>KOT #</TableHead>
+              <TableHead className={TH_CLASS}>Ticket #</TableHead>
               <TableHead className={TH_CLASS}>Order #</TableHead>
               <TableHead className={TH_CLASS}>Time</TableHead>
               <TableHead className={TH_CLASS}>Table</TableHead>
@@ -125,7 +121,7 @@ export default function KitchenSection({ data, loading, onPage }) {
         </Table>
       </AdminTableCard>
 
-      <AdminTableCard title="Top kitchen items">
+      <AdminTableCard title="Top bar items">
         <Table>
           <TableHeader className="sticky top-0 z-10">
             <TableRow>

@@ -29,6 +29,11 @@ const remotePatterns = [
     hostname: "res.cloudinary.com",
     pathname: "/**",
   },
+  {
+    protocol: "https",
+    hostname: "images.unsplash.com",
+    pathname: "/**",
+  },
 ];
 
 // Local/dev uploads and absolute localhost images used by Next/Image

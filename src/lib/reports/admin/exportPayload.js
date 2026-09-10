@@ -2,8 +2,10 @@ import Restaurant from "@/models/Restaurant";
 import { buildAdminActivity } from "./activity";
 import { buildAdminRevenue } from "./revenue";
 import { buildAdminDailySummary } from "./dailySummary";
+import { buildAdminTodayOrders } from "./todayOrder";
 import { buildAdminAudit } from "./audit";
 import { buildAdminKitchen } from "./kitchen";
+import { buildAdminBar } from "./bar";
 
 const EXPORT_PAGE = { page: 1, pageSize: 5000 };
 
@@ -28,6 +30,13 @@ export async function buildAdminExportPayload(filters) {
       data: await buildAdminDailySummary(filters),
     };
   }
+  if (section === "today-order") {
+    return {
+      section,
+      restaurantName,
+      data: await buildAdminTodayOrders({ ...filters, ...EXPORT_PAGE }),
+    };
+  }
   if (section === "audit") {
     return {
       section,
@@ -40,6 +49,13 @@ export async function buildAdminExportPayload(filters) {
       section,
       restaurantName,
       data: await buildAdminKitchen({ ...filters, ...EXPORT_PAGE }),
+    };
+  }
+  if (section === "bar") {
+    return {
+      section,
+      restaurantName,
+      data: await buildAdminBar({ ...filters, ...EXPORT_PAGE }),
     };
   }
 

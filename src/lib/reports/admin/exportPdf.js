@@ -196,6 +196,8 @@ function writeDaily(doc, data) {
   const width = pageWidth(doc);
   const counts = data.counts || {};
   const kpis = data.kpis || {};
+  const kitchen = data.kitchen || {};
+  const bar = data.bar || {};
   writeHeader(doc, data._restaurantName, "Daily Summary", data);
   sectionTitle(doc, "Order counts");
   drawTable(
@@ -204,12 +206,10 @@ function writeDaily(doc, data) {
     [width * 0.4, width * 0.6],
     [
       ["Total Orders", counts.total || 0],
-      ["Completed (Paid)", counts.completed || 0],
-      ["Pending", counts.pending || 0],
+      ["Open", counts.open || 0],
+      ["Paid", counts.completed || 0],
       ["Cancelled", counts.cancelled || 0],
       ["Waived", counts.waived || 0],
-      ["Voided (not recorded)", counts.voided || 0],
-      ["Refunded (not recorded)", counts.refunded || 0],
     ]
   );
   sectionTitle(doc, "Sales");
@@ -221,22 +221,52 @@ function writeDaily(doc, data) {
       ["Gross Sales", money(kpis.grossSales)],
       ["Discounts", money(kpis.discounts)],
       ["Net Sales", money(kpis.netSales)],
-      ["Tax", money(kpis.tax)],
-      ["Tips", money(kpis.tips)],
-      ["Service Charges", money(kpis.serviceCharges)],
-      ["Final Total", money(kpis.collected)],
+      ["Collected", money(kpis.collected)],
+      ["Gift Card Redeemed", money(kpis.giftCard)],
+      ["Active Employees", kpis.activeEmployees || 0],
     ]
   );
-  sectionTitle(doc, "Top selling items");
+  sectionTitle(doc, "Kitchen / Bar");
   drawTable(
     doc,
-    ["Item", "Quantity", "Revenue", "Orders"],
-    [width * 0.4, width * 0.2, width * 0.2, width * 0.2],
-    (data.topItems || []).map((row) => [
-      row.item,
-      row.quantity,
-      money(row.revenue),
-      row.orderCount,
+    ["Area", "Total", "Pending", "Printed", "Failed"],
+    [width * 0.2, width * 0.2, width * 0.2, width * 0.2, width * 0.2],
+    [
+      [
+        "Kitchen",
+        kitchen.total || 0,
+        kitchen.pending || 0,
+        kitchen.completed || 0,
+        kitchen.failed || 0,
+      ],
+      [
+        "Bar",
+        bar.total || 0,
+        bar.pending || 0,
+        bar.completed || 0,
+        bar.failed || 0,
+      ],
+    ]
+  );
+  sectionTitle(doc, "Recent orders");
+  drawTable(
+    doc,
+    ["Order #", "Time", "Table", "Server", "Total", "Status"],
+    [
+      width * 0.16,
+      width * 0.14,
+      width * 0.14,
+      width * 0.2,
+      width * 0.16,
+      width * 0.2,
+    ],
+    (data.orders || []).map((row) => [
+      row.orderNumber,
+      row.time,
+      row.table,
+      row.employee,
+      money(row.total),
+      row.status,
     ])
   );
 }
@@ -302,32 +332,32 @@ function writeKitchen(doc, data) {
       ["Total KOTs", counts.total || 0],
       ["Completed (printed)", counts.completed || 0],
       ["Pending", counts.pending || 0],
-      ["Cancelled", counts.cancelled || 0],
+      ["Failed", counts.failed || 0],
     ]
   );
   sectionTitle(doc, "Tickets");
   drawTable(
     doc,
-    ["KOT #", "Order #", "Date", "Time", "Table", "Server", "Status", "Type"],
+    ["KOT #", "Order #", "Time", "Table", "Server", "Items", "Status", "Reprint"],
     [
-      width * 0.14,
       width * 0.12,
       width * 0.12,
       width * 0.1,
       width * 0.1,
-      width * 0.16,
-      width * 0.12,
       width * 0.14,
+      width * 0.2,
+      width * 0.12,
+      width * 0.1,
     ],
     (data.rows || []).map((row) => [
-      row.kotNumber,
+      row.ticketNumber || row.kotNumber,
       row.orderNumber,
-      row.date,
       row.time,
       row.table,
       row.employee,
+      row.itemsSummary,
       row.status,
-      row.type,
+      row.reprint ? "Yes" : "",
     ])
   );
   sectionTitle(doc, "Top kitchen items");
@@ -344,12 +374,134 @@ function writeKitchen(doc, data) {
   );
 }
 
+function writeBar(doc, data) {
+  const width = pageWidth(doc);
+  const counts = data.counts || {};
+  writeHeader(doc, data._restaurantName, "Bar Log", data);
+  sectionTitle(doc, "Summary");
+  drawTable(
+    doc,
+    ["Metric", "Value"],
+    [width * 0.4, width * 0.6],
+    [
+      ["Total tickets", counts.total || 0],
+      ["Completed (printed)", counts.completed || 0],
+      ["Pending", counts.pending || 0],
+      ["Failed", counts.failed || 0],
+    ]
+  );
+  sectionTitle(doc, "Tickets");
+  drawTable(
+    doc,
+    [
+      "Ticket #",
+      "Order #",
+      "Time",
+      "Table",
+      "Server",
+      "Items",
+      "Status",
+      "Reprint",
+    ],
+    [
+      width * 0.12,
+      width * 0.12,
+      width * 0.1,
+      width * 0.1,
+      width * 0.14,
+      width * 0.2,
+      width * 0.12,
+      width * 0.1,
+    ],
+    (data.rows || []).map((row) => [
+      row.ticketNumber || row.kotNumber,
+      row.orderNumber,
+      row.time,
+      row.table,
+      row.employee,
+      row.itemsSummary,
+      row.status,
+      row.reprint ? "Yes" : "",
+    ])
+  );
+  sectionTitle(doc, "Top bar items");
+  drawTable(
+    doc,
+    ["Rank", "Item", "Quantity", "Orders"],
+    [width * 0.1, width * 0.5, width * 0.2, width * 0.2],
+    (data.topItems || []).map((row) => [
+      row.rank,
+      row.item,
+      row.quantity,
+      row.orderCount,
+    ])
+  );
+}
+
+function writeTodayOrder(doc, data) {
+  const width = pageWidth(doc);
+  const counts = data.counts || {};
+  writeHeader(doc, data._restaurantName, "Today Order List", data);
+  sectionTitle(doc, "Summary");
+  drawTable(
+    doc,
+    ["Metric", "Value"],
+    [width * 0.4, width * 0.6],
+    [
+      ["Total orders", counts.total || 0],
+      ["Open", counts.open || 0],
+      ["Paid", counts.paid || 0],
+      ["Cancelled", counts.cancelled || 0],
+      ["Waived", counts.waived || 0],
+    ]
+  );
+  sectionTitle(doc, "Orders");
+  drawTable(
+    doc,
+    [
+      "Order #",
+      "Date",
+      "Time",
+      "Table",
+      "Server",
+      "Source",
+      "Total",
+      "Payment",
+      "Status",
+    ],
+    [
+      width * 0.12,
+      width * 0.1,
+      width * 0.09,
+      width * 0.08,
+      width * 0.14,
+      width * 0.1,
+      width * 0.1,
+      width * 0.12,
+      width * 0.15,
+    ],
+    (data.rows || []).map((row) => [
+      row.orderNumber,
+      row.date,
+      row.time,
+      row.table,
+      row.employee,
+      row.source || "—",
+      money(row.total),
+      row.paymentStatus || "—",
+      row.status,
+    ])
+  );
+}
+
 const WRITERS = {
   activity: writeActivity,
   revenue: writeRevenue,
   "daily-summary": writeDaily,
+  "today-order": writeTodayOrder,
   audit: writeAudit,
   kitchen: writeKitchen,
+  bar: writeBar,
 };
 
 export async function exportAdminPdf({ section, restaurantName, data }) {

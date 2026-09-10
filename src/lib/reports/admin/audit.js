@@ -58,17 +58,13 @@ export async function buildAdminAudit({ restaurantId, ...filters }) {
       empty: true,
       notes: {
         unsupported:
-          "Payment failures, refunds, voids, and manual adjustments are not recorded as separate events.",
+          "Shows cancellations/waives, discounts, and gift card redemptions only. Payment failures, refunds, voids, and manual adjustments are not recorded as separate events in the POS.",
       },
       summary: {
         total: 0,
         cancelled: 0,
         discounted: 0,
         giftCard: 0,
-        refunds: 0,
-        voids: 0,
-        paymentFailures: 0,
-        manualAdjustments: 0,
       },
       page,
       pageSize,
@@ -155,17 +151,13 @@ export async function buildAdminAudit({ restaurantId, ...filters }) {
     empty: total === 0,
     notes: {
       unsupported:
-        "Payment failures, refunds, voids, and manual adjustments are not recorded as separate events.",
+        "Shows cancellations/waives, discounts, and gift card redemptions only. Payment failures, refunds, voids, and manual adjustments are not recorded as separate events in the POS.",
     },
     summary: {
       total,
       cancelled: typeCounts.ORDER_CANCELLED,
       discounted: typeCounts.DISCOUNT_APPLIED,
       giftCard: typeCounts.GIFT_CARD_USED,
-      refunds: 0,
-      voids: 0,
-      paymentFailures: 0,
-      manualAdjustments: 0,
     },
     page,
     pageSize,

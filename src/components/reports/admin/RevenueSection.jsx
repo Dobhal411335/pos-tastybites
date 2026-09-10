@@ -25,6 +25,7 @@ import {
 import {
   AdminEmptyState,
   AdminKpiCard,
+  AdminNote,
   AdminReportSkeleton,
   AdminTableCard,
   TD_CLASS,
@@ -52,6 +53,11 @@ export default function RevenueSection({ data, loading }) {
 
   return (
     <div className="space-y-8">
+      <AdminNote>
+        Operational paid-revenue overview for admins. Full accounting detail
+        (per-order tenders, invoices, tax schedules) lives under Financial
+        Reports.
+      </AdminNote>
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6">
         <AdminKpiCard
           label="Gross Sales"

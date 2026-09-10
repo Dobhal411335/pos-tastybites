@@ -10,7 +10,6 @@ import {
   ShieldCheck,
   Sunset,
   TrendingUp,
-  Wallet,
   Wine,
 } from "lucide-react";
 import AdminReportFilters from "./AdminReportFilters";
@@ -21,7 +20,8 @@ import DailySummarySection from "./DailySummarySection";
 import EodSection from "./EodSection";
 import AuditSection from "./AuditSection";
 import KitchenSection from "./KitchenSection";
-import ExpensePlaceholder from "./ExpensePlaceholder";
+import BarSection from "./BarSection";
+import TodayOrderSection from "./TodayOrderSection";
 import {
   DEFAULT_ADMIN_FILTERS,
   adminQueryString,
@@ -33,29 +33,50 @@ export const ADMIN_SECTIONS = [
     id: "daily-summary",
     label: "Daily Summary",
     icon: ClipboardList,
-    subtitle: "End of day reconciliation for the current location.",
+    subtitle: "Operational snapshot for the current location.",
     href: "/admin/reports/admin",
   },
   {
     id: "today-order",
     label: "Today Order List",
     icon: List,
-    subtitle: "Today's order list for the current location.",
+    subtitle: "Orders for the selected period with status and payment filters.",
     href: "/admin/reports/admin/today-order",
+  },
+  {
+    id: "kitchen",
+    label: "Kitchen Log",
+    icon: ChefHat,
+    subtitle: "Kitchen tickets (KOT) for the selected period.",
+    href: "/admin/reports/admin/kitchen",
+  },
+  {
+    id: "bar",
+    label: "Bar Log",
+    icon: Wine,
+    subtitle: "Bar tickets for the selected period.",
+    href: "/admin/reports/admin/bar",
   },
   {
     id: "revenue",
     label: "Revenue Generated",
     icon: TrendingUp,
-    subtitle: "Paid revenue by day, tender, category, and employee.",
+    subtitle: "Operational paid revenue by day, tender, category, and employee.",
     href: "/admin/reports/admin/revenue",
   },
   {
     id: "activity",
     label: "Admin Activity",
     icon: Activity,
-    subtitle: "Operational actions recorded for this location.",
+    subtitle: "Floor and POS operational actions for this location.",
     href: "/admin/reports/admin/activity",
+  },
+  {
+    id: "audit",
+    label: "Transaction Audit",
+    icon: ShieldCheck,
+    subtitle: "Sensitive exceptions — cancellations, discounts, and gift cards.",
+    href: "/admin/reports/admin/audit",
   },
   {
     id: "eod",
@@ -63,34 +84,6 @@ export const ADMIN_SECTIONS = [
     icon: Sunset,
     subtitle: "Close the business day and reconcile expected cash.",
     href: "/admin/reports/admin/eod",
-  },
-  {
-    id: "audit",
-    label: "Transaction Audit",
-    icon: ShieldCheck,
-    subtitle: "Exception events — cancellations, discounts, and gift cards.",
-    href: "/admin/reports/admin/audit",
-  },
-  {
-    id: "kitchen",
-    label: "Kitchen Log",
-    icon: ChefHat,
-    subtitle: "Kitchen and bar tickets for the selected period.",
-    href: "/admin/reports/admin/kitchen",
-  },
-  {
-    id: "Bar",
-    label: "Bar Log",
-    icon: Wine,
-    subtitle: "Bar tickets for the selected period.",
-    href: "/admin/reports/admin/bar",
-  },
-  {
-    id: "expenses",
-    label: "Personal Expense",
-    icon: Wallet,
-    subtitle: "Personal expense tracking for this location.",
-    href: "/admin/reports/admin/expenses",
   },
 ];
 
@@ -100,17 +93,27 @@ const API_PATH = {
   activity: "/api/admin/reports/admin/activity",
   revenue: "/api/admin/reports/admin/revenue",
   "daily-summary": "/api/admin/reports/admin/daily-summary",
+  "today-order": "/api/admin/reports/admin/today-order",
   audit: "/api/admin/reports/admin/audit",
   kitchen: "/api/admin/reports/admin/kitchen",
+  bar: "/api/admin/reports/admin/bar",
 };
 
-const PAGINATED = new Set(["activity", "audit", "kitchen"]);
+const PAGINATED = new Set([
+  "activity",
+  "audit",
+  "kitchen",
+  "bar",
+  "today-order",
+]);
 const EXPORTABLE = new Set([
   "activity",
   "revenue",
   "daily-summary",
+  "today-order",
   "audit",
   "kitchen",
+  "bar",
 ]);
 
 export default function AdminReportsPage({
@@ -153,17 +156,17 @@ export default function AdminReportsPage({
 
   return (
     <div className="flex flex-col gap-8 min-w-0">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
+      <div className="flex flex-col gap-4 min-w-0">
+        <div className="min-w-0">
           <div className="flex items-center gap-3 mb-2">
-            <div className="w-10 h-10 rounded-lg bg-zinc-100 flex items-center justify-center">
+            <div className="w-10 h-10 shrink-0 rounded-lg bg-zinc-100 flex items-center justify-center">
               <TitleIcon className="h-5 w-5 text-zinc-700" strokeWidth={1.75} />
             </div>
-            <h1 className="text-[32px] leading-10 font-bold text-zinc-900 m-0 tracking-tight">
+            <h1 className="text-[28px] sm:text-[32px] leading-9 sm:leading-10 font-bold text-zinc-900 m-0 tracking-tight">
               {current?.label || "Admin Reports"}
             </h1>
           </div>
-          <p className="text-base text-zinc-500">
+          <p className="text-sm sm:text-base text-zinc-500">
             {current?.subtitle ||
               "Operational activity, revenue, closing, audit, and kitchen logs."}
           </p>
@@ -196,7 +199,18 @@ export default function AdminReportsPage({
             data={report.data}
             loading={report.loading}
             onViewRevenue={() => router.push("/admin/reports/admin/revenue")}
+            onViewOrders={() => router.push("/admin/reports/admin/today-order")}
             onOpenEod={() => router.push("/admin/reports/admin/eod")}
+            onViewKitchen={() => router.push("/admin/reports/admin/kitchen")}
+            onViewBar={() => router.push("/admin/reports/admin/bar")}
+            onViewActivity={() => router.push("/admin/reports/admin/activity")}
+          />
+        ) : null}
+        {section === "today-order" ? (
+          <TodayOrderSection
+            data={report.data}
+            loading={report.loading}
+            onPage={setPage}
           />
         ) : null}
         {section === "eod" ? <EodSection /> : null}
@@ -214,7 +228,13 @@ export default function AdminReportsPage({
             onPage={setPage}
           />
         ) : null}
-        {section === "expenses" ? <ExpensePlaceholder /> : null}
+        {section === "bar" ? (
+          <BarSection
+            data={report.data}
+            loading={report.loading}
+            onPage={setPage}
+          />
+        ) : null}
       </div>
 
       <AdminExportDialog

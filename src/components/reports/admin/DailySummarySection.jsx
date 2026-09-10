@@ -2,13 +2,17 @@
 
 import { useState } from "react";
 import {
+  AlertTriangle,
+  ChefHat,
   ClipboardList,
   DollarSign,
+  Gift,
   Loader2,
+  Percent,
   Printer,
-  Receipt,
-  Ticket,
+  Sunset,
   Users,
+  Wine,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -28,7 +32,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { BreakdownPie } from "@/components/reports/financial/FinancialCharts";
 import OrderDetailBody, {
   STATUS_BADGE,
 } from "@/components/reports/OrderDetailBody";
@@ -43,15 +46,6 @@ import {
 } from "./adminReportUi";
 import { money } from "./useAdminReport";
 
-const TENDER_DOT = [
-  "bg-orange-500",
-  "bg-blue-500",
-  "bg-emerald-500",
-  "bg-violet-500",
-  "bg-yellow-500",
-  "bg-zinc-500",
-];
-
 const STRIP_TONE = {
   paid: "border-blue-200 bg-blue-50 text-blue-800",
   open: "border-amber-200 bg-amber-50 text-amber-800",
@@ -60,23 +54,17 @@ const STRIP_TONE = {
   staff: "border-violet-200 bg-violet-50 text-violet-800",
 };
 
-function BreakdownRow({ label, value, danger }) {
+const EOD_TONE = {
+  Closed: "border-emerald-200 bg-emerald-50 text-emerald-800",
+  Open: "border-amber-200 bg-amber-50 text-amber-800",
+  Range: "border-zinc-200 bg-zinc-50 text-zinc-700",
+};
+
+function OpsStat({ label, value }) {
   return (
-    <div className="flex justify-between items-end border-b border-zinc-200 pb-2">
-      <span
-        className={
-          danger ? "text-[15px] text-red-700" : "text-[15px] text-zinc-500"
-        }
-      >
-        {label}
-      </span>
-      <span
-        className={
-          danger
-            ? "text-lg font-semibold tabular-nums text-red-700"
-            : "text-lg font-semibold tabular-nums text-zinc-900"
-        }
-      >
+    <div className="flex items-baseline justify-between gap-3 border-b border-zinc-100 py-2 last:border-0">
+      <span className="text-[14px] text-zinc-500">{label}</span>
+      <span className="text-[15px] font-semibold tabular-nums text-zinc-900">
         {value}
       </span>
     </div>
@@ -87,7 +75,11 @@ export default function DailySummarySection({
   data,
   loading,
   onViewRevenue,
+  onViewOrders,
   onOpenEod,
+  onViewKitchen,
+  onViewBar,
+  onViewActivity,
 }) {
   const [orderId, setOrderId] = useState(null);
   const [orderDetail, setOrderDetail] = useState(null);
@@ -114,28 +106,85 @@ export default function DailySummarySection({
     return (
       <AdminEmptyState
         icon={ClipboardList}
-        title="No orders"
+        title="No activity found"
         message="No orders for the selected period."
       />
     );
   }
 
-  const kpis = data.kpis;
+  const kpis = data.kpis || {};
   const comparison = data.comparison || {};
   const deltaLabel = comparison.label || "vs prior period";
-  const servers = (data.byEmployee || []).slice(0, 4);
-  const maxSales = Math.max(...servers.map((row) => Number(row.sales) || 0), 1);
+  const statusStrip = data.statusStrip || [];
+  const orders = data.orders || [];
+  const attention = data.attention || [];
+  const kitchen = data.kitchen || {};
+  const bar = data.bar || {};
+  const printing = data.printing || {};
+  const eod = data.eod || {};
+  const activityPeek = data.activityPeek || [];
   const tenders = (data.paymentBreakdown || []).filter(
     (row) => Number(row.amount) > 0
   );
-  const kitchen = data.kitchen || { total: 0, avgPrintMinutes: null };
-  const statusStrip = data.statusStrip || [];
-  const orders = data.orders || [];
 
   return (
     <>
       <div className="flex flex-col gap-8">
+        {(attention.length > 0 || data.notes?.refunds) && (
+          <div className="space-y-3">
+            {attention.length > 0 ? (
+              <Card className="rounded-lg border-amber-200 bg-amber-50/60 shadow-sm">
+                <CardHeader className="p-5 pb-2">
+                  <CardTitle className="flex items-center gap-2 text-base font-semibold text-amber-900">
+                    <AlertTriangle className="h-4 w-4" strokeWidth={1.75} />
+                    Needs attention
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-5 pt-2 flex flex-wrap gap-2">
+                  {attention.map((item) => (
+                    <Button
+                      key={item.key}
+                      variant="outline"
+                      size="sm"
+                      className="border-amber-300 bg-white text-amber-900 hover:bg-amber-50"
+                      onClick={() => {
+                        if (item.href?.includes("kitchen") && onViewKitchen) {
+                          onViewKitchen();
+                        } else if (item.href?.includes("bar") && onViewBar) {
+                          onViewBar();
+                        } else if (item.href?.includes("today-order") && onViewOrders) {
+                          onViewOrders();
+                        } else if (item.href?.includes("eod") && onOpenEod) {
+                          onOpenEod();
+                        }
+                      }}
+                    >
+                      {item.label}
+                      <Badge
+                        variant="outline"
+                        className="ml-2 border-amber-300 text-amber-900"
+                      >
+                        {item.count}
+                      </Badge>
+                    </Button>
+                  ))}
+                </CardContent>
+              </Card>
+            ) : null}
+            <AdminNote>
+              {data.notes?.refunds} {data.notes?.voids}
+            </AdminNote>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6">
+          <AdminKpiCard
+            label="Orders"
+            value={data.counts?.total || 0}
+            icon={ClipboardList}
+            delta={comparison.orderCount}
+            deltaLabel={deltaLabel}
+          />
           <AdminKpiCard
             label="Gross Sales"
             value={money(kpis.grossSales)}
@@ -144,307 +193,300 @@ export default function DailySummarySection({
             deltaLabel={deltaLabel}
           />
           <AdminKpiCard
-            label="Total Orders"
-            value={kpis.orderCount}
-            icon={Receipt}
-            delta={comparison.orderCount}
-            deltaLabel={deltaLabel}
+            label="Collected"
+            value={money(kpis.collected)}
+            icon={DollarSign}
           />
           <AdminKpiCard
-            label="Avg Ticket Size"
+            label="Discounts"
+            value={money(kpis.discounts)}
+            icon={Percent}
+          />
+          <AdminKpiCard
+            label="Gift Card Redeemed"
+            value={money(kpis.giftCard)}
+            icon={Gift}
+          />
+          <AdminKpiCard
+            label="Active Employees"
+            value={kpis.activeEmployees || 0}
+            icon={Users}
+          />
+          <AdminKpiCard
+            label="Net Sales"
+            value={money(kpis.netSales)}
+            icon={DollarSign}
+          />
+          <AdminKpiCard
+            label="Avg Ticket"
             value={money(kpis.avgTicket)}
-            icon={Ticket}
+            icon={DollarSign}
             delta={comparison.avgTicket}
             deltaLabel={deltaLabel}
           />
-          <AdminKpiCard
-            label="Guests"
-            value={kpis.guests ?? 0}
-            icon={Users}
-          />
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+        <div className="flex flex-wrap gap-2">
           {statusStrip.map((item) => (
-            <div
+            <Badge
               key={item.key}
-              className={`rounded-lg border px-4 py-3 ${
-                STRIP_TONE[item.key] || "border-zinc-200 bg-zinc-50 text-zinc-800"
+              variant="outline"
+              className={`text-[13px] font-normal px-3 py-1.5 ${
+                STRIP_TONE[item.key] || ""
               }`}
             >
-              <p className="text-[12px] font-semibold uppercase tracking-wide opacity-80">
-                {item.label}
-              </p>
-              <p className="mt-1 text-2xl font-bold tabular-nums">{item.value}</p>
-            </div>
+              {item.label}: {item.value}
+            </Badge>
           ))}
         </div>
 
-        <AdminTableCard
-          title="Orders"
-          action={
-            data.ordersTruncated ? (
-              <span className="text-[13px] text-zinc-500">
-                Showing latest {orders.length} of {data.counts?.total || 0}
-              </span>
-            ) : null
-          }
-        >
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow className="hover:bg-transparent">
-                  <TableHead className={TH_CLASS}>Order #</TableHead>
-                  <TableHead className={TH_CLASS}>Time</TableHead>
-                  <TableHead className={TH_CLASS}>Table</TableHead>
-                  <TableHead className={TH_CLASS}>Guest</TableHead>
-                  <TableHead className={TH_CLASS}>Server</TableHead>
-                  <TableHead className={`${TH_CLASS} text-right`}>
-                    Guests
-                  </TableHead>
-                  <TableHead className={`${TH_CLASS} text-right`}>
-                    Total
-                  </TableHead>
-                  <TableHead className={TH_CLASS}>Status</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {orders.length === 0 ? (
-                  <TableRow>
-                    <TableCell
-                      colSpan={8}
-                      className={`${TD_CLASS} text-center text-zinc-500`}
-                    >
-                      No orders in this period.
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  orders.map((row) => (
-                    <TableRow
-                      key={row.id}
-                      className="cursor-pointer hover:bg-zinc-50"
-                      onClick={() => openOrder(row.id)}
-                    >
-                      <TableCell
-                        className={`${TD_CLASS} whitespace-nowrap font-medium`}
-                      >
-                        {row.orderNumber}
-                      </TableCell>
-                      <TableCell className={`${TD_CLASS} whitespace-nowrap`}>
-                        {row.time}
-                      </TableCell>
-                      <TableCell className={TD_CLASS}>{row.table}</TableCell>
-                      <TableCell className={TD_CLASS}>{row.guest}</TableCell>
-                      <TableCell className={TD_CLASS}>{row.employee}</TableCell>
-                      <TableCell
-                        className={`${TD_CLASS} text-right tabular-nums`}
-                      >
-                        {row.guestCount == null ? "—" : row.guestCount}
-                      </TableCell>
-                      <TableCell
-                        className={`${TD_CLASS} text-right tabular-nums font-medium`}
-                      >
-                        {money(row.total)}
-                      </TableCell>
-                      <TableCell className={TD_CLASS}>
-                        <Badge
-                          variant="outline"
-                          className={`text-[11px] font-normal ${
-                            STATUS_BADGE[row.status] || ""
-                          }`}
-                        >
-                          {row.status}
-                        </Badge>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        </AdminTableCard>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <Card className="lg:col-span-2 rounded-lg border-zinc-200 shadow-sm">
-            <CardHeader className="p-6 pb-4">
-              <CardTitle className="text-lg font-semibold text-zinc-900">
-                Financial Breakdown
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+          <Card className="rounded-lg border-zinc-200 shadow-sm">
+            <CardHeader className="p-5 pb-2">
+              <CardTitle className="flex items-center gap-2 text-base font-semibold">
+                <ChefHat className="h-4 w-4" strokeWidth={1.75} />
+                Kitchen
               </CardTitle>
             </CardHeader>
-            <CardContent className="p-6 pt-0">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-6">
-                <div className="space-y-4">
-                  <BreakdownRow label="Net Sales" value={money(kpis.netSales)} />
-                  <BreakdownRow label="Taxes Collected" value={money(kpis.tax)} />
-                  <BreakdownRow label="Tips" value={money(kpis.tips)} />
-                  <BreakdownRow
-                    label="Service Charges"
-                    value={money(kpis.serviceCharges)}
-                  />
-                </div>
-                <div className="space-y-4">
-                  <BreakdownRow
-                    label="Discounts Applied"
-                    value={`-${money(kpis.discounts)}`}
-                    danger
-                  />
-                  <BreakdownRow
-                    label="Refunds"
-                    value={money(kpis.refunds || 0)}
-                    danger
-                  />
-                  <BreakdownRow
-                    label="Voids"
-                    value={money(kpis.voids || 0)}
-                    danger
-                  />
-                </div>
-              </div>
-              <div className="mt-8 pt-6 border-t border-zinc-200 flex justify-between items-center bg-zinc-50 p-4 rounded-lg">
-                <span className="text-lg font-semibold text-zinc-900">
-                  Total Expected Deposit
-                </span>
-                <span className="text-4xl font-bold tabular-nums text-zinc-900">
-                  {money(kpis.expectedDeposit ?? kpis.collected)}
-                </span>
-              </div>
+            <CardContent className="p-5 pt-0">
+              <OpsStat label="Tickets" value={kitchen.total || 0} />
+              <OpsStat label="Pending" value={kitchen.pending || 0} />
+              <OpsStat label="Printed" value={kitchen.completed || 0} />
+              <OpsStat label="Failed" value={kitchen.failed || 0} />
+              {onViewKitchen ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="mt-3 px-0"
+                  onClick={onViewKitchen}
+                >
+                  View kitchen log
+                </Button>
+              ) : null}
             </CardContent>
           </Card>
 
           <Card className="rounded-lg border-zinc-200 shadow-sm">
-            <CardHeader className="p-6 pb-4">
-              <CardTitle className="text-lg font-semibold text-zinc-900">
-                Tender Types
+            <CardHeader className="p-5 pb-2">
+              <CardTitle className="flex items-center gap-2 text-base font-semibold">
+                <Wine className="h-4 w-4" strokeWidth={1.75} />
+                Bar
               </CardTitle>
             </CardHeader>
-            <CardContent className="p-6 pt-0 flex flex-col">
-              <div className="h-48">
-                {tenders.length ? (
-                  <BreakdownPie data={tenders} />
-                ) : (
-                  <div className="h-full flex items-center justify-center text-[15px] text-zinc-400">
-                    No tender data
-                  </div>
-                )}
-              </div>
-              <div className="mt-4 space-y-2">
-                {tenders.map((row, i) => (
-                  <div
-                    key={row.method}
-                    className="flex justify-between items-center py-2"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div
-                        className={`w-3 h-3 rounded-full ${
-                          TENDER_DOT[i % TENDER_DOT.length]
-                        }`}
-                      />
-                      <span className="text-[15px] text-zinc-800">
-                        {row.method}
-                      </span>
-                    </div>
-                    <span className="text-[15px] font-medium tabular-nums text-zinc-900">
-                      {row.percent}%
-                    </span>
-                  </div>
-                ))}
-              </div>
+            <CardContent className="p-5 pt-0">
+              <OpsStat label="Tickets" value={bar.total || 0} />
+              <OpsStat label="Pending" value={bar.pending || 0} />
+              <OpsStat label="Printed" value={bar.completed || 0} />
+              <OpsStat label="Failed" value={bar.failed || 0} />
+              {onViewBar ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="mt-3 px-0"
+                  onClick={onViewBar}
+                >
+                  View bar log
+                </Button>
+              ) : null}
+            </CardContent>
+          </Card>
+
+          <Card className="rounded-lg border-zinc-200 shadow-sm">
+            <CardHeader className="p-5 pb-2">
+              <CardTitle className="flex items-center gap-2 text-base font-semibold">
+                <Printer className="h-4 w-4" strokeWidth={1.75} />
+                Printing
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-5 pt-0">
+              <OpsStat label="Printed" value={printing.completed || 0} />
+              <OpsStat label="Pending" value={printing.pending || 0} />
+              <OpsStat label="Failed" value={printing.failed || 0} />
+              <OpsStat label="Reprints" value={printing.reprints || 0} />
+            </CardContent>
+          </Card>
+
+          <Card className="rounded-lg border-zinc-200 shadow-sm">
+            <CardHeader className="p-5 pb-2">
+              <CardTitle className="flex items-center gap-2 text-base font-semibold">
+                <Sunset className="h-4 w-4" strokeWidth={1.75} />
+                End of Day
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-5 pt-0 space-y-3">
+              <Badge
+                variant="outline"
+                className={EOD_TONE[eod.status] || EOD_TONE.Open}
+              >
+                {eod.status || "Open"}
+              </Badge>
+              {eod.businessDate ? (
+                <p className="text-[13px] text-zinc-500">
+                  Business date {eod.businessDate}
+                </p>
+              ) : (
+                <p className="text-[13px] text-zinc-500">
+                  Select a single day to see close status.
+                </p>
+              )}
+              {onOpenEod ? (
+                <Button className="w-full" size="sm" onClick={onOpenEod}>
+                  Open EOD report
+                </Button>
+              ) : null}
             </CardContent>
           </Card>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <Card className="rounded-lg border-zinc-200 shadow-sm">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 p-6 pb-4">
-              <CardTitle className="text-lg font-semibold text-zinc-900">
-                Top Servers (Sales)
-              </CardTitle>
-              <Button variant="link" className="px-0" onClick={onViewRevenue}>
-                View All
-              </Button>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <Card className="rounded-lg border-zinc-200 shadow-sm lg:col-span-1">
+            <CardHeader className="p-5 pb-2 flex-row items-center justify-between space-y-0">
+              <CardTitle className="text-base font-semibold">Payments</CardTitle>
+              {onViewRevenue ? (
+                <Button variant="ghost" size="sm" onClick={onViewRevenue}>
+                  Revenue
+                </Button>
+              ) : null}
             </CardHeader>
-            <CardContent className="p-6 pt-0 space-y-5">
-              {servers.length ? (
-                servers.map((row) => (
-                  <div key={String(row.employeeId)}>
-                    <div className="flex justify-between text-[15px] text-zinc-900 mb-2">
-                      <span className="font-semibold">{row.employeeName}</span>
-                      <span className="tabular-nums font-medium">
-                        {money(row.sales)}
-                      </span>
-                    </div>
-                    <div className="w-full h-2 bg-zinc-100 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-zinc-800 rounded-full"
-                        style={{
-                          width: `${Math.max(
-                            4,
-                            Math.round((Number(row.sales) / maxSales) * 100)
-                          )}%`,
-                        }}
-                      />
-                    </div>
-                  </div>
-                ))
+            <CardContent className="p-5 pt-0">
+              {tenders.length === 0 ? (
+                <p className="text-sm text-zinc-500">No payments in period.</p>
               ) : (
-                <p className="text-[15px] text-zinc-500">
-                  No employee sales for this period.
-                </p>
+                tenders.map((row) => (
+                  <OpsStat
+                    key={row.method}
+                    label={`${row.method} (${row.count || 0})`}
+                    value={money(row.amount)}
+                  />
+                ))
               )}
             </CardContent>
           </Card>
 
-          <Card className="rounded-lg border-zinc-200 shadow-sm flex flex-col">
-            <CardHeader className="p-6 pb-4">
-              <CardTitle className="text-lg font-semibold text-zinc-900">
-                Kitchen Operations
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-6 pt-0 flex-1 flex flex-col">
-              <div className="grid grid-cols-2 gap-4 mb-6">
-                <div className="p-4 bg-zinc-50 rounded-lg border border-zinc-200">
-                  <p className="text-[13px] font-semibold uppercase tracking-wide text-zinc-500 mb-1">
-                    Total KOTs
-                  </p>
-                  <p className="text-4xl font-bold tabular-nums text-zinc-900">
-                    {kitchen.total || 0}
-                  </p>
-                </div>
-                <div className="p-4 bg-zinc-50 rounded-lg border border-zinc-200">
-                  <p className="text-[13px] font-semibold uppercase tracking-wide text-zinc-500 mb-1">
-                    Avg Print Time
-                  </p>
-                  <p className="text-4xl font-bold tabular-nums text-zinc-900">
-                    {kitchen.avgPrintMinutes == null ? (
-                      "—"
-                    ) : (
-                      <>
-                        {kitchen.avgPrintMinutes}
-                        <span className="text-lg font-semibold text-zinc-500 ml-1">
-                          m
-                        </span>
-                      </>
-                    )}
-                  </p>
-                </div>
-              </div>
-              {data.notes?.kitchen ? (
-                <p className="text-[13px] text-zinc-500">{data.notes.kitchen}</p>
-              ) : null}
-              <div className="mt-auto pt-6">
-                <Button className="w-full" size="lg" onClick={onOpenEod}>
-                  <Printer className="h-4 w-4 mr-2" strokeWidth={1.75} />
-                  Open EOD Report
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+          <div className="lg:col-span-2">
+            <AdminTableCard
+              title="Recent orders"
+              action={
+                onViewOrders ? (
+                  <Button variant="ghost" size="sm" onClick={onViewOrders}>
+                    {data.ordersTruncated
+                      ? `View all (${data.counts?.total || 0})`
+                      : "View all"}
+                  </Button>
+                ) : null
+              }
+            >
+              <Table>
+                <TableHeader>
+                  <TableRow className="hover:bg-transparent">
+                    <TableHead className={TH_CLASS}>Order #</TableHead>
+                    <TableHead className={TH_CLASS}>Time</TableHead>
+                    <TableHead className={TH_CLASS}>Table</TableHead>
+                    <TableHead className={TH_CLASS}>Server</TableHead>
+                    <TableHead className={`${TH_CLASS} text-right`}>
+                      Total
+                    </TableHead>
+                    <TableHead className={TH_CLASS}>Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {orders.length === 0 ? (
+                    <TableRow>
+                      <TableCell
+                        colSpan={6}
+                        className={`${TD_CLASS} text-center text-zinc-500`}
+                      >
+                        No orders in this period.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    orders.map((row) => (
+                      <TableRow
+                        key={row.id}
+                        className="cursor-pointer hover:bg-zinc-50"
+                        onClick={() => openOrder(row.id)}
+                      >
+                        <TableCell
+                          className={`${TD_CLASS} whitespace-nowrap font-medium`}
+                        >
+                          {row.orderNumber}
+                        </TableCell>
+                        <TableCell className={`${TD_CLASS} whitespace-nowrap`}>
+                          {row.time}
+                        </TableCell>
+                        <TableCell className={TD_CLASS}>{row.table}</TableCell>
+                        <TableCell className={TD_CLASS}>{row.employee}</TableCell>
+                        <TableCell
+                          className={`${TD_CLASS} text-right tabular-nums font-medium`}
+                        >
+                          {money(row.total)}
+                        </TableCell>
+                        <TableCell className={TD_CLASS}>
+                          <Badge
+                            variant="outline"
+                            className={`text-[11px] font-normal ${
+                              STATUS_BADGE[row.status] || ""
+                            }`}
+                          >
+                            {row.status}
+                          </Badge>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </AdminTableCard>
+          </div>
         </div>
 
-        <AdminNote>
-          {data.notes?.guests} {data.notes?.staffMeals} {data.notes?.voided}{" "}
-          {data.notes?.refunded}
-        </AdminNote>
+        <AdminTableCard
+          title="Recent admin activity"
+          action={
+            onViewActivity ? (
+              <Button variant="ghost" size="sm" onClick={onViewActivity}>
+                View all
+              </Button>
+            ) : null
+          }
+        >
+          {data.notes?.activity ? (
+            <p className="px-1 pb-3 text-[13px] text-zinc-500">
+              {data.notes.activity}
+            </p>
+          ) : null}
+          <Table>
+            <TableHeader>
+              <TableRow className="hover:bg-transparent">
+                <TableHead className={TH_CLASS}>Time</TableHead>
+                <TableHead className={TH_CLASS}>Actor</TableHead>
+                <TableHead className={TH_CLASS}>Action</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {activityPeek.length === 0 ? (
+                <TableRow>
+                  <TableCell
+                    colSpan={3}
+                    className={`${TD_CLASS} text-center text-zinc-500`}
+                  >
+                    No floor/POS activity for this period.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                activityPeek.map((row) => (
+                  <TableRow key={row.id} className="h-12">
+                    <TableCell className={`${TD_CLASS} whitespace-nowrap`}>
+                      {row.time}
+                    </TableCell>
+                    <TableCell className={TD_CLASS}>{row.actor}</TableCell>
+                    <TableCell className={TD_CLASS}>{row.action}</TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </AdminTableCard>
       </div>
 
       <Sheet

@@ -136,7 +136,7 @@ export async function buildAdminActivity({ restaurantId, ...filters }) {
   return {
     meta: adminReportMeta(filters),
     empty: total === 0,
-    note: "Only floor and POS events are recorded. Back-office admin actions (employees, prices, taxes, settings, login) are not logged. IP and device are not stored.",
+    note: "Floor and POS operational events only (tables, orders, payments, overrides). Back-office admin actions — employees, menu/prices, taxes, printers, settings, and login — are not logged. IP and device are not stored.",
     summary: {
       total,
       actionCounts,

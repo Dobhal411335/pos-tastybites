@@ -46,6 +46,7 @@ import {
   ShoppingBasket,
   ChevronsRight,
   ChevronDown,
+  Download,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -213,6 +214,7 @@ const DASHBOARD_QUICK_LINKS = [
   { href: "/admin/tax", label: "Configure Tax And Fees", icon: Percent },
   { href: "/admin/users", label: "Master Admin Users", icon: UserPlus },
   { href: "/admin/settings", label: "System Settings", icon: Settings },
+  { href: "/admin/downloads", label: "POS Downloads", icon: Download },
   { href: "/admin/stock", label: "Stock Control", icon: Boxes },
   { href: "/admin/web", label: "Web Console", icon: Globe },
   { href: "/admin/reports/guests", label: "Guest Directory", icon: UserSearch },
@@ -776,6 +778,14 @@ export default function AdminDashboardPage() {
                       stat="Hardware"
                       desc="Register kitchen, bar, and receipt printers by IP for the sales print queue."
                     />
+                    <ModuleCard
+                      href="/admin/downloads"
+                      icon={Download}
+                      color="orange"
+                      title="POS Downloads"
+                      stat="Apps"
+                      desc="Download the latest Tasty Bites POS apps for Android tablets and Windows PCs."
+                    />
                   </div>
                 </section>
               )}
@@ -819,6 +829,14 @@ export default function AdminDashboardPage() {
                       title="Web Console"
                       stat="Cloud"
                       desc="Direct secure link to the cloud management dashboard and remote reporting suite."
+                    />
+                    <ModuleCard
+                      href="/admin/downloads"
+                      icon={Download}
+                      color="orange"
+                      title="POS Downloads"
+                      stat="Apps"
+                      desc="Get Android APK and Windows EXE installers for restaurant POS terminals."
                     />
                   </div>
                 </section>

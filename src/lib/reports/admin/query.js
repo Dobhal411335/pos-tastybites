@@ -34,10 +34,20 @@ export const ADMIN_SECTIONS = [
   "activity",
   "revenue",
   "daily-summary",
+  "today-order",
   "eod",
   "audit",
   "kitchen",
-  "expenses",
+  "bar",
+];
+
+export const ORDER_STATUS_FILTERS = [
+  "PENDING",
+  "CONFIRMED",
+  "COMPLETED",
+  "PAID",
+  "CANCELLED",
+  "WAIVED",
 ];
 
 export function parseAdminReportQuery(searchParams, { paginate = false } = {}) {
@@ -45,7 +55,11 @@ export function parseAdminReportQuery(searchParams, { paginate = false } = {}) {
 
   const eventType = String(searchParams.get("eventType") || "ALL").toUpperCase();
   const kotStatus = String(searchParams.get("kotStatus") || "ALL").toUpperCase();
+  const orderStatus = String(
+    searchParams.get("orderStatus") || searchParams.get("status") || "ALL"
+  ).toUpperCase();
   const section = String(searchParams.get("section") || "").toLowerCase();
+  const search = String(searchParams.get("search") || "").trim();
 
   filters.eventType =
     eventType === "ALL" ||
@@ -57,6 +71,14 @@ export function parseAdminReportQuery(searchParams, { paginate = false } = {}) {
     kotStatus === "ALL" || KOT_STATUSES.includes(kotStatus)
       ? kotStatus
       : "ALL";
+  filters.orderStatus =
+    orderStatus === "ALL" || ORDER_STATUS_FILTERS.includes(orderStatus)
+      ? orderStatus
+      : "ALL";
+  if (filters.orderStatus !== "ALL") {
+    filters.status = filters.orderStatus;
+  }
+  filters.search = search.slice(0, 80);
   filters.section = ADMIN_SECTIONS.includes(section) ? section : "daily-summary";
 
   return filters;
@@ -67,6 +89,8 @@ export function adminReportMeta(filters) {
     ...reportMeta(filters),
     eventType: filters.eventType || "ALL",
     kotStatus: filters.kotStatus || "ALL",
+    orderStatus: filters.orderStatus || filters.status || "ALL",
+    search: filters.search || "",
     section: filters.section || "daily-summary",
   };
 }

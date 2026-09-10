@@ -20,6 +20,10 @@ const SIDEBAR_GROUPS = [
         href: "/admin/reports/admin/today-order",
       },
       {
+        label: "Kitchen Log",
+        href: "/admin/reports/admin/kitchen",
+      },
+      {
         label: "Bar Log",
         href: "/admin/reports/admin/bar",
       },
@@ -32,24 +36,12 @@ const SIDEBAR_GROUPS = [
         href: "/admin/reports/admin/activity",
       },
       {
-        label: "End of Day",
-        href: "/admin/reports/admin/eod",
-      },
-      {
         label: "Transaction Audit",
         href: "/admin/reports/admin/audit",
       },
       {
-        label: "Kitchen Log",
-        href: "/admin/reports/admin/kitchen",
-      },
-      {
-        label: "Bar Log",
-        href: "/admin/reports/admin/bar",
-      },
-      {
-        label: "Personal Expense",
-        href: "/admin/reports/admin/expenses",
+        label: "End of Day",
+        href: "/admin/reports/admin/eod",
       },
     ],
   },

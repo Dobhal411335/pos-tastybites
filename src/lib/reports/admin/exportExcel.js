@@ -135,34 +135,50 @@ function writeRevenue(wb, restaurantName, data) {
 function writeDaily(wb, restaurantName, data) {
   const counts = data.counts || {};
   const kpis = data.kpis || {};
+  const kitchen = data.kitchen || {};
+  const bar = data.bar || {};
+  const printing = data.printing || {};
   const summary = addSheet(wb, "Summary", [32, 18]);
   writeMeta(summary, restaurantName, "Daily Summary", data);
   styleHeader(summary.addRow(["Metric", "Value"]));
   summary.addRow(["Total Orders", counts.total || 0]);
-  summary.addRow(["Completed (Paid)", counts.completed || 0]);
-  summary.addRow(["Pending", counts.pending || 0]);
+  summary.addRow(["Open", counts.open || 0]);
+  summary.addRow(["Paid", counts.completed || 0]);
   summary.addRow(["Cancelled", counts.cancelled || 0]);
   summary.addRow(["Waived", counts.waived || 0]);
-  summary.addRow(["Voided (not recorded)", counts.voided || 0]);
-  summary.addRow(["Refunded (not recorded)", counts.refunded || 0]);
   summary.addRow(["Gross Sales", money(kpis.grossSales)]);
   summary.addRow(["Discounts", money(kpis.discounts)]);
   summary.addRow(["Net Sales", money(kpis.netSales)]);
-  summary.addRow(["Tax", money(kpis.tax)]);
-  summary.addRow(["Tips", money(kpis.tips)]);
-  summary.addRow(["Service Charges", money(kpis.serviceCharges)]);
-  summary.addRow(["Final Total", money(kpis.collected)]);
+  summary.addRow(["Collected", money(kpis.collected)]);
+  summary.addRow(["Gift Card Redeemed", money(kpis.giftCard)]);
+  summary.addRow(["Active Employees", kpis.activeEmployees || 0]);
+  summary.addRow(["Kitchen Tickets", kitchen.total || 0]);
+  summary.addRow(["Bar Tickets", bar.total || 0]);
+  summary.addRow(["Failed Prints", printing.failed || 0]);
+  summary.addRow(["EOD Status", data.eod?.status || ""]);
 
-  const emp = addSheet(wb, "Employees", [24, 10, 14, 12]);
-  styleHeader(emp.addRow(["Employee", "Orders", "Sales", "Tips"]));
-  for (const row of data.byEmployee || []) {
-    emp.addRow([row.employeeName, row.orders, money(row.sales), money(row.tips)]);
-  }
-
-  const items = addSheet(wb, "Top Items", [28, 12, 14, 10]);
-  styleHeader(items.addRow(["Item", "Quantity", "Revenue", "Orders"]));
-  for (const row of data.topItems || []) {
-    items.addRow([row.item, row.quantity, money(row.revenue), row.orderCount]);
+  const orders = addSheet(wb, "Recent Orders", [14, 12, 12, 12, 22, 12, 12]);
+  styleHeader(
+    orders.addRow([
+      "Order #",
+      "Date",
+      "Time",
+      "Table",
+      "Server",
+      "Total",
+      "Status",
+    ])
+  );
+  for (const row of data.orders || []) {
+    orders.addRow([
+      row.orderNumber,
+      row.date,
+      row.time,
+      row.table,
+      row.employee,
+      money(row.total),
+      row.status,
+    ]);
   }
 }
 
@@ -197,8 +213,50 @@ function writeAudit(wb, restaurantName, data) {
   }
 }
 
+function writeTodayOrder(wb, restaurantName, data) {
+  const counts = data.counts || {};
+  const summary = addSheet(wb, "Summary", [28, 18]);
+  writeMeta(summary, restaurantName, "Today Order List", data);
+  styleHeader(summary.addRow(["Metric", "Value"]));
+  summary.addRow(["Total Orders", counts.total || 0]);
+  summary.addRow(["Open", counts.open || 0]);
+  summary.addRow(["Paid", counts.paid || 0]);
+  summary.addRow(["Cancelled", counts.cancelled || 0]);
+  summary.addRow(["Waived", counts.waived || 0]);
+
+  const orders = addSheet(wb, "Orders", [
+    14, 12, 12, 12, 22, 14, 12, 14, 12,
+  ]);
+  styleHeader(
+    orders.addRow([
+      "Order #",
+      "Date",
+      "Time",
+      "Table",
+      "Server",
+      "Source",
+      "Total",
+      "Payment",
+      "Status",
+    ])
+  );
+  for (const row of data.rows || []) {
+    orders.addRow([
+      row.orderNumber,
+      row.date,
+      row.time,
+      row.table,
+      row.employee,
+      row.source || "",
+      money(row.total),
+      row.paymentStatus || "",
+      row.status,
+    ]);
+  }
+}
+
 function writeKitchen(wb, restaurantName, data) {
-  const tickets = addSheet(wb, "KOTs", [18, 16, 14, 12, 12, 22, 14, 12]);
+  const tickets = addSheet(wb, "KOTs", [18, 16, 12, 12, 22, 28, 14, 10]);
   writeMeta(tickets, restaurantName, "Kitchen Log", data);
   styleHeader(
     tickets.addRow([
@@ -208,20 +266,59 @@ function writeKitchen(wb, restaurantName, data) {
       "Time",
       "Table",
       "Server",
+      "Items",
       "Status",
-      "Type",
+      "Reprint",
     ])
   );
   for (const row of data.rows || []) {
     tickets.addRow([
-      row.kotNumber,
+      row.ticketNumber || row.kotNumber,
       row.orderNumber,
       row.date,
       row.time,
       row.table,
       row.employee,
+      row.itemsSummary,
       row.status,
-      row.type,
+      row.reprint ? "Yes" : "",
+    ]);
+  }
+
+  const items = addSheet(wb, "Top Items", [8, 28, 12, 12]);
+  styleHeader(items.addRow(["Rank", "Item", "Quantity", "Orders"]));
+  for (const row of data.topItems || []) {
+    items.addRow([row.rank, row.item, row.quantity, row.orderCount]);
+  }
+}
+
+function writeBar(wb, restaurantName, data) {
+  const tickets = addSheet(wb, "Bar Tickets", [18, 16, 12, 12, 22, 28, 14, 10]);
+  writeMeta(tickets, restaurantName, "Bar Log", data);
+  styleHeader(
+    tickets.addRow([
+      "Ticket #",
+      "Order #",
+      "Date",
+      "Time",
+      "Table",
+      "Server",
+      "Items",
+      "Status",
+      "Reprint",
+    ])
+  );
+  for (const row of data.rows || []) {
+    tickets.addRow([
+      row.ticketNumber || row.kotNumber,
+      row.orderNumber,
+      row.date,
+      row.time,
+      row.table,
+      row.employee,
+      row.itemsSummary,
+      row.status,
+      row.reprint ? "Yes" : "",
     ]);
   }
 
@@ -236,8 +333,10 @@ const WRITERS = {
   activity: writeActivity,
   revenue: writeRevenue,
   "daily-summary": writeDaily,
+  "today-order": writeTodayOrder,
   audit: writeAudit,
   kitchen: writeKitchen,
+  bar: writeBar,
 };
 
 export async function exportAdminExcel({ section, restaurantName, data }) {

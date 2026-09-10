@@ -1,5 +1,8 @@
 import Order from "@/models/Order";
 import PrintJob from "@/models/PrintJob";
+import EodReport from "@/models/EodReport";
+import OperationalAuditLog from "@/models/OperationalAuditLog";
+import EmployeeSession from "@/models/employee/EmployeeSession";
 import { r2 } from "@/lib/eod/eodHelpers";
 import { DEFAULT_RESTAURANT_TIMEZONE } from "@/lib/restaurantTime";
 import {
@@ -20,16 +23,15 @@ import {
 import {
   emptyKpis,
   EMPLOYEE_LOOKUP,
-  fillDaySeries,
   financialPipeline,
   KPI_GROUP,
   roundKpis,
-  seriesByDay,
 } from "@/lib/reports/financial/metrics";
 import { adminReportMeta } from "./query";
 import { paymentBreakdownFromKpis } from "./kpis";
 
-const ORDERS_LIMIT = 75;
+const ORDERS_PREVIEW = 8;
+const ACTIVITY_PREVIEW = 8;
 
 const ORDER_LIST_PROJECT = {
   _id: 1,
@@ -84,11 +86,17 @@ function mapOrderRow(order, tz) {
   };
 }
 
-async function kitchenSnapshot({ restaurantId, dateFrom, dateTo, employeeId }) {
+async function printAreaSnapshot({
+  restaurantId,
+  dateFrom,
+  dateTo,
+  employeeId,
+  printType,
+}) {
   const { start, end } = dateRangeBounds(dateFrom, dateTo);
   const match = {
     restaurantId: toObjectId(restaurantId),
-    printType: { $in: ["KOT", "BAR_RECEIPT"] },
+    printType,
     createdAt: { $gte: start, $lt: end },
   };
   const emp = toObjectId(employeeId);
@@ -98,7 +106,20 @@ async function kitchenSnapshot({ restaurantId, dateFrom, dateTo, employeeId }) {
     { $match: match },
     {
       $facet: {
+        statusCounts: [{ $group: { _id: "$status", count: { $sum: 1 } } }],
         total: [{ $count: "count" }],
+        reprints: [
+          {
+            $match: {
+              $or: [
+                { parentPrintJobId: { $ne: null } },
+                { "metadata.isReprint": true },
+                { attemptCount: { $gt: 1 } },
+              ],
+            },
+          },
+          { $count: "count" },
+        ],
         printTime: [
           {
             $match: {
@@ -125,18 +146,40 @@ async function kitchenSnapshot({ restaurantId, dateFrom, dateTo, employeeId }) {
     },
   ]);
 
+  const byStatus = {
+    QUEUED: 0,
+    PRINTING: 0,
+    PRINTED: 0,
+    FAILED: 0,
+    CANCELLED: 0,
+  };
+  for (const row of facet?.statusCounts || []) {
+    if (Object.prototype.hasOwnProperty.call(byStatus, row._id)) {
+      byStatus[row._id] = row.count;
+    }
+  }
+  const total = facet?.total?.[0]?.count || 0;
+  const pending = byStatus.QUEUED + byStatus.PRINTING;
   const avg = facet?.printTime?.[0]?.avgMinutes;
+
   return {
-    total: facet?.total?.[0]?.count || 0,
+    total,
+    pending,
+    completed: byStatus.PRINTED,
+    failed: byStatus.FAILED,
+    cancelled: byStatus.CANCELLED,
+    reprints: facet?.reprints?.[0]?.count || 0,
     avgPrintMinutes: avg == null ? null : Math.round(avg),
   };
 }
 
 export async function buildAdminDailySummary({ restaurantId, ...filters }) {
   const tz = filters.timezone || DEFAULT_RESTAURANT_TIMEZONE;
+  const rid = toObjectId(restaurantId);
   const allMatch = baseOrderMatch({ restaurantId, ...filters });
   const paidMatch = paidRevenueMatch({ restaurantId, ...filters });
   const paidPipeline = financialPipeline(paidMatch, filters.paymentMethod);
+  const { start, end } = dateRangeBounds(filters.dateFrom, filters.dateTo);
 
   const prior = priorPeriodBounds(filters.dateFrom, filters.dateTo);
   const priorPaidMatch = paidRevenueMatch({
@@ -150,120 +193,98 @@ export async function buildAdminDailySummary({ restaurantId, ...filters }) {
     filters.paymentMethod
   );
 
-  const [[statusFacet], [paidFacet], [priorKpiRow], kitchen] =
-    await Promise.all([
-      Order.aggregate([
-        { $match: allMatch },
-        {
-          $facet: {
-            statusCounts: [
-              {
-                $group: {
-                  _id: "$status",
-                  count: { $sum: 1 },
-                },
+  const isSingleDay = filters.dateFrom === filters.dateTo;
+  const isToday = filters.preset === "TODAY";
+
+  const [
+    [statusFacet],
+    [paidFacet],
+    [priorKpiRow],
+    kitchen,
+    bar,
+    activeEmployees,
+    eodSaved,
+    recentActivity,
+  ] = await Promise.all([
+    Order.aggregate([
+      { $match: allMatch },
+      {
+        $facet: {
+          statusCounts: [
+            {
+              $group: {
+                _id: "$status",
+                count: { $sum: 1 },
               },
-            ],
-            staffMeals: [
-              {
-                $match: {
-                  $or: [{ source: "STAFF" }, { status: "WAIVED" }],
-                },
+            },
+          ],
+          staffMeals: [
+            {
+              $match: {
+                $or: [{ source: "STAFF" }, { status: "WAIVED" }],
               },
-              { $count: "count" },
-            ],
-            orders: [
-              { $sort: { updatedAt: -1, _id: -1 } },
-              { $limit: ORDERS_LIMIT },
-              ...EMPLOYEE_LOOKUP,
-              { $project: ORDER_LIST_PROJECT },
-            ],
-          },
+            },
+            { $count: "count" },
+          ],
+          orders: [
+            { $sort: { updatedAt: -1, _id: -1 } },
+            { $limit: ORDERS_PREVIEW },
+            ...EMPLOYEE_LOOKUP,
+            { $project: ORDER_LIST_PROJECT },
+          ],
         },
-      ]),
-      Order.aggregate([
-        ...paidPipeline,
-        ...EMPLOYEE_LOOKUP,
-        {
-          $facet: {
-            kpis: [{ $group: KPI_GROUP }],
-            guests: [
-              {
-                $group: {
-                  _id: null,
-                  guests: { $sum: { $ifNull: ["$guestCount", 0] } },
-                },
+      },
+    ]),
+    Order.aggregate([
+      ...paidPipeline,
+      {
+        $facet: {
+          kpis: [{ $group: KPI_GROUP }],
+          guests: [
+            {
+              $group: {
+                _id: null,
+                guests: { $sum: { $ifNull: ["$guestCount", 0] } },
               },
-            ],
-            byDay: [seriesByDay(tz)],
-            byEmployee: [
-              {
-                $group: {
-                  _id: { $ifNull: ["$processedBy", "unknown"] },
-                  employeeName: { $first: "$employeeName" },
-                  orders: { $sum: 1 },
-                  sales: { $sum: "$netSales" },
-                  tips: { $sum: { $ifNull: ["$tipAmount", 0] } },
-                },
-              },
-              {
-                $project: {
-                  _id: 0,
-                  employeeId: "$_id",
-                  employeeName: { $ifNull: ["$employeeName", "Unknown"] },
-                  orders: 1,
-                  sales: { $round: ["$sales", 2] },
-                  tips: { $round: ["$tips", 2] },
-                },
-              },
-              { $sort: { sales: -1, employeeName: 1 } },
-            ],
-            topItems: [
-              { $unwind: { path: "$items", preserveNullAndEmptyArrays: false } },
-              {
-                $group: {
-                  _id: {
-                    $ifNull: [
-                      "$items.menuItemId",
-                      { $ifNull: ["$items.name", "Unknown"] },
-                    ],
-                  },
-                  item: { $first: { $ifNull: ["$items.name", "Unknown"] } },
-                  quantity: { $sum: { $ifNull: ["$items.qty", 0] } },
-                  revenue: {
-                    $sum: {
-                      $multiply: [
-                        { $ifNull: ["$items.price", 0] },
-                        { $ifNull: ["$items.qty", 0] },
-                      ],
-                    },
-                  },
-                  orders: { $addToSet: "$_id" },
-                },
-              },
-              {
-                $project: {
-                  _id: 0,
-                  item: 1,
-                  quantity: 1,
-                  revenue: { $round: ["$revenue", 2] },
-                  orderCount: { $size: "$orders" },
-                },
-              },
-              { $sort: { quantity: -1, revenue: -1 } },
-              { $limit: 20 },
-            ],
-          },
+            },
+          ],
         },
-      ]),
-      Order.aggregate([...priorPipeline, { $group: KPI_GROUP }]),
-      kitchenSnapshot({
-        restaurantId,
-        dateFrom: filters.dateFrom,
-        dateTo: filters.dateTo,
-        employeeId: filters.employeeId,
-      }),
-    ]);
+      },
+    ]),
+    Order.aggregate([...priorPipeline, { $group: KPI_GROUP }]),
+    printAreaSnapshot({
+      restaurantId,
+      dateFrom: filters.dateFrom,
+      dateTo: filters.dateTo,
+      employeeId: filters.employeeId,
+      printType: "KOT",
+    }),
+    printAreaSnapshot({
+      restaurantId,
+      dateFrom: filters.dateFrom,
+      dateTo: filters.dateTo,
+      employeeId: filters.employeeId,
+      printType: "BAR_RECEIPT",
+    }),
+    EmployeeSession.countDocuments({
+      restaurant: rid,
+      status: "Active",
+    }),
+    isSingleDay
+      ? EodReport.exists({
+          restaurant: rid,
+          businessDate: filters.dateFrom,
+        })
+      : Promise.resolve(null),
+    OperationalAuditLog.find({
+      restaurantId: rid,
+      timestamp: { $gte: start, $lt: end },
+    })
+      .sort({ timestamp: -1 })
+      .limit(ACTIVITY_PREVIEW)
+      .select("actorName action timestamp orderId tableId reason newValue")
+      .lean(),
+  ]);
 
   const counts = {
     total: 0,
@@ -279,8 +300,7 @@ export async function buildAdminDailySummary({ restaurantId, ...filters }) {
     counts.total += row.count;
   }
 
-  const openCount =
-    counts.PENDING + counts.CONFIRMED + counts.COMPLETED;
+  const openCount = counts.PENDING + counts.CONFIRMED + counts.COMPLETED;
   const staffMeals = statusFacet?.staffMeals?.[0]?.count || 0;
   const guests = paidFacet?.guests?.[0]?.guests || 0;
   const orders = (statusFacet?.orders || []).map((row) =>
@@ -294,26 +314,90 @@ export async function buildAdminDailySummary({ restaurantId, ...filters }) {
     priorKpis.grossSales,
     priorKpis.orderCount
   );
-  const byDay = fillDaySeries(
-    filters.dateFrom,
-    filters.dateTo,
-    paidFacet?.byDay || [],
-    ["grossSales", "netSales", "orders"]
-  );
   const paymentBreakdown = paymentBreakdownFromKpis(kpis);
   const comparisonLabel =
     filters.preset === "TODAY" ? "vs yesterday" : "vs prior period";
+
+  const printing = {
+    failed: kitchen.failed + bar.failed,
+    reprints: kitchen.reprints + bar.reprints,
+    pending: kitchen.pending + bar.pending,
+    completed: kitchen.completed + bar.completed,
+  };
+
+  const eod = {
+    businessDate: isSingleDay ? filters.dateFrom : null,
+    saved: Boolean(eodSaved),
+    status: !isSingleDay
+      ? "Range"
+      : eodSaved
+        ? "Closed"
+        : isToday
+          ? "Open"
+          : "Open",
+  };
+
+  const attention = [];
+  if (printing.failed > 0) {
+    attention.push({
+      key: "failed-prints",
+      label: "Failed print jobs",
+      count: printing.failed,
+      href: "/admin/reports/admin/kitchen",
+    });
+  }
+  if (openCount > 0) {
+    attention.push({
+      key: "open-orders",
+      label: "Open orders",
+      count: openCount,
+      href: "/admin/reports/admin/today-order",
+    });
+  }
+  if (kitchen.pending > 0) {
+    attention.push({
+      key: "pending-kots",
+      label: "Pending kitchen tickets",
+      count: kitchen.pending,
+      href: "/admin/reports/admin/kitchen",
+    });
+  }
+  if (bar.pending > 0) {
+    attention.push({
+      key: "pending-bar",
+      label: "Pending bar tickets",
+      count: bar.pending,
+      href: "/admin/reports/admin/bar",
+    });
+  }
+  if (isToday && isSingleDay && !eodSaved) {
+    attention.push({
+      key: "eod-open",
+      label: "End of day not saved",
+      count: 1,
+      href: "/admin/reports/admin/eod",
+    });
+  }
+
+  const activityPeek = (recentActivity || []).map((doc) => ({
+    id: String(doc._id),
+    time: formatRestaurantTime(doc.timestamp, tz),
+    date: formatRestaurantDate(doc.timestamp, tz),
+    actor: doc.actorName || "Unknown",
+    action: doc.action,
+    reason: doc.reason || null,
+  }));
 
   return {
     meta: adminReportMeta(filters),
     empty: counts.total === 0 && kpis.orderCount === 0,
     notes: {
-      completed:
-        "Completed orders are paid orders. Order status COMPLETED is not written by the POS.",
-      voided: "Void is not stored as a separate status.",
-      refunded: "Refunds are not recorded in the POS yet.",
+      refunds: "Refunds are not recorded in the POS yet.",
+      voids: "Voids are not stored as a separate status.",
       kitchen:
-        "Avg print time is createdAt to printedAt on printed KOTs. Prep/ready/served is not stored.",
+        "Prep/ready/served is not stored. Ticket status is print-queue status only.",
+      activity:
+        "Activity peek shows floor/POS events only. Back-office admin actions are not logged.",
       guests: "Guests are summed from guestCount on paid orders only.",
       staffMeals: "Staff meals include source STAFF and waived orders.",
     },
@@ -326,15 +410,13 @@ export async function buildAdminDailySummary({ restaurantId, ...filters }) {
       waived: counts.WAIVED,
       open: openCount,
       staffMeals,
-      voided: 0,
-      refunded: 0,
     },
     statusStrip: [
       { key: "paid", label: "Paid", value: counts.PAID },
       { key: "open", label: "Open", value: openCount },
       { key: "cancelled", label: "Cancelled", value: counts.CANCELLED },
       { key: "waived", label: "Waived", value: counts.WAIVED },
-      { key: "staff", label: "Staff", value: staffMeals },
+      { key: "staff", label: "Staff meals", value: staffMeals },
     ],
     kpis: {
       grossSales: kpis.grossSales,
@@ -344,35 +426,26 @@ export async function buildAdminDailySummary({ restaurantId, ...filters }) {
       tips: kpis.tips,
       serviceCharges: kpis.serviceCharges,
       collected: kpis.collected,
+      giftCard: kpis.giftCard,
       orderCount: kpis.orderCount,
       avgTicket,
-      expectedDeposit: kpis.collected,
       guests,
-      refunds: 0,
-      voids: 0,
+      activeEmployees,
     },
     comparison: {
       label: comparisonLabel,
       grossSales: pctDelta(kpis.grossSales, priorKpis.grossSales),
       orderCount: pctDelta(kpis.orderCount, priorKpis.orderCount),
       avgTicket: pctDelta(avgTicket, priorAvgTicket),
-      refundsVoids: 0,
     },
     kitchen,
+    bar,
+    printing,
+    eod,
+    attention,
+    activityPeek,
     paymentBreakdown,
-    byEmployee: paidFacet?.byEmployee || [],
-    topItems: paidFacet?.topItems || [],
     orders,
-    ordersTruncated: counts.total > ORDERS_LIMIT,
-    charts: {
-      salesOverTime: byDay.map((d) => ({ date: d.date, value: d.netSales })),
-      ordersByStatus: [
-        { name: "Paid", value: counts.PAID },
-        { name: "Pending", value: counts.PENDING },
-        { name: "Confirmed", value: counts.CONFIRMED },
-        { name: "Cancelled", value: counts.CANCELLED },
-        { name: "Waived", value: counts.WAIVED },
-      ].filter((row) => row.value > 0),
-    },
+    ordersTruncated: counts.total > ORDERS_PREVIEW,
   };
 }

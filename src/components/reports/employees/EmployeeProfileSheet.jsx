@@ -526,8 +526,35 @@ function OrderDetailSkeleton() {
   );
 }
 
-function CancelledItemsTable({ rows, onSelectOrder, timezone, emptyLabel }) {
-  if (!rows.length) {
+function CancelledItemsTable({ rows, onSelectOrder, timezone, emptyLabel, maxOrders }) {
+  const groupedOrders = useMemo(() => {
+    if (!rows || !rows.length) return [];
+    const map = new Map();
+    for (const row of rows) {
+      const key = row.orderId || `${row.orderNumber}-${row.createdAt}`;
+      if (!map.has(key)) {
+        map.set(key, {
+          orderId: row.orderId,
+          orderNumber: row.orderNumber,
+          status: row.status,
+          createdAt: row.createdAt,
+          waiveReason: row.waiveReason || null,
+          items: [],
+          totalValue: 0,
+        });
+      }
+      const group = map.get(key);
+      group.items.push(row);
+      group.totalValue += Number(row.value) || 0;
+      if (!group.waiveReason && row.waiveReason) {
+        group.waiveReason = row.waiveReason;
+      }
+    }
+    const list = Array.from(map.values());
+    return maxOrders ? list.slice(0, maxOrders) : list;
+  }, [rows, maxOrders]);
+
+  if (!groupedOrders.length) {
     return (
       <p className="text-sm text-zinc-500 bg-zinc-50 rounded-xl px-3 py-4 text-center">
         {emptyLabel}
@@ -552,44 +579,69 @@ function CancelledItemsTable({ rows, onSelectOrder, timezone, emptyLabel }) {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {rows.map((row, index) => {
+          {groupedOrders.map((order, index) => {
             const even = index % 2 === 1;
             const clickable = typeof onSelectOrder === "function";
             return (
               <TableRow
-                key={`${row.orderId}-${index}`}
+                key={order.orderId || `${order.orderNumber}-${index}`}
                 className={`${even ? "bg-red-50/70" : "bg-white"} ${
                   clickable ? "cursor-pointer hover:bg-orange-100" : ""
                 }`}
-                onClick={clickable ? () => onSelectOrder(row.orderId) : undefined}
+                onClick={clickable ? () => onSelectOrder(order.orderId) : undefined}
               >
                 <TableCell className={`border border-zinc-300 align-top ${even ? "bg-red-50/70" : ""}`}>
                   <div className="text-xs font-semibold tabular-nums text-zinc-900">
-                    {row.orderNumber}
+                    {order.orderNumber}
                   </div>
                   <div className="mt-0.5 flex items-center gap-1.5 flex-wrap">
                     <span
                       className={`text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded ${
-                        STATUS_BADGE[row.status] || "bg-zinc-100 text-zinc-600"
+                        STATUS_BADGE[order.status] || "bg-zinc-100 text-zinc-600"
                       }`}
                     >
-                      {row.status}
+                      {order.status}
                     </span>
-                    {timezone && row.createdAt ? (
+                    {timezone && order.createdAt ? (
                       <span className="text-[10px] text-zinc-500">
-                        {formatTimeTz(row.createdAt, timezone)}
+                        {formatTimeTz(order.createdAt, timezone)}
                       </span>
                     ) : null}
                   </div>
                 </TableCell>
                 <TableCell className={`border border-zinc-300 align-top ${even ? "bg-red-50/70" : ""}`}>
-                  <div className="text-xs text-zinc-900">
-                    {row.item}
-                    {row.qty > 1 ? ` ×${row.qty}` : ""}
-                  </div>
-                  {row.waiveReason ? (
-                    <p className="text-[11px] text-amber-800 mt-1 line-clamp-2">
-                      Reason: {row.waiveReason}
+                  {order.items.length === 1 ? (
+                    <div className="text-xs text-zinc-900">
+                      {order.items[0].item}
+                      {order.items[0].qty > 1 ? ` ×${order.items[0].qty}` : ""}
+                    </div>
+                  ) : (
+                    <div className="space-y-1">
+                      {order.items.map((it, itemIdx) => (
+                        <div
+                          key={itemIdx}
+                          className="flex items-start justify-between gap-2 text-xs text-zinc-900"
+                        >
+                          <span className="leading-snug">
+                            {it.item}
+                            {it.qty > 1 ? ` ×${it.qty}` : ""}
+                          </span>
+                          <span className="text-zinc-500 tabular-nums text-[11px] shrink-0 font-medium">
+                            -{money(it.value)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {order.waiveReason ? (
+                    <p
+                      className={`text-[11px] text-amber-800 line-clamp-2 ${
+                        order.items.length > 1
+                          ? "mt-1.5 pt-1.5 border-t border-zinc-200"
+                          : "mt-1"
+                      }`}
+                    >
+                      Reason: {order.waiveReason}
                     </p>
                   ) : null}
                 </TableCell>
@@ -598,7 +650,12 @@ function CancelledItemsTable({ rows, onSelectOrder, timezone, emptyLabel }) {
                     even ? "bg-red-50/70" : ""
                   }`}
                 >
-                  -{money(row.value)}
+                  <div>-{money(order.totalValue)}</div>
+                  {order.items.length > 1 ? (
+                    <div className="text-[10px] text-zinc-500 font-normal">
+                      {order.items.length} items
+                    </div>
+                  ) : null}
                 </TableCell>
               </TableRow>
             );
@@ -779,11 +836,12 @@ function EmployeeProfileBody({
             Cancelled items
           </h4>
           <Badge variant="outline" className="text-[10px] bg-red-50 text-red-700 border-red-200">
-            {(overview?.cancelCount ?? cancelledItems.length)} cancelled
+            {(overview?.cancelCount ?? new Set((cancelledItems || []).map((c) => c.orderId)).size)} cancelled
           </Badge>
         </div>
         <CancelledItemsTable
-          rows={cancelledItems.slice(0, 8)}
+          rows={cancelledItems}
+          maxOrders={8}
           onSelectOrder={onSelectOrder}
           timezone={timezone}
           emptyLabel="No cancelled items in this period."
@@ -952,6 +1010,10 @@ function DayDetailBody({
   const logins = sessions.length || (day.clockIn ? 1 : 0);
   const previewSessions = sessions.slice(0, SESSION_PREVIEW_COUNT);
   const hasMoreLogs = sessions.length > SESSION_PREVIEW_COUNT || allSessions.length > SESSION_PREVIEW_COUNT;
+  const cancelledOrdersCount = useMemo(
+    () => new Set((cancelledItems || []).map((c) => c.orderId)).size,
+    [cancelledItems]
+  );
 
   return (
     <div className="flex flex-col gap-5 pb-6">
@@ -1052,7 +1114,7 @@ function DayDetailBody({
             Cancelled / waived
           </h4>
           <Badge variant="outline" className="text-[10px] bg-red-50 text-red-700 border-red-200">
-            {cancelledItems.length}
+            {cancelledOrdersCount} cancelled
           </Badge>
         </div>
         <CancelledItemsTable
