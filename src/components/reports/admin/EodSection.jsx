@@ -67,9 +67,9 @@ export default function EodSection() {
 
   return (
     <div className="space-y-6">
-      <Card className="rounded-lg border-zinc-200 shadow-sm">
+      <Card className="rounded-xl border border-orange-200 bg-gradient-to-r from-orange-50 to-white shadow-sm">
         <CardContent className="p-6 flex flex-wrap items-center gap-3">
-          <span className="text-[13px] font-semibold uppercase tracking-wide text-zinc-500">
+          <span className="text-[13px] font-semibold uppercase tracking-wide text-orange-700/80">
             EOD status
           </span>
           <Badge variant="outline" className={STATUS_CLASS[status]}>

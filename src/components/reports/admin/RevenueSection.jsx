@@ -154,7 +154,7 @@ export default function RevenueSection({ data, loading }) {
           </TableHeader>
           <TableBody>
             {data.byDay.map((row) => (
-              <TableRow key={row.date} className="h-14 hover:bg-zinc-50">
+              <TableRow key={row.date} className="h-14 hover:bg-orange-50/50">
                 <TableCell className={`${TD_CLASS} whitespace-nowrap`}>
                   {row.date}
                 </TableCell>

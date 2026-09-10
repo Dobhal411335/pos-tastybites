@@ -118,7 +118,7 @@ export default function TodayOrderSection({ data, loading, onPage }) {
               {(data.rows || []).map((row) => (
                 <TableRow
                   key={row.id}
-                  className="h-14 cursor-pointer hover:bg-zinc-50"
+                  className="h-14 cursor-pointer hover:bg-orange-50/50"
                   onClick={() => openOrder(row.id)}
                 >
                   <TableCell

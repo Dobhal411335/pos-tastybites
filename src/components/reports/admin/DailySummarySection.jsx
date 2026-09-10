@@ -133,10 +133,10 @@ export default function DailySummarySection({
         {(attention.length > 0 || data.notes?.refunds) && (
           <div className="space-y-3">
             {attention.length > 0 ? (
-              <Card className="rounded-lg border-amber-200 bg-amber-50/60 shadow-sm">
+              <Card className="rounded-xl border border-amber-300 bg-gradient-to-r from-amber-50 to-orange-50 shadow-sm">
                 <CardHeader className="p-5 pb-2">
                   <CardTitle className="flex items-center gap-2 text-base font-semibold text-amber-900">
-                    <AlertTriangle className="h-4 w-4" strokeWidth={1.75} />
+                    <AlertTriangle className="h-4 w-4 text-orange-600" strokeWidth={1.75} />
                     Needs attention
                   </CardTitle>
                 </CardHeader>
@@ -241,10 +241,10 @@ export default function DailySummarySection({
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
-          <Card className="rounded-lg border-zinc-200 shadow-sm">
+          <Card className="rounded-xl border border-orange-200 bg-gradient-to-br from-orange-50/70 to-white shadow-sm">
             <CardHeader className="p-5 pb-2">
-              <CardTitle className="flex items-center gap-2 text-base font-semibold">
-                <ChefHat className="h-4 w-4" strokeWidth={1.75} />
+              <CardTitle className="flex items-center gap-2 text-base font-semibold text-zinc-900">
+                <ChefHat className="h-4 w-4 text-orange-600" strokeWidth={1.75} />
                 Kitchen
               </CardTitle>
             </CardHeader>
@@ -266,10 +266,10 @@ export default function DailySummarySection({
             </CardContent>
           </Card>
 
-          <Card className="rounded-lg border-zinc-200 shadow-sm">
+          <Card className="rounded-xl border border-orange-200 bg-gradient-to-br from-orange-50/70 to-white shadow-sm">
             <CardHeader className="p-5 pb-2">
-              <CardTitle className="flex items-center gap-2 text-base font-semibold">
-                <Wine className="h-4 w-4" strokeWidth={1.75} />
+              <CardTitle className="flex items-center gap-2 text-base font-semibold text-zinc-900">
+                <Wine className="h-4 w-4 text-orange-600" strokeWidth={1.75} />
                 Bar
               </CardTitle>
             </CardHeader>
@@ -291,10 +291,10 @@ export default function DailySummarySection({
             </CardContent>
           </Card>
 
-          <Card className="rounded-lg border-zinc-200 shadow-sm">
+          <Card className="rounded-xl border border-orange-200 bg-gradient-to-br from-orange-50/70 to-white shadow-sm">
             <CardHeader className="p-5 pb-2">
-              <CardTitle className="flex items-center gap-2 text-base font-semibold">
-                <Printer className="h-4 w-4" strokeWidth={1.75} />
+              <CardTitle className="flex items-center gap-2 text-base font-semibold text-zinc-900">
+                <Printer className="h-4 w-4 text-orange-600" strokeWidth={1.75} />
                 Printing
               </CardTitle>
             </CardHeader>
@@ -306,10 +306,10 @@ export default function DailySummarySection({
             </CardContent>
           </Card>
 
-          <Card className="rounded-lg border-zinc-200 shadow-sm">
+          <Card className="rounded-xl border border-orange-200 bg-gradient-to-br from-orange-50/70 to-white shadow-sm">
             <CardHeader className="p-5 pb-2">
-              <CardTitle className="flex items-center gap-2 text-base font-semibold">
-                <Sunset className="h-4 w-4" strokeWidth={1.75} />
+              <CardTitle className="flex items-center gap-2 text-base font-semibold text-zinc-900">
+                <Sunset className="h-4 w-4 text-orange-600" strokeWidth={1.75} />
                 End of Day
               </CardTitle>
             </CardHeader>
@@ -339,9 +339,9 @@ export default function DailySummarySection({
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <Card className="rounded-lg border-zinc-200 shadow-sm lg:col-span-1">
+          <Card className="rounded-xl border border-orange-200 bg-gradient-to-br from-orange-50/70 to-white shadow-sm lg:col-span-1">
             <CardHeader className="p-5 pb-2 flex-row items-center justify-between space-y-0">
-              <CardTitle className="text-base font-semibold">Payments</CardTitle>
+              <CardTitle className="text-base font-semibold text-zinc-900">Payments</CardTitle>
               {onViewRevenue ? (
                 <Button variant="ghost" size="sm" onClick={onViewRevenue}>
                   Revenue
@@ -403,7 +403,7 @@ export default function DailySummarySection({
                     orders.map((row) => (
                       <TableRow
                         key={row.id}
-                        className="cursor-pointer hover:bg-zinc-50"
+                        className="cursor-pointer hover:bg-orange-50/50"
                         onClick={() => openOrder(row.id)}
                       >
                         <TableCell

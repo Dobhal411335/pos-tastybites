@@ -6,9 +6,12 @@ directories:
 files:
   - "electron/**/*"
   - "package.json"
+extraResources:
+  - from: public/branding/tastybites-sales.png
+    to: icons/POS.png
 mac:
   target: dmg
-  icon: public/icons/POS.png
+  icon: public/branding/tastybites-sales.png
 win:
   target: nsis
-  icon: public/icons/POS.png
+  icon: public/branding/tastybites-sales.png

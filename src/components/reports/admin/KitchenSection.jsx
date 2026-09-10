@@ -89,7 +89,7 @@ export default function KitchenSection({ data, loading, onPage }) {
           </TableHeader>
           <TableBody>
             {data.rows.map((row) => (
-              <TableRow key={row.id} className="h-14 hover:bg-zinc-50">
+              <TableRow key={row.id} className="h-14 hover:bg-orange-50/50">
                 <TableCell
                   className={`${TD_CLASS} whitespace-nowrap font-medium`}
                 >
@@ -141,7 +141,7 @@ export default function KitchenSection({ data, loading, onPage }) {
             {(data.topItems || []).map((row) => (
               <TableRow
                 key={`${row.rank}-${row.item}`}
-                className="h-14 hover:bg-zinc-50"
+                className="h-14 hover:bg-orange-50/50"
               >
                 <TableCell className={`${TD_CLASS} tabular-nums`}>
                   {row.rank}

@@ -23,6 +23,12 @@
 /desktop/node_modules
 /desktop/dist
 /release
+/release-admin
+
+# electron / android installers (keep local or upload to Drive/CDN — never commit)
+*.exe
+*.apk
+*.blockmap
 
 # electron installers (upload to CDN or public/downloads/ for releases)
 public/downloads/*.exe

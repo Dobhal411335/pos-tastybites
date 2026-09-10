@@ -21,7 +21,7 @@ let mainWindow = null;
 function getAppIcon() {
   const iconPath = isPackagedApp()
     ? path.join(process.resourcesPath, 'icons', 'POS.png')
-    : path.join(__dirname, '..', 'public', 'icons', 'POS.png');
+    : path.join(__dirname, '..', 'public', 'branding', 'tastybites-sales.png');
   const icon = nativeImage.createFromPath(iconPath);
   return icon.isEmpty() ? undefined : icon;
 }

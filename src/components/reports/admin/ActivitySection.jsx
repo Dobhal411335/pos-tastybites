@@ -58,7 +58,7 @@ export default function ActivitySection({ data, loading, onPage }) {
           </TableHeader>
           <TableBody>
             {data.rows.map((row) => (
-              <TableRow key={row.id} className="h-14 hover:bg-zinc-50">
+              <TableRow key={row.id} className="h-14 hover:bg-orange-50/50">
                 <TableCell className={`${TD_CLASS} whitespace-nowrap`}>
                   {row.date}
                 </TableCell>

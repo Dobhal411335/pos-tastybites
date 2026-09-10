@@ -238,7 +238,7 @@ export default function AdminReportFilters({
                     className={`rounded px-2.5 py-1.5 text-xs font-semibold transition-colors ${
                       uiPreset === preset.value
                         ? "bg-orange-500 text-white"
-                        : "text-zinc-600 hover:bg-zinc-50"
+                        : "text-zinc-600 hover:bg-orange-50/50"
                     }`}
                   >
                     {preset.label}
