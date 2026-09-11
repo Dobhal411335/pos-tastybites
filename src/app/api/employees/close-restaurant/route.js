@@ -17,6 +17,7 @@ function personName(person) {
 }
 
 const UNSETTLED_ORDER_FILTER = {
+  isActive: { $ne: false },
   status: { $nin: ["PAID", "CANCELLED", "WAIVED"] },
   paymentStatus: { $ne: "PAID" },
 };

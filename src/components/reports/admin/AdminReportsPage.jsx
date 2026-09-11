@@ -6,6 +6,7 @@ import {
   Activity,
   ChefHat,
   ClipboardList,
+  FolderKanban,
   List,
   ShieldCheck,
   Sunset,
@@ -22,6 +23,7 @@ import AuditSection from "./AuditSection";
 import KitchenSection from "./KitchenSection";
 import BarSection from "./BarSection";
 import TodayOrderSection from "./TodayOrderSection";
+import OrderManagementSection from "./OrderManagementSection";
 import {
   DEFAULT_ADMIN_FILTERS,
   adminQueryString,
@@ -35,6 +37,14 @@ export const ADMIN_SECTIONS = [
     icon: ClipboardList,
     subtitle: "Operational snapshot for the current location.",
     href: "/admin/reports/admin",
+  },
+  {
+    id: "order-management",
+    label: "Order Management",
+    icon: FolderKanban,
+    subtitle:
+      "Filter, review, soft-delete cash-only orders, and restore deleted orders.",
+    href: "/admin/reports/admin/order-management",
   },
   {
     id: "today-order",

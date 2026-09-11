@@ -162,6 +162,7 @@ export function guestIdentity(order) {
 }
 
 export function isRevenueOrder(order) {
+  if (order.isActive === false) return false;
   return (
     order.paymentStatus === "PAID" &&
     order.status !== "CANCELLED" &&
@@ -410,7 +411,11 @@ function parseGuestKeyQuery(guestKey) {
 }
 
 function guestKeyMongoFilter(parsed, restaurantId) {
-  const match = { restaurantId, source: { $ne: "STAFF" } };
+  const match = {
+    restaurantId,
+    source: { $ne: "STAFF" },
+    isActive: { $ne: false },
+  };
   if (parsed.type === "order" && mongoose.Types.ObjectId.isValid(parsed.value)) {
     match._id = new mongoose.Types.ObjectId(parsed.value);
     return match;
@@ -526,6 +531,7 @@ export async function buildGuestDirectoryReport({
   let match = {
     restaurantId: rid,
     source: { $ne: "STAFF" },
+    isActive: { $ne: false },
   };
 
   if (parsedKey) {

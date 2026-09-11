@@ -54,6 +54,7 @@ export async function buildEodReport({
   ] = await Promise.all([
       Order.find({
         restaurantId: rid,
+        isActive: { $ne: false },
         $or: [{ paymentStatus: "PAID" }, { status: "PAID" }],
         status: { $nin: ["CANCELLED", "WAIVED"] },
         $and: [
@@ -70,6 +71,7 @@ export async function buildEodReport({
         .lean(),
       Order.find({
         restaurantId: rid,
+        isActive: { $ne: false },
         status: "CANCELLED",
         $or: [
           { updatedAt: { $gte: start, $lt: end } },
@@ -103,6 +105,7 @@ export async function buildEodReport({
         {
           $match: {
             restaurantId: rid,
+            isActive: { $ne: false },
             $or: [
               { updatedAt: { $gte: start, $lt: end } },
               { createdAt: { $gte: start, $lt: end } },

@@ -25,7 +25,11 @@ export const GET = withAuth(async (request, { params }) => {
     }
 
     const restaurantId = request.restaurant;
+    const { searchParams } = new URL(request.url);
     const query = { restaurantId };
+    const includeDeleted =
+      searchParams.get("includeDeleted") === "1" ||
+      searchParams.get("includeDeleted") === "true";
 
     if (mongoose.Types.ObjectId.isValid(id) && String(new mongoose.Types.ObjectId(id)) === String(id)) {
       query._id = id;
@@ -33,8 +37,22 @@ export const GET = withAuth(async (request, { params }) => {
       query.orderNumber = String(id);
     }
 
+    // Soft-deleted orders only visible to Admin/Manager with includeDeleted
+    const role = String(request.role || "").toUpperCase();
+    const canViewDeleted =
+      includeDeleted &&
+      ["ADMIN", "SUPER ADMIN", "MASTER TERMINAL", "MANAGER", "MANAGER TERMINAL"].includes(
+        role
+      );
+    if (!canViewDeleted) {
+      query.isActive = { $ne: false };
+    }
+
     const order = await Order.findOne(query).lean();
     if (!order) {
+      return sendError(new Error("Not Found"), "Order not found", 404);
+    }
+    if (order.isActive === false && !canViewDeleted) {
       return sendError(new Error("Not Found"), "Order not found", 404);
     }
 

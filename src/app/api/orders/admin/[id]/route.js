@@ -18,7 +18,12 @@ export const PUT = withAuth(async (request, { params }) => {
     if (tableNo) updateData.tableNo = tableNo;
 
     const order = await Order.findOneAndUpdate(
-      { _id: id, restaurantId: request.restaurant, source: "ADMIN" },
+      {
+        _id: id,
+        restaurantId: request.restaurant,
+        source: "ADMIN",
+        isActive: { $ne: false },
+      },
       { $set: updateData },
       { new: true }
     );
@@ -43,7 +48,8 @@ export const DELETE = withAuth(async (request, { params }) => {
     const deletedOrder = await Order.findOneAndDelete({
       _id: id,
       restaurantId: request.restaurant,
-      source: "ADMIN"
+      source: "ADMIN",
+      isActive: { $ne: false },
     });
 
     if (!deletedOrder) {

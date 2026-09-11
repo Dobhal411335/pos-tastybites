@@ -69,6 +69,7 @@ export const GET = withAuth(async (request) => {
       const sanitized = search.trim();
       const matchingOrders = await Order.find({
         restaurantId: request.restaurant,
+        isActive: { $ne: false },
         orderNumber: { $regex: sanitized, $options: "i" },
       })
         .select("_id")

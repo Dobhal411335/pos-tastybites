@@ -18,7 +18,12 @@ export const PATCH = withAuth(async (request, { params }) => {
     }
     
     const updatedOrder = await Order.findOneAndUpdate(
-      { _id: id, restaurantId: request.restaurant, source: "STAFF" },
+      {
+        _id: id,
+        restaurantId: request.restaurant,
+        source: "STAFF",
+        isActive: { $ne: false },
+      },
       { $set: { status: status } },
       { new: true, runValidators: true }
     );
@@ -39,7 +44,10 @@ export const DELETE = withAuth(async (request, { params }) => {
     const { id } = await params;
     
     const deletedOrder = await Order.findOneAndDelete({
-      _id: id, restaurantId: request.restaurant, source: "STAFF"
+      _id: id,
+      restaurantId: request.restaurant,
+      source: "STAFF",
+      isActive: { $ne: false },
     });
     
     if (!deletedOrder) {

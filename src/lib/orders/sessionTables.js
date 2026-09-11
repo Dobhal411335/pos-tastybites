@@ -154,6 +154,7 @@ function itemSnapshot(item, suffix) {
 async function mergeUnpaidOrdersIntoSession(targetSession, sourceSession) {
   const sourceOrders = await Order.find({
     tableSession: sourceSession._id,
+    isActive: { $ne: false },
     status: { $in: ["PENDING", "CONFIRMED"] },
     paymentStatus: { $ne: "PAID" },
   });
@@ -162,6 +163,7 @@ async function mergeUnpaidOrdersIntoSession(targetSession, sourceSession) {
 
   let targetOrder = await Order.findOne({
     tableSession: targetSession._id,
+    isActive: { $ne: false },
     status: { $in: ["PENDING", "CONFIRMED"] },
     paymentStatus: { $ne: "PAID" },
   });
@@ -260,6 +262,7 @@ export async function syncSessionOrderTableLabels(session) {
   await Order.updateMany(
     {
       tableSession: session._id,
+      isActive: { $ne: false },
       status: { $in: ["PENDING", "CONFIRMED"] },
     },
     { $set: { tableNo } },

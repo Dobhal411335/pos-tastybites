@@ -57,6 +57,7 @@ export function baseOrderMatch({
   const { start, end } = dateRangeBounds(dateFrom, dateTo);
   const match = {
     restaurantId: rid,
+    isActive: { $ne: false },
     updatedAt: { $gte: start, $lt: end },
   };
 

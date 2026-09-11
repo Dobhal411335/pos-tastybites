@@ -22,7 +22,12 @@ const OperationalAuditLogSchema = new mongoose.Schema(
         'ORDER_UPDATED',
         'ORDER_CANCELLED', 
         'PAYMENT_COMPLETED',
-        'ADMIN_OVERRIDE'
+        'ADMIN_OVERRIDE',
+        'ORDER_SOFT_DELETED',
+        'ORDER_RESTORED',
+        'ORDER_PERMANENTLY_DELETED',
+        'ORDER_NUMBER_RENUMBERED',
+        'INVOICE_REFERENCE_RENUMBERED',
       ],
       required: true,
       index: true

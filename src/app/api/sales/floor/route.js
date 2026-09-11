@@ -52,6 +52,7 @@ export const GET = withAuth(async (request) => {
       const sessionIds = sessions.map((s) => s._id);
       activeOrders = await Order.find({
         tableSession: { $in: sessionIds },
+        isActive: { $ne: false },
         status: {
           $in: [
             "PENDING",

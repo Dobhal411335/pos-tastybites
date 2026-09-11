@@ -363,6 +363,7 @@ export const POST = withAuth(async (request) => {
           _id: orderId,
           restaurantId: request.restaurant,
           source: orderSource,
+          isActive: { $ne: false },
           status: { $in: ["PENDING", "CONFIRMED"] },
         });
 
@@ -455,7 +456,10 @@ export const POST = withAuth(async (request) => {
       const createPayload = {
         restaurantId: request.restaurant,
         orderNumber,
+        originalOrderNumber: orderNumber,
+        isActive: true,
         invoiceNumber,
+        originalInvoiceNumber: invoiceNumber,
         items: formattedItems.map((item) => ({ ...item, sentQty: item.qty })),
         subTotal,
         taxTotal,
@@ -547,6 +551,7 @@ export const POST = withAuth(async (request) => {
     let order = await Order.findOne({
       tableSession: sessionId,
       restaurantId: request.restaurant,
+      isActive: { $ne: false },
       status: { $in: ["PENDING", "CONFIRMED"] }
     });
 
@@ -676,7 +681,10 @@ export const POST = withAuth(async (request) => {
       const newOrder = await Order.create({
         restaurantId: request.restaurant,
         orderNumber,
+        originalOrderNumber: orderNumber,
+        isActive: true,
         invoiceNumber,
+        originalInvoiceNumber: invoiceNumber,
         items: formattedItems.map(item => ({ ...item, sentQty: item.qty })),
         subTotal,
         taxTotal,
@@ -796,6 +804,7 @@ export const GET = withAuth(async (request) => {
         _id: orderId,
         restaurantId: request.restaurant,
         source: { $in: ["WALK_IN", "STAFF", "POS"] },
+        isActive: { $ne: false },
         status: { $in: ["PENDING", "CONFIRMED"] },
       }).lean();
 
@@ -804,6 +813,7 @@ export const GET = withAuth(async (request) => {
           _id: orderId,
           restaurantId: request.restaurant,
           source: { $in: ["WALK_IN", "STAFF", "POS"] },
+          isActive: { $ne: false },
           status: { $nin: ["CANCELLED", "WAIVED"] },
         }).lean();
       }
@@ -817,6 +827,7 @@ export const GET = withAuth(async (request) => {
       let order = await Order.findOne({
         tableSession: sessionId,
         restaurantId: request.restaurant,
+        isActive: { $ne: false },
         status: { $in: ["PENDING", "CONFIRMED"] }
       }).sort({ createdAt: -1 }).lean();
 
@@ -824,6 +835,7 @@ export const GET = withAuth(async (request) => {
         order = await Order.findOne({
           tableSession: sessionId,
           restaurantId: request.restaurant,
+          isActive: { $ne: false },
           status: { $nin: ["CANCELLED", "WAIVED"] }
         }).sort({ createdAt: -1 }).lean();
       }
@@ -840,7 +852,7 @@ export const GET = withAuth(async (request) => {
     const limitParam = searchParams.get("limit");
     const limit = limitParam ? Math.min(Math.max(1, Number(limitParam) || 50), 1000) : 500;
     
-    let query = { restaurantId };
+    let query = { restaurantId, isActive: { $ne: false } };
     
     if (today === "true") {
       const start = new Date();
@@ -901,7 +913,11 @@ export const PATCH = withAuth(async (request) => {
       return sendError(new Error("Missing reason"), "A waive reason is required", 400);
     }
 
-    const order = await Order.findOne({ _id: orderId, restaurantId });
+    const order = await Order.findOne({
+      _id: orderId,
+      restaurantId,
+      isActive: { $ne: false },
+    });
     if (!order) {
       return sendError(new Error("Not Found"), "Order not found", 404);
     }
@@ -934,6 +950,7 @@ export const PATCH = withAuth(async (request) => {
       if (session?.isSessionOpen) {
         const blockingOrders = await Order.countDocuments({
           _id: { $in: session.activeOrders },
+          isActive: { $ne: false },
           paymentStatus: { $ne: "PAID" },
           status: { $nin: ["CANCELLED", "WAIVED"] },
         });

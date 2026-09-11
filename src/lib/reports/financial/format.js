@@ -33,6 +33,21 @@ export function formatRestaurantDate(
   }).format(new Date(date));
 }
 
+/** e.g. "Fri, Sep 11, 2026" — single date cell with weekday */
+export function formatRestaurantDateWithDay(
+  date,
+  timeZone = DEFAULT_RESTAURANT_TIMEZONE
+) {
+  if (!date) return "—";
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    weekday: "short",
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  }).format(new Date(date));
+}
+
 export function formatRestaurantTime(
   date,
   timeZone = DEFAULT_RESTAURANT_TIMEZONE

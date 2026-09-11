@@ -305,6 +305,7 @@ export const PUT = withAuth(async (request) => {
       // Backend verification: Do not silently release an unpaid active order
       const unpaidOrdersCount = await Order.countDocuments({
         restaurantId: request.restaurant,
+        isActive: { $ne: false },
         $or: [
           { _id: { $in: session.activeOrders } },
           { tableSession: session._id },

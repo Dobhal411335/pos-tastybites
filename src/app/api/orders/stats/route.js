@@ -50,6 +50,7 @@ export const GET = withAuth(async (request) => {
         {
           $match: {
             restaurantId,
+            isActive: { $ne: false },
             createdAt: { $gte: todayStart, $lt: todayEnd },
             status: { $ne: "CANCELLED" },
           },
@@ -80,6 +81,7 @@ export const GET = withAuth(async (request) => {
         {
           $match: {
             restaurantId,
+            isActive: { $ne: false },
             createdAt: { $gte: yesterdayStart, $lt: todayStart },
             status: { $ne: "CANCELLED" },
           },
@@ -103,6 +105,7 @@ export const GET = withAuth(async (request) => {
         {
           $match: {
             restaurantId,
+            isActive: { $ne: false },
             createdAt: { $gte: todayStart, $lt: todayEnd },
             status: { $ne: "CANCELLED" },
           },

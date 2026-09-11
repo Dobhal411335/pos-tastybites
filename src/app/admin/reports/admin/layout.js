@@ -16,6 +16,10 @@ const SIDEBAR_GROUPS = [
         exact: true,
       },
       {
+        label: "Order Management",
+        href: "/admin/reports/admin/order-management",
+      },
+      {
         label: "Today Order List",
         href: "/admin/reports/admin/today-order",
       },

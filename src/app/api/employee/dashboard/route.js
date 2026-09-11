@@ -56,6 +56,7 @@ export const GET = withEmployeeAuth(async (request) => {
     const recentOrders = await Order.find({
       restaurantId,
       processedBy: employeeId,
+      isActive: { $ne: false },
       createdAt: { $gte: oneDayAgo }
     }).sort({ createdAt: -1 }).lean();
 

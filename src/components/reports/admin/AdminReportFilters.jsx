@@ -121,12 +121,18 @@ export default function AdminReportFilters({
   const showPayment =
     section === "revenue" ||
     section === "daily-summary" ||
-    section === "today-order";
+    section === "today-order" ||
+    section === "order-management";
   const showActivityEvent = section === "activity";
   const showAuditEvent = section === "audit";
   const showKotStatus = section === "kitchen" || section === "bar";
   const showOrderStatus = section === "today-order";
-  const showSearch = section === "today-order";
+  const showSearch =
+    section === "today-order" || section === "order-management";
+  const searchPlaceholder =
+    section === "order-management"
+      ? "Search order / invoice / table / guest"
+      : "Search order / guest / table";
 
   const hasExtraFilters =
     showEmployee ||
@@ -275,7 +281,7 @@ export default function AdminReportFilters({
               <Input
                 value={searchDraft}
                 onChange={(e) => setSearchDraft(e.target.value)}
-                placeholder="Search order / guest / table"
+                placeholder={searchPlaceholder}
                 className="h-9 w-full sm:w-[220px] bg-white"
               />
               <Button type="submit" variant="outline" size="sm" className="h-9 shrink-0">

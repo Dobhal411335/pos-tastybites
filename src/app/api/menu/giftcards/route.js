@@ -43,10 +43,17 @@ async function historyWithOrderNumbers(history, restaurantId) {
     _id: { $in: missingIds },
     restaurantId,
   })
-    .select("_id orderNumber")
+    .select("_id orderNumber originalOrderNumber isActive")
     .lean();
 
-  const byId = new Map(orders.map((o) => [String(o._id), o.orderNumber]));
+  const byId = new Map(
+    orders.map((o) => [
+      String(o._id),
+      o.isActive === false
+        ? o.originalOrderNumber || o.orderNumber
+        : o.orderNumber,
+    ])
+  );
 
   return rows.map((h) => {
     const orderNumber =

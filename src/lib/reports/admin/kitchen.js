@@ -98,6 +98,8 @@ export async function buildAdminPrintTickets({
         },
       },
     },
+    // Hide tickets whose order was soft-deleted
+    { $match: { $nor: [{ "orderDoc.isActive": false }] } },
     {
       $facet: {
         statusCounts: [{ $group: { _id: "$status", count: { $sum: 1 } } }],

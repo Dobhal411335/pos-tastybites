@@ -614,7 +614,10 @@ export async function reprintOrderTicket({
   }
 
   // 2. If no prior PrintJob exists, fetch the order document to build a new print job marked as reprint
-  const order = await Order.findById(orderId).lean();
+  const order = await Order.findOne({
+    _id: orderId,
+    isActive: { $ne: false },
+  }).lean();
   if (!order) {
     throw Object.assign(new Error("Order not found"), { statusCode: 404 });
   }

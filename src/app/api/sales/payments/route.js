@@ -60,6 +60,7 @@ export const POST = withAuth(async (request) => {
     const order = await Order.findOne({
       _id: orderId,
       restaurantId: request.restaurant,
+      isActive: { $ne: false },
     });
     if (!order) {
       return sendError(new Error("Not Found"), "Order not found", 404);
@@ -454,6 +455,7 @@ export const POST = withAuth(async (request) => {
         // Check if there are any remaining unpaid active orders for this session
         const unpaidCount = await Order.countDocuments({
           restaurantId: request.restaurant,
+          isActive: { $ne: false },
           $or: [
             { _id: { $in: session.activeOrders } },
             { tableSession: session._id },

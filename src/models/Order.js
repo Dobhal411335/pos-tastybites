@@ -38,8 +38,21 @@ const OrderSchema = new mongoose.Schema(
   {
     restaurantId: { type: mongoose.Schema.Types.ObjectId, ref: 'Restaurant', index: true },
     orderNumber: { type: String, required: true },
+    /** First assigned order # at create (historical reference). */
+    originalOrderNumber: { type: String, default: null },
     invoiceNumber: { type: String },
+    /** First assigned invoice # at create (historical reference). */
+    originalInvoiceNumber: { type: String, default: null },
     items: [OrderItemSchema],
+    /** Soft-delete: inactive orders are excluded from active reports. */
+    isActive: { type: Boolean, default: true, index: true },
+    deletedAt: { type: Date, default: null },
+    deletedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee', default: null },
+    deletionReason: { type: String, default: null },
+    restoredAt: { type: Date, default: null },
+    restoredBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee', default: null },
+    permanentlyDeletedAt: { type: Date, default: null },
+    permanentlyDeletedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee', default: null },
     subTotal: { type: Number, required: true },
     taxTotal: { type: Number, default: 0 },
     serviceChargeTotal: { type: Number, default: 0 },
@@ -87,8 +100,24 @@ const OrderSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-OrderSchema.index({ restaurantId: 1, orderNumber: 1 }, { unique: true });
-OrderSchema.index({ restaurantId: 1, invoiceNumber: 1 }, { unique: true, sparse: true });
+// Partial unique among active orders only — name must differ from legacy full unique index.
+OrderSchema.index(
+  { restaurantId: 1, orderNumber: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { isActive: true },
+    name: "restaurantId_1_orderNumber_1_active",
+  }
+);
+OrderSchema.index(
+  { restaurantId: 1, invoiceNumber: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { isActive: true },
+    name: "restaurantId_1_invoiceNumber_1_active",
+  }
+);
+OrderSchema.index({ restaurantId: 1, isActive: 1, createdAt: -1 });
 OrderSchema.index({ restaurantId: 1, createdAt: -1 });
 OrderSchema.index({ restaurantId: 1, status: 1, createdAt: -1 });
 OrderSchema.index({ restaurantId: 1, paymentStatus: 1, createdAt: -1 });

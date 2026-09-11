@@ -490,6 +490,7 @@ function orderDateMatch(rid, dateFrom, dateTo) {
   const { end } = businessDateBounds(dateTo);
   return {
     restaurantId: rid,
+    isActive: { $ne: false },
     createdAt: { $gte: start, $lt: end },
   };
 }

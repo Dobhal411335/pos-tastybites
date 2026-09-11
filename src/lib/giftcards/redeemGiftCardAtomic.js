@@ -36,6 +36,7 @@ export async function redeemGiftCardAtomic({
     orderDoc = await Order.findOne({
       _id: orderId,
       restaurantId: restaurantObjectId,
+      isActive: { $ne: false },
     })
       .select("orderNumber partyName guestName totalAmount items")
       .lean();

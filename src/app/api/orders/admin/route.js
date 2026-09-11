@@ -22,7 +22,10 @@ export const POST = withAuth(async (request) => {
     const newOrder = await Order.create({
       restaurantId: request.restaurant,
       orderNumber,
+      originalOrderNumber: orderNumber,
+      isActive: true,
       invoiceNumber,
+      originalInvoiceNumber: invoiceNumber,
       items: items.map(item => ({
         menuItemId: item.id,
         name: item.name,
@@ -65,6 +68,7 @@ export const GET = withAuth(async (request) => {
     const orders = await Order.find({
       restaurantId: request.restaurant,
       source: "ADMIN",
+      isActive: { $ne: false },
       createdAt: { $gte: startOfToday }
     }).sort({ createdAt: -1 });
 
