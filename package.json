@@ -7,7 +7,7 @@
   "main": "electron/main.js",
   "description": "Tasty Bites restaurant POS and management platform",
   "scripts": {
-    "dev": "node server.js",
+    "dev": "node --require ./scripts/dev-preload.cjs server.js",
     "build": "next build",
     "start": "NODE_ENV=production node server.js",
     "lint": "eslint",

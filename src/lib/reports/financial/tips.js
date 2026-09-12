@@ -62,7 +62,7 @@ export async function buildFinancialTips({ restaurantId, ...filters }) {
 
   return {
     meta: reportMeta(filters),
-    empty: kpis.tips === 0 && kpis.serviceCharges === 0,
+    empty: kpis.orderCount === 0,
     summary: {
       tips: kpis.tips,
       serviceCharges: kpis.serviceCharges,

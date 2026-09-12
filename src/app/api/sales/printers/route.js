@@ -16,13 +16,12 @@ const EMPLOYEE_ROLES = [
 
 /**
  * GET /api/sales/printers
- * Enabled printer mappings for the Electron print agent (LAN host/port only).
+ * Printer mappings for print agents (includes disabled/off so agents can leave jobs queued).
  */
 export const GET = withAuth(async (request) => {
   try {
     const printers = await PrinterConfig.find({
       restaurant: request.restaurant,
-      enabled: true,
     })
       .select(
         "name type target host port connectionType systemPrinterName location enabled",

@@ -8,4 +8,5 @@ contextBridge.exposeInMainWorld('electronPOS', {
     chrome: process.versions.chrome,
   },
   printRaw: (payload) => ipcRenderer.invoke('pos:print-raw', payload),
+  probePrinter: (payload) => ipcRenderer.invoke('pos:probe-printer', payload),
 });

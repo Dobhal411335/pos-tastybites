@@ -1,7 +1,20 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ArrowUpDown, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
+import {
+  ArrowUpDown,
+  Ban,
+  CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
+  ClipboardList,
+  Clock,
+  FileCheck2,
+  HandCoins,
+  ListOrdered,
+  Loader2,
+} from "lucide-react";
+import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -31,7 +44,7 @@ import {
 export default function FinancialOrdersReport() {
   const [filters, setFilters] = useState(DEFAULT_FINANCIAL_FILTERS);
   const stableFilters = useMemo(() => filters, [filters]);
-  const { data, loading } = useFinancialReport(
+  const { data, loading, error, reload } = useFinancialReport(
     "/api/admin/reports/financial/orders",
     stableFilters,
     { paginate: true }
@@ -40,15 +53,24 @@ export default function FinancialOrdersReport() {
   const [orderId, setOrderId] = useState(null);
   const [orderDetail, setOrderDetail] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState(null);
 
   const openOrder = async (id) => {
     setOrderId(id);
     setOrderDetail(null);
+    setDetailError(null);
     setDetailLoading(true);
     try {
       const res = await fetch(`/api/orders/${id}`, { credentials: "include" });
       const json = await res.json();
-      if (json.success) setOrderDetail(json.data);
+      if (!res.ok || !json.success) {
+        throw new Error(json.message || "Order could not be loaded.");
+      }
+      setOrderDetail(json.data);
+    } catch (err) {
+      const message = err.message || "Order could not be loaded.";
+      setDetailError(message);
+      toast.error(message);
     } finally {
       setDetailLoading(false);
     }
@@ -73,25 +95,58 @@ export default function FinancialOrdersReport() {
         filters={filters}
         onFiltersChange={setFilters}
         filterProps={{
+          showStatus: true,
           showTable: true,
           showGuest: true,
           showSearch: true,
-          searchPlaceholder: "Order # or guest",
+          searchPlaceholder: "Order #, invoice #, or guest",
         }}
         loading={loading}
-        empty={!data || data.empty}
+        error={error}
+        onRetry={reload}
+        empty={!error && (!data || data.empty)}
         emptyMessage="No orders found for the selected period."
       >
         <div className="space-y-4">
           <FinancialKpiCards
             items={[
-              { label: "Total Orders", value: counts.total || 0 },
-              { label: "Paid", value: counts.PAID || 0 },
-              { label: "Pending", value: counts.PENDING || 0 },
-              { label: "Confirmed", value: counts.CONFIRMED || 0 },
-              { label: "Completed", value: counts.COMPLETED || 0 },
-              { label: "Cancelled", value: counts.CANCELLED || 0 },
-              { label: "Waived", value: counts.WAIVED || 0 },
+              {
+                label: "Total Orders",
+                value: counts.total || 0,
+                icon: ClipboardList,
+              },
+              {
+                label: "Paid",
+                value: counts.PAID || 0,
+                icon: HandCoins,
+                tone: "success",
+              },
+              {
+                label: "Pending",
+                value: counts.PENDING || 0,
+                icon: Clock,
+              },
+              {
+                label: "Confirmed",
+                value: counts.CONFIRMED || 0,
+                icon: ListOrdered,
+              },
+              {
+                label: "Completed",
+                value: counts.COMPLETED || 0,
+                icon: CheckCircle2,
+              },
+              {
+                label: "Cancelled",
+                value: counts.CANCELLED || 0,
+                icon: Ban,
+                tone: "danger",
+              },
+              {
+                label: "Waived",
+                value: counts.WAIVED || 0,
+                icon: FileCheck2,
+              },
             ]}
           />
 
@@ -101,6 +156,7 @@ export default function FinancialOrdersReport() {
                 <TableRow>
                   {[
                     ["orderNumber", "Order #"],
+                    ["invoiceNumber", "Invoice #"],
                     ["updatedAt", "Date"],
                     [null, "Time"],
                     [null, "Employee"],
@@ -140,6 +196,9 @@ export default function FinancialOrdersReport() {
                     onClick={() => openOrder(row.id)}
                   >
                     <TableCell className="font-medium">{row.orderNumber}</TableCell>
+                    <TableCell className="whitespace-nowrap">
+                      {row.invoiceNumber || "—"}
+                    </TableCell>
                     <TableCell className="whitespace-nowrap">{row.date}</TableCell>
                     <TableCell className="whitespace-nowrap">{row.time}</TableCell>
                     <TableCell>{row.employee}</TableCell>
@@ -167,9 +226,7 @@ export default function FinancialOrdersReport() {
           </div>
 
           <div className="flex items-center justify-between text-sm text-zinc-500">
-            <p>
-              {data?.total || 0} orders
-            </p>
+            <p>{data?.total || 0} orders</p>
             <div className="flex items-center gap-2">
               <Button
                 variant="outline"
@@ -210,7 +267,21 @@ export default function FinancialOrdersReport() {
           ) : orderDetail ? (
             <OrderDetailBody order={orderDetail} />
           ) : (
-            <p className="mt-4 text-sm text-zinc-500">Order could not be loaded.</p>
+            <div className="mt-4 space-y-3">
+              <p className="text-sm text-zinc-500">
+                {detailError || "Order could not be loaded."}
+              </p>
+              {orderId ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => openOrder(orderId)}
+                >
+                  Retry
+                </Button>
+              ) : null}
+            </div>
           )}
         </SheetContent>
       </Sheet>

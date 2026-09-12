@@ -12,6 +12,8 @@ import { reportMeta } from "./query.js";
 const LIST_PROJECT = {
   _id: 1,
   orderNumber: 1,
+  invoiceNumber: 1,
+  originalInvoiceNumber: 1,
   createdAt: 1,
   updatedAt: 1,
   processedBy: 1,
@@ -84,6 +86,8 @@ export async function buildFinancialOrders({ restaurantId, ...filters }) {
   const rows = (facet?.rows || []).map((order) => ({
     id: String(order._id),
     orderNumber: order.orderNumber,
+    invoiceNumber: order.invoiceNumber || null,
+    originalInvoiceNumber: order.originalInvoiceNumber || null,
     date: formatRestaurantDate(order.updatedAt, tz),
     time: formatRestaurantTime(order.updatedAt, tz),
     createdAt: order.createdAt,

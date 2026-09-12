@@ -8,17 +8,23 @@ import { setSocketServer } from './src/lib/socketServer.js';
 
 nextEnv.loadEnvConfig(process.cwd());
 
+// Keep in sync with scripts/dev-preload.cjs (preload runs first for ESM import order).
+const dev = process.env.NODE_ENV !== 'production';
+if (dev) {
+  process.env.NODE_ENV ||= 'development';
+  process.env.__NEXT_DEV_SERVER = '1';
+}
+
 const {
   resolveSocketAuth,
   authorizeSocketRoom,
 } = await import('./src/lib/socketAuth.js');
 
-const dev = process.env.NODE_ENV !== 'production';
 const hostname = 'localhost';
 const port = process.env.PORT || 3000;
 
 // Initialize Next.js
-const app = next({ dev, hostname, port });
+const app = next({ dev, hostname, port, dir: process.cwd() });
 const handle = app.getRequestHandler();
 
 const corsOrigin = process.env.SOCKET_CORS_ORIGIN

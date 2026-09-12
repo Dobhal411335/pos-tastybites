@@ -4,8 +4,9 @@ import { eachBusinessDate } from "./datePresets.js";
 import { dayKeyExpr, paymentTenderMatch } from "./match.js";
 
 /**
- * Mirror of resolveTenders() as aggregation stages.
- * cashAmount/cardAmount include tip when that tender took the overpay.
+ * Mirror of resolveTenders() in @/lib/eod/eodHelpers as aggregation stages.
+ * Keep both in sync: cashAmount/cardAmount include tip when that tender took the overpay.
+ * Prefer explicit cashAmount/cardAmount/giftcardUsedAmount; fall back to paymentMethod.
  */
 export const TENDER_STAGES = [
   {

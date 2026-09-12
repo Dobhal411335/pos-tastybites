@@ -275,6 +275,23 @@ export default function PrintJobsPage() {
       "Print job requeued"
     );
 
+  const handleCancel = (id) =>
+    runAction(
+      id,
+      async () => {
+        const res = await fetch(`/api/sales/print-jobs/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "cancel" }),
+        });
+        const json = await res.json();
+        if (!res.ok || !json.success) {
+          throw new Error(json.message || "Failed to cancel job");
+        }
+      },
+      "Print job cancelled"
+    );
+
   const handleConfirmPrintAgain = async () => {
     if (!reprintTarget || reprinting || activeReprintRef.current) return;
     activeReprintRef.current = true;
@@ -867,6 +884,24 @@ export default function PrintJobsPage() {
                                   <RotateCcw className="w-3.5 h-3.5 mr-1" />
                                 )}
                                 Retry
+                              </Button>
+                            )}
+
+                            {job.status === "QUEUED" && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-8 px-2.5 text-xs text-zinc-700 border-zinc-300 hover:bg-zinc-100 hover:text-zinc-900"
+                                disabled={busy}
+                                onClick={() => handleCancel(job._id)}
+                                title="Cancel this queued job so it will not print"
+                              >
+                                {busy ? (
+                                  <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" />
+                                ) : (
+                                  <X className="w-3.5 h-3.5 mr-1" />
+                                )}
+                                Cancel
                               </Button>
                             )}
 

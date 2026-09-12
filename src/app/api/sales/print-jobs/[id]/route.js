@@ -11,7 +11,9 @@ import { logger } from "@/utils/logger";
 import {
   SALES_PRINT_ROLES,
   retryPrintJob,
+  cancelPrintJob,
   assertPrintAdminRole,
+  toPrintJobEventPayload,
 } from "@/lib/printing/printJobService";
 
 /** Floor staff + admins — Electron print agent needs job detail for ESC/POS. */
@@ -252,15 +254,9 @@ export const PATCH = withAuth(async (request, { params }) => {
     }
 
     if (action === "cancel") {
-      const job = await PrintJob.findById(id);
-      if (!job) {
-        return sendError(new Error("Not Found"), "Print job not found", 404);
-      }
-      if (String(job.restaurantId) !== String(request.restaurant)) {
-        return sendError(new Error("Forbidden"), "Access denied", 403);
-      }
-      job.status = "CANCELLED";
-      await job.save();
+      const job = await cancelPrintJob(id, {
+        restaurantId: request.restaurant,
+      });
       return sendSuccess(job, "Print job cancelled");
     }
 

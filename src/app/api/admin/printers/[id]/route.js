@@ -38,7 +38,7 @@ export const PATCH = withAuth(async (request, { params }) => {
     const printer = await PrinterConfig.findOneAndUpdate(
       { _id: id, restaurant: request.restaurant },
       normalized.data,
-      { new: true, runValidators: true },
+      { returnDocument: "after", runValidators: true },
     );
 
     if (!printer) {

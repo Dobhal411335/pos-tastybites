@@ -58,6 +58,37 @@ function sendRawToPrinter(host, port, data) {
   });
 }
 
+const PROBE_TIMEOUT_MS = 5000;
+
+function probePrinter(host, port) {
+  return new Promise((resolve, reject) => {
+    const socket = new net.Socket();
+    let settled = false;
+
+    const finish = (err, result) => {
+      if (settled) return;
+      settled = true;
+      socket.destroy();
+      if (err) reject(err);
+      else resolve(result);
+    };
+
+    socket.setTimeout(PROBE_TIMEOUT_MS);
+
+    socket.on('timeout', () => {
+      finish(new Error(`Printer connection timed out (${host}:${port})`));
+    });
+
+    socket.on('error', (err) => {
+      finish(new Error(err?.message || 'Printer connection failed'));
+    });
+
+    socket.connect(port, host, () => {
+      finish(null, { success: true, host, port });
+    });
+  });
+}
+
 export function registerPrintIpc() {
   ipcMain.handle('pos:print-raw', async (_event, payload) => {
     try {
@@ -79,6 +110,19 @@ export function registerPrintIpc() {
       return {
         success: false,
         error: err?.message || 'Print failed',
+      };
+    }
+  });
+
+  ipcMain.handle('pos:probe-printer', async (_event, payload) => {
+    try {
+      const { host, port } = validatePrintTarget(payload || {});
+      const result = await probePrinter(host, port);
+      return { success: true, ...result };
+    } catch (err) {
+      return {
+        success: false,
+        error: err?.message || 'Probe failed',
       };
     }
   });

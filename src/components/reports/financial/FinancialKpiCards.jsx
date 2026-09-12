@@ -1,22 +1,40 @@
 "use client";
 
+import { AdminKpiCard } from "@/components/reports/admin/adminReportUi";
 import { money } from "./useFinancialReport";
+import { cn } from "@/lib/utils";
 
-export default function FinancialKpiCards({ items = [] }) {
+export default function FinancialKpiCards({
+  items = [],
+  className,
+  columns = "auto",
+}) {
+  const gridClass =
+    columns === 2
+      ? "grid grid-cols-1 sm:grid-cols-2 gap-6"
+      : columns === 3
+        ? "grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6"
+        : "grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6";
+
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8 gap-2">
+    <div className={cn(gridClass, className)}>
       {items.map((item) => (
-        <div
+        <AdminKpiCard
           key={item.label}
-          className="rounded-md border border-zinc-200 bg-white px-3 py-2"
-        >
-          <p className="text-[11px] font-medium uppercase tracking-wide text-zinc-500">
-            {item.label}
-          </p>
-          <p className="mt-0.5 text-base font-semibold tabular-nums text-zinc-900">
-            {item.money ? money(item.value) : item.value}
-          </p>
-        </div>
+          label={item.label}
+          value={
+            item.displayValue != null
+              ? item.displayValue
+              : item.money
+                ? money(item.value)
+                : item.value
+          }
+          icon={item.icon}
+          hint={item.hint}
+          tone={item.tone}
+          delta={item.delta}
+          deltaLabel={item.deltaLabel}
+        />
       ))}
     </div>
   );

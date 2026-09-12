@@ -80,14 +80,23 @@ export function toPrintJobEventPayload(job, orderNumber, printerConfig = null) {
   };
 }
 
+/**
+ * Resolve which printer should handle a job.
+ * - Exactly one enabled printer → use it for all targets (single-printer shops)
+ * - Multiple → match by printerTarget (KITCHEN / COUNTER / RECEIPT)
+ */
 async function resolvePrinterConfig(restaurantId, printerTarget) {
-  if (!restaurantId || !printerTarget) return null;
-  return PrinterConfig.findOne({
+  if (!restaurantId) return null;
+  const enabled = await PrinterConfig.find({
     restaurant: restaurantId,
-    target: printerTarget,
     enabled: true,
   }).lean();
+  if (!enabled.length) return null;
+  if (enabled.length === 1) return enabled[0];
+  if (!printerTarget) return null;
+  return enabled.find((p) => p.target === printerTarget) || null;
 }
+
 
 function emitPrintEvent(eventName, restaurantId, floorId, payload) {
   if (!global.io) return;
@@ -444,6 +453,32 @@ export async function retryPrintJob(jobId, { runNow = false, simulateFailure = f
   }
 
   return { job, result: { success: true, message: "Requeued" } };
+}
+
+/**
+ * Cancel a QUEUED print job so agents will not print it.
+ */
+export async function cancelPrintJob(jobId, { restaurantId } = {}) {
+  const job = await PrintJob.findById(jobId);
+  if (!job) {
+    throw Object.assign(new Error("Print job not found"), { statusCode: 404 });
+  }
+  if (restaurantId && String(job.restaurantId) !== String(restaurantId)) {
+    throw Object.assign(new Error("Forbidden"), { statusCode: 403 });
+  }
+  if (job.status !== "QUEUED") {
+    throw Object.assign(
+      new Error("Only queued print jobs can be cancelled"),
+      { statusCode: 400 }
+    );
+  }
+
+  let floorId = null;
+  const order = await Order.findById(job.orderId).lean();
+  if (order?.floor) floorId = order.floor;
+
+  await persistStatus(job, { status: "CANCELLED" }, floorId);
+  return job;
 }
 
 export async function markPrintJobPrinted(jobId, { restaurantId } = {}) {

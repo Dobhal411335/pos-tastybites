@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { DollarSign, Percent, TrendingDown } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -11,7 +12,6 @@ import {
 } from "@/components/ui/table";
 import FinancialPageHeader from "./FinancialPageHeader";
 import FinancialKpiCards from "./FinancialKpiCards";
-import FinancialEmpty from "./FinancialEmpty";
 import { ChartCard, seriesHasValues, TimeAreaChart } from "./FinancialCharts";
 import {
   DEFAULT_FINANCIAL_FILTERS,
@@ -22,7 +22,7 @@ import {
 export default function FinancialDiscountsReport() {
   const [filters, setFilters] = useState(DEFAULT_FINANCIAL_FILTERS);
   const stableFilters = useMemo(() => filters, [filters]);
-  const { data, loading } = useFinancialReport(
+  const { data, loading, error, reload } = useFinancialReport(
     "/api/admin/reports/financial/discounts",
     stableFilters
   );
@@ -33,56 +33,75 @@ export default function FinancialDiscountsReport() {
       description="Order-level discounts stored at checkout (coupon codes and staff discount)."
       filters={filters}
       onFiltersChange={setFilters}
+      filterProps={{ showStatus: false }}
       loading={loading}
+      error={error}
+      onRetry={reload}
+      empty={!error && (!data || data.empty)}
     >
-      {!data || data.empty ? (
-        <FinancialEmpty />
-      ) : (
-        <div className="space-y-4">
-          <FinancialKpiCards
-            items={[
-              { label: "Gross Sales", value: data.summary.grossSales, money: true },
-              { label: "Total Discount", value: data.summary.discounts, money: true },
-              { label: "Net Sales", value: data.summary.netSales, money: true },
-            ]}
+      {data && !data.empty ? (
+      <div className="space-y-4">
+        <FinancialKpiCards
+          columns={3}
+          items={[
+            {
+              label: "Gross Sales",
+              value: data.summary.grossSales,
+              money: true,
+              icon: DollarSign,
+            },
+            {
+              label: "Total Discount",
+              value: data.summary.discounts,
+              money: true,
+              icon: Percent,
+              tone: "danger",
+            },
+            {
+              label: "Net Sales",
+              value: data.summary.netSales,
+              money: true,
+              icon: TrendingDown,
+            },
+          ]}
+        />
+
+        <ChartCard
+          title="Discount amount over time"
+          empty={!seriesHasValues(data.charts?.discountOverTime)}
+        >
+          <TimeAreaChart data={data.charts?.discountOverTime} color="#eab308" />
+        </ChartCard>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+          <BreakdownTable
+            title="By discount"
+            headers={["Discount Name", "Orders", "Amount"]}
+            rows={(data.byCode || []).map((row) => [
+              row.discountName,
+              row.orders,
+              money(row.amount),
+            ])}
           />
-
-          <ChartCard
-            title="Discount amount over time"
-            empty={!seriesHasValues(data.charts?.discountOverTime)}
-          >
-            <TimeAreaChart data={data.charts?.discountOverTime} color="#eab308" />
-          </ChartCard>
-
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-            <BreakdownTable
-              title="By discount"
-              headers={["Discount Name", "Orders", "Amount"]}
-              rows={(data.byCode || []).map((row) => [
-                row.discountName,
-                row.orders,
-                money(row.amount),
-              ])}
-            />
-            <BreakdownTable
-              title="By employee"
-              headers={["Employee", "Orders", "Amount"]}
-              rows={(data.byEmployee || []).map((row) => [
-                row.employeeName,
-                row.orders,
-                money(row.amount),
-              ])}
-            />
-            <BreakdownTable
-              title="By date"
-              headers={["Date", "Orders", "Amount"]}
-              rows={(data.byDate || [])
-                .filter((row) => row.amount > 0)
-                .map((row) => [row.date, row.orders, money(row.amount)])}
-            />
-          </div>
+          <BreakdownTable
+            title="By employee"
+            headers={["Employee", "Orders", "Amount"]}
+            rows={(data.byEmployee || []).map((row) => [
+              row.employeeName,
+              row.orders,
+              money(row.amount),
+            ])}
+          />
+          <BreakdownTable
+            title="By date"
+            headers={["Date", "Orders", "Amount"]}
+            rows={(data.byDate || [])
+              .filter((row) => row.amount > 0)
+              .map((row) => [row.date, row.orders, money(row.amount)])}
+          />
         </div>
-      )}
+      </div>
+      ) : null}
     </FinancialPageHeader>
   );
 }

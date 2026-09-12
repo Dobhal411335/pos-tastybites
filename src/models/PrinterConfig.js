@@ -61,6 +61,34 @@ const PrinterConfigSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    /** Last on-site TCP/USB reachability check (reported by mobile / Electron / print-bridge) */
+    lastReachability: {
+      status: {
+        type: String,
+        enum: ["reachable", "unreachable", "unknown"],
+        default: "unknown",
+      },
+      checkedAt: {
+        type: Date,
+        default: null,
+      },
+      error: {
+        type: String,
+        trim: true,
+        maxlength: 500,
+        default: null,
+      },
+      source: {
+        type: String,
+        enum: ["mobile", "electron", "print-bridge"],
+        default: undefined,
+      },
+      requestId: {
+        type: String,
+        trim: true,
+        default: null,
+      },
+    },
   },
   { timestamps: true },
 );

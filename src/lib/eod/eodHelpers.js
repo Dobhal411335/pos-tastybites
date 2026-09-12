@@ -94,6 +94,10 @@ export function normalizePaymentTypeLabel(method, giftcardUsedAmount = 0) {
 /**
  * Resolve cash / card / gift tender amounts for a paid order.
  */
+/**
+ * Resolve cash/card/gift tenders from an Order document.
+ * Aggregation mirror: TENDER_STAGES in @/lib/reports/financial/metrics — keep both in sync.
+ */
 export function resolveTenders(order) {
   const tip = r2(order.tipAmount);
   const total = r2(order.totalAmount);

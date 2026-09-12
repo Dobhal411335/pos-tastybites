@@ -17,9 +17,38 @@ function isElectronDesktop() {
   );
 }
 
+function canProbePrinter() {
+  return (
+    isElectronDesktop() &&
+    typeof window.electronPOS?.probePrinter === "function"
+  );
+}
+
 function isNetworkPrinter(printer) {
   const type = String(printer?.connectionType || "LAN").toUpperCase();
-  return type === "LAN" || type === "NETWORK";
+  return (
+    printer?.enabled !== false &&
+    (type === "LAN" || type === "NETWORK") &&
+    Boolean(String(printer?.host || "").trim())
+  );
+}
+
+/**
+ * Exactly one enabled network printer → use for any target.
+ * Multiple → match by target (and optional printerId).
+ */
+function pickNetworkPrinter(printers, { printerId, printerTarget } = {}) {
+  const enabledNet = (printers || []).filter((p) => isNetworkPrinter(p));
+  if (!enabledNet.length) return null;
+  if (printerId) {
+    const byId = enabledNet.find((p) => String(p._id) === String(printerId));
+    if (byId) return byId;
+  }
+  if (enabledNet.length === 1) return enabledNet[0];
+  if (printerTarget) {
+    return enabledNet.find((p) => p.target === printerTarget) || null;
+  }
+  return null;
 }
 
 /**
@@ -32,6 +61,7 @@ export default function ElectronPrintAgent() {
   const { socket } = useSocket();
   const printersRef = useRef([]);
   const processingRef = useRef(new Set());
+  const probingRef = useRef(new Set());
 
   useEffect(() => {
     if (!isElectronDesktop()) return undefined;
@@ -62,13 +92,11 @@ export default function ElectronPrintAgent() {
   useEffect(() => {
     if (!socket || !isElectronDesktop()) return undefined;
 
-    const findPrinter = (target) =>
-      printersRef.current.find(
-        (p) =>
-          p.enabled !== false &&
-          p.target === target &&
-          isNetworkPrinter(p),
-      );
+    const findPrinter = (target, printerId) =>
+      pickNetworkPrinter(printersRef.current, {
+        printerId,
+        printerTarget: target,
+      });
 
     const sendToPrinter = async (printer, dataBase64) => {
       return window.electronPOS.printRaw({
@@ -84,9 +112,11 @@ export default function ElectronPrintAgent() {
       }
 
       const printer =
-        printersRef.current.find((p) => p._id === payload?.printerId) ||
-        printersRef.current.find((p) => p.target === payload?.target) ||
-        payload;
+        pickNetworkPrinter(printersRef.current, {
+          printerId: payload?.printerId,
+          printerTarget: payload?.target,
+        }) ||
+        (payload?.host ? payload : null);
 
       if (!isNetworkPrinter(printer) || !printer?.host) {
         return;
@@ -122,30 +152,21 @@ export default function ElectronPrintAgent() {
       processingRef.current.add(jobId);
 
       try {
-        if (!printersRef.current.length) {
+        try {
           const res = await employeeFetch("/api/sales/printers");
           const json = await res.json();
           if (json.success) printersRef.current = json.data || [];
+        } catch {
+          // keep cached list if refresh fails
         }
 
-        const printer = findPrinter(payload?.printerTarget);
+        const printer = findPrinter(
+          payload?.printerTarget,
+          payload?.printerId,
+        );
         if (!printer) {
-          const anyUsb = printersRef.current.find(
-            (p) =>
-              p.target === payload?.printerTarget &&
-              String(p.connectionType || "").toUpperCase() === "USB",
-          );
-          if (anyUsb) {
-            return;
-          }
-          await employeeFetch(`/api/sales/print-jobs/${jobId}/complete`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              success: false,
-              errorMessage: `No enabled network printer for target ${payload?.printerTarget}`,
-            }),
-          });
+          // No enabled network printer (turned off / missing) — leave QUEUED.
+          // USB targets are handled by print-bridge.
           return;
         }
 
@@ -206,12 +227,78 @@ export default function ElectronPrintAgent() {
       processJob(payload);
     };
 
+    const handleProbe = async (payload) => {
+      if (payload?.connectionType && !isNetworkPrinter(payload)) {
+        return;
+      }
+
+      const printerId = payload?.printerId;
+      if (!printerId || !canProbePrinter()) return;
+
+      const probeKey = payload?.requestId || printerId;
+      if (probingRef.current.has(probeKey)) return;
+      probingRef.current.add(probeKey);
+
+      try {
+        const cached = printersRef.current.find(
+          (p) => String(p._id) === String(printerId),
+        );
+        const host = payload?.host || cached?.host;
+        const port = payload?.port || cached?.port || 9100;
+
+        if (!host) {
+          await employeeFetch(`/api/admin/printers/${printerId}/probe-result`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              reachable: false,
+              error: "No host configured for probe",
+              source: "electron",
+              requestId: payload?.requestId,
+            }),
+          });
+          return;
+        }
+
+        const result = await window.electronPOS.probePrinter({ host, port });
+        await employeeFetch(`/api/admin/printers/${printerId}/probe-result`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            reachable: !!result?.success,
+            error: result?.error,
+            source: "electron",
+            requestId: payload?.requestId,
+          }),
+        });
+      } catch (err) {
+        try {
+          await employeeFetch(`/api/admin/printers/${printerId}/probe-result`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              reachable: false,
+              error: err?.message || "Electron probe failed",
+              source: "electron",
+              requestId: payload?.requestId,
+            }),
+          });
+        } catch {
+          // ignore
+        }
+      } finally {
+        probingRef.current.delete(probeKey);
+      }
+    };
+
     socket.on("NEW_PRINT_JOB", onNewJob);
     socket.on("PRINTER_TEST", handleTest);
+    socket.on("PRINTER_PROBE", handleProbe);
 
     return () => {
       socket.off("NEW_PRINT_JOB", onNewJob);
       socket.off("PRINTER_TEST", handleTest);
+      socket.off("PRINTER_PROBE", handleProbe);
     };
   }, [socket]);
 

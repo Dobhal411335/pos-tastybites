@@ -8,6 +8,8 @@ import EmployeeShift from "@/models/employee/EmployeeShift";
 import Restaurant from "@/models/Restaurant";
 import Giftcard from "@/models/menu/Giftcard";
 import { buildWorkingHoursSummaryPipeline } from "@/lib/payEstimate";
+import { ACTIVE_ORDER_FILTER } from "@/lib/orders/activeOrderFilter";
+import { paidRevenueOrderMatch } from "@/lib/reports/financial/match";
 import {
   businessCalendarDate,
   businessDateBounds,
@@ -52,26 +54,15 @@ export async function buildEodReport({
     statusRows,
     issuedGiftCards,
   ] = await Promise.all([
-      Order.find({
-        restaurantId: rid,
-        isActive: { $ne: false },
-        $or: [{ paymentStatus: "PAID" }, { status: "PAID" }],
-        status: { $nin: ["CANCELLED", "WAIVED"] },
-        $and: [
-          {
-            $or: [
-              { updatedAt: { $gte: start, $lt: end } },
-              { createdAt: { $gte: start, $lt: end } },
-            ],
-          },
-        ],
-      })
+      Order.find(
+        paidRevenueOrderMatch({ restaurantId: rid, start, end })
+      )
         .populate("processedBy", "firstName lastName name")
         .populate("table", "section tableNumber")
         .lean(),
       Order.find({
         restaurantId: rid,
-        isActive: { $ne: false },
+        ...ACTIVE_ORDER_FILTER,
         status: "CANCELLED",
         $or: [
           { updatedAt: { $gte: start, $lt: end } },
@@ -105,7 +96,7 @@ export async function buildEodReport({
         {
           $match: {
             restaurantId: rid,
-            isActive: { $ne: false },
+            ...ACTIVE_ORDER_FILTER,
             $or: [
               { updatedAt: { $gte: start, $lt: end } },
               { createdAt: { $gte: start, $lt: end } },

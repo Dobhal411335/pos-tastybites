@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import { businessDateBounds } from "@/lib/eod/eodHelpers";
+import { ACTIVE_ORDER_FILTER } from "@/lib/orders/activeOrderFilter";
 import { DEFAULT_RESTAURANT_TIMEZONE } from "@/lib/restaurantTime";
 
 export const ORDER_STATUSES = [
@@ -17,6 +18,7 @@ export const ORDER_SORT_FIELDS = new Set([
   "updatedAt",
   "createdAt",
   "orderNumber",
+  "invoiceNumber",
   "totalAmount",
   "subTotal",
   "status",
@@ -41,6 +43,21 @@ export function escapeRegex(value) {
 }
 
 /**
+ * Paid revenue for a UTC window: active + PAID + not cancelled/waived + updatedAt.
+ * Shared by Financial reports and EOD so Overview and Day Closing reconcile.
+ */
+export function paidRevenueOrderMatch({ restaurantId, start, end }) {
+  const rid = toObjectId(restaurantId);
+  return {
+    restaurantId: rid,
+    ...ACTIVE_ORDER_FILTER,
+    paymentStatus: "PAID",
+    status: { $nin: ["CANCELLED", "WAIVED"] },
+    updatedAt: { $gte: start, $lt: end },
+  };
+}
+
+/**
  * Base match on restaurant + updatedAt window (payment / last financial event).
  */
 export function baseOrderMatch({
@@ -57,7 +74,7 @@ export function baseOrderMatch({
   const { start, end } = dateRangeBounds(dateFrom, dateTo);
   const match = {
     restaurantId: rid,
-    isActive: { $ne: false },
+    ...ACTIVE_ORDER_FILTER,
     updatedAt: { $gte: start, $lt: end },
   };
 
@@ -85,6 +102,8 @@ export function baseOrderMatch({
     const s = escapeRegex(search);
     guestOrSearch.push(
       { orderNumber: { $regex: s, $options: "i" } },
+      { invoiceNumber: { $regex: s, $options: "i" } },
+      { originalInvoiceNumber: { $regex: s, $options: "i" } },
       { partyName: { $regex: s, $options: "i" } },
       { guestName: { $regex: s, $options: "i" } },
       { contactNumber: { $regex: s, $options: "i" } }
@@ -101,11 +120,48 @@ export function baseOrderMatch({
  * Paid orders that count toward sales (same rule as EOD / guest directory).
  */
 export function paidRevenueMatch(filters) {
-  const match = baseOrderMatch(filters);
-  match.paymentStatus = "PAID";
-  if (!filters.status || filters.status === "ALL" || filters.status === "PAID") {
-    match.status = { $nin: ["CANCELLED", "WAIVED"] };
+  const { start, end } = dateRangeBounds(filters.dateFrom, filters.dateTo);
+  const match = paidRevenueOrderMatch({
+    restaurantId: filters.restaurantId,
+    start,
+    end,
+  });
+
+  const emp = toObjectId(filters.employeeId);
+  if (emp) match.processedBy = emp;
+
+  if (filters.status && filters.status !== "ALL" && filters.status !== "PAID") {
+    match.status = filters.status;
   }
+
+  if (filters.table) {
+    match.tableNo = { $regex: escapeRegex(filters.table), $options: "i" };
+  }
+
+  const guestOrSearch = [];
+  if (filters.guest) {
+    const g = escapeRegex(filters.guest);
+    guestOrSearch.push(
+      { partyName: { $regex: g, $options: "i" } },
+      { guestName: { $regex: g, $options: "i" } },
+      { contactNumber: { $regex: g, $options: "i" } }
+    );
+  }
+  if (filters.search) {
+    const s = escapeRegex(filters.search);
+    guestOrSearch.push(
+      { orderNumber: { $regex: s, $options: "i" } },
+      { invoiceNumber: { $regex: s, $options: "i" } },
+      { originalInvoiceNumber: { $regex: s, $options: "i" } },
+      { partyName: { $regex: s, $options: "i" } },
+      { guestName: { $regex: s, $options: "i" } },
+      { contactNumber: { $regex: s, $options: "i" } }
+    );
+  }
+  if (guestOrSearch.length) {
+    match.$or = guestOrSearch;
+  }
+
   return match;
 }
 

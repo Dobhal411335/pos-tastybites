@@ -144,7 +144,7 @@ const QUICK_ACTION_LINKS = [
   },
   {
     href: "/admin/reports/financial/invoices",
-    label: "Today Order Invoices",
+    label: "Invoices",
     icon: Receipt,
   },
   {

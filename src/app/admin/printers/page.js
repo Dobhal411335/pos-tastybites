@@ -10,6 +10,7 @@ import {
   Usb,
   Send,
   AlertCircle,
+  Activity,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -74,6 +75,7 @@ export default function AdminPrintersPage() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [testingId, setTestingId] = useState(null);
+  const [probingId, setProbingId] = useState(null);
   const [editId, setEditId] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const [deleteTarget, setDeleteTarget] = useState(null);
@@ -235,7 +237,23 @@ export default function AdminPrintersPage() {
   };
 
   const resolveLiveStatus = (printer) => {
-    if (!printer.enabled) return { label: "Disabled", tone: "muted" };
+    if (!printer.enabled) return { label: "Off", tone: "muted" };
+    if (probingId === printer._id) {
+      return { label: "Checking…", tone: "muted" };
+    }
+
+    const reach = printer.lastReachability;
+    if (reach?.status === "reachable" && reach?.checkedAt) {
+      return { label: "Connected", tone: "good", detail: reach };
+    }
+    if (reach?.status === "unreachable" && reach?.checkedAt) {
+      return {
+        label: "Disconnected",
+        tone: "bad",
+        detail: reach,
+      };
+    }
+
     if (isUsb(printer.connectionType)) {
       if (bridgeStatus === "down") {
         return { label: "Disconnected", tone: "bad" };
@@ -251,8 +269,113 @@ export default function AdminPrintersPage() {
       if (match) return { label: "Connected", tone: "good" };
       return { label: "Disconnected", tone: "bad" };
     }
-    // Network: registered + enabled — live ping is Electron/desktop side
+
     return { label: "Unknown", tone: "muted" };
+  };
+
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  const handleCheckConnection = async (printer) => {
+    if (!printer?.enabled) {
+      return toast.error("Turn the printer on before checking connection.");
+    }
+    setProbingId(printer._id);
+    try {
+      const res = await fetch(`/api/admin/printers/${printer._id}/probe`, {
+        method: "POST",
+      });
+      const json = await res.json();
+      if (!json.success) {
+        return toast.error(json.message || "Failed to start connection check");
+      }
+
+      const requestId = json.data?.requestId;
+      toast.message("Checking connection…", {
+        description:
+          "Waiting for sales APK, desktop POS, or print bridge on the restaurant network.",
+      });
+
+      const deadline = Date.now() + 10_000;
+      let matched = null;
+      while (Date.now() < deadline) {
+        await sleep(800);
+        const listRes = await fetch("/api/admin/printers");
+        const listJson = await listRes.json();
+        if (!listJson.success) continue;
+        const list = listJson.data || [];
+        setPrinters(list);
+        const updated = list.find((p) => String(p._id) === String(printer._id));
+        const reach = updated?.lastReachability;
+        if (
+          reach?.checkedAt &&
+          reach.status &&
+          reach.status !== "unknown" &&
+          (!requestId || reach.requestId === requestId)
+        ) {
+          matched = reach;
+          break;
+        }
+      }
+
+      if (!matched) {
+        toast.error(
+          "No on-site POS answered. Open the sales APK or desktop POS on the restaurant Wi‑Fi, then try again.",
+        );
+        return;
+      }
+
+      if (matched.status === "reachable") {
+        toast.success(
+          `Connected${matched.source ? ` (via ${matched.source})` : ""}`,
+        );
+      } else {
+        toast.error(
+          matched.error ||
+            "Printer unreachable from the on-site POS (check IP, Wi‑Fi, and power).",
+        );
+      }
+    } catch (err) {
+      toast.error(err?.message || "Connection check failed");
+    } finally {
+      setProbingId(null);
+      fetchPrinters();
+    }
+  };
+
+  const handleToggleEnabled = async (printer, enabled) => {
+    try {
+      const payload = {
+        name: printer.name,
+        target: printer.target,
+        purpose: printer.target,
+        type: printer.type || "THERMAL",
+        connectionType: printer.connectionType || "LAN",
+        location: printer.location || null,
+        enabled,
+        isActive: enabled,
+        systemPrinterName: printer.systemPrinterName || null,
+        host: printer.host || null,
+        ipAddress: printer.host || null,
+        port: printer.port || 9100,
+      };
+
+      const res = await fetch(`/api/admin/printers/${printer._id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const json = await res.json();
+      if (!json.success) {
+        return toast.error(json.message || "Failed to update printer");
+      }
+      toast.success(enabled ? "Printer turned on" : "Printer turned off");
+      if (editId === printer._id) {
+        setForm((prev) => ({ ...prev, enabled }));
+      }
+      fetchPrinters();
+    } catch {
+      toast.error("Failed to update printer");
+    }
   };
 
   const handleTestPrint = async (printer) => {
@@ -293,7 +416,10 @@ export default function AdminPrintersPage() {
       if (!json.success) {
         return toast.error(json.message || "Test print failed to send");
       }
-      toast.success(json.message || "Test print sent to desktop POS");
+      toast.success(
+        json.message ||
+          "Test print signal sent. Use Check connection to verify reachability; keep sales APK or desktop POS open to print.",
+      );
     } catch (err) {
       toast.error(err?.message || "Test print failed");
     } finally {
@@ -302,6 +428,8 @@ export default function AdminPrintersPage() {
   };
 
   const usbForm = isUsb(form.connectionType);
+  const enabledPrinters = printers.filter((p) => p.enabled !== false);
+  const singlePrinterDefault = enabledPrinters.length === 1;
 
   return (
     <div className="space-y-8">
@@ -310,10 +438,27 @@ export default function AdminPrintersPage() {
           Printer Configuration
         </h1>
         <p className="text-slate-500 mt-2 max-w-2xl">
-          Configure USB (local print bridge) or network thermal printers. USB
-          printers use the Windows system name — no IP required
+          Configure USB (local print bridge) or network thermal printers. Use
+          Check connection to verify reachability from an on-site sales APK or
+          desktop POS. Test print sends a ticket only when that agent is online.
         </p>
       </div>
+
+      {singlePrinterDefault && (
+        <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+          <span className="font-semibold">Only printer — </span>
+          all KOT, bar, and receipt jobs print to{" "}
+          <span className="font-medium">{enabledPrinters[0].name}</span>.
+          Add another enabled printer to route by Target again.
+        </div>
+      )}
+      {!loading && enabledPrinters.length > 1 && (
+        <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+          Multiple printers enabled — each job uses the printer whose{" "}
+          <span className="font-medium">Target</span> matches (Kitchen / Counter /
+          Receipt).
+        </div>
+      )}
 
       <Card className="border-slate-200 shadow-sm">
         <CardContent className="py-4 flex flex-wrap items-center gap-3 justify-between">
@@ -473,7 +618,8 @@ export default function AdminPrintersPage() {
             <div>
               <p className="text-sm font-medium text-slate-900">Enabled</p>
               <p className="text-xs text-slate-500">
-                Disabled printers are ignored by the print queue.
+                Turned-off printers stay registered but leave print jobs queued
+                until turned on again.
               </p>
             </div>
             <Switch
@@ -536,7 +682,15 @@ export default function AdminPrintersPage() {
                   return (
                     <TableRow key={printer._id}>
                       <TableCell className="font-medium">
-                        {printer.name}
+                        <div className="flex flex-col gap-1 items-start">
+                          <span>{printer.name}</span>
+                          {singlePrinterDefault &&
+                            printer.enabled !== false && (
+                              <Badge className="bg-emerald-100 text-emerald-800 font-normal">
+                                Default for all jobs
+                              </Badge>
+                            )}
+                        </div>
                       </TableCell>
                       <TableCell>
                         <Badge variant="outline">
@@ -564,26 +718,74 @@ export default function AdminPrintersPage() {
                         </span>
                       </TableCell>
                       <TableCell>
-                        <Badge
-                          className={
-                            live.tone === "good"
-                              ? "bg-emerald-100 text-emerald-800"
-                              : live.tone === "bad"
-                                ? "bg-red-100 text-red-800"
-                                : "bg-zinc-100 text-zinc-600"
-                          }
-                        >
-                          {live.label}
-                        </Badge>
+                        <div className="flex flex-col gap-2 items-start">
+                          <Badge
+                            className={
+                              live.tone === "good"
+                                ? "bg-emerald-100 text-emerald-800"
+                                : live.tone === "bad"
+                                  ? "bg-red-100 text-red-800"
+                                  : "bg-zinc-100 text-zinc-600"
+                            }
+                          >
+                            {live.label}
+                          </Badge>
+                          {live.detail?.checkedAt && (
+                            <span className="text-[10px] text-slate-400 max-w-[140px] leading-tight">
+                              {live.detail.source
+                                ? `${live.detail.source} · `
+                                : ""}
+                              {new Date(live.detail.checkedAt).toLocaleString()}
+                            </span>
+                          )}
+                          <div className="flex items-center gap-2">
+                            <Switch
+                              checked={printer.enabled !== false}
+                              onCheckedChange={(checked) =>
+                                handleToggleEnabled(printer, checked)
+                              }
+                              aria-label={
+                                printer.enabled !== false
+                                  ? "Turn printer off"
+                                  : "Turn printer on"
+                              }
+                            />
+                            <span className="text-xs text-slate-500">
+                              {printer.enabled !== false ? "On" : "Off"}
+                            </span>
+                          </div>
+                        </div>
                       </TableCell>
                       <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
+                        <div className="flex justify-end gap-2 flex-wrap">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            title="Check connection"
+                            disabled={
+                              !printer.enabled ||
+                              probingId === printer._id ||
+                              testingId === printer._id
+                            }
+                            onClick={() => handleCheckConnection(printer)}
+                          >
+                            {probingId === printer._id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Activity className="h-4 w-4" />
+                            )}
+                            <span className="ml-1 hidden sm:inline">
+                              Check
+                            </span>
+                          </Button>
                           <Button
                             size="sm"
                             variant="outline"
                             title="Test Print"
                             disabled={
-                              !printer.enabled || testingId === printer._id
+                              !printer.enabled ||
+                              testingId === printer._id ||
+                              probingId === printer._id
                             }
                             onClick={() => handleTestPrint(printer)}
                           >

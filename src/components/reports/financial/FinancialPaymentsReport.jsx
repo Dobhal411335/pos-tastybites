@@ -1,7 +1,14 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  CreditCard,
+  Gift,
+  Banknote,
+  Wallet,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -19,10 +26,16 @@ import {
   useFinancialReport,
 } from "./useFinancialReport";
 
+const METHOD_ICON = {
+  Cash: Banknote,
+  Card: CreditCard,
+  "Gift Card": Gift,
+};
+
 export default function FinancialPaymentsReport() {
   const [filters, setFilters] = useState(DEFAULT_FINANCIAL_FILTERS);
   const stableFilters = useMemo(() => filters, [filters]);
-  const { data, loading } = useFinancialReport(
+  const { data, loading, error, reload } = useFinancialReport(
     "/api/admin/reports/financial/payments",
     stableFilters,
     { paginate: true }
@@ -38,42 +51,55 @@ export default function FinancialPaymentsReport() {
       description="Tenders from paid orders. Split checkouts appear as one row with cash, card, and gift-card amounts."
       filters={filters}
       onFiltersChange={setFilters}
-      filterProps={{ showSearch: true, searchPlaceholder: "Order #" }}
+      filterProps={{
+        showStatus: false,
+        showSearch: true,
+        searchPlaceholder: "Order # or invoice #",
+      }}
       loading={loading}
-      empty={!data || data.empty}
+      error={error}
+      onRetry={reload}
+      empty={!error && (!data || data.empty)}
       emptyMessage="No payment data found for the selected period."
     >
       <div className="space-y-4">
         <FinancialKpiCards
           items={[
-            { label: "Total Collected", value: data?.summary?.collected, money: true },
+            {
+              label: "Total Collected",
+              value: data?.summary?.collected,
+              money: true,
+              icon: Wallet,
+            },
             ...methods.map((m) => ({
               label: m.method,
-              value: `${money(m.amount)} · ${m.count} · ${m.percent}%`,
+              value: m.amount,
+              money: true,
+              icon: METHOD_ICON[m.method] || Wallet,
+              hint: `${m.count} payments · ${m.percent}%`,
             })),
           ]}
         />
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <div className="border border-zinc-200 rounded-lg bg-white p-3">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
-              Gift cards redeemed
-            </p>
-            <p className="mt-1 text-lg font-semibold tabular-nums">
-              {money(redeemed?.amount)} · {redeemed?.count || 0} orders
-            </p>
-            <p className="mt-1 text-xs text-zinc-500">{redeemed?.note}</p>
-          </div>
-          <div className="border border-zinc-200 rounded-lg bg-white p-3">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
-              Gift cards issued
-            </p>
-            <p className="mt-1 text-lg font-semibold tabular-nums">
-              {money(issued?.amount)} · {issued?.count || 0} cards
-            </p>
-            <p className="mt-1 text-xs text-zinc-500">{issued?.note}</p>
-          </div>
-        </div>
+        <FinancialKpiCards
+          columns={2}
+          items={[
+            {
+              label: "Gift Cards Redeemed",
+              value: redeemed?.amount,
+              money: true,
+              icon: Gift,
+              hint: `${redeemed?.count || 0} orders · ${redeemed?.note || ""}`.trim(),
+            },
+            {
+              label: "Gift Cards Issued",
+              value: issued?.amount,
+              money: true,
+              icon: Gift,
+              hint: `${issued?.count || 0} cards · ${issued?.note || ""}`.trim(),
+            },
+          ]}
+        />
 
         <div className="border border-zinc-200 rounded-lg bg-white overflow-x-auto">
           <Table>

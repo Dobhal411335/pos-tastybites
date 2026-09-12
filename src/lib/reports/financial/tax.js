@@ -48,17 +48,13 @@ export async function buildFinancialTax({ restaurantId, ...filters }) {
                   {
                     $cond: [
                       { $gt: [{ $ifNull: ["$taxTotal", 0] }, 0] },
-                      {
-                        $map: {
-                          input: { $literal: [1] },
-                          as: "_",
-                          in: {
-                            name: "Sales Tax",
-                            rate: 0,
-                            amount: { $ifNull: ["$taxTotal", 0] },
-                          },
+                      [
+                        {
+                          name: "Sales Tax",
+                          rate: 0,
+                          amount: { $ifNull: ["$taxTotal", 0] },
                         },
-                      },
+                      ],
                       [],
                     ],
                   },

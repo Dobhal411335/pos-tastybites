@@ -47,36 +47,70 @@ export function financialQueryString(filters, { paginate = false } = {}) {
   return params.toString();
 }
 
+async function loadFinancialReport(path, qs) {
+  const res = await fetch(`${path}?${qs}`, {
+    credentials: "include",
+    cache: "no-store",
+  });
+  const json = await res.json();
+  if (!res.ok || !json.success) {
+    throw new Error(json.message || "Failed to load report");
+  }
+  return json.data;
+}
+
 export function useFinancialReport(path, filters, { paginate = false } = {}) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const qs = financialQueryString(filters, { paginate });
 
   const fetchReport = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
-      const res = await fetch(`${path}?${qs}`, {
-        credentials: "include",
-        cache: "no-store",
-      });
-      const json = await res.json();
-      if (!res.ok || !json.success) {
-        throw new Error(json.message || "Failed to load report");
-      }
-      setData(json.data);
-    } catch (error) {
-      toast.error(error.message || "Failed to load report");
+      const next = await loadFinancialReport(path, qs);
+      setData(next);
+    } catch (err) {
+      const message = err.message || "Failed to load report";
+      setError(message);
       setData(null);
+      toast.error(message);
     } finally {
       setLoading(false);
     }
   }, [path, qs]);
 
   useEffect(() => {
-    fetchReport();
-  }, [fetchReport]);
+    let cancelled = false;
 
-  return { data, loading, reload: fetchReport };
+    async function run() {
+      await Promise.resolve();
+      if (cancelled) return;
+      setLoading(true);
+      setError(null);
+      try {
+        const next = await loadFinancialReport(path, qs);
+        if (cancelled) return;
+        setData(next);
+      } catch (err) {
+        if (cancelled) return;
+        const message = err.message || "Failed to load report";
+        setError(message);
+        setData(null);
+        toast.error(message);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, [path, qs]);
+
+  return { data, loading, error, reload: fetchReport };
 }
 
 export function money(value) {
