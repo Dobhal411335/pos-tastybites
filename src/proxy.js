@@ -61,8 +61,8 @@ export async function proxy(request) {
   let response;
 
   // Subdomain Routing (Rewrite logic)
-  // If the user visits pos.tastybitesrestaurant.com/foo, we map it to /admin/foo
-  // If the user visits sales.tastybitesrestaurant.com/foo, we map it to /sales/foo
+  // pos host: / stays the public landing page; other app paths map to /admin/...
+  // sales host: paths map to /sales/... (root redirects to /floor)
   let targetPath = pathname;
 
   // Public/static assets must not be rewritten onto /sales or /admin
@@ -94,6 +94,16 @@ export async function proxy(request) {
       return response;
     }
 
+    // Customer-facing routes on the POS host (landing lives at /)
+    const isPosPublicPath =
+      pathname === '/' ||
+      pathname === '/login' ||
+      pathname === '/menu' ||
+      pathname.startsWith('/order') ||
+      pathname.startsWith('/checkout') ||
+      pathname.startsWith('/download') ||
+      pathname === '/electron';
+
     if (isSales && pathname === '/login') {
       targetPath = '/sales/login';
     } else if (isSales && pathname === '/') {
@@ -101,8 +111,9 @@ export async function proxy(request) {
       response = NextResponse.redirect(new URL('/floor', request.url));
       response.headers.set('x-request-id', reqId);
       return response;
-    } else if (pathname !== '/login' && isPos && !isAdminPage && !isSalesPage) {
-      targetPath = `/admin${pathname === '/' ? '/dashboard' : pathname}`;
+    } else if (isPos && !isPosPublicPath && !isAdminPage && !isSalesPage) {
+      // pos.example.com/dashboard → /admin/dashboard (not root — root is the landing page)
+      targetPath = `/admin${pathname}`;
     } else if (pathname !== '/login' && isSales && !isSalesPage && !isAdminPage) {
       targetPath = `/sales${pathname}`;
     } else if (
