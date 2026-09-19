@@ -1,136 +1,127 @@
 "use client";
 
-import React, { Suspense, useState, useEffect } from "react";
+import React, { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import Image from "next/image";
-import Navbar from "@/components/sections/Navbar";
+import { Leaf } from "lucide-react";
 import Footer from "@/components/sections/Footer";
-import MenuSearch from "@/components/menu/MenuSearch";
+import Navbar from "@/components/sections/Navbar";
+import MenuHero from "@/components/menu/MenuHero";
 import CategoryFilter from "@/components/menu/CategoryFilter";
 import ProductGrid from "@/components/menu/ProductGrid";
-import Pagination from "@/components/menu/Pagination";
-import CartDrawer from "@/components/menu/CartDrawer";
 import MobileCart from "@/components/menu/MobileCart";
-import { mockProducts } from "@/components/menu/mockProducts";
-import { CartProvider } from "@/context/CartContext";
-
-const ITEMS_PER_PAGE = 20;
+import LoadingSkeleton from "@/components/menu/LoadingSkeleton";
+import EmptyState from "@/components/menu/EmptyState";
+import CartDrawer from "@/components/menu/CartDrawer";
+import { usePublicMenu } from "@/hooks/usePublicMenu";
 
 function MenuContent() {
   const searchParams = useSearchParams();
   const searchVal = searchParams.get("search") || "";
   const categoryVal = searchParams.get("category") || "";
-  const pageVal = parseInt(searchParams.get("page") || "1", 10);
-
-  const [filteredProducts, setFilteredProducts] = useState([]);
-  const [paginatedProducts, setPaginatedProducts] = useState([]);
-  const [totalPages, setTotalPages] = useState(1);
-  const [isLoading, setIsLoading] = useState(false);
+  const { categories, products, loading, error } = usePublicMenu();
+  const [searchPending, setSearchPending] = useState(false);
+  const [cartOpen, setCartOpen] = useState(false);
+  const onSearchPendingChange = useCallback((pending) => {
+    setSearchPending(Boolean(pending));
+  }, []);
 
   useEffect(() => {
-    setIsLoading(true);
-    // Simulate minor network latency for organic restaurant feel
-    const timer = setTimeout(() => {
-      let result = [...mockProducts];
+    const openCart = () => setCartOpen(true);
+    window.addEventListener("tastybites:open-cart", openCart);
+    return () => window.removeEventListener("tastybites:open-cart", openCart);
+  }, []);
 
-      // Filter by category
-      if (categoryVal && categoryVal !== "all") {
-        result = result.filter(
-          (p) => p.category.toLowerCase() === categoryVal.toLowerCase()
-        );
-      }
+  useEffect(() => {
+    const cartParam = searchParams.get("cart");
+    if (cartParam === "1" || cartParam === "open") {
+      window.dispatchEvent(new CustomEvent("tastybites:open-cart"));
+    }
+  }, [searchParams]);
 
-      // Filter by search
-      if (searchVal) {
-        const query = searchVal.toLowerCase();
-        result = result.filter(
-          (p) =>
-            p.name.toLowerCase().includes(query) ||
-            p.desc.toLowerCase().includes(query)
-        );
-      }
+  const filteredProducts = useMemo(() => {
+    let result = [...products];
+    if (categoryVal && categoryVal !== "all") {
+      result = result.filter(
+        (p) =>
+          String(p.category).toLowerCase() === categoryVal.toLowerCase() ||
+          String(p.categoryId) === categoryVal
+      );
+    }
+    if (searchVal) {
+      const q = searchVal.toLowerCase();
+      result = result.filter(
+        (p) =>
+          p.name.toLowerCase().includes(q) ||
+          (p.description || p.desc || "").toLowerCase().includes(q) ||
+          (p.categoryName || "").toLowerCase().includes(q)
+      );
+    }
+    return result;
+  }, [products, categoryVal, searchVal]);
 
-      // Calculate pagination totals
-      const total = Math.ceil(result.length / ITEMS_PER_PAGE);
-      setTotalPages(total || 1);
-
-      // Slice for current page
-      const startIndex = (pageVal - 1) * ITEMS_PER_PAGE;
-      const paginated = result.slice(startIndex, startIndex + ITEMS_PER_PAGE);
-
-      setFilteredProducts(result);
-      setPaginatedProducts(paginated);
-      setIsLoading(false);
-    }, 300);
-
-    return () => clearTimeout(timer);
-  }, [searchVal, categoryVal, pageVal]);
+  const showProductLoading = loading || searchPending;
 
   return (
-    <div className="flex flex-col min-h-screen bg-[#FAFAFA] font-sans antialiased text-[#1F2937] pb-16 md:pb-0">
-      
-      {/* Navbar (reused, White background) */}
+    <div className="flex min-h-screen flex-col bg-[var(--customer-surface)] pb-24 text-[var(--customer-ink)] antialiased lg:pb-0">
       <Navbar />
 
-      {/* Restaurant Header Banner (No abstract neon shapes, real warm photo layout) */}
-      <div className="relative w-full h-[220px] md:h-[280px] bg-zinc-950 flex items-center justify-center overflow-hidden">
-        <Image
-          src="https://images.unsplash.com/photo-1550966871-3ed3cdb5ed0c?q=80&w=1600&auto=format&fit=crop"
-          alt="Tasty Bites Restaurant Kitchen"
-          fill
-          priority
-          className="object-cover opacity-60"
+      <main className="w-full flex-1 bg-[var(--customer-surface)]">
+        <MenuHero
+          categories={categories}
+          products={products}
+          onSearchPendingChange={onSearchPendingChange}
         />
-        <div className="absolute inset-0 bg-linear-to-t from-zinc-950/70 via-zinc-950/30 to-transparent"></div>
-        <div className="relative z-10 text-center space-y-2 text-white">
-          <span className="text-xs font-bold uppercase tracking-widest text-[#F97316]">
-            Welcome to Tasty Bites
-          </span>
-          <h1 className="text-3xl md:text-5xl font-bold tracking-tight font-serif">
-            Our Fine Culinary Menu
-          </h1>
-          <p className="text-xs md:text-sm text-zinc-350 max-w-md mx-auto font-light leading-relaxed">
-            Fresh local Canadian ingredients cooked to absolute perfection. Place your order below.
-          </p>
-        </div>
-      </div>
 
-      {/* Main Filter & Grid Container */}
-      <main className="flex-1 mx-auto max-w-7xl w-full px-6 py-12 sm:px-8">
-        
-        {/* Search and Filters Layout */}
-        <div className="flex flex-col gap-6 mb-8 border-b border-[#ECECEC] pb-6">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <h2 className="text-2xl font-bold font-serif text-[#1F2937]">
-              Explore Dishes
-            </h2>
-            <MenuSearch />
-          </div>
-          <CategoryFilter />
+        <div className="mx-auto max-w-[1400px] px-5 pb-2 md:px-12">
+          <CategoryFilter categories={categories} />
         </div>
 
-        {/* Content columns (Grid & Sticky Cart Drawer on Desktop) */}
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 items-start">
-          
-          {/* Products List (takes 3 cols on desktop) */}
-          <div className="lg:col-span-3 space-y-6">
-            <ProductGrid products={paginatedProducts} isLoading={isLoading} />
-            <Pagination currentPage={pageVal} totalPages={totalPages} />
+        <section className="mx-auto w-full max-w-[1400px] px-5 py-10 md:px-12">
+          <div className="flex items-start gap-8">
+            <div className="min-w-0 flex-1">
+              <div className="mb-6 flex items-center justify-between pb-1">
+                <div className="flex items-center gap-2">
+                  <h2 className="text-2xl font-semibold text-[var(--customer-ink)]">
+                    Kitchen Selections
+                  </h2>
+                  <span className="rounded bg-[var(--customer-surface-container)] px-2 py-0.5 text-xs font-semibold text-[var(--customer-muted)]">
+                    {showProductLoading
+                      ? "…"
+                      : `${filteredProducts.length} Available`}
+                  </span>
+                </div>
+                <div className="hidden items-center gap-2 text-xs font-semibold text-[var(--customer-muted)] sm:flex">
+                  <Leaf className="h-4 w-4 text-primary" />
+                  <span>Made fresh to order · Same-day pickup</span>
+                </div>
+              </div>
+
+              {showProductLoading ? (
+                <LoadingSkeleton />
+              ) : error ? (
+                <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-sm text-red-700">
+                  {error}
+                </div>
+              ) : filteredProducts.length === 0 ? (
+                <EmptyState />
+              ) : (
+                <ProductGrid
+                  products={filteredProducts}
+                  resetKey={`${categoryVal}|${searchVal}`}
+                />
+              )}
+            </div>
+
+            <CartDrawer
+              mode="menu"
+              open={cartOpen}
+              onOpenChange={setCartOpen}
+            />
           </div>
-
-          {/* Sticky Cart Drawer (Desktop) */}
-          <div className="hidden lg:block lg:col-span-1">
-            <CartDrawer />
-          </div>
-
-        </div>
-
+        </section>
       </main>
 
-      {/* Mobile Floating Bottom Cart */}
       <MobileCart />
-
-      {/* Footer (Reused as explicitly instructed) */}
       <Footer />
     </div>
   );
@@ -138,14 +129,14 @@ function MenuContent() {
 
 export default function MenuPage() {
   return (
-    <CartProvider>
-      <Suspense fallback={
-        <div className="min-h-screen bg-[#FAFAFA] flex items-center justify-center font-serif text-[#1F2937]">
-          Loading Menu...
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center text-sm text-(--customer-muted)">
+          Loading menu…
         </div>
-      }>
-        <MenuContent />
-      </Suspense>
-    </CartProvider>
+      }
+    >
+      <MenuContent />
+    </Suspense>
   );
 }

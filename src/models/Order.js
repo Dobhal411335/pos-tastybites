@@ -96,6 +96,15 @@ const OrderSchema = new mongoose.Schema(
     staffFor: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee', default: null },
     staffOrderReason: { type: String, default: null },
     processedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee' }, // Original order taker — sales/tip credit. Never reassigned on payment or table transfer.
+    /** Online pickup: when staff approved the order (PENDING → CONFIRMED). */
+    onlineApprovedAt: { type: Date, default: null },
+    onlineApprovedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee', default: null },
+    /** Online pickup: when kitchen KOT was sent after approval. */
+    onlineKotSentAt: { type: Date, default: null },
+    onlineKotSentBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee', default: null },
+    /** Online pickup: marked ready for guest pickup. */
+    onlineReadyAt: { type: Date, default: null },
+    onlineReadyBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee', default: null },
   },
   { timestamps: true }
 );

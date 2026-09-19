@@ -1,100 +1,77 @@
-"use client"
-import { X } from 'lucide-react';
-import React, { useEffect, useState } from 'react';
+"use client";
 
-const PopUpBanner = ({ section = "frontend" }) => {
+import { X } from "lucide-react";
+import React, { useEffect, useState } from "react";
+import { useRestaurantPublic } from "@/context/RestaurantPublicContext";
+
+export default function PopUpBanner() {
+  const { restaurant } = useRestaurantPublic();
   const [banner, setBanner] = useState(null);
-  const [open, setOpen] = useState(false); // Initially closed
+  const [open, setOpen] = useState(false);
   const [showAnim, setShowAnim] = useState(false);
 
   useEffect(() => {
-    fetch(`/api/web/popupBanner?section=${section}`)
-      .then(res => res.json())
-      .then(data => {
-        if (Array.isArray(data) && data.length > 0) {
-          setBanner(data[0]);
-        }
-      });
-  }, []);
+    const first = restaurant?.popups?.[0];
+    if (first) setBanner(first);
+  }, [restaurant]);
 
   useEffect(() => {
-    if (banner) {
-      // Delay popup open by 2 seconds
-      const timer = setTimeout(() => {
-        setOpen(true);
-        // Animate in after open
-        setTimeout(() => setShowAnim(true), 10);
-      }, 2000);
-      return () => clearTimeout(timer);
-    }
+    if (!banner) return;
+    const timer = setTimeout(() => {
+      setOpen(true);
+      setTimeout(() => setShowAnim(true), 10);
+    }, 2000);
+    return () => clearTimeout(timer);
   }, [banner]);
 
   const handleClose = () => {
     setShowAnim(false);
-    setTimeout(() => setOpen(false), 200); // Wait for animation out
+    setTimeout(() => setOpen(false), 200);
   };
 
   if (!banner || !open) return null;
 
+  const imageUrl =
+    typeof banner.image === "string" ? banner.image : banner.image?.url || "";
+
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 p-4">
       <div
-        className={`relative bg-white w-full max-w-3xl overflow-hidden shadow-2xl
-    flex flex-col md:flex-row transition-all duration-500
-    ${showAnim ? "translate-y-0 opacity-100" : "translate-y-8 opacity-0"}`}
+        className={`relative w-full max-w-lg rounded-2xl bg-white overflow-hidden shadow-2xl transition-all duration-200 ${
+          showAnim ? "opacity-100 scale-100" : "opacity-0 scale-95"
+        }`}
       >
-        {/* Close Button */}
         <button
+          type="button"
           onClick={handleClose}
-          className="absolute top-3 right-3 z-20 bg-black/80 hover:bg-black text-white rounded-full p-2 transition"
-          aria-label="Close popup"
+          className="absolute top-3 right-3 z-10 h-10 w-10 rounded-full bg-white/90 flex items-center justify-center text-zinc-700"
+          aria-label="Close promotion"
         >
-          <X size={20} />
+          <X className="h-5 w-5" />
         </button>
-
-        {/* Left Side Banner */}
-        <div className="w-full md:w-1/2 h-[220px] md:h-[380px]">
-          <img
-            src={banner.image?.url || "/placeholder.jpeg"}
-            alt="Popup Banner"
-            className="w-full h-full object-cover"
-          />
-        </div>
-
-        {/* Right Side Content */}
-        <div className="w-full md:w-1/2 md:h-[380px] flex items-center justify-center p-5 md:p-8">
-          <div className="w-full max-w-sm text-center">
-            <p className="text-gray-500 font-semibold text-sm mb-2">
-              Crafted with Heart
-            </p>
-
-            <h2 className="text-lg md:text-xl font-bold text-black leading-tight mb-4">
+        {imageUrl && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={imageUrl} alt="" className="w-full h-48 object-cover" />
+        )}
+        <div className="p-6 space-y-3">
+          {banner.heading && (
+            <h2 className="text-xl font-bold font-[family-name:var(--font-display)] text-zinc-900">
               {banner.heading}
             </h2>
-
-            <p className="text-gray-600 text-sm md:text-[14px] leading-relaxed mb-6">
-              {banner.paragraph}
-            </p>
-
+          )}
+          {banner.paragraph && (
+            <p className="text-sm text-zinc-600 leading-relaxed">{banner.paragraph}</p>
+          )}
+          {banner.buttonLink && (
             <a
-              href={banner.buttonLink || "#"}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="block"
+              href={banner.buttonLink}
+              className="inline-flex h-11 items-center justify-center rounded-lg bg-primary px-5 text-xs font-bold uppercase tracking-widest text-white"
             >
-              <button className="w-full bg-black text-white font-semibold py-3 hover:bg-gray-900 transition">
-                Explore
-              </button>
+              Order Now
             </a>
-
-            <p className="mt-3 text-gray-500 font-semibold text-sm">
-              Don't miss this chance
-            </p>
-          </div>
+          )}
         </div>
       </div>
     </div>
   );
-};
-
-export default PopUpBanner;
+}

@@ -124,7 +124,7 @@ const PopUpBanner = () => {
 
     const handleDelete = async (id) => {
         try {
-            const response = await fetch("/api/web/popup-banner", {
+            const response = await fetch("/api/web/popupBanner", {
                 method: "DELETE",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ id }),

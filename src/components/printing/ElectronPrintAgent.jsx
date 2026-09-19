@@ -9,6 +9,8 @@ import {
 } from "@/lib/printing/escpos";
 import { toast } from "sonner";
 
+const HEALTH_INTERVAL_MS = 90_000;
+
 function isElectronDesktop() {
   return (
     typeof window !== "undefined" &&
@@ -55,6 +57,7 @@ function pickNetworkPrinter(printers, { printerId, printerTarget } = {}) {
  * Listens for print jobs on the sales Socket.IO connection and sends
  * ESC/POS bytes to configured LAN/NETWORK printers via Electron IPC.
  * USB jobs are handled by the local Windows print-bridge — skipped here.
+ * Drains QUEUED jobs on mount, visibility restore, and printer-online.
  * No-op in a normal browser.
  */
 export default function ElectronPrintAgent() {
@@ -62,6 +65,7 @@ export default function ElectronPrintAgent() {
   const printersRef = useRef([]);
   const processingRef = useRef(new Set());
   const probingRef = useRef(new Set());
+  const drainingRef = useRef(false);
 
   useEffect(() => {
     if (!isElectronDesktop()) return undefined;
@@ -106,35 +110,17 @@ export default function ElectronPrintAgent() {
       });
     };
 
-    const handleTest = async (payload) => {
-      if (payload?.connectionType && !isNetworkPrinter(payload)) {
-        return;
-      }
-
-      const printer =
-        pickNetworkPrinter(printersRef.current, {
-          printerId: payload?.printerId,
-          printerTarget: payload?.target,
-        }) ||
-        (payload?.host ? payload : null);
-
-      if (!isNetworkPrinter(printer) || !printer?.host) {
-        return;
-      }
-
-      const dataBase64 = buildTestTicket({
-        name: printer.name || payload?.name,
-        target: printer.target || payload?.target,
-        host: printer.host,
-        port: printer.port || payload?.port || 9100,
-        connectionType: printer.connectionType || "LAN",
-      });
-
-      const result = await sendToPrinter(printer, dataBase64);
-      if (result?.success) {
-        toast.success(`Test print sent to ${printer.name}`);
-      } else {
-        toast.error(result?.error || "Test print failed");
+    const claimJob = async (jobId) => {
+      try {
+        const res = await employeeFetch(`/api/sales/print-jobs/${jobId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "claim" }),
+        });
+        const json = await res.json();
+        return !!json?.data?.claimed;
+      } catch {
+        return false;
       }
     };
 
@@ -165,8 +151,11 @@ export default function ElectronPrintAgent() {
           payload?.printerId,
         );
         if (!printer) {
-          // No enabled network printer (turned off / missing) — leave QUEUED.
-          // USB targets are handled by print-bridge.
+          return;
+        }
+
+        const claimed = await claimJob(jobId);
+        if (!claimed) {
           return;
         }
 
@@ -178,6 +167,10 @@ export default function ElectronPrintAgent() {
 
         const { job, order, kotItems, restaurant, serverName, guestCount } =
           detailJson.data;
+
+        if (job?.status && job.status !== "PRINTING" && job.status !== "QUEUED") {
+          return;
+        }
 
         const dataBase64 = buildTicketFromJob({
           job,
@@ -219,6 +212,80 @@ export default function ElectronPrintAgent() {
         toast.error(err?.message || "Auto print failed");
       } finally {
         processingRef.current.delete(jobId);
+      }
+    };
+
+    const drainQueuedJobs = async () => {
+      if (drainingRef.current) return;
+      drainingRef.current = true;
+      try {
+        try {
+          const res = await employeeFetch("/api/sales/printers");
+          const json = await res.json();
+          if (json.success) printersRef.current = json.data || [];
+        } catch {
+          // keep cache
+        }
+
+        const hasNetwork = (printersRef.current || []).some((p) =>
+          isNetworkPrinter(p),
+        );
+        if (!hasNetwork) return;
+
+        const listRes = await employeeFetch(
+          "/api/sales/print-jobs?status=QUEUED&limit=20&stats=0",
+        );
+        const listJson = await listRes.json();
+        const jobs = listJson?.data || [];
+        for (const job of jobs) {
+          const jobId = String(job._id);
+          if (processingRef.current.has(jobId)) continue;
+          const printer = findPrinter(job.printerTarget, job.printerId);
+          if (!printer) continue;
+          await processJob({
+            printJobId: jobId,
+            printType: job.printType,
+            printerTarget: job.printerTarget,
+            printerId: job.printerId,
+            status: "QUEUED",
+          });
+        }
+      } catch (err) {
+        console.warn("[ElectronPrintAgent] drain failed:", err);
+      } finally {
+        drainingRef.current = false;
+      }
+    };
+
+    const handleTest = async (payload) => {
+      if (payload?.connectionType && !isNetworkPrinter(payload)) {
+        return;
+      }
+
+      const printer =
+        pickNetworkPrinter(printersRef.current, {
+          printerId: payload?.printerId,
+          printerTarget: payload?.target,
+        }) ||
+        (payload?.host ? payload : null);
+
+      if (!isNetworkPrinter(printer) || !printer?.host) {
+        return;
+      }
+
+      const dataBase64 = buildTestTicket({
+        name: printer.name || payload?.name,
+        target: printer.target || payload?.target,
+        host: printer.host,
+        port: printer.port || payload?.port || 9100,
+        connectionType: printer.connectionType || "LAN",
+      });
+
+      const result = await sendToPrinter(printer, dataBase64);
+      if (result?.success) {
+        toast.success(`Test print sent to ${printer.name}`);
+      } else {
+        toast.error(result?.error || "Test print failed");
       }
     };
 
@@ -271,6 +338,9 @@ export default function ElectronPrintAgent() {
             requestId: payload?.requestId,
           }),
         });
+        if (result?.success) {
+          void drainQueuedJobs();
+        }
       } catch (err) {
         try {
           await employeeFetch(`/api/admin/printers/${printerId}/probe-result`, {
@@ -291,14 +361,59 @@ export default function ElectronPrintAgent() {
       }
     };
 
+    const probeAllLocal = async () => {
+      if (!canProbePrinter()) return;
+      const network = (printersRef.current || []).filter((p) =>
+        isNetworkPrinter(p),
+      );
+      for (const printer of network) {
+        const printerId = String(printer._id);
+        if (probingRef.current.has(printerId)) continue;
+        probingRef.current.add(printerId);
+        try {
+          const result = await window.electronPOS.probePrinter({
+            host: printer.host,
+            port: printer.port || 9100,
+          });
+          if (result?.success) {
+            void drainQueuedJobs();
+          }
+        } catch {
+          // local health only
+        } finally {
+          probingRef.current.delete(printerId);
+        }
+      }
+    };
+
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") {
+        void (async () => {
+          await probeAllLocal();
+          await drainQueuedJobs();
+        })();
+      }
+    };
+
     socket.on("NEW_PRINT_JOB", onNewJob);
     socket.on("PRINTER_TEST", handleTest);
     socket.on("PRINTER_PROBE", handleProbe);
+    socket.on("connect", drainQueuedJobs);
+    document.addEventListener("visibilitychange", onVisibility);
+
+    void drainQueuedJobs();
+    void probeAllLocal();
+    const healthTimer = setInterval(() => {
+      void probeAllLocal();
+    }, HEALTH_INTERVAL_MS);
 
     return () => {
       socket.off("NEW_PRINT_JOB", onNewJob);
       socket.off("PRINTER_TEST", handleTest);
       socket.off("PRINTER_PROBE", handleProbe);
+      socket.off("connect", drainQueuedJobs);
+      document.removeEventListener("visibilitychange", onVisibility);
+      clearInterval(healthTimer);
     };
   }, [socket]);
 

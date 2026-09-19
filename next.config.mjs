@@ -34,6 +34,11 @@ const remotePatterns = [
     hostname: "images.unsplash.com",
     pathname: "/**",
   },
+  {
+    protocol: "https",
+    hostname: "placehold.net",
+    pathname: "/**",
+  },
 ];
 
 // Local/dev uploads and absolute localhost images used by Next/Image

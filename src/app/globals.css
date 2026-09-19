@@ -1,14 +1,20 @@
 @import "tailwindcss";
 
 :root {
-  --background: #FAFAFA;
-  --foreground: #18181B;
-  --primary: #F97316;
-  --primary-hover: #EA580C;
-  --accent: #F97316;
-  --accent-hover: #EA580C;
-  --border: #E5E7EB;
-  --muted: #71717A;
+  --background: #fbf9f5;
+  --foreground: #1b1c1a;
+  --primary: #e06d26;
+  --primary-hover: #c45a1a;
+  --accent: #e06d26;
+  --accent-hover: #c45a1a;
+  --border: #c6c6cd;
+  --muted: #45464d;
+  --ink: #0f172a;
+  --customer-surface: #fbf9f5;
+  --customer-surface-low: #f5f3ef;
+  --customer-surface-container: #efeeea;
+  --customer-ink: #1b1c1a;
+  --customer-muted: #45464d;
 }
 
 @theme inline {
@@ -19,15 +25,28 @@
   --color-accent: var(--accent);
   --color-accent-hover: var(--accent-hover);
   --color-border: var(--border);
-  --font-serif: Georgia, Cambria, "Times New Roman", Times, serif;
+  --font-serif: var(--font-display), var(--font-body), "Segoe UI", sans-serif;
+  --font-sans: var(--font-body), "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-family: var(--font-body), "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* Landing / in-page section navigation */
+html.smooth-scroll {
+  scroll-behavior: smooth;
+  scroll-padding-top: 5.5rem; /* fixed navbar (h-20) + breathing room */
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html.smooth-scroll {
+    scroll-behavior: auto;
+  }
 }
 
 /* Tabular numerals for prices, totals, quantities */

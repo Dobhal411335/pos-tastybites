@@ -212,6 +212,9 @@ export default function TodayOrdersPage() {
   const [isWaiveModalOpen, setIsWaiveModalOpen] = useState(false);
   const [waiveReason, setWaiveReason] = useState("");
   const [isWaiving, setIsWaiving] = useState(false);
+  const [isApprovingOnline, setIsApprovingOnline] = useState(false);
+  const [isSendingOnlineKot, setIsSendingOnlineKot] = useState(false);
+  const [isMarkingOnlineReady, setIsMarkingOnlineReady] = useState(false);
 
   const fetchOrders = useCallback(async ({ silent = false } = {}) => {
     await Promise.resolve();
@@ -568,12 +571,138 @@ export default function TodayOrdersPage() {
 
   const isOnlineOrder = selectedOrder?.source === "ONLINE";
   const orderStatusUpper = String(selectedOrder?.status || "").toUpperCase();
+  const onlinePickup = useMemo(() => {
+    if (!isOnlineOrder || !selectedOrder?.specialNote) return null;
+    const m = String(selectedOrder.specialNote).match(
+      /\[PICKUP\s+(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2})\]/i
+    );
+    if (!m) return null;
+    const [, date, time] = m;
+    const [hh, mm] = time.split(":").map(Number);
+    const period = hh >= 12 ? "PM" : "AM";
+    const h12 = hh % 12 || 12;
+    return {
+      date,
+      time,
+      label: `${h12}:${String(mm).padStart(2, "0")} ${period}`,
+      note: String(selectedOrder.specialNote)
+        .replace(/\[PICKUP\s+\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}\]\s*/i, "")
+        .trim(),
+    };
+  }, [isOnlineOrder, selectedOrder?.specialNote]);
+
+  const canApproveOnline =
+    isOnlineOrder &&
+    orderStatusUpper === "PENDING" &&
+    !isOrderPaid(selectedOrder);
+  const canSendOnlineKot =
+    isOnlineOrder &&
+    orderStatusUpper === "CONFIRMED" &&
+    !selectedOrder?.onlineKotSentAt &&
+    !isOrderPaid(selectedOrder);
+  const canMarkOnlineReady =
+    isOnlineOrder &&
+    orderStatusUpper === "CONFIRMED" &&
+    Boolean(selectedOrder?.onlineKotSentAt) &&
+    !selectedOrder?.onlineReadyAt &&
+    !isOrderPaid(selectedOrder);
+  const canPayOnline =
+    isOnlineOrder &&
+    (orderStatusUpper === "COMPLETED" || Boolean(selectedOrder?.onlineReadyAt)) &&
+    !isOrderPaid(selectedOrder) &&
+    !["CANCELLED", "WAIVED"].includes(orderStatusUpper);
+  const canReprintOnlineKot =
+    isOnlineOrder &&
+    Boolean(selectedOrder?.onlineKotSentAt) &&
+    !["CANCELLED", "WAIVED"].includes(orderStatusUpper);
+
   const canWaive =
     selectedOrder &&
     !isOnlineOrder &&
     !isOrderPaid(selectedOrder) &&
     ["PENDING", "CONFIRMED"].includes(orderStatusUpper);
-  const showPayNow = canWaive;
+  const showPayNow = canWaive || canPayOnline;
+
+  const handleApproveOnline = async () => {
+    if (!selectedOrder?._id || isApprovingOnline) return;
+    setIsApprovingOnline(true);
+    try {
+      const res = await fetch("/api/orders/employee", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          orderId: selectedOrder._id,
+          action: "approve-online",
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        throw new Error(json.message || "Failed to approve order");
+      }
+      setSelectedOrder((prev) => ({ ...(prev || {}), ...json.data }));
+      toast.success("Online order approved. You can send KOT next.");
+      await fetchOrders({ silent: true });
+    } catch (err) {
+      toast.error(err.message || "Failed to approve online order");
+    } finally {
+      setIsApprovingOnline(false);
+    }
+  };
+
+  const handleSendOnlineKot = async () => {
+    if (!selectedOrder?._id || isSendingOnlineKot) return;
+    setIsSendingOnlineKot(true);
+    try {
+      const res = await fetch("/api/orders/employee", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          orderId: selectedOrder._id,
+          action: "send-online-kot",
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        throw new Error(json.message || "Failed to create KOT");
+      }
+      setSelectedOrder((prev) => ({ ...(prev || {}), ...json.data }));
+      toast.success("Kitchen ticket created. Mark ready when food is done.");
+      await fetchOrders({ silent: true });
+      setPrintType("kot");
+      setPendingReleaseAfterPrint(false);
+      setIsPrintModalOpen(true);
+    } catch (err) {
+      toast.error(err.message || "Failed to send kitchen ticket");
+    } finally {
+      setIsSendingOnlineKot(false);
+    }
+  };
+
+  const handleMarkOnlineReady = async () => {
+    if (!selectedOrder?._id || isMarkingOnlineReady) return;
+    setIsMarkingOnlineReady(true);
+    try {
+      const res = await fetch("/api/orders/employee", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          orderId: selectedOrder._id,
+          action: "mark-online-ready",
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        throw new Error(json.message || "Failed to mark ready");
+      }
+      setSelectedOrder((prev) => ({ ...(prev || {}), ...json.data }));
+      toast.success("Guest notified — order is ready for pickup.");
+      await fetchOrders({ silent: true });
+    } catch (err) {
+      toast.error(err.message || "Failed to mark order ready");
+    } finally {
+      setIsMarkingOnlineReady(false);
+    }
+  };
 
   const isTableSessionOpen =
     Boolean(
@@ -848,6 +977,34 @@ export default function TodayOrdersPage() {
                       </span>
                     </div>
                   )}
+                  {isOnlineOrder && selectedOrder.contactNumber ? (
+                    <div className="flex justify-between gap-3 font-medium">
+                      <span className="text-zinc-500 shrink-0">Phone</span>
+                      <span className="text-zinc-900 font-bold tabular-nums text-right">
+                        {selectedOrder.guestCountryCode
+                          ? `${selectedOrder.guestCountryCode} `
+                          : ""}
+                        {selectedOrder.contactNumber}
+                      </span>
+                    </div>
+                  ) : null}
+                  {isOnlineOrder && selectedOrder.guestEmail ? (
+                    <div className="flex justify-between gap-3 font-medium">
+                      <span className="text-zinc-500 shrink-0">Email</span>
+                      <span className="text-zinc-900 font-bold text-right break-all">
+                        {selectedOrder.guestEmail}
+                      </span>
+                    </div>
+                  ) : null}
+                  {isOnlineOrder && onlinePickup ? (
+                    <div className="flex justify-between gap-3 font-medium">
+                      <span className="text-zinc-500 shrink-0">Pickup</span>
+                      <span className="text-sky-700 font-bold text-right">
+                        {onlinePickup.label}
+                        {onlinePickup.date ? ` · ${onlinePickup.date}` : ""}
+                      </span>
+                    </div>
+                  ) : null}
                   {selectedOrder.source === "STAFF" && selectedOrder.staffOrderReason && (
                     <div className="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3">
                       <span className="text-xs font-bold text-indigo-600 uppercase tracking-wider block mb-1">
@@ -950,7 +1107,11 @@ export default function TodayOrdersPage() {
                   <div className="h-px bg-zinc-100"></div>
                   <div>
                     <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2">Note</h3>
-                    <p className="text-sm text-zinc-600">{selectedOrder.specialNote}</p>
+                    <p className="text-sm text-zinc-600">
+                      {isOnlineOrder && onlinePickup
+                        ? onlinePickup.note || "—"
+                        : selectedOrder.specialNote}
+                    </p>
                   </div>
                 </>
               )}
@@ -1092,16 +1253,56 @@ export default function TodayOrdersPage() {
             </div>
 
             <div className="p-4 border-t border-zinc-400 shrink-0 bg-white space-y-2">
-              {isOnlineOrder && (
+              {canApproveOnline && (
+                <Button
+                  onClick={handleApproveOnline}
+                  disabled={isApprovingOnline}
+                  className="w-full h-12 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-none"
+                >
+                  {isApprovingOnline ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : (
+                    "Approve Online Order"
+                  )}
+                </Button>
+              )}
+              {canSendOnlineKot && (
+                <Button
+                  onClick={handleSendOnlineKot}
+                  disabled={isSendingOnlineKot}
+                  className="w-full h-12 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-none"
+                >
+                  {isSendingOnlineKot ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : (
+                    "Create Kitchen / KOT"
+                  )}
+                </Button>
+              )}
+              {canMarkOnlineReady && (
+                <Button
+                  onClick={handleMarkOnlineReady}
+                  disabled={isMarkingOnlineReady}
+                  className="w-full h-12 bg-sky-600 hover:bg-sky-700 text-white font-bold rounded-xl shadow-none"
+                >
+                  {isMarkingOnlineReady ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : (
+                    "Mark Ready for Pickup"
+                  )}
+                </Button>
+              )}
+              {canReprintOnlineKot && (
                 <Button
                   onClick={() => {
                     setPrintType("kot");
                     setPendingReleaseAfterPrint(false);
                     setIsPrintModalOpen(true);
                   }}
-                  className="w-full h-12 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-none"
+                  variant="outline"
+                  className="w-full h-11 rounded-xl border-blue-300 bg-blue-50 text-blue-800 hover:bg-blue-100 font-bold shadow-none"
                 >
-                  Kitchen / KOT
+                  Reprint KOT
                 </Button>
               )}
               {showPayNow && (
@@ -1109,7 +1310,7 @@ export default function TodayOrdersPage() {
                   onClick={openPaymentModal}
                   className="w-full h-12 bg-red-600 hover:bg-red-700 text-white font-bold rounded shadow-none"
                 >
-                  Pay Now
+                  {canPayOnline ? "Pay / Print Bill" : "Pay Now"}
                 </Button>
               )}
               {canWaive && (

@@ -24,7 +24,7 @@ export const GET = withAuth(async (request) => {
       restaurant: request.restaurant,
     })
       .select(
-        "name type target host port connectionType systemPrinterName location enabled",
+        "name type target host port connectionType systemPrinterName location enabled lastReachability",
       )
       .sort({ target: 1 })
       .lean();

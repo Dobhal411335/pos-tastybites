@@ -161,6 +161,9 @@ export function getOrderTypeBadgeClass(order) {
 }
 
 export function getOrderLocationLabel(order) {
+  if (order?.source === "ONLINE") {
+    return "Online Pickup";
+  }
   if (order?.source === "WALK_IN") {
     return order?.partyName || order?.guestName || "Walk-in";
   }

@@ -67,6 +67,7 @@ function relativeTime(date) {
 
 function notificationHref(n) {
   if (n.type === "EMPLOYEE_LOGIN" || n.type === "EMPLOYEE_LOGOUT") return null;
+  if (n.type === "NEW_RESERVATION") return "/sales/reservations";
   if (n.tableSessionId) return `/sales/orders/${n.tableSessionId}`;
   if (n.printJobId) return `/sales/print-jobs/${n.printJobId}`;
   if (n.type?.startsWith("TABLE")) return "/floor";

@@ -1,56 +1,68 @@
+import { Plus_Jakarta_Sans } from "next/font/google";
 import { Toaster } from "sonner";
 import { CartProvider } from "@/context/CartContext";
+import { RestaurantPublicProvider } from "@/context/RestaurantPublicContext";
+import { MenuPublicProvider } from "@/context/MenuPublicContext";
 import "./globals.css";
+
+const jakarta = Plus_Jakarta_Sans({
+  subsets: ["latin"],
+  variable: "--font-body",
+  display: "swap",
+});
 
 export const metadata = {
   metadataBase: new URL("https://pos.tastybitesrestaurant.com/"),
   title: {
-    default: "TastyBites - Modern POS & Restaurant Management",
-    template: "%s | TastyBites",
+    default: "Tasty Bites | Order Online for Same-Day Pickup",
+    template: "%s | Tasty Bites",
   },
   description:
-    "Experience seamless restaurant management with TastyBites. Manage menus, orders, tables, and staff efficiently with our enterprise POS solution.",
+    "Order from Tasty Bites online for same-day pickup. Browse the menu, customize your meal, and pay at the restaurant.",
   keywords:
-    "tastybites, restaurant pos, pos system, restaurant management, online ordering, billing software, menu management, cafe pos",
-  icons: { 
+    "tasty bites, order online, restaurant pickup, menu, Exeter restaurant",
+  icons: {
     icon: "/favicon.ico",
     shortcut: "/favicon-16x16.png",
-    apple: "/apple-touch-icon.png" 
+    apple: "/apple-touch-icon.png",
   },
   openGraph: {
-    title: "TastyBites - Modern POS & Restaurant Management",
+    title: "Tasty Bites | Order Online for Same-Day Pickup",
     description:
-      "Experience seamless restaurant management with TastyBites. Manage menus, orders, tables, and staff efficiently.",
+      "Fresh food made to order. Order online, pick up the same day, pay at the restaurant.",
     images: ["/BannerImage.png"],
     url: "https://pos.tastybitesrestaurant.com/",
-    siteName: "TastyBites",
+    siteName: "Tasty Bites",
+    type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title: "TastyBites - Modern POS & Restaurant Management",
+    title: "Tasty Bites | Order Online",
     description:
-      "Experience seamless restaurant management with TastyBites. Manage menus, orders, tables, and staff efficiently.",
+      "Fresh food made to order. Order online for same-day pickup.",
     images: ["/BannerImage.png"],
   },
-  other: {
-    "author": "TastyBites",
-    "robots": "index, follow",
-    "viewport": "width=device-width, initial-scale=1",
+  robots: {
+    index: true,
+    follow: true,
   },
 };
 
 export default function RootLayout({ children }) {
   return (
     <html
-    suppressHydrationWarning
+      suppressHydrationWarning
       lang="en"
-      className={``}
+      className={jakarta.variable}
+      style={{ ["--font-display"]: "var(--font-body)" }}
     >
-      <body className="min-h-full flex flex-col">
+      <body className="flex min-h-full flex-col font-sans">
         <Toaster position="top-right" richColors />
-        <CartProvider>
-          {children}
-        </CartProvider>
+        <RestaurantPublicProvider>
+          <MenuPublicProvider>
+            <CartProvider>{children}</CartProvider>
+          </MenuPublicProvider>
+        </RestaurantPublicProvider>
       </body>
     </html>
   );

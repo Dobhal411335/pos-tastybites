@@ -2,131 +2,179 @@
 
 import React, { useState } from "react";
 import Image from "next/image";
-import { Plus, Minus, ShoppingBag, Eye } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { useCart } from "@/context/CartContext";
+import { Eye, Plus, SlidersHorizontal } from "lucide-react";
 import { cn } from "@/lib/utils";
 import ProductConfigModal from "./ProductConfigModal";
 import ProductDetailModal from "./ProductDetailModal";
+import { productImageSrc } from "@/lib/public/productImage";
+import { useCart } from "@/context/CartContext";
+import { toast } from "sonner";
+
+function productNeedsConfig(product) {
+  if (!product) return false;
+  if (product.hasModifiers) return true;
+  const variants = product.variants || [];
+  const addons = product.addons || [];
+  const choices = product.choiceOptions || [];
+  const prep = product.preparationStyles || [];
+  return variants.length > 1 || addons.length > 0 || choices.length > 0 || prep.length > 0;
+}
 
 export default function ProductCard({ product }) {
+  const { addToCart } = useCart();
   const [isConfigOpen, setIsConfigOpen] = useState(false);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const isAvailable = product.available !== false;
+  const price = Number(product.price) || 0;
+  const needsConfig = productNeedsConfig(product);
+
+  const quickAdd = () => {
+    if (!isAvailable) return;
+    if (needsConfig) {
+      setIsConfigOpen(true);
+      return;
+    }
+    const sizeName = product.variants?.[0]?.size || "Standard";
+    const unitPrice = Number(product.variants?.[0]?.price ?? product.price) || 0;
+    const cartKey = `${product.id}-${sizeName}`.replace(/\s+/g, "-");
+    addToCart(
+      {
+        cartKey,
+        id: product.id,
+        menuItemId: product.id,
+        name: product.name,
+        price: unitPrice,
+        image: product.image,
+        selectedSize: sizeName,
+        size: sizeName,
+        sizes: sizeName && !/^standard$/i.test(sizeName) ? [sizeName] : [],
+        selectedAddons: [],
+        options: [],
+        choiceSelections: [],
+        category: product.category,
+        categoryName: product.categoryName,
+        productType: product.productType,
+      },
+      1
+    );
+    toast.success(`${product.name} added to bag`);
+  };
 
   return (
     <>
-      <div className="group flex flex-col justify-between rounded-xl bg-white border border-[#ECECEC] shadow-sm hover:shadow-md transition-all duration-200 overflow-hidden">
-        {/* Product Image & Badges */}
+      <article
+        className={cn(
+          "group flex flex-col overflow-hidden rounded-xl bg-white shadow-[0_4px_20px_-2px_rgba(15,23,42,0.04)] transition-all hover:shadow-[0_12px_32px_-4px_rgba(15,23,42,0.08)]",
+          !isAvailable && "opacity-75"
+        )}
+      >
         <div
+          className="relative aspect-[4/3] w-full cursor-pointer overflow-hidden bg-[var(--customer-surface-low)]"
           onClick={() => setIsDetailOpen(true)}
-          className="relative w-full h-[180px] sm:h-[220px] bg-zinc-150 cursor-pointer overflow-hidden"
+          onKeyDown={(e) => e.key === "Enter" && setIsDetailOpen(true)}
+          role="button"
+          tabIndex={0}
         >
           <Image
-            src={product.image}
+            src={productImageSrc(product)}
             alt={product.name}
             fill
-            sizes="(max-w-7xl) 25vw, 50vw, 100vw"
+            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
             className={cn(
-              "object-cover transition-transform duration-500 group-hover:scale-[1.02]",
-              !isAvailable && "grayscale opacity-80"
+              "object-cover transition-transform duration-500 group-hover:scale-105",
+              !isAvailable && "grayscale"
             )}
           />
-          
-          {/* Availability Badge */}
-          <div
-            className={cn(
-              "absolute top-3 left-3 px-2 py-0.5 text-[9px] uppercase font-bold tracking-widest text-white shadow-sm",
-              isAvailable ? "bg-[#12A594]" : "bg-red-500"
-            )}
+          <div className="absolute left-3 top-3 flex flex-wrap gap-1">
+            {product.categoryName ? (
+              <span className="rounded-md border border-gray-400 bg-white/90 px-2 py-0.5 text-[11px] font-semibold text-[var(--customer-ink)]">
+                {product.categoryName}
+              </span>
+            ) : null}
+          </div>
+          <button
+            type="button"
+            className="absolute bottom-3 right-3 flex items-center gap-1 rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-semibold text-[var(--customer-ink)] opacity-0 shadow-sm backdrop-blur-md transition-opacity group-hover:opacity-100"
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsDetailOpen(true);
+            }}
           >
-            {isAvailable ? "Available" : "Sold Out"}
-          </div>
-
-          {/* Quick View Overlay icon */}
-          <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-            <div className="bg-white/90 p-2.5 rounded-full shadow-sm text-zinc-800">
-              <Eye className="h-5 w-5" />
-            </div>
-          </div>
+            <Eye className="h-3.5 w-3.5" /> Info
+          </button>
         </div>
 
-        {/* Product Details */}
-        <div className="p-4 flex-1 flex flex-col justify-between space-y-4">
-          
-          <div className="space-y-1 cursor-pointer" onClick={() => setIsDetailOpen(true)}>
-            <h3 className="font-bold text-[#1F2937] text-base font-serif line-clamp-1">
-              {product.name}
-            </h3>
-            <p className="text-xs text-[#6B7280] font-light leading-relaxed line-clamp-2">
-              {product.desc}
+        <div className="flex flex-1 flex-col justify-between gap-2 p-4">
+          <div>
+            <div className="flex items-start justify-between gap-2">
+              <h3
+                className="cursor-pointer text-lg font-semibold text-[var(--customer-ink)] transition-colors group-hover:text-primary"
+                onClick={() => setIsDetailOpen(true)}
+              >
+                {product.name}
+              </h3>
+              <span className="whitespace-nowrap text-lg font-bold tabular-nums text-[var(--customer-ink)]">
+                ${price.toFixed(2)}
+              </span>
+            </div>
+            <p className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-[var(--customer-muted)]">
+              {product.description || product.desc || "Made fresh to order."}
             </p>
           </div>
 
-          {/* Pricing, Quantity Selector & Cart CTA */}
-          <div className="space-y-3 pt-3 border-t border-[#ECECEC]">
-            {/* Price display */}
-            <div className="flex items-baseline justify-between">
-              <span className="text-base font-extrabold text-[#1F2937]">
-                ${product.price.toFixed(2)}
+          <div className="mt-auto flex items-center justify-between gap-2 pt-2">
+            {needsConfig ? (
+              <span className="flex items-center gap-0.5 text-[11px] font-semibold text-primary">
+                <SlidersHorizontal className="h-3.5 w-3.5" /> Customize
               </span>
-              <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider">
-                + Tax
-              </span>
-            </div>
-
-            {/* Action Row */}
-            {isAvailable ? (
-              <div className="flex flex-col gap-2">
-                {/* Option available banner link */}
-                <button
-                  type="button"
-                  onClick={() => setIsConfigOpen(true)}
-                  className="w-full py-1 text-[10px] text-left uppercase tracking-widest text-[#F97316] font-bold border-b border-dashed border-[#F97316]/30 hover:border-[#F97316] transition-all flex items-center justify-between"
-                >
-                  <span>Option Available</span>
-                  <span>Configure &rarr;</span>
-                </button>
-
-                {/* Add to Cart button opens config/details options */}
-                <Button
-                  onClick={() => setIsConfigOpen(true)}
-                  className="w-full bg-[#F97316] hover:bg-[#e06510] text-white rounded-none h-10 text-[10px] uppercase font-bold tracking-widest flex items-center justify-center gap-1.5 transition-colors"
-                >
-                  <ShoppingBag className="h-3.5 w-3.5" />
-                  <span>Customize & Add</span>
-                </Button>
-              </div>
             ) : (
-              <Button
-                disabled
-                className="w-full bg-zinc-200 text-zinc-400 cursor-not-allowed rounded-none h-9 text-[10px] uppercase font-bold tracking-widest"
+              <span className="text-[11px] font-semibold text-[var(--customer-muted)]">
+                Standard
+              </span>
+            )}
+
+            {isAvailable ? (
+              <button
+                type="button"
+                onClick={needsConfig ? () => setIsConfigOpen(true) : quickAdd}
+                className={cn(
+                  "flex items-center gap-1 rounded-lg px-4 py-2 text-sm font-semibold shadow-sm transition-all",
+                  needsConfig
+                    ? "bg-primary text-white hover:bg-primary-hover"
+                    : "bg-red-500 text-white hover:bg-red-600"                )}
               >
+                {needsConfig ? (
+                  "Choose Options"
+                ) : (
+                  <>
+                    <Plus className="h-4 w-4" /> Add
+                  </>
+                )}
+              </button>
+            ) : (
+              <span className="rounded-lg bg-zinc-100 px-4 py-2 text-sm font-semibold text-zinc-400">
                 Unavailable
-              </Button>
+              </span>
             )}
           </div>
-
         </div>
-      </div>
+      </article>
 
-      {/* Config Options Modal */}
-      {isConfigOpen && (
-        <ProductConfigModal
-          isOpen={isConfigOpen}
-          onClose={() => setIsConfigOpen(false)}
-          product={product}
-        />
-      )}
-
-      {/* Product Detail Modal */}
-      {isDetailOpen && (
-        <ProductDetailModal
-          isOpen={isDetailOpen}
-          onClose={() => setIsDetailOpen(false)}
-          product={product}
-        />
-      )}
+      <ProductDetailModal
+        isOpen={isDetailOpen}
+        onClose={() => setIsDetailOpen(false)}
+        product={product}
+        onAdd={() => {
+          setIsDetailOpen(false);
+          if (needsConfig) setIsConfigOpen(true);
+          else quickAdd();
+        }}
+      />
+      <ProductConfigModal
+        isOpen={isConfigOpen}
+        onClose={() => setIsConfigOpen(false)}
+        product={product}
+      />
     </>
   );
 }

@@ -15,6 +15,7 @@ import {
   FileBarChart2,
   ChevronDown,
   AlertTriangle,
+  CalendarDays,
 } from "lucide-react";
 import { toast } from "sonner";
 import DateTimeDisplay from "@/components/common/DateTimeDisplay";
@@ -23,6 +24,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import NotificationBell from "@/components/common/NotificationBell";
 import { employeeFetch } from "@/lib/employeeFetch";
+import { useSocket } from "@/components/providers/SocketProvider";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -41,7 +43,13 @@ import {
 
 const PRIMARY_NAV = [
   { label: "Floor", href: "/floor", icon: Grid2X2 },
-  { label: "Orders", href: "/sales/today", icon: ShoppingBag },
+  { label: "Orders", href: "/sales/today", icon: ShoppingBag, showUnpaidBadge: true },
+  {
+    label: "Bookings",
+    href: "/sales/reservations",
+    icon: CalendarDays,
+    showBookingBadge: true,
+  },
 ];
 
 const MENU_LINKS = [
@@ -56,6 +64,11 @@ const MENU_LINKS = [
     icon: ShoppingBag,
   },
   {
+    label: "Table Bookings",
+    href: "/sales/reservations",
+    icon: CalendarDays,
+  },
+  {
     label: "Print Jobs",
     href: "/sales/print-jobs",
     icon: Printer,
@@ -65,7 +78,6 @@ const MENU_LINKS = [
     href: "/sales/notifications",
     icon: BellRing,
   },
-
 ];
 
 const TABLE_STATUS = [
@@ -106,6 +118,60 @@ export default function EmployeeTopNav({
   const [checkingClose, setCheckingClose] = React.useState(false);
   const [closingRestaurant, setClosingRestaurant] = React.useState(false);
   const [menuOpen, setMenuOpen] = React.useState(false);
+  const [unpaidCount, setUnpaidCount] = React.useState(0);
+  const [pendingBookings, setPendingBookings] = React.useState(0);
+  const { socket } = useSocket();
+
+  const refreshUnpaidCount = React.useCallback(async () => {
+    try {
+      const res = await employeeFetch("/api/orders/employee?unpaidCount=true");
+      if (!res.ok) return;
+      const json = await res.json();
+      if (json?.success) {
+        setUnpaidCount(Number(json.data?.unpaidCount) || 0);
+      }
+    } catch {
+      // ignore badge errors
+    }
+  }, []);
+
+  const refreshPendingBookings = React.useCallback(async () => {
+    try {
+      const res = await employeeFetch(
+        "/api/sales/reservations?pendingCount=true"
+      );
+      if (!res.ok) return;
+      const json = await res.json();
+      if (json?.success) {
+        setPendingBookings(Number(json.data?.pendingCount) || 0);
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  React.useEffect(() => {
+    refreshUnpaidCount();
+    refreshPendingBookings();
+  }, [refreshUnpaidCount, refreshPendingBookings, pathname]);
+
+  React.useEffect(() => {
+    if (!socket) return undefined;
+    const onOrderChange = () => refreshUnpaidCount();
+    const onBookingChange = () => refreshPendingBookings();
+    socket.on("order:created", onOrderChange);
+    socket.on("order:updated", onOrderChange);
+    socket.on("payment:completed", onOrderChange);
+    socket.on("reservation:created", onBookingChange);
+    socket.on("reservation:updated", onBookingChange);
+    return () => {
+      socket.off("order:created", onOrderChange);
+      socket.off("order:updated", onOrderChange);
+      socket.off("payment:completed", onOrderChange);
+      socket.off("reservation:created", onBookingChange);
+      socket.off("reservation:updated", onBookingChange);
+    };
+  }, [socket, refreshUnpaidCount, refreshPendingBookings]);
 
   const showCloseBlockers = (blockers) => {
     setCloseBlockers(blockers || null);
@@ -224,6 +290,11 @@ export default function EmployeeTopNav({
           {PRIMARY_NAV.map((item) => {
             const active = navActive(pathname, item.href);
             const Icon = item.icon;
+            const badgeCount = item.showUnpaidBadge
+              ? unpaidCount
+              : item.showBookingBadge
+                ? pendingBookings
+                : 0;
             return (
               <Link
                 key={item.href}
@@ -236,6 +307,17 @@ export default function EmployeeTopNav({
               >
                 <Icon className="xl:h-5 lg:h-4 md:h-3 shrink-0" />
                 <span>{item.label}</span>
+                {badgeCount > 0 ? (
+                  <span
+                    className={`inline-flex min-w-5 items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none tabular-nums ${
+                      active
+                        ? "bg-white text-orange-600"
+                        : "bg-red-500 text-white"
+                    }`}
+                  >
+                    {badgeCount > 99 ? "99+" : badgeCount}
+                  </span>
+                ) : null}
               </Link>
             );
           })}
@@ -390,17 +472,31 @@ export default function EmployeeTopNav({
       <nav className="md:hidden flex items-center gap-1.5 overflow-x-auto px-3 pb-2.5 no-scrollbar">
         {PRIMARY_NAV.map((item) => {
           const active = navActive(pathname, item.href);
+          const badgeCount = item.showUnpaidBadge
+            ? unpaidCount
+            : item.showBookingBadge
+              ? pendingBookings
+              : 0;
           return (
             <Link
               key={item.href}
               href={item.href}
-              className={`shrink-0 rounded-full px-3.5 py-1.5 text-xs font-semibold ${
+              className={`shrink-0 inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-semibold ${
                 active
                   ? "bg-orange-500 text-white"
                   : "bg-stone-200/70 text-stone-600"
               }`}
             >
               {item.label}
+              {badgeCount > 0 ? (
+                <span
+                  className={`inline-flex min-w-4 items-center justify-center rounded-full px-1 py-0.5 text-[10px] font-bold leading-none tabular-nums ${
+                    active ? "bg-white text-orange-600" : "bg-red-500 text-white"
+                  }`}
+                >
+                  {badgeCount > 99 ? "99+" : badgeCount}
+                </span>
+              ) : null}
             </Link>
           );
         })}

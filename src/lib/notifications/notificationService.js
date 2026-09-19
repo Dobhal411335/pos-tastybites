@@ -1,9 +1,11 @@
 import Notification from "@/models/Notification";
 import EmployeeSession from "@/models/employee/EmployeeSession";
 import { logger } from "@/utils/logger";
+import { getSocketServer } from "@/lib/socketServer";
 
 const HIGH_PRIORITY_TYPES = new Set([
   "NEW_ORDER",
+  "NEW_RESERVATION",
   "PAYMENT_COMPLETED",
   "KOT_READY",
   "PRINT_FAILED",
@@ -75,6 +77,7 @@ export function categorizeType(type) {
       "TABLE_RELEASED",
       "TABLE_TRANSFERRED",
       "TABLE_REASSIGNED",
+      "NEW_RESERVATION",
     ].includes(type)
   ) {
     return "Tables";
@@ -107,16 +110,17 @@ function todayCreatedAtFilter() {
 }
 
 function emitNotification(event, restaurantId, floorId, recipientId, payload) {
-  if (!global.io) return;
+  const io = getSocketServer();
+  if (!io) return;
 
   // Emit to exactly one primary room so clients in multiple rooms
   // (restaurant + floor) do not receive the same event twice.
   if (recipientId) {
-    global.io.to(`employee:${recipientId}`).emit(event, payload);
+    io.to(`employee:${String(recipientId)}`).emit(event, payload);
     return;
   }
   if (restaurantId) {
-    global.io.to(`restaurant:${restaurantId}`).emit(event, payload);
+    io.to(`restaurant:${String(restaurantId)}`).emit(event, payload);
   }
 }
 
@@ -326,6 +330,7 @@ export async function listNotifications({
   } else if (filter === "Tables") {
     query.type = {
       $in: [
+        "NEW_RESERVATION",
         "TABLE_ASSIGNED",
         "TABLE_RELEASED",
         "TABLE_TRANSFERRED",

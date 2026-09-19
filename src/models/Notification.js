@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 
 export const NOTIFICATION_TYPES = [
   "NEW_ORDER",
+  "NEW_RESERVATION",
   "ORDER_UPDATED",
   "ORDER_CANCELLED",
   "ORDER_COMPLETED",

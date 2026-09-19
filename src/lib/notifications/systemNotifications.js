@@ -2,8 +2,11 @@ const DISMISS_KEY = "tastybites_system_notif_prompt_dismissed";
 /** Persist across refreshes so we don't nag after Allow / Not now. */
 const SETUP_DONE_KEY = "tastybites_alerts_setup_done";
 
-/** Browser/OS system notifications are reserved for new orders only. */
-export const SYSTEM_NOTIFICATION_TYPES = new Set(["NEW_ORDER"]);
+/** Browser/OS system notifications for high-urgency sales alerts. */
+export const SYSTEM_NOTIFICATION_TYPES = new Set([
+  "NEW_ORDER",
+  "NEW_RESERVATION",
+]);
 
 export function isSystemNotificationSupported() {
   return typeof window !== "undefined" && "Notification" in window;
@@ -104,9 +107,10 @@ export function showSystemNotification(notification) {
     n.onclick = () => {
       try {
         window.focus();
-        const sessionId = notification?.tableSessionId;
-        if (sessionId) {
-          window.location.href = `/sales/orders/${sessionId}`;
+        if (notification?.type === "NEW_RESERVATION") {
+          window.location.href = "/sales/reservations";
+        } else if (notification?.tableSessionId) {
+          window.location.href = `/sales/orders/${notification.tableSessionId}`;
         } else {
           window.location.href = "/sales/notifications";
         }

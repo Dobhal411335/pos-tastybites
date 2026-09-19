@@ -1,55 +1,44 @@
 import React from "react";
 import Navbar from "@/components/sections/Navbar";
 import Hero from "@/components/sections/Hero";
-import SearchFilter from "@/components/sections/SearchFilter";
-import AboutUs from "@/components/sections/AboutUs";
-import Notices from "@/components/sections/Notices";
-import ProductCards from "@/components/sections/ProductCards";
-import DealsCarousel from "@/components/sections/DealsCarousel";
-import PromoGrid from "@/components/sections/PromoGrid";
-import BookingForm from "@/components/sections/BookingForm";
 import Footer from "@/components/sections/Footer";
 import PopUpBanner from "@/components/sections/PopUpBanner";
+import QuickOrderBar from "@/components/ordering/QuickOrderBar";
+import CategoryCarousel from "@/components/ordering/CategoryCarousel";
+import BrowseMenuLanding from "@/components/ordering/BrowseMenuLanding";
+import SpecialOfferBanner from "@/components/ordering/SpecialOfferBanner";
+import RestaurantStory from "@/components/ordering/RestaurantStory";
+import PickupHowItWorks from "@/components/ordering/PickupHowItWorks";
+import BookTableForm from "@/components/ordering/BookTableForm";
+import FinalOrderCta from "@/components/ordering/FinalOrderCta";
+import LocalBusinessJsonLd from "@/components/ordering/LocalBusinessJsonLd";
+import SmoothScroll from "@/components/ordering/SmoothScroll";
+
+export const metadata = {
+  title: "Order Online for Same-Day Pickup",
+  description:
+    "Order from Tasty Bites online. Browse the menu, customize your meal, and pick up the same day.",
+};
 
 export default function Home() {
   return (
-    <div className="flex flex-col min-h-screen bg-[#F7F8FA] font-sans overflow-x-hidden antialiased">
-      
-      <PopUpBanner/>
-
-      {/* Navigation */}
+    <div className="flex min-h-screen flex-col overflow-x-hidden bg-(--customer-surface) text-(--customer-ink) antialiased">
+      <SmoothScroll />
+      <LocalBusinessJsonLd />
+      <PopUpBanner />
       <Navbar />
-
-      {/* Hero Section */}
-      <Hero />
-
-      {/* Interactive Search Section */}
-      <SearchFilter />
-
-      {/* Main Content Area */}
-      <main className="flex-1 py-12 space-y-6">
-        
-        {/* About Us section */}
-        <AboutUs />
-
-        {/* Notices Section */}
-        <Notices />
-
-        {/* Product Menu Cards */}
-        <ProductCards />
-
-        {/* Deals Carousel */}
-        <DealsCarousel />
-
-        {/* Promo Grid */}
-        <PromoGrid />
-
-        {/* Booking Section */}
-        <BookingForm />
-
+      <main className="flex-1">
+        <Hero />
+        <QuickOrderBar />
+        <CategoryCarousel />
+        <BrowseMenuLanding />
+        <SpecialOfferBanner />
+        <RestaurantStory />
+        <PickupHowItWorks />
+        {/* <CustomerReviews /> */}
+        <BookTableForm />
+        <FinalOrderCta />
       </main>
-
-      {/* Footer Section */}
       <Footer />
     </div>
   );

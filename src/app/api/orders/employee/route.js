@@ -10,6 +10,8 @@ import { getNextOrderNumber, getNextInvoiceNumber } from "@/utils/generateOrderN
 import OperationalAuditLog from "@/models/OperationalAuditLog";
 import { createKotPrintJob, createBarReceiptPrintJob } from "@/lib/printing/printJobService";
 import { createNotification } from "@/lib/notifications/notificationService";
+import { getSocketServer } from "@/lib/socketServer";
+import { sendOnlineOrderStatusEmail } from "@/lib/brevo/sendOnlineOrderStatusEmail";
 import Table from "@/models/floor/Table";
 import Floor from "@/models/floor/Floor";
 import { repricePosCartItems } from "@/lib/orders/repricePosCartItems";
@@ -844,6 +846,22 @@ export const GET = withAuth(async (request) => {
       return sendSuccess(enriched, "Session order retrieved");
     }
 
+    // Unpaid open-order count for employee topnav badge
+    if (searchParams.get("unpaidCount") === "true") {
+      const start = new Date();
+      start.setHours(0, 0, 0, 0);
+      const end = new Date();
+      end.setHours(23, 59, 59, 999);
+      const unpaidCount = await Order.countDocuments({
+        restaurantId: request.restaurant,
+        isActive: { $ne: false },
+        createdAt: { $gte: start, $lte: end },
+        paymentStatus: { $ne: "PAID" },
+        status: { $nin: ["CANCELLED", "WAIVED", "PAID"] },
+      });
+      return sendSuccess({ unpaidCount }, "Unpaid order count");
+    }
+
     // Default: Get recent employee orders; today=true returns all restaurant orders for the day
     const employeeId = request.user.id;
     const restaurantId = request.restaurant;
@@ -892,7 +910,7 @@ export const GET = withAuth(async (request) => {
   }
 }, ["EMPLOYEE", "MANAGER", "ADMIN", "SERVER", "BARTENDER"]);
 
-// PATCH - Waive off an unpaid POS bill (e.g. customer refused payment after KOT)
+// PATCH - Waive unpaid bill OR approve / send KOT for online pickup orders
 export const PATCH = withAuth(async (request) => {
   try {
     const employeeId = request.user.id;
@@ -900,12 +918,219 @@ export const PATCH = withAuth(async (request) => {
     const body = await request.json();
     const { orderId, action, reason } = body || {};
 
-    if (action !== "waive") {
-      return sendError(new Error("Invalid action"), "Unsupported action", 400);
-    }
-
     if (!orderId) {
       return sendError(new Error("Missing orderId"), "orderId is required", 400);
+    }
+
+    if (action === "approve-online") {
+      const order = await Order.findOne({
+        _id: orderId,
+        restaurantId,
+        isActive: { $ne: false },
+      });
+      if (!order) {
+        return sendError(new Error("Not Found"), "Order not found", 404);
+      }
+      if (order.source !== "ONLINE") {
+        return sendError(new Error("Invalid source"), "Only online orders can be approved this way", 400);
+      }
+      if (order.status !== "PENDING") {
+        return sendError(
+          new Error("Invalid Status"),
+          `Order is already ${order.status}. Only pending online orders can be approved.`,
+          400
+        );
+      }
+
+      order.status = "CONFIRMED";
+      order.onlineApprovedAt = new Date();
+      order.onlineApprovedBy = employeeId;
+      if (!order.processedBy) order.processedBy = employeeId;
+      await order.save();
+
+      try {
+        const restaurant = await Restaurant.findById(restaurantId)
+          .select("name address")
+          .lean();
+        await sendOnlineOrderStatusEmail({
+          type: "approved",
+          order,
+          restaurantName: restaurant?.name,
+          address: restaurant?.address || null,
+        });
+      } catch (emailErr) {
+        logger.error("Failed to send online approve email", emailErr);
+      }
+
+      try {
+        await OperationalAuditLog.create({
+          restaurantId,
+          actorId: employeeId,
+          actorType: "Employee",
+          actorName: request.user.name || request.user.firstName,
+          action: "ORDER_UPDATED",
+          newValue: {
+            status: "CONFIRMED",
+            orderId: order._id,
+            orderNumber: order.orderNumber,
+            onlineApproved: true,
+          },
+        });
+      } catch (auditErr) {
+        logger.error("Failed to write online-approve audit log", auditErr);
+      }
+
+      try {
+        const io = getSocketServer();
+        io?.to(`restaurant:${restaurantId}`).emit("order:updated", {
+          orderId: order._id,
+          orderNumber: order.orderNumber,
+          source: "ONLINE",
+          status: "CONFIRMED",
+        });
+      } catch (socketErr) {
+        logger.error("Failed to emit online approve socket", socketErr);
+      }
+
+      const [enriched] = await enrichOrdersWithProcessedBy([order.toObject()]);
+      return sendSuccess(enriched, "Online order approved");
+    }
+
+    if (action === "mark-online-ready") {
+      const order = await Order.findOne({
+        _id: orderId,
+        restaurantId,
+        isActive: { $ne: false },
+      });
+      if (!order) {
+        return sendError(new Error("Not Found"), "Order not found", 404);
+      }
+      if (order.source !== "ONLINE") {
+        return sendError(new Error("Invalid source"), "Only online orders support this action", 400);
+      }
+      if (order.status !== "CONFIRMED" && order.status !== "COMPLETED") {
+        return sendError(
+          new Error("Not ready"),
+          "Approve and send KOT before marking ready for pickup",
+          400
+        );
+      }
+      if (!order.onlineKotSentAt) {
+        return sendError(
+          new Error("KOT required"),
+          "Create the kitchen ticket before marking ready for pickup",
+          400
+        );
+      }
+      if (order.onlineReadyAt || order.status === "COMPLETED") {
+        return sendError(new Error("Already ready"), "Order was already marked ready", 400);
+      }
+
+      order.status = "COMPLETED";
+      order.onlineReadyAt = new Date();
+      order.onlineReadyBy = employeeId;
+      await order.save();
+
+      try {
+        const restaurant = await Restaurant.findById(restaurantId)
+          .select("name address")
+          .lean();
+        await sendOnlineOrderStatusEmail({
+          type: "ready",
+          order,
+          restaurantName: restaurant?.name,
+          address: restaurant?.address || null,
+        });
+      } catch (emailErr) {
+        logger.error("Failed to send online ready email", emailErr);
+      }
+
+      try {
+        const io = getSocketServer();
+        io?.to(`restaurant:${restaurantId}`).emit("order:updated", {
+          orderId: order._id,
+          orderNumber: order.orderNumber,
+          source: "ONLINE",
+          status: "COMPLETED",
+          onlineReady: true,
+        });
+      } catch (socketErr) {
+        logger.error("Failed to emit online ready socket", socketErr);
+      }
+
+      const [enriched] = await enrichOrdersWithProcessedBy([order.toObject()]);
+      return sendSuccess(enriched, "Order marked ready for pickup");
+    }
+
+    if (action === "send-online-kot") {
+      const order = await Order.findOne({
+        _id: orderId,
+        restaurantId,
+        isActive: { $ne: false },
+      });
+      if (!order) {
+        return sendError(new Error("Not Found"), "Order not found", 404);
+      }
+      if (order.source !== "ONLINE") {
+        return sendError(new Error("Invalid source"), "Only online orders support this KOT action", 400);
+      }
+      if (order.status !== "CONFIRMED") {
+        return sendError(
+          new Error("Not approved"),
+          "Approve the online order before sending KOT",
+          400
+        );
+      }
+      if (order.onlineKotSentAt) {
+        return sendError(new Error("Already sent"), "Kitchen ticket was already sent for this order", 400);
+      }
+
+      const kitchenItems = (order.items || []).filter(
+        (item) => String(item.productType || "KITCHEN").toUpperCase() !== "BAR"
+      );
+      const ticketItems = kitchenItems.length > 0 ? kitchenItems : order.items || [];
+
+      const { job } = await enqueueOrderTicketPrintJob({
+        order,
+        employeeId,
+        guestCount: order.guestCount,
+        ticketItems,
+        routeToKitchen: true,
+      });
+
+      if (!job) {
+        return sendError(
+          new Error("Print failed"),
+          "Could not create kitchen ticket. Check printer setup and try again.",
+          502
+        );
+      }
+
+      order.onlineKotSentAt = new Date();
+      order.onlineKotSentBy = employeeId;
+      await order.save();
+
+      try {
+        const io = getSocketServer();
+        io?.to(`restaurant:${restaurantId}`).emit("order:updated", {
+          orderId: order._id,
+          orderNumber: order.orderNumber,
+          source: "ONLINE",
+          onlineKotSent: true,
+        });
+      } catch (socketErr) {
+        logger.error("Failed to emit online KOT socket", socketErr);
+      }
+
+      const [enriched] = await enrichOrdersWithProcessedBy([order.toObject()]);
+      return sendSuccess(
+        { ...enriched, kotJobId: job._id },
+        "Kitchen ticket created"
+      );
+    }
+
+    if (action !== "waive") {
+      return sendError(new Error("Invalid action"), "Unsupported action", 400);
     }
 
     const waiveReason = String(reason || "").trim();
@@ -1040,7 +1265,7 @@ export const PATCH = withAuth(async (request) => {
       sessionReleased ? "Bill waived and table released" : "Bill waived successfully"
     );
   } catch (error) {
-    logger.error("Failed to waive order", error);
-    return sendError(error, "Failed to waive order", 500);
+    logger.error("Failed to patch order", error);
+    return sendError(error, "Failed to update order", 500);
   }
 }, ["EMPLOYEE", "MANAGER", "ADMIN", "SERVER", "BARTENDER", "STAFF"]);

@@ -356,6 +356,25 @@ export async function executePrintJob(jobId, { simulateFailure = false, restaura
   const adapter = getPrinterAdapter();
   const result = await adapter.print(job, { simulateFailure, order });
 
+  // Never treat simulated/blocked server adapters as physical success in production.
+  if (result.simulated && result.blocked) {
+    await persistStatus(
+      job,
+      {
+        status: "QUEUED",
+        errorMessage: result.error || "Waiting for on-site print agent",
+      },
+      floorId
+    );
+    return {
+      job,
+      result: {
+        ...result,
+        success: false,
+      },
+    };
+  }
+
   if (!result.success) {
     await persistStatus(
       job,

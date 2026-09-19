@@ -52,7 +52,7 @@ const PRINT_BRIDGE_URL =
 const EMPTY_FORM = {
   name: "",
   target: "RECEIPT",
-  connectionType: "USB",
+  connectionType: "NETWORK",
   systemPrinterName: "",
   host: "",
   port: "9100",
@@ -239,16 +239,16 @@ export default function AdminPrintersPage() {
   const resolveLiveStatus = (printer) => {
     if (!printer.enabled) return { label: "Off", tone: "muted" };
     if (probingId === printer._id) {
-      return { label: "Checking…", tone: "muted" };
+      return { label: "Checking", tone: "muted" };
     }
 
     const reach = printer.lastReachability;
     if (reach?.status === "reachable" && reach?.checkedAt) {
-      return { label: "Connected", tone: "good", detail: reach };
+      return { label: "Online", tone: "good", detail: reach };
     }
     if (reach?.status === "unreachable" && reach?.checkedAt) {
       return {
-        label: "Disconnected",
+        label: "Offline",
         tone: "bad",
         detail: reach,
       };
@@ -256,7 +256,7 @@ export default function AdminPrintersPage() {
 
     if (isUsb(printer.connectionType)) {
       if (bridgeStatus === "down") {
-        return { label: "Disconnected", tone: "bad" };
+        return { label: "Offline", tone: "bad" };
       }
       if (bridgeStatus === "unknown") {
         return { label: "Unknown", tone: "muted" };
@@ -266,8 +266,8 @@ export default function AdminPrintersPage() {
         (p) =>
           p.name?.toLowerCase() === String(sys || "").toLowerCase(),
       );
-      if (match) return { label: "Connected", tone: "good" };
-      return { label: "Disconnected", tone: "bad" };
+      if (match) return { label: "Online", tone: "good" };
+      return { label: "Offline", tone: "bad" };
     }
 
     return { label: "Unknown", tone: "muted" };
@@ -326,12 +326,12 @@ export default function AdminPrintersPage() {
 
       if (matched.status === "reachable") {
         toast.success(
-          `Connected${matched.source ? ` (via ${matched.source})` : ""}`,
+          `Online${matched.source ? ` (via ${matched.source})` : ""}`,
         );
       } else {
         toast.error(
           matched.error ||
-            "Printer unreachable from the on-site POS (check IP, Wi‑Fi, and power).",
+            "Printer offline from the on-site POS (check IP, Wi‑Fi, and power).",
         );
       }
     } catch (err) {
@@ -438,9 +438,12 @@ export default function AdminPrintersPage() {
           Printer Configuration
         </h1>
         <p className="text-slate-500 mt-2 max-w-2xl">
-          Configure USB (local print bridge) or network thermal printers. Use
-          Check connection to verify reachability from an on-site sales APK or
-          desktop POS. Test print sends a ticket only when that agent is online.
+          Prefer <span className="font-medium text-slate-700">NETWORK / Wi‑Fi</span>{" "}
+          for multi-device restaurants (Android + desktop on the same LAN). USB
+          still works via the local print bridge on a Windows PC. Reserve the
+          printer IP in your router DHCP so daily use does not require re-entry.
+          Status: Online / Offline / Checking / Unknown (TCP probe from an on-site
+          Sales app or desktop POS — not from the cloud server).
         </p>
       </div>
 
@@ -535,9 +538,9 @@ export default function AdminPrintersPage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="USB">USB</SelectItem>
-                  <SelectItem value="NETWORK">NETWORK</SelectItem>
-                  <SelectItem value="LAN">LAN (legacy)</SelectItem>
+                  <SelectItem value="NETWORK">NETWORK / Wi‑Fi (recommended)</SelectItem>
+                  <SelectItem value="LAN">LAN (legacy alias)</SelectItem>
+                  <SelectItem value="USB">USB (Windows print bridge)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
