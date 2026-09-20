@@ -1,6 +1,12 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useState,
+} from "react";
 import { getPublicRestaurantSlug, publicApiBase } from "@/lib/public/clientConfig";
 
 const RestaurantPublicContext = createContext({
@@ -17,11 +23,11 @@ export function RestaurantPublicProvider({ children, initialRestaurant = null })
   const [loading, setLoading] = useState(!initialRestaurant);
   const [error, setError] = useState(null);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(publicApiBase(slug));
+      const res = await fetch(publicApiBase(slug), { cache: "no-store" });
       const json = await res.json();
       if (!res.ok || !json.success) {
         throw new Error(json.message || "Failed to load restaurant");
@@ -32,14 +38,12 @@ export function RestaurantPublicProvider({ children, initialRestaurant = null })
     } finally {
       setLoading(false);
     }
-  };
+  }, [slug]);
 
   useEffect(() => {
-    if (!initialRestaurant) {
-      load();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [slug]);
+    // Always refresh so pickup slots match current restaurant timezone / clock.
+    load();
+  }, [load]);
 
   return (
     <RestaurantPublicContext.Provider

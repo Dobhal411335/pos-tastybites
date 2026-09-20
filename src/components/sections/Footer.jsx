@@ -105,11 +105,11 @@ export default function Footer() {
                 </>
               )}
             </Link>
-            <p className="text-xs leading-relaxed text-[var(--customer-muted)]">
+            <p className="text-[13px] leading-relaxed text-[var(--customer-muted)]">
               Order online, pick up at {brandName}, and pay when you arrive. Fresh food made to
               order — no delivery.
             </p>
-            <ul className="flex flex-col gap-1 pt-1 text-xs text-[var(--customer-muted)]">
+            <ul className="flex flex-col gap-1 pt-1 text-[13px] text-[var(--customer-muted)]">
               <li>
                 <Link href="/" className="transition-colors hover:text-primary">
                   Home
@@ -139,10 +139,10 @@ export default function Footer() {
           </div>
 
           <div className="flex flex-col gap-3">
-            <span className="text-xs font-bold uppercase tracking-wider text-[var(--customer-ink)]">
+            <span className="text-[13px] font-bold uppercase tracking-wider text-[var(--customer-ink)]">
               Customer Support
             </span>
-            <ul className="flex flex-col gap-2 text-xs text-[var(--customer-muted)]">
+            <ul className="flex flex-col gap-2 text-[13px] text-[var(--customer-muted)]">
               <li>
                 <Link href="/menu" className="transition-colors hover:text-primary">
                   Pickup Information
@@ -162,10 +162,10 @@ export default function Footer() {
           </div>
 
           <div className="flex flex-col gap-3">
-            <span className="text-xs font-bold uppercase tracking-wider text-[var(--customer-ink)]">
+            <span className="text-[13px] font-bold uppercase tracking-wider text-[var(--customer-ink)]">
               Contact &amp; Hours
             </span>
-            <div className="flex flex-col gap-2 text-xs text-[var(--customer-muted)]">
+            <div className="flex flex-col gap-2 text-[13px] text-[var(--customer-muted)]">
               {address ? (
                 <div className="flex items-start gap-1.5">
                   <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
@@ -213,10 +213,10 @@ export default function Footer() {
           </div>
 
           <div className="flex flex-col gap-4">
-            <span className="text-xs font-bold uppercase tracking-wider text-[var(--customer-ink)]">
+            <span className="text-[13px] font-bold uppercase tracking-wider text-[var(--customer-ink)]">
               Order Direct
             </span>
-            <p className="text-xs text-[var(--customer-muted)]">
+            <p className="text-[13px] text-[var(--customer-muted)]">
               Skip third-party apps — order here and pick up fresh at {brandName}.
             </p>
             <Link

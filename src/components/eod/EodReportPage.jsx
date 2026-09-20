@@ -27,17 +27,10 @@ import {
 } from "@/components/ui/table";
 import EodReportPreview from "@/components/eod/EodReportPreview";
 import EodEmailDialog from "@/components/eod/EodEmailDialog";
+import { todayRestaurantISO } from "@/lib/restaurantTime";
 
 const money = (n) =>
   `$${(Math.round((Number(n) || 0) * 100) / 100).toFixed(2)}`;
-
-function todayLocalISO() {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
 
 /**
  * Shared End-of-Day report UI for Sales and Admin.
@@ -49,7 +42,7 @@ export default function EodReportPage({
   title = "End-of-Day Report",
   onReportMeta,
 }) {
-  const [businessDate, setBusinessDate] = useState(todayLocalISO());
+  const [businessDate, setBusinessDate] = useState(todayRestaurantISO());
   const [report, setReport] = useState(null);
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(true);

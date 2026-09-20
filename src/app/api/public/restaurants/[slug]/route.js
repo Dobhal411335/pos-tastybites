@@ -2,6 +2,7 @@ import { sendSuccess } from "@/utils/apiResponse";
 import { sendError } from "@/utils/errorHandler";
 import { getPublicRestaurantProfile } from "@/lib/public/resolveRestaurant";
 import { buildSameDayPickupSlots } from "@/lib/public/pickup";
+import { DEFAULT_RESTAURANT_TIMEZONE } from "@/lib/restaurantTime";
 import OfferDetails from "@/models/Web/OfferDetails";
 import PopupBanner from "@/models/Web/popupBanner";
 import connectDB from "@/lib/db";
@@ -24,6 +25,7 @@ export async function GET(_request, { params }) {
       {
         ...profile,
         pickupSlots: buildSameDayPickupSlots(),
+        timezone: DEFAULT_RESTAURANT_TIMEZONE,
         promotions: offerDetails
           ? {
               moreOffers: offerDetails.moreOffers || null,
@@ -47,7 +49,8 @@ export async function GET(_request, { params }) {
       "Restaurant retrieved",
       200,
       {
-        "Cache-Control": "public, s-maxage=60, stale-while-revalidate=120",
+        // Pickup slots are time-sensitive; never CDN-cache them.
+        "Cache-Control": "no-store, no-cache, must-revalidate",
       }
     );
   } catch (error) {

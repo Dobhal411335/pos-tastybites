@@ -16,6 +16,11 @@ import {
   FileEdit,
   Printer,
   Layers,
+  ShoppingBag,
+  UserRound,
+  Globe,
+  ArrowRight,
+  RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -43,8 +48,32 @@ import { Textarea } from "@/components/ui/textarea";
 import { employeeFetch } from "@/lib/employeeFetch";
 import { isSalesAdminRole } from "@/utils/roles";
 import { resolveDocumentId, sessionOwnsTable, formatTableLocation } from "@/utils/orderDisplay";
+import { cn } from "@/lib/utils";
 
 const SALES_FLOOR_STORAGE_KEY = "sales-active-floor-id";
+
+const FLOOR_TABLE_LEGEND = [
+  { label: "Available", className: "bg-white border border-zinc-400" },
+  { label: "Serving", className: "bg-sky-400 border border-sky-500" },
+  { label: "Payment", className: "bg-emerald-500 border border-emerald-600" },
+  { label: "Ordering", className: "bg-orange-500 border border-orange-600" },
+  { label: "Combined", className: "bg-violet-500 border border-violet-600" },
+  { label: "Booked", className: "bg-red-500 border border-red-600" },
+];
+
+const OPEN_ORDER_STATUSES = new Set(["PENDING", "CONFIRMED"]);
+
+function isFloorOrderPaid(order) {
+  return (
+    String(order?.paymentStatus || "").toUpperCase() === "PAID" ||
+    String(order?.status || "").toUpperCase() === "PAID"
+  );
+}
+
+function isFloorOrderOpen(order) {
+  const status = String(order?.status || "").toUpperCase();
+  return OPEN_ORDER_STATUSES.has(status) && !isFloorOrderPaid(order);
+}
 
 function readUrlFloorId() {
   if (typeof window === "undefined") return null;
@@ -100,6 +129,11 @@ export default function SalesFloorPage() {
   });
   const [activeEmployees, setActiveEmployees] = useState([]);
   const [onlineStaff, setOnlineStaff] = useState({ count: 0, online: [] });
+  const [orderAttention, setOrderAttention] = useState({
+    walkInUnpaid: 0,
+    staffUnpaid: 0,
+    onlineOpen: 0,
+  });
   const [scale, setScale] = useState(1);
   const floorViewportRef = React.useRef(null);
   const selectedFloorIdRef = React.useRef(readStoredFloorId());
@@ -137,6 +171,28 @@ export default function SalesFloorPage() {
           online: json.data.online || [],
         });
       }
+    } catch {
+      /* non-blocking */
+    }
+  }, []);
+
+  const loadOrderAttention = useCallback(async () => {
+    try {
+      const res = await employeeFetch("/api/orders/employee?today=true");
+      const json = await res.json();
+      if (!res.ok || !json.success) return;
+      const orders = Array.isArray(json.data) ? json.data : [];
+      let walkInUnpaid = 0;
+      let staffUnpaid = 0;
+      let onlineOpen = 0;
+      for (const order of orders) {
+        if (!isFloorOrderOpen(order)) continue;
+        const source = String(order.source || "").toUpperCase();
+        if (source === "WALK_IN") walkInUnpaid += 1;
+        else if (source === "STAFF") staffUnpaid += 1;
+        else if (source === "ONLINE") onlineOpen += 1;
+      }
+      setOrderAttention({ walkInUnpaid, staffUnpaid, onlineOpen });
     } catch {
       /* non-blocking */
     }
@@ -195,6 +251,7 @@ export default function SalesFloorPage() {
           setActiveEmployees(empData.data || []);
         }
         await loadOnlineStaff();
+        await loadOrderAttention();
       }
     } catch (err) {
       if (!silent) {
@@ -205,7 +262,7 @@ export default function SalesFloorPage() {
       setLoading(false);
       setFloorLoading(false);
     }
-  }, [loadOnlineStaff]);
+  }, [loadOnlineStaff, loadOrderAttention]);
 
   const reloadCurrentFloor = useCallback(
     (options = {}) => {
@@ -266,13 +323,18 @@ export default function SalesFloorPage() {
       scheduleSilentFloorReload();
     };
 
+    const onOrderAttention = () => {
+      loadOrderAttention();
+      scheduleSilentFloorReload();
+    };
+
     socket.on("table:assigned", onFloorEvent);
     socket.on("table:updated", onFloorEvent);
     socket.on("table:released", onFloorEvent);
     socket.on("table:transferred", onFloorEvent);
-    socket.on("order:created", onFloorEvent);
-    socket.on("order:updated", onFloorEvent);
-    socket.on("payment:completed", onFloorEvent);
+    socket.on("order:created", onOrderAttention);
+    socket.on("order:updated", onOrderAttention);
+    socket.on("payment:completed", onOrderAttention);
     socket.on("NEW_PRINT_JOB", () => {
       toast.message("New print job queued", {
         description: "Open Print Jobs to preview / test.",
@@ -284,12 +346,12 @@ export default function SalesFloorPage() {
       socket.off("table:updated", onFloorEvent);
       socket.off("table:released", onFloorEvent);
       socket.off("table:transferred", onFloorEvent);
-      socket.off("order:created", onFloorEvent);
-      socket.off("order:updated", onFloorEvent);
-      socket.off("payment:completed", onFloorEvent);
+      socket.off("order:created", onOrderAttention);
+      socket.off("order:updated", onOrderAttention);
+      socket.off("payment:completed", onOrderAttention);
       socket.off("NEW_PRINT_JOB");
     };
-  }, [socket, scheduleSilentFloorReload]);
+  }, [socket, scheduleSilentFloorReload, loadOrderAttention]);
 
   useEffect(() => {
     if (socket && selectedFloorId) {
@@ -663,8 +725,8 @@ export default function SalesFloorPage() {
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden">
-      <header className="shrink-0 border-b border-zinc-200 bg-white px-4 sm:px-5 py-3">
+    <div className="flex h-full max-h-full min-h-0 flex-col overflow-hidden">
+      <header className="shrink-0 border-b border-zinc-200 bg-white px-4 sm:px-5 py-2.5 sm:py-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
             <h1 className="text-base md:text-lg font-bold text-zinc-900 tracking-tight">
@@ -677,7 +739,55 @@ export default function SalesFloorPage() {
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-1.5 rounded-xl border border-stone-200 bg-white p-1">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => router.push("/sales/walk-in")}
+                className="h-8 gap-1.5 rounded-lg border border-orange-300 bg-orange-50 px-2.5 text-[12px] font-bold text-orange-800 hover:bg-orange-100 hover:text-orange-900"
+              >
+                <ShoppingBag className="h-3.5 w-3.5" />
+                Walk-in
+                {orderAttention.walkInUnpaid > 0 ? (
+                  <span className="ml-0.5 rounded-md bg-orange-500 px-1.5 py-0.5 text-[10px] font-black text-white tabular-nums">
+                    {orderAttention.walkInUnpaid}
+                  </span>
+                ) : null}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => router.push("/sales/staff")}
+                className="h-8 gap-1.5 rounded-lg border border-indigo-300 bg-indigo-50 px-2.5 text-[12px] font-bold text-indigo-800 hover:bg-indigo-100 hover:text-indigo-900"
+              >
+                <UserRound className="h-3.5 w-3.5" />
+                Staff
+                {orderAttention.staffUnpaid > 0 ? (
+                  <span className="ml-0.5 rounded-md bg-indigo-600 px-1.5 py-0.5 text-[10px] font-black text-white tabular-nums">
+                    {orderAttention.staffUnpaid}
+                  </span>
+                ) : null}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => router.push("/sales/today?tab=ONLINE")}
+                className="h-8 gap-1.5 rounded-lg border border-sky-300 bg-sky-50 px-2.5 text-[12px] font-bold text-sky-800 hover:bg-sky-100 hover:text-sky-900"
+              >
+                <Globe className="h-3.5 w-3.5" />
+                Online
+                {orderAttention.onlineOpen > 0 ? (
+                  <span className="ml-0.5 rounded-md bg-sky-600 px-1.5 py-0.5 text-[10px] font-black text-white tabular-nums">
+                    {orderAttention.onlineOpen}
+                  </span>
+                ) : null}
+              </Button>
+            </div>
+
             {floorData.floors.length > 0 && (
               <Select
                 value={activeFloorId || undefined}
@@ -696,6 +806,19 @@ export default function SalesFloorPage() {
                 </SelectContent>
               </Select>
             )}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={floorLoading || loading}
+              onClick={() => reloadCurrentFloor()}
+              className="h-9 gap-1.5 rounded-lg border-stone-200 bg-white px-3 text-[13px] font-semibold text-stone-700 hover:bg-stone-50"
+            >
+              <RefreshCw
+                className={`h-3.5 w-3.5 ${floorLoading ? "animate-spin" : ""}`}
+              />
+              Refresh
+            </Button>
             <Button
               type="button"
               variant={gridMode !== "none" ? "secondary" : "ghost"}
@@ -958,6 +1081,103 @@ export default function SalesFloorPage() {
           </div>
         </div>
         </div>
+
+        <aside className="hidden h-full max-h-full min-h-0 w-[260px] shrink-0 flex-col overflow-hidden border-l border-zinc-200 bg-white lg:flex">
+          <div className="shrink-0 border-b border-zinc-100 px-4 py-2.5">
+            <p className="text-[11px] font-extrabold uppercase tracking-widest text-zinc-400">
+              Needs attention
+            </p>
+            <p className="mt-0.5 text-sm font-bold text-zinc-900">
+              Today’s open orders
+            </p>
+          </div>
+
+          <div className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain p-3">
+            {[
+              {
+                href: "/sales/walk-in",
+                label: "Walk-in unpaid",
+                count: orderAttention.walkInUnpaid,
+                Icon: ShoppingBag,
+                tone: "border-orange-200 bg-orange-50 text-orange-900",
+                badge: "bg-orange-500",
+              },
+              {
+                href: "/sales/staff",
+                label: "Staff unpaid",
+                count: orderAttention.staffUnpaid,
+                Icon: UserRound,
+                tone: "border-indigo-200 bg-indigo-50 text-indigo-900",
+                badge: "bg-indigo-600",
+              },
+              {
+                href: "/sales/today?tab=ONLINE",
+                label: "Online open",
+                count: orderAttention.onlineOpen,
+                Icon: Globe,
+                tone: "border-sky-200 bg-sky-50 text-sky-900",
+                badge: "bg-sky-600",
+              },
+            ].map((item) => (
+              <button
+                key={item.href}
+                type="button"
+                onClick={() => router.push(item.href)}
+                className={cn(
+                  "flex w-full items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left transition-colors hover:brightness-[0.98]",
+                  item.tone,
+                )}
+              >
+                <item.Icon className="h-4 w-4 shrink-0 opacity-80" />
+                <span className="min-w-0 flex-1 text-xs font-extrabold">
+                  {item.label}
+                </span>
+                <span
+                  className={cn(
+                    "rounded-md px-1.5 py-0.5 text-[11px] font-black tabular-nums text-white",
+                    item.count > 0 ? item.badge : "bg-zinc-400",
+                  )}
+                >
+                  {item.count}
+                </span>
+                <ArrowRight className="h-3.5 w-3.5 opacity-50" />
+              </button>
+            ))}
+
+            {orderAttention.walkInUnpaid +
+              orderAttention.staffUnpaid +
+              orderAttention.onlineOpen ===
+            0 ? (
+              <div className="flex items-start gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5">
+                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+                <p className="text-xs font-semibold text-emerald-800">
+                  All clear — no unpaid walk-in, staff, or open online orders.
+                </p>
+              </div>
+            ) : null}
+          </div>
+
+          <div className="shrink-0 border-t border-zinc-100 bg-white px-4 py-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom))]">
+            <p className="mb-2 text-[11px] font-extrabold uppercase tracking-widest text-zinc-400">
+              Table status
+            </p>
+            <div className="grid grid-cols-2 gap-x-2 gap-y-1.5">
+              {FLOOR_TABLE_LEGEND.map((item) => (
+                <div key={item.label} className="flex min-w-0 items-center gap-2">
+                  <span
+                    className={cn(
+                      "h-3.5 w-3.5 shrink-0 rounded-sm border",
+                      item.className,
+                    )}
+                  />
+                  <span className="truncate text-[11px] font-semibold text-zinc-600">
+                    {item.label}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </aside>
       </div>
 
       {/* Start Session Modal */}

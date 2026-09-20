@@ -115,6 +115,50 @@ export default function EodReportPreview({ report }) {
         ) : null}
       </Section>
 
+      <Section title="Orders by Source (includes Walk-in, Staff & Online)">
+        <SimpleTable
+          headers={[
+            "Source",
+            "Orders",
+            "Paid",
+            "Net Sales",
+            "Gross Sales",
+            "Tips",
+          ]}
+          rows={[
+            ...((report.salesBySource?.rows || []).map((r) => [
+              r.label,
+              r.orderCount ?? 0,
+              r.paidCount ?? 0,
+              money(r.netSales),
+              money(r.grossSales),
+              money(r.tips),
+            ])),
+            report.salesBySource?.total
+              ? [
+                  "TOTAL",
+                  report.salesBySource.total.orderCount ?? 0,
+                  report.salesBySource.total.paidCount ?? 0,
+                  money(report.salesBySource.total.netSales),
+                  money(report.salesBySource.total.grossSales),
+                  money(report.salesBySource.total.tips),
+                ]
+              : [
+                  "TOTAL",
+                  oc.total ?? 0,
+                  oc.paid ?? 0,
+                  money(dss.netSales),
+                  money(dss.grossSales),
+                  money(ts.totalTips ?? dls.totalTips),
+                ],
+          ]}
+        />
+        <p className="text-xs text-stone-500">
+          POS / Table, Walk-in, Staff, and Online orders are all included in
+          End-of-Day sales when paid.
+        </p>
+      </Section>
+
       <Section title="Detailed Sales Summary">
         <MetricGrid
           items={[

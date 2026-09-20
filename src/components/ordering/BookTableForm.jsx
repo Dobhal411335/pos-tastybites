@@ -17,14 +17,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { useRestaurantPublic } from "@/context/RestaurantPublicContext";
 import { publicApiBase, getPublicRestaurantSlug } from "@/lib/public/clientConfig";
-
-function todayLocalISO() {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
+import { todayRestaurantISO } from "@/lib/restaurantTime";
 
 function formatTodayLabel(iso) {
   try {
@@ -42,7 +35,7 @@ function formatTodayLabel(iso) {
 export default function BookTableForm() {
   const { restaurant, slug: ctxSlug } = useRestaurantPublic();
   const slug = ctxSlug || getPublicRestaurantSlug();
-  const today = useMemo(() => todayLocalISO(), []);
+  const today = useMemo(() => todayRestaurantISO(), []);
   const [submitting, setSubmitting] = useState(false);
   const [sendingOtp, setSendingOtp] = useState(false);
   const [verifyingOtp, setVerifyingOtp] = useState(false);

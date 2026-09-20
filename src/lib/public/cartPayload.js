@@ -4,13 +4,17 @@
 export function cartItemsToRepricePayload(cartItems = []) {
   return (Array.isArray(cartItems) ? cartItems : []).map((item, index) => {
     const sizes = [];
-    if (item.size || item.selectedSize) {
-      const sizeName = item.size || item.selectedSize;
-      if (sizeName && !/^standard$/i.test(sizeName) && !/^regular(\s+size)?$/i.test(sizeName)) {
-        sizes.push(sizeName);
+    const rawSize = item.size || item.selectedSize;
+    const isExtra = String(rawSize || "").toUpperCase() === "EXTRA";
+    if (rawSize && !isExtra) {
+      if (
+        !/^standard$/i.test(rawSize) &&
+        !/^regular(\s+size)?$/i.test(rawSize)
+      ) {
+        sizes.push(rawSize);
       }
     }
-    if (Array.isArray(item.sizes)) {
+    if (!isExtra && Array.isArray(item.sizes)) {
       for (const s of item.sizes) {
         if (s && !sizes.includes(s)) sizes.push(s);
       }
@@ -27,8 +31,8 @@ export function cartItemsToRepricePayload(cartItems = []) {
       menuItemId: item.id || item.menuItemId,
       name: item.name,
       qty: Math.max(1, Math.floor(Number(item.quantity ?? item.qty) || 1)),
-      size: sizes.length ? sizes.join(", ") : item.size || "Standard",
-      sizes,
+      size: isExtra ? "Extra" : sizes.length ? sizes.join(", ") : item.size || "Standard",
+      sizes: isExtra ? [] : sizes,
       options,
       choiceSelections: item.choiceSelections || [],
       addonChoiceSelections: item.addonChoiceSelections || [],

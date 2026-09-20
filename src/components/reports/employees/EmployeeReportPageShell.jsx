@@ -7,6 +7,7 @@ import EmployeeProfileSheet from "./EmployeeProfileSheet";
 import FocusedEmployeeDetailSheet from "./sheets/FocusedEmployeeDetailSheet";
 import { ReportError } from "./EmployeeReportUi";
 import { toYmd } from "./employeeFormat";
+import { DEFAULT_RESTAURANT_TIMEZONE } from "@/lib/restaurantTime";
 import {
   useEmployeeDetailLoader,
   useEmployeeReport,
@@ -42,7 +43,7 @@ export default function EmployeeReportPageShell({
   const [exportOpen, setExportOpen] = useState(false);
 
   const filterOptions = report.data?.filters || { employees: [], shifts: [] };
-  const timezone = report.data?.meta?.timezone || "Asia/Kolkata";
+  const timezone = report.data?.meta?.timezone || DEFAULT_RESTAURANT_TIMEZONE;
   const sheetOpen = Boolean(detail.selectedEmployeeId);
 
   const exportQuery = (() => {

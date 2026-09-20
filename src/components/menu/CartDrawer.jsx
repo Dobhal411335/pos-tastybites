@@ -21,6 +21,10 @@ import { useCart } from "@/context/CartContext";
 import { useRestaurantPublic } from "@/context/RestaurantPublicContext";
 import { publicApiBase } from "@/lib/public/clientConfig";
 import { cn } from "@/lib/utils";
+import {
+  getProductChoiceDetailLines,
+  getAddonChoiceDetailLines,
+} from "@/utils/productChoices";
 
 function lineNote(item) {
   if (item.isOffer) {
@@ -31,9 +35,20 @@ function lineNote(item) {
     );
   }
   const parts = [];
-  if (item.selectedSize || item.size) parts.push(item.selectedSize || item.size);
+  if (item.size === "Extra" || item.selectedSize === "Extra") {
+    if (item.parentProductName) parts.push(`Extra for ${item.parentProductName}`);
+    else parts.push("Extra");
+  } else if (item.selectedSize || item.size) {
+    parts.push(item.selectedSize || item.size);
+  }
   if (item.selectedAddons?.length) parts.push(item.selectedAddons.join(", "));
   if (item.preparationStyle) parts.push(item.preparationStyle);
+  for (const line of getProductChoiceDetailLines(item)) {
+    parts.push(`${line.label}: ${line.value}`);
+  }
+  for (const line of getAddonChoiceDetailLines(item)) {
+    parts.push(`${line.label}: ${line.value}`);
+  }
   return parts.join(" · ") || "Standard";
 }
 
@@ -51,7 +66,7 @@ export default function CartDrawer({ open = false, onOpenChange, mode = "drawer"
     itemCount,
     displaySubtotal,
   } = useCart();
-  const { restaurant, slug } = useRestaurantPublic();
+  const { restaurant, slug, refresh } = useRestaurantPublic();
   const [quote, setQuote] = useState(null);
   const [quoting, setQuoting] = useState(false);
   const [flowOpen, setFlowOpen] = useState(false);
@@ -67,6 +82,13 @@ export default function CartDrawer({ open = false, onOpenChange, mode = "drawer"
   const brandName = restaurant?.name || "Tasty Bites";
   const slots = restaurant?.pickupSlots || [];
   const address = restaurant?.address || "";
+
+  // Fresh slots when opening checkout (timezone / clock sensitive).
+  useEffect(() => {
+    if (flowOpen && flowStep === 1) {
+      refresh?.();
+    }
+  }, [flowOpen, flowStep, refresh]);
 
   useEffect(() => {
     if (!quoteActive || itemCount === 0) {
@@ -269,34 +291,36 @@ export default function CartDrawer({ open = false, onOpenChange, mode = "drawer"
             {cartItems.map((item) => (
               <div
                 key={item.cartKey}
-                className="flex items-center justify-between gap-3 rounded-xl bg-[var(--customer-surface-low)] p-3"
+                className="flex items-start justify-between gap-3 rounded-xl bg-[var(--customer-surface-low)] p-3.5"
               >
                 <div className="min-w-0 flex-1">
-                  <h4 className="truncate text-sm font-bold text-[var(--customer-ink)]">
+                  <h4 className="text-sm font-bold leading-snug text-[var(--customer-ink)]">
                     {item.name}
                   </h4>
-                  <p className="truncate text-xs text-[var(--customer-muted)]">{lineNote(item)}</p>
-                  <span className="text-xs font-bold tabular-nums text-primary">
+                  <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-[var(--customer-muted)]">
+                    {lineNote(item)}
+                  </p>
+                  <span className="mt-1.5 inline-block text-xs font-bold tabular-nums text-primary">
                     ${(item.price * item.quantity).toFixed(2)}
                   </span>
                 </div>
-                <div className="flex shrink-0 items-center gap-2">
+                <div className="flex shrink-0 items-center gap-2 pt-0.5">
                   <div className="flex items-center rounded-lg bg-white shadow-sm">
                     <button
                       type="button"
                       onClick={() => updateQuantity(item.cartKey, item.quantity - 1)}
-                      className="flex h-7 w-7 items-center justify-center text-[var(--customer-ink)] hover:text-primary"
+                      className="flex h-8 w-8 items-center justify-center text-[var(--customer-ink)] hover:text-primary"
                       aria-label="Decrease"
                     >
                       <Minus className="h-3.5 w-3.5" />
                     </button>
-                    <span className="w-6 text-center text-xs font-bold tabular-nums">
+                    <span className="w-7 text-center text-xs font-bold tabular-nums">
                       {item.quantity}
                     </span>
                     <button
                       type="button"
                       onClick={() => updateQuantity(item.cartKey, item.quantity + 1)}
-                      className="flex h-7 w-7 items-center justify-center text-[var(--customer-ink)] hover:text-primary"
+                      className="flex h-8 w-8 items-center justify-center text-[var(--customer-ink)] hover:text-primary"
                       aria-label="Increase"
                     >
                       <Plus className="h-3.5 w-3.5" />
@@ -390,7 +414,7 @@ export default function CartDrawer({ open = false, onOpenChange, mode = "drawer"
       <>
         <aside
           id="menu-order-bag"
-          className="sticky top-24 hidden h-[calc(100vh-7rem)] w-[340px] shrink-0 flex-col overflow-hidden rounded-2xl border border-[var(--border)]/40 bg-white shadow-sm lg:flex"
+          className="sticky top-24 hidden h-[calc(100vh-7rem)] w-[400px] shrink-0 flex-col overflow-hidden rounded-2xl border border-[var(--border)]/40 bg-white shadow-sm lg:flex"
           aria-label="Your order bag"
         >
           {renderBagBody({ showClose: false })}
@@ -407,7 +431,7 @@ export default function CartDrawer({ open = false, onOpenChange, mode = "drawer"
           />
           <aside
             className={cn(
-              "fixed top-0 right-0 z-[60] flex h-full w-full max-w-md flex-col bg-white shadow-2xl transition-transform duration-300 ease-in-out",
+              "fixed top-0 right-0 z-[60] flex h-full w-full max-w-lg flex-col bg-white shadow-2xl transition-transform duration-300 ease-in-out",
               open ? "translate-x-0" : "translate-x-full"
             )}
             aria-hidden={!open}
@@ -435,7 +459,7 @@ export default function CartDrawer({ open = false, onOpenChange, mode = "drawer"
 
       <aside
         className={cn(
-          "fixed top-0 right-0 z-[60] flex h-full w-full max-w-md flex-col bg-white shadow-2xl transition-transform duration-300 ease-in-out",
+          "fixed top-0 right-0 z-[60] flex h-full w-full max-w-lg flex-col bg-white shadow-2xl transition-transform duration-300 ease-in-out",
           open ? "translate-x-0" : "translate-x-full"
         )}
         aria-hidden={!open}
@@ -457,40 +481,51 @@ const FLOW_STEPS = [
 
 function CheckoutTimeline({ step }) {
   return (
-    <ol className="flex items-center gap-1 px-4 pb-3 pt-1 sm:gap-2 sm:px-6">
+    <ol className="flex w-full items-start justify-center px-4 pt-2 sm:px-8">
       {FLOW_STEPS.map((item, index) => {
         const done = step > item.id;
         const active = step === item.id;
+        const isLast = index === FLOW_STEPS.length - 1;
         return (
-          <li key={item.id} className="flex min-w-0 flex-1 items-center gap-1 sm:gap-2">
-            <div className="flex min-w-0 flex-col items-center gap-1">
-              <span
-                className={cn(
-                  "flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold transition-colors",
-                  done && "bg-[var(--customer-ink)] text-white",
-                  active && "bg-primary text-white shadow-md",
-                  !done && !active && "bg-[var(--customer-surface-container)] text-[var(--customer-muted)]"
-                )}
-              >
-                {done ? <Check className="h-4 w-4" /> : item.id}
-              </span>
-              <span
-                className={cn(
-                  "truncate text-[10px] font-semibold uppercase tracking-wide",
-                  active ? "text-primary" : done ? "text-[var(--customer-ink)]" : "text-[var(--customer-muted)]"
-                )}
-              >
-                {item.label}
-              </span>
-            </div>
-            {index < FLOW_STEPS.length - 1 ? (
+          <li
+            key={item.id}
+            className="relative flex min-w-0 flex-1 flex-col items-center text-center"
+          >
+            {!isLast ? (
               <div
                 className={cn(
-                  "mb-4 h-0.5 min-w-[12px] flex-1 rounded-full transition-colors",
-                  step > item.id ? "bg-[var(--customer-ink)]" : "bg-[var(--customer-surface-container)]"
+                  "absolute left-[calc(50%+1rem)] right-[calc(-50%+1rem)] top-4 h-0.5 rounded-full transition-colors",
+                  step > item.id
+                    ? "bg-[var(--customer-ink)]"
+                    : "bg-[var(--customer-surface-container)]"
                 )}
+                aria-hidden
               />
             ) : null}
+            <span
+              className={cn(
+                "relative z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold transition-colors",
+                done && "bg-[var(--customer-ink)] text-white",
+                active && "bg-primary text-white shadow-md",
+                !done &&
+                  !active &&
+                  "bg-[var(--customer-surface-container)] text-[var(--customer-muted)]"
+              )}
+            >
+              {done ? <Check className="h-4 w-4" /> : item.id}
+            </span>
+            <span
+              className={cn(
+                "mt-1.5 w-full px-1 text-[10px] font-semibold uppercase tracking-wide",
+                active
+                  ? "text-primary"
+                  : done
+                    ? "text-[var(--customer-ink)]"
+                    : "text-[var(--customer-muted)]"
+              )}
+            >
+              {item.label}
+            </span>
           </li>
         );
       })}
@@ -587,13 +622,12 @@ function CheckoutFlowModal({
   };
 
   const pickup = order?.pickup || {};
-  const canCloseBackdrop = step !== 3;
 
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
       <div
-        className="absolute inset-0 bg-[var(--customer-ink)]/60 backdrop-blur-sm"
-        onClick={canCloseBackdrop ? onClose : undefined}
+        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+        aria-hidden
       />
       <div className="relative flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
         <div className="flex items-center justify-between bg-[var(--customer-surface-low)] px-4 py-3 sm:px-6">
@@ -634,11 +668,11 @@ function CheckoutFlowModal({
               >
             <form
               onSubmit={handleSubmit(onSubmitDetails)}
-              className="grid grid-cols-1 gap-6 p-4 sm:p-6 lg:grid-cols-12"
+              className="grid grid-cols-1 gap-6 p-4 lg:grid-cols-12"
             >
-              <div className="space-y-4 lg:col-span-7">
+              <div className="space-y-3 lg:col-span-7">
                 {address ? (
-                  <div className="space-y-1 rounded-xl bg-orange-50 p-4">
+                  <div className="space-y-1 rounded-xl border border-primary/50 bg-orange-50 p-4">
                     <div className="flex items-center gap-1.5 text-sm font-bold text-primary">
                       <Store className="h-4 w-4" />
                       Pickup location
@@ -760,7 +794,7 @@ function CheckoutFlowModal({
                       <div key={item.cartKey} className="flex justify-between gap-2">
                         <div className="min-w-0">
                           <span className="font-bold">{item.quantity}x</span> {item.name}
-                          <div className="pl-4 text-xs text-[var(--customer-muted)]">
+                          <div className="line-clamp-2 pl-4 text-xs leading-relaxed text-[var(--customer-muted)]">
                             {lineNote(item)}
                           </div>
                         </div>

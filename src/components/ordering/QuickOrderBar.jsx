@@ -85,7 +85,7 @@ export default function QuickOrderBar() {
               <button
                 type="button"
                 onClick={() => goSearch()}
-                className="flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-[var(--ink)] text-xs font-bold uppercase tracking-wider text-white shadow-sm transition-all hover:bg-[var(--ink)]/90"
+                className="flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-primary text-xs font-bold uppercase tracking-wider text-white shadow-sm transition-all hover:bg-[var(--ink)]/90"
               >
                 <span>Search Food</span>
                 <Search className="h-[18px] w-[18px]" />

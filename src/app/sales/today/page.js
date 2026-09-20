@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useMemo } from "react";
-import { useRouter } from "next/navigation";
+import React, { useState, useEffect, useCallback, useMemo, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { 
   Search, Clock, ChevronRight, X, 
   Receipt, ShoppingBag, Loader2, ArrowLeft, RefreshCw,
@@ -21,6 +21,7 @@ import {
   getOrderPartyLabel,
   shouldShowTable,
 } from "@/utils/orderDisplay";
+import { resolveTenders } from "@/lib/eod/eodHelpers";
 
 const STATUSES = ["All", "PENDING", "CONFIRMED", "CANCELLED", "WAIVED", "PAID", "ONLINE"];
 const STATUS_RANK = {
@@ -31,6 +32,13 @@ const STATUS_RANK = {
   WAIVED: 3,
   CANCELLED: 4,
 };
+
+function normalizeTodayTab(raw) {
+  const value = String(raw || "").trim().toUpperCase();
+  if (!value) return "All";
+  if (value === "ALL") return "All";
+  return STATUSES.includes(value) ? value : "All";
+}
 
 function getPlacerName(order) {
   if (order.processedByName) return order.processedByName;
@@ -192,9 +200,26 @@ function getPaymentType(order) {
 }
 
 export default function TodayOrdersPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex h-[calc(100vh-60px)] w-full items-center justify-center bg-zinc-50">
+          <Loader2 className="h-8 w-8 animate-spin text-orange-500" />
+        </div>
+      }
+    >
+      <TodayOrdersPageContent />
+    </Suspense>
+  );
+}
+
+function TodayOrdersPageContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { socket } = useSocket();
-  const [activeTab, setActiveTab] = useState("All");
+  const [activeTab, setActiveTab] = useState(() =>
+    normalizeTodayTab(searchParams.get("tab")),
+  );
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [orders, setOrders] = useState([]);
@@ -248,6 +273,28 @@ export default function TodayOrdersPage() {
       ignore = true;
     };
   }, [fetchOrders]);
+
+  useEffect(() => {
+    setActiveTab(normalizeTodayTab(searchParams.get("tab")));
+  }, [searchParams]);
+
+  const selectTab = useCallback(
+    (status) => {
+      const next = normalizeTodayTab(status);
+      setActiveTab(next);
+      const params = new URLSearchParams(searchParams.toString());
+      if (next === "All") {
+        params.delete("tab");
+      } else {
+        params.set("tab", next);
+      }
+      const query = params.toString();
+      router.replace(query ? `/sales/today?${query}` : "/sales/today", {
+        scroll: false,
+      });
+    },
+    [router, searchParams],
+  );
 
   useEffect(() => {
     if (!socket) return;
@@ -314,29 +361,29 @@ export default function TodayOrdersPage() {
   }, [orders]);
 
   const paymentStats = useMemo(() => {
-    const paid = orders.filter((o) => o.status !== "CANCELLED" && o.status !== "WAIVED" && isOrderPaid(o));
+    const paid = orders.filter(
+      (o) =>
+        o.status !== "CANCELLED" &&
+        o.status !== "WAIVED" &&
+        isOrderPaid(o)
+    );
     const totals = { cash: 0, card: 0, gift: 0 };
     const counts = { cash: 0, card: 0, gift: 0 };
 
     paid.forEach((order) => {
-      const method = String(order.paymentMethod || "").toLowerCase();
-      const giftUsed = Number(order.giftcardUsedAmount || 0);
-      const isCard = method.includes("card") && !method.includes("gift");
-      const isCash = method.includes("cash");
-      const isGift = method.includes("gift");
-      const remaining = Math.max(0, Number(order.totalAmount || 0) - giftUsed);
-      const tip = Number(order.tipAmount || 0);
-
-      if (giftUsed > 0 || isGift) {
-        totals.gift += giftUsed > 0 ? giftUsed : remaining + tip;
-        counts.gift += 1;
-      }
-      if (isCash) {
-        totals.cash += remaining + tip;
+      // Same tender split as EOD / financial reports (handles Cash + Card).
+      const { cash, card, giftCard } = resolveTenders(order);
+      if (cash > 0) {
+        totals.cash += cash;
         counts.cash += 1;
-      } else if (isCard) {
-        totals.card += remaining + tip;
+      }
+      if (card > 0) {
+        totals.card += card;
         counts.card += 1;
+      }
+      if (giftCard > 0) {
+        totals.gift += giftCard;
+        counts.gift += 1;
       }
     });
 
@@ -803,7 +850,7 @@ export default function TodayOrdersPage() {
               <button
                 key={status}
                 type="button"
-                onClick={() => setActiveTab(status)}
+                onClick={() => selectTab(status)}
                 className={`px-4 py-2 rounded-xl text-sm font-bold whitespace-nowrap transition-colors ${
                   activeTab === status 
                     ? "bg-zinc-900 text-white shadow-sm" 
@@ -1382,6 +1429,24 @@ export default function TodayOrdersPage() {
           const paid = updatedOrder || selectedOrder;
           if (paid) {
             setSelectedOrder((prev) => ({ ...(prev || {}), ...paid }));
+          }
+          if (
+            paid?._id &&
+            typeof window !== "undefined"
+          ) {
+            const source = String(paid?.source || "").toUpperCase();
+            if (source === "WALK_IN") {
+              const stored = sessionStorage.getItem("direct-order-walk-in");
+              if (stored && String(stored) === String(paid._id)) {
+                sessionStorage.removeItem("direct-order-walk-in");
+              }
+            }
+            if (source === "STAFF") {
+              const stored = sessionStorage.getItem("direct-order-staff");
+              if (stored && String(stored) === String(paid._id)) {
+                sessionStorage.removeItem("direct-order-staff");
+              }
+            }
           }
           await fetchOrders({ silent: true });
 

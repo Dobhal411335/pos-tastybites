@@ -189,6 +189,7 @@ export default function BrowseMenuLanding() {
 
       {activeProduct ? (
         <ProductConfigModal
+          key={activeProduct?.id || activeProduct?._id || "config"}
           isOpen={!!activeProduct}
           onClose={() => setActiveProduct(null)}
           product={activeProduct}

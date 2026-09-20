@@ -1,10 +1,23 @@
 /**
  * Restaurant wall-clock helpers.
  * Template times like "17:00" must mean local restaurant time, not the server's
- * timezone (Vercel is UTC — otherwise 5 PM becomes 10:30 PM IST).
+ * timezone (Vercel/Hostinger are UTC).
+ *
+ * Env (keep these in sync):
+ *   RESTAURANT_TIMEZONE              — server (EOD, APIs, reports)
+ *   NEXT_PUBLIC_RESTAURANT_TIMEZONE  — client fallbacks (reports UI)
+ *   ONLINE_ORDERING_TIMEZONE         — optional alias for pickup slots
+ *
+ * Values:
+ *   Production (Canada / Exeter ON): America/Toronto
+ *   Local testing (India):           Asia/Kolkata
+ * Default when unset: America/Toronto (production-safe).
  */
 export const DEFAULT_RESTAURANT_TIMEZONE =
-  process.env.RESTAURANT_TIMEZONE || "Asia/Kolkata";
+  process.env.RESTAURANT_TIMEZONE ||
+  process.env.NEXT_PUBLIC_RESTAURANT_TIMEZONE ||
+  process.env.ONLINE_ORDERING_TIMEZONE ||
+  "America/Toronto";
 
 function tzParts(date, timeZone = DEFAULT_RESTAURANT_TIMEZONE) {
   const fmt = new Intl.DateTimeFormat("en-US", {
@@ -53,8 +66,12 @@ export function parseTemplateTime(value) {
 
 /**
  * Build a UTC Date for a calendar day + HH:mm in the restaurant timezone.
- * `day` may be any Date; only its restaurant-local Y/M/D are used unless
- * year/month/day are passed explicitly via override.
+ * Pass a Date (uses that instant's restaurant-local Y/M/D) or an explicit
+ * `{ year, month, day }` civil date (1-based month).
+ *
+ * Non-fixed-offset zones (e.g. America/Toronto with DST) must correct both
+ * clock time AND calendar-day drift. A single UTC-midnight guess is still
+ * the previous evening in Toronto, so hour-only adjustment is off-by-one.
  */
 export function zonedDateTime(
   day,
@@ -62,24 +79,48 @@ export function zonedDateTime(
   minutes = 0,
   timeZone = DEFAULT_RESTAURANT_TIMEZONE
 ) {
-  const local = tzParts(day, timeZone);
+  const local =
+    day &&
+    typeof day === "object" &&
+    !(day instanceof Date) &&
+    day.year != null
+      ? {
+          year: Number(day.year),
+          month: Number(day.month),
+          day: Number(day.day),
+        }
+      : tzParts(day || new Date(), timeZone);
   const y = local.year;
-  const m = String(local.month).padStart(2, "0");
-  const d = String(local.day).padStart(2, "0");
+  const month = local.month;
+  const d = local.day;
   const hh = String(hours).padStart(2, "0");
   const mm = String(minutes).padStart(2, "0");
-  // Asia/Kolkata is fixed +05:30 (no DST). For other zones this is approximate;
-  // Kolkata is the default for this product.
+  const mStr = String(month).padStart(2, "0");
+  const dStr = String(d).padStart(2, "0");
+
   if (timeZone === "Asia/Kolkata" || timeZone === "Asia/Calcutta") {
-    return new Date(`${y}-${m}-${d}T${hh}:${mm}:00+05:30`);
+    return new Date(`${y}-${mStr}-${dStr}T${hh}:${mm}:00+05:30`);
   }
-  // Fallback: use temporal offset sampling
-  const guess = new Date(`${y}-${m}-${d}T${hh}:${mm}:00Z`);
-  const asLocal = tzParts(guess, timeZone);
-  const desiredAsMinutes = hours * 60 + minutes;
-  const actualAsMinutes = asLocal.hour * 60 + asLocal.minute;
-  const deltaMinutes = desiredAsMinutes - actualAsMinutes;
-  return new Date(guess.getTime() + deltaMinutes * 60 * 1000);
+
+  // Iterate until wall-clock Y-M-D HH:mm in `timeZone` matches the target.
+  let date = new Date(Date.UTC(y, month - 1, d, hours, minutes, 0));
+  for (let i = 0; i < 4; i++) {
+    const parts = tzParts(date, timeZone);
+    const gotHour = parts.hour === 24 ? 0 : parts.hour;
+    const wantMs = Date.UTC(y, month - 1, d, hours, minutes, 0);
+    const gotMs = Date.UTC(
+      parts.year,
+      parts.month - 1,
+      parts.day,
+      gotHour,
+      parts.minute,
+      parts.second
+    );
+    const delta = wantMs - gotMs;
+    if (Math.abs(delta) < 500) break;
+    date = new Date(date.getTime() + delta);
+  }
+  return date;
 }
 
 export function formatTimeInRestaurantTz(
@@ -87,7 +128,7 @@ export function formatTimeInRestaurantTz(
   timeZone = DEFAULT_RESTAURANT_TIMEZONE
 ) {
   if (!date) return "";
-  return new Intl.DateTimeFormat("en-IN", {
+  return new Intl.DateTimeFormat("en-CA", {
     timeZone,
     hour: "numeric",
     minute: "2-digit",
@@ -100,6 +141,16 @@ export function weekdayInRestaurantTz(
   timeZone = DEFAULT_RESTAURANT_TIMEZONE
 ) {
   return tzParts(date, timeZone).weekday;
+}
+
+/** YYYY-MM-DD for the restaurant wall clock (safe on client + server). */
+export function todayRestaurantISO(timeZone = DEFAULT_RESTAURANT_TIMEZONE) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
 }
 
 /**
@@ -120,7 +171,26 @@ export function restaurantDayBounds(
   day = new Date(),
   timeZone = DEFAULT_RESTAURANT_TIMEZONE
 ) {
-  const start = zonedDateTime(day, 0, 0, timeZone);
-  const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
+  const local = tzParts(day, timeZone);
+  const start = zonedDateTime(
+    { year: local.year, month: local.month, day: local.day },
+    0,
+    0,
+    timeZone
+  );
+  // Next local calendar day (DST-safe; do not add a fixed 24h).
+  const next = new Date(
+    Date.UTC(local.year, local.month - 1, local.day + 1, 12, 0, 0)
+  );
+  const end = zonedDateTime(
+    {
+      year: next.getUTCFullYear(),
+      month: next.getUTCMonth() + 1,
+      day: next.getUTCDate(),
+    },
+    0,
+    0,
+    timeZone
+  );
   return { start, end };
 }

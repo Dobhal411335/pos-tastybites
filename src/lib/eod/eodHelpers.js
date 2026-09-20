@@ -1,7 +1,8 @@
 import {
   DEFAULT_RESTAURANT_TIMEZONE,
   restaurantCalendarDate,
-  restaurantDayBounds,
+  todayRestaurantISO,
+  zonedDateTime,
 } from "@/lib/restaurantTime";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -27,8 +28,24 @@ export function businessDateBounds(
   timeZone = DEFAULT_RESTAURANT_TIMEZONE
 ) {
   const [y, m, d] = dateStr.split("-").map(Number);
-  const probe = new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
-  return restaurantDayBounds(probe, timeZone);
+  const start = zonedDateTime(
+    { year: y, month: m, day: d },
+    0,
+    0,
+    timeZone
+  );
+  const next = new Date(Date.UTC(y, m - 1, d + 1, 12, 0, 0));
+  const end = zonedDateTime(
+    {
+      year: next.getUTCFullYear(),
+      month: next.getUTCMonth() + 1,
+      day: next.getUTCDate(),
+    },
+    0,
+    0,
+    timeZone
+  );
+  return { start, end };
 }
 
 /** Stable calendar Date used on EmployeeLog / EmployeeShift.date. */
@@ -53,6 +70,8 @@ export function todayBusinessDate(timeZone = DEFAULT_RESTAURANT_TIMEZONE) {
   const cal = restaurantCalendarDate(new Date(), timeZone);
   return cal.toISOString().slice(0, 10);
 }
+
+export { todayRestaurantISO };
 
 export function formatEmployeeName(emp) {
   if (!emp) return "Unknown";

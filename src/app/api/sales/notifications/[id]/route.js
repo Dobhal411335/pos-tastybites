@@ -4,7 +4,7 @@ import { logger } from '@/utils/logger';
 import { withSalesOrDeviceAuth } from '@/utils/salesAuth';
 import { markNotificationRead } from '@/lib/notifications/notificationService';
 
-const ROLES = ['ADMIN', 'MANAGER', 'SERVER', 'BARTENDER', 'EMPLOYEE', 'DEVICE'];
+const ROLES = ['ADMIN', 'MANAGER', 'SERVER', 'BARTENDER', 'EMPLOYEE', 'DEVICE', 'Master Terminal','Manager Terminal'];
 
 /**
  * PATCH /api/sales/notifications/[id]

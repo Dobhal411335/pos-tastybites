@@ -171,6 +171,7 @@ export default function ProductCard({ product }) {
         }}
       />
       <ProductConfigModal
+        key={product?.id || product?._id || "config"}
         isOpen={isConfigOpen}
         onClose={() => setIsConfigOpen(false)}
         product={product}

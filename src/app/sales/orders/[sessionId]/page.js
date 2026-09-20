@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useSocket } from "@/components/providers/SocketProvider";
 import {
   ArrowLeft,
@@ -82,6 +82,17 @@ function formatOrderServerName(order, fallbackUser) {
     return fallbackUser.name || `${fName} ${lName}`.trim() || "Server";
   }
   return "Server";
+}
+
+/** Resume walk-in/staff only while the order is still open (not paid). */
+function isOpenDirectOrderStatus(order) {
+  if (!order) return false;
+  const status = String(order.status || "").toUpperCase();
+  const paid =
+    String(order.paymentStatus || "").toUpperCase() === "PAID" ||
+    status === "PAID";
+  if (paid) return false;
+  return status === "PENDING" || status === "CONFIRMED";
 }
 
 function persistSalesFloorId(floorId) {
@@ -236,7 +247,23 @@ function mergeCartLines(prev, incomingLines, seqRef) {
 }
 
 export default function OrderPage() {
+  return (
+    <React.Suspense
+      fallback={
+        <div className="flex h-screen w-full flex-col items-center justify-center bg-zinc-50">
+          <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+          <p className="mt-4 font-semibold text-zinc-500">Loading menu...</p>
+        </div>
+      }
+    >
+      <OrderPageContent />
+    </React.Suspense>
+  );
+}
+
+function OrderPageContent() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const { user: currentUser } = useAuth();
   const router = useRouter();
   const { socket } = useSocket();
@@ -247,6 +274,11 @@ export default function OrderPage() {
   const isLegacyNew = sessionId === "new";
   const isNoSession = isDirectOrder || isLegacyNew;
   const hasTableSession = !isNoSession;
+  const queryOrderId = searchParams.get("orderId");
+  const queryStaffId = searchParams.get("staffId") || "";
+  const isFreshDirect =
+    isDirectOrder && searchParams.get("fresh") === "1";
+  const directOrderStorageKey = `direct-order-${sessionId}`;
 
   // Data states
   const [categories, setCategories] = useState(["All"]);
@@ -508,39 +540,72 @@ export default function OrderPage() {
             }
           }
         } else if (isDirectOrder) {
-          const savedOrderId = sessionStorage.getItem(`direct-order-${sessionId}`);
-          if (savedOrderId) {
-            const orderRes = await fetch(
-              `/api/orders/employee?orderId=${savedOrderId}`,
-            );
-            const orderJson = await orderRes.json();
-            if (orderJson.success && orderJson.data) {
-              const existingOrder = orderJson.data;
-              setActiveOrder(existingOrder);
-              setOrderStatus(existingOrder.status);
-              setOrderNote(existingOrder.specialNote || "");
-              if (existingOrder.partyName || existingOrder.guestName) {
-                setGuestName(existingOrder.partyName || existingOrder.guestName);
+          if (isFreshDirect) {
+            sessionStorage.removeItem(directOrderStorageKey);
+            try {
+              if (isWalkIn) {
+                router.replace("/sales/orders/walk-in");
+              } else if (isStaffOrder) {
+                const next = queryStaffId
+                  ? `/sales/orders/staff?staffId=${encodeURIComponent(queryStaffId)}`
+                  : "/sales/orders/staff";
+                router.replace(next);
               }
-              if (existingOrder.contactNumber) {
-                setGuestPhone(existingOrder.contactNumber);
+            } catch {
+              /* ignore */
+            }
+          } else {
+            const resumeId =
+              queryOrderId ||
+              sessionStorage.getItem(directOrderStorageKey) ||
+              "";
+            if (resumeId) {
+              const orderRes = await fetch(
+                `/api/orders/employee?orderId=${resumeId}`,
+              );
+              const orderJson = await orderRes.json();
+              if (orderJson.success && orderJson.data) {
+                const existingOrder = orderJson.data;
+                if (!isOpenDirectOrderStatus(existingOrder)) {
+                  sessionStorage.removeItem(directOrderStorageKey);
+                } else {
+                  sessionStorage.setItem(
+                    directOrderStorageKey,
+                    String(existingOrder._id),
+                  );
+                  setActiveOrder(existingOrder);
+                  setOrderStatus(existingOrder.status);
+                  setOrderNote(existingOrder.specialNote || "");
+                  if (existingOrder.partyName || existingOrder.guestName) {
+                    setGuestName(
+                      existingOrder.partyName || existingOrder.guestName,
+                    );
+                  }
+                  if (existingOrder.contactNumber) {
+                    setGuestPhone(existingOrder.contactNumber);
+                  }
+                  if (existingOrder.guestCountryCode) {
+                    setGuestCountryCode(existingOrder.guestCountryCode);
+                  }
+                  if (existingOrder.guestEmail) {
+                    setGuestEmail(existingOrder.guestEmail);
+                  }
+                  if (existingOrder.staffFor) {
+                    setSelectedStaffId(String(existingOrder.staffFor));
+                  }
+                  if (existingOrder.staffOrderReason) {
+                    setStaffOrderReason(existingOrder.staffOrderReason);
+                  }
+                  const restoredCart = buildCartFromOrderItems(
+                    existingOrder.items,
+                  );
+                  syncCartIdSeqFromItems(cartIdSeq, restoredCart);
+                  setCart(restoredCart);
+                  setKotCartFingerprint(getCartFingerprint(restoredCart));
+                }
+              } else {
+                sessionStorage.removeItem(directOrderStorageKey);
               }
-              if (existingOrder.guestCountryCode) {
-                setGuestCountryCode(existingOrder.guestCountryCode);
-              }
-              if (existingOrder.guestEmail) {
-                setGuestEmail(existingOrder.guestEmail);
-              }
-              if (existingOrder.staffFor) {
-                setSelectedStaffId(String(existingOrder.staffFor));
-              }
-              if (existingOrder.staffOrderReason) {
-                setStaffOrderReason(existingOrder.staffOrderReason);
-              }
-              const restoredCart = buildCartFromOrderItems(existingOrder.items);
-              syncCartIdSeqFromItems(cartIdSeq, restoredCart);
-              setCart(restoredCart);
-              setKotCartFingerprint(getCartFingerprint(restoredCart));
             }
           }
         }
@@ -551,19 +616,44 @@ export default function OrderPage() {
       }
     };
     fetchData();
-  }, [sessionId]);
+  }, [
+    sessionId,
+    isDirectOrder,
+    isFreshDirect,
+    isWalkIn,
+    isStaffOrder,
+    hasTableSession,
+    queryOrderId,
+    queryStaffId,
+    directOrderStorageKey,
+    router,
+  ]);
 
   useEffect(() => {
     setServerName(formatOrderServerName(activeOrder, currentUser));
   }, [currentUser, activeOrder]);
 
   useEffect(() => {
+    if (!isStaffOrder || !queryStaffId || employees.length === 0) return;
+    const emp = employees.find(
+      (e) => String(e.id || e._id) === String(queryStaffId),
+    );
+    if (!emp) return;
+    setSelectedStaffId(String(emp.id || emp._id));
+    if (emp.name) setGuestName(emp.name);
+  }, [isStaffOrder, queryStaffId, employees]);
+
+  useEffect(() => {
     if (!isStaffOrder || selectedStaffId || employees.length === 0) return;
+    if (queryStaffId) return;
     const myId = String(currentUser?._id || currentUser?.id || "");
     if (!myId) return;
     const me = employees.find((emp) => String(emp.id || emp._id) === myId);
-    if (me) setSelectedStaffId(String(me.id || me._id));
-  }, [isStaffOrder, employees, currentUser, selectedStaffId]);
+    if (me) {
+      setSelectedStaffId(String(me.id || me._id));
+      if (me.name) setGuestName(me.name);
+    }
+  }, [isStaffOrder, employees, currentUser, selectedStaffId, queryStaffId]);
 
   useEffect(() => {
     if (!isStaffOrder) return;
@@ -573,11 +663,12 @@ export default function OrderPage() {
     setAppliedDiscount(
       buildStaffDiscountState(emp?.staffDiscount, emp?.name),
     );
+    if (emp?.name) setGuestName(emp.name);
   }, [isStaffOrder, selectedStaffId, employees]);
 
   const fetchOrderOnly = useCallback(async () => {
     if (isNoSession) {
-      const savedOrderId = sessionStorage.getItem(`direct-order-${sessionId}`);
+      const savedOrderId = sessionStorage.getItem(directOrderStorageKey);
       if (!savedOrderId) return;
       try {
         const orderRes = await fetch(
@@ -585,8 +676,15 @@ export default function OrderPage() {
         );
         const orderJson = await orderRes.json();
         if (orderJson.success && orderJson.data) {
-          setActiveOrder(orderJson.data);
-          setOrderStatus(orderJson.data.status);
+          const existingOrder = orderJson.data;
+          if (!isOpenDirectOrderStatus(existingOrder)) {
+            sessionStorage.removeItem(directOrderStorageKey);
+            setActiveOrder(existingOrder);
+            setOrderStatus(existingOrder.status);
+            return;
+          }
+          setActiveOrder(existingOrder);
+          setOrderStatus(existingOrder.status);
         }
       } catch (err) {
         console.error(err);
@@ -606,7 +704,7 @@ export default function OrderPage() {
     } catch (err) {
       console.error(err);
     }
-  }, [sessionId, isNoSession]);
+  }, [sessionId, isNoSession, directOrderStorageKey]);
 
   useEffect(() => {
     const handleReconnect = () => {
@@ -1106,6 +1204,7 @@ export default function OrderPage() {
     const trimmed = (nameOverride ?? guestName ?? "").trim();
     if (trimmed) return trimmed;
 
+    if (isStaffOrder) return "Staff";
     if (isWalkIn || isLegacyNew) return "Walk-in";
 
     const tableNo = getDisplayTableNo();
@@ -1198,7 +1297,7 @@ export default function OrderPage() {
         }
 
         if (isDirectOrder && json.data._id) {
-          sessionStorage.setItem(`direct-order-${sessionId}`, json.data._id);
+          sessionStorage.setItem(directOrderStorageKey, json.data._id);
         }
 
         if (json.data.kotPayload && json.data.kotPayload.length > 0) {
@@ -1236,9 +1335,9 @@ export default function OrderPage() {
     if (cart.length === 0 || hasSentKot) return;
     if (isStaffOrder) {
       setIsStaffModalOpen(true);
-    } else {
-      setIsKitchenModalOpen(true);
+      return;
     }
+    setIsKitchenModalOpen(true);
   };
 
   const handleConfirmKitchen = async () => {
@@ -1336,6 +1435,14 @@ export default function OrderPage() {
     setIsPaymentModalOpen(true);
   };
 
+  const goToWalkInHub = () => {
+    router.push("/sales/walk-in");
+  };
+
+  const goToStaffHub = () => {
+    router.push("/sales/staff");
+  };
+
   const goToFloor = () => {
     const floorId =
       persistSalesFloorId(sessionFloorIdRef.current) ||
@@ -1354,6 +1461,23 @@ export default function OrderPage() {
     router.push("/floor");
   };
 
+  const leaveAfterDirectPay = () => {
+    sessionStorage.removeItem(directOrderStorageKey);
+    setCart([]);
+    setActiveOrder(null);
+    setOrderStatus("Draft");
+    setOrderNote("");
+    if (isWalkIn) {
+      goToWalkInHub();
+      return;
+    }
+    if (isStaffOrder) {
+      goToStaffHub();
+      return;
+    }
+    goToFloor();
+  };
+
   const handleReleaseTable = async (shouldRelease) => {
     persistSalesFloorId(
       sessionFloorIdRef.current || sessionData?.floorId || sessionData?.floor,
@@ -1361,7 +1485,8 @@ export default function OrderPage() {
     if (!shouldRelease || isNoSession) {
       setIsReleaseModalOpen(false);
       if (isDirectOrder) {
-        sessionStorage.removeItem(`direct-order-${sessionId}`);
+        leaveAfterDirectPay();
+        return;
       }
       goToFloor();
       return;
@@ -1392,6 +1517,18 @@ export default function OrderPage() {
     setCart([]);
     setOrderNote("");
     if (!isStaffOrder) setAppliedDiscount(null);
+    if (isDirectOrder) {
+      sessionStorage.removeItem(directOrderStorageKey);
+      setActiveOrder(null);
+      setOrderStatus("Draft");
+      if (!isStaffOrder) {
+        setGuestName("");
+        setGuestPhone("");
+        setGuestEmail("");
+      } else if (!queryStaffId && !selectedStaffId) {
+        setGuestName("");
+      }
+    }
     setIsClearOrderModalOpen(false);
   };
 
@@ -1412,21 +1549,45 @@ export default function OrderPage() {
         <div className="w-[65%] flex flex-col border-r border-zinc-200 bg-zinc-50">
           {/* LEFT PANEL HEADER */}
           <div className="flex items-center justify-between px-4 py-3 bg-white border-b border-zinc-200 shrink-0">
-            <div className="min-w-0">
-              <h2 className="text-[17px] font-black text-zinc-900">
-                Create Order
-              </h2>
-              <p className="text-xs font-semibold text-zinc-800 mt-0.5 truncate">
-                {isWalkIn
-                  ? "Walk-in Customer"
-                  : isStaffOrder
-                    ? "Staff Order"
-                    : isLegacyNew
-                      ? guestTable
-                        ? `${guestTable} . Takeaway`
-                        : "Takeaway"
-                      : getDisplayTableNo() || "Loading table..."}
-              </p>
+            <div className="flex min-w-0 items-center gap-2">
+              {isWalkIn ? (
+                <button
+                  type="button"
+                  onClick={goToWalkInHub}
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-zinc-200 text-zinc-700 hover:bg-zinc-50"
+                  aria-label="Back to walk-in orders"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                </button>
+              ) : null}
+              {isStaffOrder ? (
+                <button
+                  type="button"
+                  onClick={goToStaffHub}
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-zinc-200 text-zinc-700 hover:bg-zinc-50"
+                  aria-label="Back to staff orders"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                </button>
+              ) : null}
+              <div className="min-w-0">
+                <h2 className="text-[17px] font-black text-zinc-900">
+                  Create Order
+                </h2>
+                <p className="mt-0.5 truncate text-xs font-semibold text-zinc-800">
+                  {isWalkIn
+                    ? "Walk-in Customer"
+                    : isStaffOrder
+                      ? guestName
+                        ? `Staff · ${guestName}`
+                        : "Staff Order"
+                      : isLegacyNew
+                        ? guestTable
+                          ? `${guestTable} . Takeaway`
+                          : "Takeaway"
+                        : getDisplayTableNo() || "Loading table..."}
+                </p>
+              </div>
             </div>
             <div className="flex items-center gap-1 bg-zinc-100 p-1 rounded-lg">
               <button
@@ -1698,6 +1859,19 @@ export default function OrderPage() {
           </div>
           <div className="flex-1 bg-zinc-50 overflow-y-auto custom-scrollbar">
             <div className="p-4 space-y-4">
+              {isStaffOrder && guestName ? (
+                <div className="flex items-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2.5">
+                  <User className="h-4 w-4 shrink-0 text-indigo-600" />
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-extrabold uppercase tracking-wider text-indigo-600">
+                      Staff member
+                    </p>
+                    <p className="truncate text-sm font-extrabold text-indigo-950">
+                      {guestName}
+                    </p>
+                  </div>
+                </div>
+              ) : null}
               {cart.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-16 text-zinc-400">
                   <p className="font-bold text-sm text-zinc-900">
@@ -2164,7 +2338,7 @@ export default function OrderPage() {
           setOrderStatus("PAID");
           setActiveOrder((prev) => ({ ...(prev || {}), ...updatedOrder }));
           if (isDirectOrder) {
-            sessionStorage.removeItem(`direct-order-${sessionId}`);
+            sessionStorage.removeItem(directOrderStorageKey);
           }
           if (updatedOrder?.discountCode) {
             setAppliedDiscount({
@@ -2763,10 +2937,9 @@ export default function OrderPage() {
           if (printType === "customer" && orderStatus === "PAID") {
             if (hasTableSession) {
               setIsReleaseModalOpen(true);
+            } else if (isDirectOrder) {
+              leaveAfterDirectPay();
             } else {
-              if (isDirectOrder) {
-                sessionStorage.removeItem(`direct-order-${sessionId}`);
-              }
               goToFloor();
             }
             return;

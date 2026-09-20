@@ -13,6 +13,8 @@ import connectDB from "@/lib/db";
 /**
  * Public order tracker (no auth, no phone gate).
  * Rate-limited per IP and per IP+orderNumber.
+ * Limits allow ~15s status polling on the landing track page
+ * (4 req/min ≈ 60 / 15m) plus manual refreshes.
  */
 export async function GET(request, { params }) {
   try {
@@ -26,7 +28,7 @@ export async function GET(request, { params }) {
 
     const ipLimit = checkRateLimit({
       key: `public-order-track:ip:${ip}`,
-      limit: 30,
+      limit: 180,
       windowMs: 15 * 60 * 1000,
     });
     if (!ipLimit.ok) {
@@ -38,7 +40,7 @@ export async function GET(request, { params }) {
 
     const orderLimit = checkRateLimit({
       key: `public-order-track:order:${ip}:${ticket}`,
-      limit: 20,
+      limit: 120,
       windowMs: 15 * 60 * 1000,
     });
     if (!orderLimit.ok) {

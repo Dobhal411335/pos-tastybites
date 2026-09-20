@@ -1,4 +1,5 @@
 import { format } from "date-fns";
+import { DEFAULT_RESTAURANT_TIMEZONE } from "@/lib/restaurantTime";
 
 export { STATUS_BADGE, money } from "@/components/reports/OrderDetailBody";
 
@@ -42,20 +43,20 @@ export function staffGroup(role) {
   return "other";
 }
 
-export function formatInTz(value, timeZone, options) {
+export function formatInTz(value, timeZone = DEFAULT_RESTAURANT_TIMEZONE, options) {
   if (!value) return "—";
-  return new Intl.DateTimeFormat("en-IN", { timeZone, ...options }).format(new Date(value));
+  return new Intl.DateTimeFormat("en-CA", { timeZone, ...options }).format(new Date(value));
 }
 
-export function formatTimeTz(value, timeZone) {
+export function formatTimeTz(value, timeZone = DEFAULT_RESTAURANT_TIMEZONE) {
   return formatInTz(value, timeZone, { hour: "numeric", minute: "2-digit", hour12: true });
 }
 
-export function formatDateTz(value, timeZone) {
+export function formatDateTz(value, timeZone = DEFAULT_RESTAURANT_TIMEZONE) {
   return formatInTz(value, timeZone, { day: "numeric", month: "short", year: "numeric" });
 }
 
-export function formatDateShortTz(value, timeZone) {
+export function formatDateShortTz(value, timeZone = DEFAULT_RESTAURANT_TIMEZONE) {
   return formatInTz(value, timeZone, { day: "numeric", month: "short" });
 }
 

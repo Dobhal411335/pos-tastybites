@@ -8,7 +8,7 @@ import {
   markAllNotificationsRead,
 } from '@/lib/notifications/notificationService';
 
-const ROLES = ['ADMIN', 'MANAGER', 'SERVER', 'BARTENDER', 'EMPLOYEE', 'DEVICE'];
+const ROLES = ['ADMIN', 'MANAGER', 'SERVER', 'BARTENDER', 'EMPLOYEE', 'DEVICE', 'Master Terminal','Manager Terminal'];
 
 /**
  * GET /api/sales/notifications

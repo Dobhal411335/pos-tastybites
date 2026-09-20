@@ -19,6 +19,10 @@ import { formatSessionTableLabel, formatTableLocation, joinTableNumbers } from "
 import { freeSessionTables } from "@/lib/orders/sessionTables";
 import { countryCodes } from "@/utils/countryCodes";
 import { cartChoiceSelectionsKey } from "@/utils/productChoices";
+import {
+  businessDateBounds,
+  todayBusinessDate,
+} from "@/lib/eod/eodHelpers";
 
 function orderItemsMatch(existingItem, incomingItem) {
   if (existingItem.cartId === incomingItem.cartId) return true;
@@ -802,22 +806,18 @@ export const GET = withAuth(async (request) => {
     const today = searchParams.get("today");
     
     if (orderId) {
+      // Pay / resume any restaurant order by id (POS, walk-in, staff, online).
+      // Do not filter by source — online pickup orders must be payable from Mobile.
       let order = await Order.findOne({
         _id: orderId,
         restaurantId: request.restaurant,
-        source: { $in: ["WALK_IN", "STAFF", "POS"] },
         isActive: { $ne: false },
-        status: { $in: ["PENDING", "CONFIRMED"] },
+        status: { $nin: ["CANCELLED", "WAIVED"] },
       }).lean();
 
       if (!order) {
-        order = await Order.findOne({
-          _id: orderId,
-          restaurantId: request.restaurant,
-          source: { $in: ["WALK_IN", "STAFF", "POS"] },
-          isActive: { $ne: false },
-          status: { $nin: ["CANCELLED", "WAIVED"] },
-        }).lean();
+        // Still return null for missing/cancelled — client handles paid recovery separately
+        order = null;
       }
 
       const [enriched] = order ? await enrichOrdersWithProcessedBy([order]) : [null];
@@ -848,14 +848,11 @@ export const GET = withAuth(async (request) => {
 
     // Unpaid open-order count for employee topnav badge
     if (searchParams.get("unpaidCount") === "true") {
-      const start = new Date();
-      start.setHours(0, 0, 0, 0);
-      const end = new Date();
-      end.setHours(23, 59, 59, 999);
+      const { start, end } = businessDateBounds(todayBusinessDate());
       const unpaidCount = await Order.countDocuments({
         restaurantId: request.restaurant,
         isActive: { $ne: false },
-        createdAt: { $gte: start, $lte: end },
+        createdAt: { $gte: start, $lt: end },
         paymentStatus: { $ne: "PAID" },
         status: { $nin: ["CANCELLED", "WAIVED", "PAID"] },
       });
@@ -873,11 +870,8 @@ export const GET = withAuth(async (request) => {
     let query = { restaurantId, isActive: { $ne: false } };
     
     if (today === "true") {
-      const start = new Date();
-      start.setHours(0, 0, 0, 0);
-      const end = new Date();
-      end.setHours(23, 59, 59, 999);
-      query.createdAt = { $gte: start, $lte: end };
+      const { start, end } = businessDateBounds(todayBusinessDate());
+      query.createdAt = { $gte: start, $lt: end };
     } else {
       query.processedBy = employeeId;
       if (startDate || endDate) {

@@ -23,6 +23,7 @@ import {
   qty,
   useInventoryReport,
 } from "./useInventoryReport";
+import { DEFAULT_RESTAURANT_TIMEZONE } from "@/lib/restaurantTime";
 
 const TABS = [
   { id: "overview", label: "Stock Overview" },
@@ -206,7 +207,7 @@ export default function InventoryStockReport() {
   const kpis = overview.data?.kpis;
   const lookups = overview.data?.lookups || { categories: [] };
   const meta = overview.data?.meta;
-  const timezone = meta?.timezone || "Asia/Kolkata";
+  const timezone = meta?.timezone || DEFAULT_RESTAURANT_TIMEZONE;
 
   const exportQuery = useMemo(
     () =>

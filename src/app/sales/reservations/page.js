@@ -230,7 +230,7 @@ export default function SalesReservationsPage() {
                   key={f.id}
                   type="button"
                   onClick={() => setTab(f.id)}
-                  className={`inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-bold transition ${
+                  className={`inline-flex items-center gap-1.5 rounded-md border border-zinc-600 bg-zinc-100 text-zinc-600 px-3.5 py-2 text-md font-bold transition ${
                     active
                       ? "bg-orange-500 text-white shadow-sm"
                       : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"
@@ -238,8 +238,8 @@ export default function SalesReservationsPage() {
                 >
                   {f.label}
                   <span
-                    className={`rounded-full px-1.5 py-0.5 text-[10px] tabular-nums ${
-                      active ? "bg-white/20 text-white" : "bg-white text-zinc-500"
+                    className={`rounded-full px-1.5 border border-black py-0.5 text-[10px] tabular-nums ${
+                      active ? "bg-white/20 text-black" : "bg-white text-zinc-800"
                     }`}
                   >
                     {count}
@@ -327,10 +327,7 @@ export default function SalesReservationsPage() {
                           </span>
                         ) : null}
                       </div>
-                      <p className="text-[11px] text-zinc-400">
-                        Table # is a staff note only — it does not lock a floor table.
-                        Mark Seated when guests arrive, then seat them on Floor.
-                      </p>
+                     
                     </div>
 
                     <div className="flex w-full flex-col gap-2 lg:w-56">

@@ -43,17 +43,27 @@ export function escapeRegex(value) {
 }
 
 /**
- * Paid revenue for a UTC window: active + PAID + not cancelled/waived + updatedAt.
+ * Paid revenue for a restaurant business-day window: active + paid + not cancelled/waived.
  * Shared by Financial reports and EOD so Overview and Day Closing reconcile.
+ * Treats either paymentStatus or status as PAID (covers POS / walk-in / staff / online).
+ * Does not filter by source — WALK_IN, STAFF, ONLINE, and POS all count.
+ * Uses createdAt OR updatedAt so same-day create/pay always lands on the day.
  */
 export function paidRevenueOrderMatch({ restaurantId, start, end }) {
   const rid = toObjectId(restaurantId);
   return {
     restaurantId: rid,
     ...ACTIVE_ORDER_FILTER,
-    paymentStatus: "PAID",
     status: { $nin: ["CANCELLED", "WAIVED"] },
-    updatedAt: { $gte: start, $lt: end },
+    $and: [
+      { $or: [{ paymentStatus: "PAID" }, { status: "PAID" }] },
+      {
+        $or: [
+          { updatedAt: { $gte: start, $lt: end } },
+          { createdAt: { $gte: start, $lt: end } },
+        ],
+      },
+    ],
   };
 }
 
@@ -159,7 +169,8 @@ export function paidRevenueMatch(filters) {
     );
   }
   if (guestOrSearch.length) {
-    match.$or = guestOrSearch;
+    // Keep paid/date $and clauses; nest guest search as an extra $and entry.
+    match.$and = [...(match.$and || []), { $or: guestOrSearch }];
   }
 
   return match;

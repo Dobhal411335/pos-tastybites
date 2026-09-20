@@ -3,21 +3,14 @@
 import React from "react";
 import { Loader2, User, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 
 export default function StaffOrderPartyModal({
   open,
   onClose,
   employees = [],
   selectedStaffId,
-  onStaffChange,
   staffOrderReason,
   onReasonChange,
   onConfirm,
@@ -29,6 +22,14 @@ export default function StaffOrderPartyModal({
     (emp) => String(emp.id || emp._id) === String(selectedStaffId),
   );
   const selectedName = selectedEmployee?.name || "";
+  const discount = Number(selectedEmployee?.staffDiscount) || 0;
+  const displayValue = [
+    selectedName,
+    selectedEmployee?.role,
+    discount > 0 ? `${discount}% off` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-900/50 backdrop-blur-sm">
@@ -37,7 +38,7 @@ export default function StaffOrderPartyModal({
           <div>
             <h2 className="text-lg font-bold text-zinc-900">Staff Order</h2>
             <p className="text-sm font-semibold text-zinc-500 mt-0.5">
-              Whose name should this order be under?
+              Confirm staff name and add a special note if needed
             </p>
           </div>
           <button
@@ -52,53 +53,29 @@ export default function StaffOrderPartyModal({
         <div className="p-5 space-y-4">
           <div className="space-y-1.5">
             <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider flex items-center gap-1.5">
-              <User className="w-3.5 h-3.5" /> Select Employee
+              <User className="w-3.5 h-3.5" /> Staff member
             </label>
-            <Select value={selectedStaffId || ""} onValueChange={onStaffChange}>
-              <SelectTrigger className="h-12 border-zinc-200 rounded-lg text-sm font-semibold">
-                <SelectValue placeholder="Choose staff member..." />
-              </SelectTrigger>
-              <SelectContent>
-                {employees.map((emp) => (
-                  <SelectItem key={emp.id || emp._id} value={String(emp.id || emp._id)}>
-                    {emp.name}
-                    {emp.role ? ` · ${emp.role}` : ""}
-                    {Number(emp.staffDiscount) > 0
-                      ? ` · ${Number(emp.staffDiscount)}% off`
-                      : ""}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {selectedName && (
-            <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-3 text-sm font-semibold text-indigo-900 space-y-1">
-              <p>
-                Order for: <span className="font-black">{selectedName}</span>
+            <Input
+              readOnly
+              value={displayValue || "—"}
+              className="h-12 border-zinc-200 rounded-lg text-sm font-semibold bg-zinc-50 text-zinc-900 cursor-default focus-visible:ring-0"
+            />
+            {selectedName && discount > 0 ? (
+              <p className="text-xs font-bold text-emerald-700">
+                Staff discount: {discount}% off will apply automatically
               </p>
-              {Number(selectedEmployee?.staffDiscount) > 0 ? (
-                <p className="text-green-800 font-bold">
-                  Staff discount: {Number(selectedEmployee.staffDiscount)}% off
-                  will apply automatically
-                </p>
-              ) : (
-                <p className="text-indigo-700 font-medium">
-                  No staff discount assigned to this employee
-                </p>
-              )}
-            </div>
-          )}
+            ) : null}
+          </div>
 
           <div className="space-y-1.5">
             <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
-              Reason
+              Special note
               <span className="text-zinc-400 font-semibold normal-case ml-1">
                 (optional)
               </span>
             </label>
             <Textarea
-              placeholder="e.g. End of shift meal"
+              placeholder="e.g. End of shift meal, allergy note…"
               value={staffOrderReason}
               onChange={(e) => onReasonChange(e.target.value)}
               className="min-h-[80px] border-zinc-200 rounded-lg text-sm font-medium resize-none"

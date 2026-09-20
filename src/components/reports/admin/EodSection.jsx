@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import EodReportPage from "@/components/eod/EodReportPage";
 import { AdminNote } from "./adminReportUi";
+import { todayRestaurantISO } from "@/lib/restaurantTime";
 
 const STATUS_CLASS = {
   Closed: "bg-emerald-50 text-emerald-800 border-emerald-200",
@@ -12,17 +13,9 @@ const STATUS_CLASS = {
   Open: "bg-zinc-100 text-zinc-700 border-zinc-200",
 };
 
-function todayLocalISO() {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
 export default function EodSection() {
   const [saved, setSaved] = useState(false);
-  const [businessDate, setBusinessDate] = useState(todayLocalISO());
+  const [businessDate, setBusinessDate] = useState(todayRestaurantISO());
   const [canClose, setCanClose] = useState(false);
 
   useEffect(() => {
@@ -58,7 +51,7 @@ export default function EodSection() {
     []
   );
 
-  const isToday = businessDate === todayLocalISO();
+  const isToday = businessDate === todayRestaurantISO();
   const status = saved
     ? "Closed"
     : isToday && canClose

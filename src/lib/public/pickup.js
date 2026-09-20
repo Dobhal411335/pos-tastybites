@@ -1,20 +1,32 @@
-/** Prefer restaurant wall clock; Exeter ON defaults to America/Toronto when unset. */
+import { DEFAULT_RESTAURANT_TIMEZONE } from "@/lib/restaurantTime";
+
+/**
+ * Pickup / online ordering wall clock — same env as EOD / Today.
+ *   Production (Canada): America/Toronto
+ *   Local testing (India): Asia/Kolkata via .env.local
+ */
 export function onlineOrderingTimezone() {
-  return (
-    process.env.RESTAURANT_TIMEZONE ||
-    process.env.ONLINE_ORDERING_TIMEZONE ||
-    "America/Toronto"
-  );
+  return DEFAULT_RESTAURANT_TIMEZONE;
 }
 
 /**
- * Same-day pickup slots: every 15 minutes, starting ~30 min from now,
+ * Same-day pickup slots: every 15 minutes, starting ~leadMinutes from now,
  * until 22:45 restaurant-local (same calendar day only).
+ * @param {Date} [now]
+ * @param {string} [timeZone]
+ * @param {{ leadMinutes?: number }} [options]
  */
-export function buildSameDayPickupSlots(now = new Date(), timeZone = onlineOrderingTimezone()) {
+export function buildSameDayPickupSlots(
+  now = new Date(),
+  timeZone = onlineOrderingTimezone(),
+  options = {}
+) {
+  const leadMinutes = Number.isFinite(options.leadMinutes)
+    ? options.leadMinutes
+    : 30;
   const local = getLocalParts(now, timeZone);
   const slots = [];
-  const startMinutes = local.hour * 60 + local.minute + 30;
+  const startMinutes = local.hour * 60 + local.minute + leadMinutes;
   const aligned = Math.ceil(startMinutes / 15) * 15;
   const endMinutes = 22 * 60 + 45; // 10:45 PM last slot
 
@@ -38,25 +50,38 @@ export function buildSameDayPickupSlots(now = new Date(), timeZone = onlineOrder
   return slots;
 }
 
-export function isValidSameDayPickup(pickupTime, now = new Date(), timeZone = onlineOrderingTimezone()) {
-  if (!pickupTime || typeof pickupTime !== "string") return false;
-  const match = pickupTime.trim().match(/^(\d{1,2}):(\d{2})$/);
-  if (!match) return false;
-  const hours = Number(match[1]);
-  const minutes = Number(match[2]);
-  if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return false;
+/**
+ * Accept a same-day pickup time that was (or still is) offerable to the guest.
+ * Uses a 5-minute lead so OTP / checkout delay does not invalidate a slot that
+ * was listed with the normal ~30 minute lead.
+ */
+export function isValidSameDayPickup(
+  pickupTime,
+  now = new Date(),
+  timeZone = onlineOrderingTimezone()
+) {
+  const normalized = normalizePickupTime(pickupTime);
+  if (!normalized) return false;
 
-  const slots = buildSameDayPickupSlots(now, timeZone);
-  return slots.some((s) => s.value === `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`);
+  // Same 15-minute grid / same day cutoff as the guest dropdown, with OTP grace.
+  const acceptable = buildSameDayPickupSlots(now, timeZone, {
+    leadMinutes: 5,
+  });
+  return acceptable.some((s) => s.value === normalized);
 }
 
-export function formatPickupNotePrefix(pickupTime, now = new Date(), timeZone = onlineOrderingTimezone()) {
+export function formatPickupNotePrefix(
+  pickupTime,
+  now = new Date(),
+  timeZone = onlineOrderingTimezone()
+) {
   const local = getLocalParts(now, timeZone);
   const dateStr = `${local.year}-${String(local.month).padStart(2, "0")}-${String(local.day).padStart(2, "0")}`;
-  const normalized = pickupTime.trim().match(/^(\d{1,2}):(\d{2})$/);
-  const hh = String(Number(normalized[1])).padStart(2, "0");
-  const mm = String(Number(normalized[2])).padStart(2, "0");
-  return `[PICKUP ${dateStr} ${hh}:${mm}]`;
+  const normalized = normalizePickupTime(pickupTime);
+  if (!normalized) {
+    throw Object.assign(new Error("Invalid pickup time"), { status: 400 });
+  }
+  return `[PICKUP ${dateStr} ${normalized}]`;
 }
 
 export function parsePickupFromSpecialNote(specialNote) {
@@ -71,6 +96,18 @@ export function stripPickupPrefix(specialNote) {
   return String(specialNote || "")
     .replace(/\[PICKUP\s+\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}\]\s*/i, "")
     .trim();
+}
+
+function normalizePickupTime(pickupTime) {
+  if (!pickupTime || typeof pickupTime !== "string") return null;
+  const match = pickupTime.trim().match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
+  if (!match) return null;
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return null;
+  if (minutes % 15 !== 0) return null;
+  if (hours * 60 + minutes > 22 * 60 + 45) return null;
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
 }
 
 function formatSlotLabel(hours, minutes) {

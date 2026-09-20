@@ -18,7 +18,7 @@ import { publicApiBase } from "@/lib/public/clientConfig";
 export default function CheckoutPage() {
   const router = useRouter();
   const { cartItems, clearCart, itemCount, displaySubtotal } = useCart();
-  const { restaurant, slug } = useRestaurantPublic();
+  const { restaurant, slug, refresh } = useRestaurantPublic();
   const [quote, setQuote] = useState(null);
   const [quoting, setQuoting] = useState(false);
   const [sendingOtp, setSendingOtp] = useState(false);
@@ -31,6 +31,10 @@ export default function CheckoutPage() {
 
   const slots = restaurant?.pickupSlots || [];
   const brandName = restaurant?.name || "Tasty Bites";
+
+  useEffect(() => {
+    refresh?.();
+  }, [refresh]);
 
   const {
     register,

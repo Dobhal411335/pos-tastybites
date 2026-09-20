@@ -64,11 +64,6 @@ const MENU_LINKS = [
     icon: ShoppingBag,
   },
   {
-    label: "Table Bookings",
-    href: "/sales/reservations",
-    icon: CalendarDays,
-  },
-  {
     label: "Print Jobs",
     href: "/sales/print-jobs",
     icon: Printer,
@@ -80,27 +75,29 @@ const MENU_LINKS = [
   },
 ];
 
-const TABLE_STATUS = [
-  { label: "Available", className: "bg-white border border-zinc-500" },
-  { label: "Serving", className: "bg-sky-400 border border-sky-500" },
-  { label: "Payment", className: "bg-emerald-500 border border-emerald-600" },
-  { label: "Ordering", className: "bg-orange-500 border border-orange-600" },
-  { label: "Combined", className: "bg-violet-500 border border-violet-600" },
-  { label: "Booked", className: "bg-red-500 border border-red-600" },
-];
-
-const ORDER_LINKS = [
-  { label: "Walking Direct Order", href: "/sales/orders/walk-in" },
-  { label: "Staff Order", href: "/sales/orders/staff" },
-  { label: "Online Order", href: "/sales/today" },
-];
-
 const quickActionClass =
   "flex h-[58px] w-[58px] items-center justify-center rounded-[18px] bg-white text-stone-800 shadow-[6px_6px_14px_rgba(0,0,0,0.08),-3px_-3px_10px_rgba(255,255,255,0.9)] ring-1 ring-stone-100/80 transition-all duration-200 group-hover:-translate-y-0.5 group-hover:shadow-[8px_8px_18px_rgba(0,0,0,0.1)]";
 
 function navActive(pathname, href) {
   if (href === "/floor") {
-    return pathname === "/floor" || pathname?.startsWith("/sales/orders");
+    return (
+      pathname === "/floor" ||
+      (pathname?.startsWith("/sales/orders") &&
+        !pathname?.startsWith("/sales/orders/walk-in") &&
+        !pathname?.startsWith("/sales/orders/staff"))
+    );
+  }
+  if (href === "/sales/walk-in") {
+    return (
+      pathname === "/sales/walk-in" ||
+      pathname?.startsWith("/sales/orders/walk-in")
+    );
+  }
+  if (href === "/sales/staff") {
+    return (
+      pathname === "/sales/staff" ||
+      pathname?.startsWith("/sales/orders/staff")
+    );
   }
   return pathname === href || pathname?.startsWith(href + "/");
 }
@@ -362,32 +359,20 @@ export default function EmployeeTopNav({
             <DropdownMenuContent
               align="end"
               sideOffset={12}
-              className="w-[min(400px,calc(100vw-1.5rem))] space-y-3 rounded-[24px] border border-stone-200/60 bg-[#EFEFEF] p-3 shadow-[0_20px_50px_rgba(0,0,0,0.12)]"
+              className="w-[min(340px,calc(100vw-1.5rem))] space-y-3 rounded-[24px] border border-stone-200/60 bg-[#EFEFEF] p-3 shadow-[0_20px_50px_rgba(0,0,0,0.12)]"
             >
-              <div>
-                <h3 className="mb-2 px-1 font-serif text-[16px] text-stone-900">
-                  Table Status
-                </h3>
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl bg-white px-3 py-2.5 shadow-sm">
-                  {TABLE_STATUS.map((item) => (
-                    <div
-                      key={item.label}
-                      className="flex items-center gap-1.5"
-                    >
-                      <span
-                        className={`h-2.5 w-2.5 shrink-0 rounded-full ${item.className}`}
-                      />
-                      <span className="whitespace-nowrap text-[11px] font-medium text-stone-800">
-                        {item.label}
-                      </span>
-                    </div>
-                  ))}
-                </div>
+              <div className="rounded-2xl bg-white px-4 py-3 shadow-sm">
+                <p className="truncate text-sm font-bold text-stone-900">
+                  {employeeName || "Employee"}
+                </p>
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-stone-500">
+                  {employeeRole}
+                </p>
               </div>
 
               <div className="rounded-[22px] bg-white px-4 pb-4 pt-3 shadow-[0_8px_24px_rgba(0,0,0,0.06)]">
                 <h3 className="mb-4 text-[18px] font-semibold tracking-tight text-stone-900">
-                  Quick links
+                  Tools
                 </h3>
 
                 <div className="grid grid-cols-3 gap-x-3 gap-y-4">
@@ -447,21 +432,6 @@ export default function EmployeeTopNav({
                     </span>
                   </button>
                 </div>
-              </div>
-
-              <div className="overflow-hidden rounded-2xl bg-white shadow-sm">
-                {ORDER_LINKS.map((item, index) => (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    onClick={() => setMenuOpen(false)}
-                    className={`block py-3.5 text-center font-serif text-[17px] text-stone-900 transition-colors hover:bg-stone-50 ${
-                      index > 0 ? "border-t border-stone-200" : ""
-                    }`}
-                  >
-                    {item.label}
-                  </Link>
-                ))}
               </div>
             </DropdownMenuContent>
           </DropdownMenu>

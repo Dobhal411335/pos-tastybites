@@ -14,8 +14,14 @@ import ElectronPrintAgent from "@/components/printing/ElectronPrintAgent";
 export default function SalesAppShell({ children }) {
   const pathname = usePathname();
   const isLoginPage = pathname === "/sales/login" || pathname === "/login";
-  const isFloorPage = pathname === "/floor";
-  const isTodayOrdersPage = pathname === "/sales/today" || pathname === "/today";
+  const isFloorPage =
+    pathname === "/sales/floor" ||
+    pathname === "/floor" ||
+    pathname?.endsWith("/floor");
+  const isTodayOrdersPage =
+    pathname === "/sales/today" ||
+    pathname === "/today" ||
+    pathname?.endsWith("/today");
   const lockViewport = isFloorPage || isTodayOrdersPage;
   const [employeeUser, setEmployeeUser] = useState(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);

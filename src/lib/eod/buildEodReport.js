@@ -22,6 +22,21 @@ import {
 } from "./eodHelpers.js";
 import { reconcileEod } from "./reconcileEod.js";
 
+const ORDER_SOURCES = ["POS", "WALK_IN", "STAFF", "ONLINE"];
+
+function normalizeOrderSource(order) {
+  const raw = String(order?.source || "POS").toUpperCase();
+  if (ORDER_SOURCES.includes(raw)) return raw;
+  return "POS";
+}
+
+function sourceSectionName(source) {
+  if (source === "WALK_IN") return "Walk-in";
+  if (source === "STAFF") return "Staff";
+  if (source === "ONLINE") return "Online";
+  return null;
+}
+
 /**
  * Build full End-of-Day report payload for a restaurant + YYYY-MM-DD.
  */
@@ -52,6 +67,7 @@ export async function buildEodReport({
     shifts,
     laborRows,
     statusRows,
+    sourceDayRows,
     issuedGiftCards,
   ] = await Promise.all([
       Order.find(
@@ -111,6 +127,44 @@ export async function buildEodReport({
           },
         },
       ]),
+      Order.aggregate([
+        {
+          $match: {
+            restaurantId: rid,
+            ...ACTIVE_ORDER_FILTER,
+            $or: [
+              { updatedAt: { $gte: start, $lt: end } },
+              { createdAt: { $gte: start, $lt: end } },
+            ],
+          },
+        },
+        {
+          $group: {
+            _id: { $ifNull: ["$source", "POS"] },
+            count: { $sum: 1 },
+            paidCount: {
+              $sum: {
+                $cond: [
+                  {
+                    $and: [
+                      { $not: { $in: ["$status", ["CANCELLED", "WAIVED"]] } },
+                      {
+                        $or: [
+                          { $eq: ["$paymentStatus", "PAID"] },
+                          { $eq: ["$status", "PAID"] },
+                        ],
+                      },
+                    ],
+                  },
+                  1,
+                  0,
+                ],
+              },
+            },
+            amount: { $sum: { $ifNull: ["$totalAmount", 0] } },
+          },
+        },
+      ]),
       Giftcard.find({
         restaurant: rid,
         isIssued: true,
@@ -151,6 +205,28 @@ export async function buildEodReport({
   const tipsByEmp = new Map();
   const paymentTypeMap = new Map();
   const taxMap = new Map();
+  const sourceMap = new Map(
+    ORDER_SOURCES.map((source) => [
+      source,
+      {
+        source,
+        label:
+          source === "WALK_IN"
+            ? "Walk-in"
+            : source === "STAFF"
+              ? "Staff"
+              : source === "ONLINE"
+                ? "Online"
+                : "POS / Table",
+        billCount: 0,
+        netSales: 0,
+        grossSales: 0,
+        discounts: 0,
+        taxes: 0,
+        tips: 0,
+      },
+    ]),
+  );
 
   const ensureSection = (name) => {
     if (!sectionMap.has(name)) {
@@ -204,16 +280,20 @@ export async function buildEodReport({
     totalNonCash = r2(totalNonCash + tenders.card + tenders.giftCard);
     totalGiftCardPayments = r2(totalGiftCardPayments + tenders.giftCard);
 
-    // Section
-    let sectionName = "No Section";
-    if (order.table?.section) {
-      sectionName = String(order.table.section).trim() || "No Section";
-    } else if (order.table?._id) {
-      sectionName =
-        tableSectionById.get(String(order.table._id)) || "No Section";
-    } else if (order.table) {
-      sectionName =
-        tableSectionById.get(String(order.table)) || "No Section";
+    // Section — walk-in / staff / online get named buckets (not "No Section")
+    const orderSource = normalizeOrderSource(order);
+    let sectionName = sourceSectionName(orderSource);
+    if (!sectionName) {
+      sectionName = "No Section";
+      if (order.table?.section) {
+        sectionName = String(order.table.section).trim() || "No Section";
+      } else if (order.table?._id) {
+        sectionName =
+          tableSectionById.get(String(order.table._id)) || "No Section";
+      } else if (order.table) {
+        sectionName =
+          tableSectionById.get(String(order.table)) || "No Section";
+      }
     }
     const sec = ensureSection(sectionName);
     sec.billCount += 1;
@@ -221,6 +301,14 @@ export async function buildEodReport({
     sec.grossSales = r2(sec.grossSales + sub);
     sec.discounts = r2(sec.discounts + disc);
     sec.taxes = r2(sec.taxes + tax);
+
+    const srcRow = sourceMap.get(orderSource) || sourceMap.get("POS");
+    srcRow.billCount += 1;
+    srcRow.netSales = r2(srcRow.netSales + net);
+    srcRow.grossSales = r2(srcRow.grossSales + sub);
+    srcRow.discounts = r2(srcRow.discounts + disc);
+    srcRow.taxes = r2(srcRow.taxes + tax);
+    srcRow.tips = r2(srcRow.tips + tip);
 
     // Categories — allocate order discount/tax proportionally by item line net
     const items = Array.isArray(order.items) ? order.items : [];
@@ -404,6 +492,23 @@ export async function buildEodReport({
   }
   statusCounts.open = (statusCounts.PENDING || 0) + (statusCounts.CONFIRMED || 0);
 
+  const daySourceCounts = {
+    POS: { count: 0, paidCount: 0, amount: 0 },
+    WALK_IN: { count: 0, paidCount: 0, amount: 0 },
+    STAFF: { count: 0, paidCount: 0, amount: 0 },
+    ONLINE: { count: 0, paidCount: 0, amount: 0 },
+  };
+  for (const row of sourceDayRows) {
+    const key = ORDER_SOURCES.includes(String(row._id || "").toUpperCase())
+      ? String(row._id).toUpperCase()
+      : "POS";
+    daySourceCounts[key].count += row.count || 0;
+    daySourceCounts[key].paidCount += row.paidCount || 0;
+    daySourceCounts[key].amount = r2(
+      daySourceCounts[key].amount + (row.amount || 0),
+    );
+  }
+
   const issuedGiftCardCount = issuedGiftCards.length;
   const issuedGiftCardAmount = r2(
     issuedGiftCards.reduce((s, c) => s + (Number(c.value) || 0), 0)
@@ -460,7 +565,7 @@ export async function buildEodReport({
       restaurantAddress: restaurant.address || "",
       businessDate,
       priorDate,
-      title: `${restaurant.name || "Restaurant"} - End Of Day - ${businessDate}/${priorDate}`,
+      title: `${restaurant.name || "Restaurant"} — End of Day — ${businessDate}`,
       generatedAt: new Date().toISOString(),
       generatedBy: generatedBy || null,
       generatedByName: generatedByResolved || null,
@@ -492,6 +597,42 @@ export async function buildEodReport({
       waivedAmount: statusAmounts.WAIVED,
       refunded: 0,
       refundedNote: "Refunds are not recorded in the POS yet.",
+      bySource: {
+        pos: daySourceCounts.POS.count,
+        walkIn: daySourceCounts.WALK_IN.count,
+        staff: daySourceCounts.STAFF.count,
+        online: daySourceCounts.ONLINE.count,
+        posPaid: daySourceCounts.POS.paidCount,
+        walkInPaid: daySourceCounts.WALK_IN.paidCount,
+        staffPaid: daySourceCounts.STAFF.paidCount,
+        onlinePaid: daySourceCounts.ONLINE.paidCount,
+      },
+    },
+    salesBySource: {
+      rows: ORDER_SOURCES.map((source) => {
+        const paid = sourceMap.get(source);
+        const day = daySourceCounts[source];
+        return {
+          source,
+          label: paid.label,
+          orderCount: day.count,
+          paidCount: paid.billCount,
+          netSales: paid.netSales,
+          grossSales: paid.grossSales,
+          discounts: paid.discounts,
+          taxes: paid.taxes,
+          tips: paid.tips,
+        };
+      }),
+      total: {
+        orderCount: statusCounts.total,
+        paidCount: billCount,
+        netSales,
+        grossSales,
+        discounts: totalDiscounts,
+        taxes: totalSalesTaxes,
+        tips: totalTips,
+      },
     },
     detailedLaborSummary: {
       totalLaborCost,
