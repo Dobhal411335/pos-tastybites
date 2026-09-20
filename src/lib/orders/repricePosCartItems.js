@@ -302,8 +302,10 @@ export async function repricePosCartItems({
       }
     }
 
+    // Round price to cents; keep unit tax full-precision until the order total
+    // so we match Sales POS (sum line taxes, then round once). Rounding tax
+    // per line first can drift by 1¢ vs round(subtotal × rate).
     unitPrice = r2(unitPrice);
-    unitTax = r2(unitTax);
 
     formattedItems.push({
       menuItemId: id,
