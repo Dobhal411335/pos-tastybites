@@ -740,54 +740,6 @@ export default function SalesFloorPage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center gap-1.5 rounded-xl border border-stone-200 bg-white p-1">
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={() => router.push("/sales/walk-in")}
-                className="h-8 gap-1.5 rounded-lg border border-orange-300 bg-orange-50 px-2.5 text-[12px] font-bold text-orange-800 hover:bg-orange-100 hover:text-orange-900"
-              >
-                <ShoppingBag className="h-3.5 w-3.5" />
-                Walk-in
-                {orderAttention.walkInUnpaid > 0 ? (
-                  <span className="ml-0.5 rounded-md bg-orange-500 px-1.5 py-0.5 text-[10px] font-black text-white tabular-nums">
-                    {orderAttention.walkInUnpaid}
-                  </span>
-                ) : null}
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={() => router.push("/sales/staff")}
-                className="h-8 gap-1.5 rounded-lg border border-indigo-300 bg-indigo-50 px-2.5 text-[12px] font-bold text-indigo-800 hover:bg-indigo-100 hover:text-indigo-900"
-              >
-                <UserRound className="h-3.5 w-3.5" />
-                Staff
-                {orderAttention.staffUnpaid > 0 ? (
-                  <span className="ml-0.5 rounded-md bg-indigo-600 px-1.5 py-0.5 text-[10px] font-black text-white tabular-nums">
-                    {orderAttention.staffUnpaid}
-                  </span>
-                ) : null}
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={() => router.push("/sales/today?tab=ONLINE")}
-                className="h-8 gap-1.5 rounded-lg border border-sky-300 bg-sky-50 px-2.5 text-[12px] font-bold text-sky-800 hover:bg-sky-100 hover:text-sky-900"
-              >
-                <Globe className="h-3.5 w-3.5" />
-                Online
-                {orderAttention.onlineOpen > 0 ? (
-                  <span className="ml-0.5 rounded-md bg-sky-600 px-1.5 py-0.5 text-[10px] font-black text-white tabular-nums">
-                    {orderAttention.onlineOpen}
-                  </span>
-                ) : null}
-              </Button>
-            </div>
-
             {floorData.floors.length > 0 && (
               <Select
                 value={activeFloorId || undefined}

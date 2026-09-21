@@ -21,16 +21,19 @@ import {
   Loader2,
   LayoutGrid,
   List,
+  Columns2,
+  Columns3,
   Coffee,
   Utensils,
   UtensilsCrossed,
   Wine,
-  Beer,
   Cake,
-  IceCream,
   Pizza,
   Sandwich,
   ShoppingCart,
+  ChevronDown,
+  Check,
+  SlidersHorizontal,
 } from "lucide-react";
 import { toast } from "sonner";
 import Image from "next/image";
@@ -45,6 +48,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import PrintPreviewModal from "@/components/receipts/PrintPreviewModal";
 import TodayOrderPaymentModal from "@/components/sales/TodayOrderPaymentModal";
 import StaffOrderPartyModal from "@/components/sales/StaffOrderPartyModal";
@@ -339,13 +353,85 @@ function OrderPageContent() {
   const [isReleasingTable, setIsReleasingTable] = useState(false);
   const sessionFloorIdRef = useRef(null);
 
-  // View States
-  const [viewMode, setViewMode] = useState("grid"); // 'grid' | 'list'
+  // View / layout states (persisted for staff preference)
+  const [panelLayout, setPanelLayout] = useState("2"); // '2' | '3'
+  const [itemStyle, setItemStyle] = useState("list"); // 'tiles' | 'list'
+  const [gridCols, setGridCols] = useState(2); // 2 | 3 | 4
+  const [viewMode, setViewMode] = useState("list"); // 'grid' (heads) | 'list' (categories)
   const [heads, setHeads] = useState([{ _id: "all", name: "All" }]);
   const [productHeads, setProductHeads] = useState([]);
   const [activeHead, setActiveHead] = useState("All");
   const [offers, setOffers] = useState([]);
   const [isClearOrderModalOpen, setIsClearOrderModalOpen] = useState(false);
+  const layoutPrefsLoaded = useRef(false);
+
+  const useHeadsNav = true; // heads always available in 2 + 3 panel
+  const useCategoryNav = panelLayout === "2"; // category dropdown in 2-panel search row
+  // 3-panel always uses list product cards; category left + heads under search
+  const effectiveItemStyle = panelLayout === "3" ? "list" : itemStyle;
+  const useCategoryFilter = true; // both panels filter by category
+  const useHeadsFilter = true; // both panels filter by head
+
+  const TILE_PALETTE = [
+    {
+      bg: "bg-emerald-50 hover:bg-emerald-100 border-emerald-200",
+      code: "bg-emerald-600 text-white",
+    },
+    {
+      bg: "bg-sky-50 hover:bg-sky-100 border-sky-200",
+      code: "bg-sky-600 text-white",
+    },
+    {
+      bg: "bg-amber-50 hover:bg-amber-100 border-amber-200",
+      code: "bg-amber-700 text-white",
+    },
+    {
+      bg: "bg-indigo-50 hover:bg-indigo-100 border-indigo-200",
+      code: "bg-indigo-600 text-white",
+    },
+    {
+      bg: "bg-rose-50 hover:bg-rose-100 border-rose-200",
+      code: "bg-rose-600 text-white",
+    },
+    {
+      bg: "bg-teal-50 hover:bg-teal-100 border-teal-200",
+      code: "bg-teal-700 text-white",
+    },
+    {
+      bg: "bg-orange-50 hover:bg-orange-100 border-orange-200",
+      code: "bg-orange-600 text-white",
+    },
+    {
+      bg: "bg-violet-50 hover:bg-violet-100 border-violet-200",
+      code: "bg-violet-600 text-white",
+    },
+    {
+      bg: "bg-cyan-50 hover:bg-cyan-100 border-cyan-200",
+      code: "bg-cyan-700 text-white",
+    },
+    {
+      bg: "bg-fuchsia-50 hover:bg-fuchsia-100 border-fuchsia-200",
+      code: "bg-fuchsia-600 text-white",
+    },
+  ];
+
+  const getTileTheme = (key) => {
+    const str = String(key || "");
+    let hash = 0;
+    for (let i = 0; i < str.length; i += 1) {
+      hash = (hash * 31 + str.charCodeAt(i)) >>> 0;
+    }
+    return TILE_PALETTE[hash % TILE_PALETTE.length];
+  };
+
+  const productGridClass =
+    effectiveItemStyle === "tiles"
+      ? gridCols === 4
+        ? "grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 p-3 gap-2.5"
+        : gridCols === 3
+          ? "grid grid-cols-2 md:grid-cols-3 p-3 gap-2.5"
+          : "grid grid-cols-2 p-3 gap-2.5"
+      : "grid grid-cols-1 xl:grid-cols-2 p-4 gap-3";
 
   const headIconMap = {
     Breakfast: Coffee,
@@ -366,6 +452,62 @@ function OrderPageContent() {
       return <Tag className="w-6 h-6" strokeWidth={1.5} />;
     const Icon = headIconMap[headName] || Utensils;
     return <Icon className="w-6 h-6" strokeWidth={1.5} />;
+  };
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = window.localStorage.getItem("sales-order-layout");
+      if (raw) {
+        const prefs = JSON.parse(raw);
+        if (prefs.panelLayout === "2" || prefs.panelLayout === "3") {
+          setPanelLayout(prefs.panelLayout);
+        }
+        if (prefs.itemStyle === "tiles" || prefs.itemStyle === "list") {
+          setItemStyle(prefs.itemStyle);
+        }
+        if ([2, 3, 4].includes(Number(prefs.gridCols))) {
+          setGridCols(Number(prefs.gridCols));
+        }
+        if (prefs.viewMode === "grid" || prefs.viewMode === "list") {
+          setViewMode(prefs.viewMode);
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+    layoutPrefsLoaded.current = true;
+  }, []);
+
+  useEffect(() => {
+    if (!layoutPrefsLoaded.current || typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(
+        "sales-order-layout",
+        JSON.stringify({
+          panelLayout,
+          itemStyle,
+          gridCols,
+          viewMode,
+        }),
+      );
+    } catch {
+      /* ignore */
+    }
+  }, [panelLayout, itemStyle, gridCols, viewMode]);
+
+  const setPanelLayoutMode = (mode) => {
+    setPanelLayout(mode);
+    if (mode === "3") {
+      setItemStyle("list");
+      setViewMode("list");
+    }
+  };
+
+  const setItemStyleMode = (style) => {
+    setItemStyle(style);
+    if (style === "tiles") setViewMode("grid");
+    if (style === "list" && panelLayout === "2") setViewMode("list");
   };
 
   const isOfferActive = (offer) => {
@@ -730,7 +872,7 @@ function OrderPageContent() {
   const filteredProducts = menuItems.filter((p) => {
     if (activeHead === "Offer") return false;
     let matchesHead = true;
-    if (viewMode === "grid" && activeHead !== "All") {
+    if (useHeadsFilter && activeHead !== "All") {
       const ph = productHeads.find((h) => h.head?.name === activeHead);
       if (ph) {
         matchesHead = ph.categories.some((c) => c.products.includes(p._id));
@@ -739,7 +881,7 @@ function OrderPageContent() {
       }
     }
     const matchesCat =
-      viewMode === "list"
+      useCategoryFilter
         ? activeCategory === "All" ||
           (p.category && p.category.name === activeCategory)
         : true;
@@ -1488,7 +1630,7 @@ function OrderPageContent() {
         leaveAfterDirectPay();
         return;
       }
-      goToFloor();
+      goToFloor();    
       return;
     }
     try {
@@ -1532,6 +1674,391 @@ function OrderPageContent() {
     setIsClearOrderModalOpen(false);
   };
 
+  const menuPanelWidth =
+    panelLayout === "3" ? "flex-1 min-w-0" : "w-[65%]";
+  const cartPanelWidth =
+    panelLayout === "3" ? "w-[32%] min-w-[280px] max-w-[420px]" : "w-[35%]";
+
+  const layoutSummaryLabel = (() => {
+    const panels = panelLayout === "3" ? "3 panels" : "2 panels";
+    if (panelLayout === "3" || itemStyle === "list") return `${panels} · List`;
+    return `${panels} · Tiles ${gridCols}`;
+  })();
+
+  const renderLayoutControls = () => (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-primary px-2.5 py-2 text-[13px] font-bold text-white shadow-sm hover:bg-primary/90"
+          title="Layout options"
+        >
+          <SlidersHorizontal className="h-3.5 w-3.5" />
+          Layout
+          <span className="hidden sm:inline font-semibold text-white">
+            · {layoutSummaryLabel}
+          </span>
+          <ChevronDown className="h-3.5 w-3.5 text-white" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-52 bg-white">
+        <DropdownMenuLabel className="text-[10px] uppercas tracking-wider text-zinc-500">
+          Screens
+        </DropdownMenuLabel>
+        <DropdownMenuItem
+          onClick={() => setPanelLayoutMode("2")}
+          className="font-semibold"
+        >
+          <Columns2 className="h-4 w-4" />
+          2 panels
+          {panelLayout === "2" ? (
+            <Check className="ml-auto h-4 w-4 text-orange-600" />
+          ) : null}
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onClick={() => setPanelLayoutMode("3")}
+          className="font-semibold"
+        >
+          <Columns3 className="h-4 w-4" />
+          3 panels
+          {panelLayout === "3" ? (
+            <Check className="ml-auto h-4 w-4 text-orange-600" />
+          ) : null}
+        </DropdownMenuItem>
+
+        {panelLayout === "2" ? (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel className="text-[10px] uppercase tracking-wider text-zinc-500">
+              Product view
+            </DropdownMenuLabel>
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger className="font-semibold">
+                <List className="h-4 w-4" />
+                List
+                {itemStyle === "tiles" ? (
+                  <span className="ml-auto mr-1 text-[10px] font-bold text-orange-600">
+                    {gridCols}
+                  </span>
+                ) : itemStyle === "list" ? (
+                  <Check className="ml-auto mr-1 h-4 w-4 text-orange-600" />
+                ) : null}
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent className="w-40 bg-white">
+                <DropdownMenuItem
+                  onClick={() => setItemStyleMode("list")}
+                  className="font-semibold"
+                >
+                  Cards
+                  {itemStyle === "list" ? (
+                    <Check className="ml-auto h-4 w-4 text-black" />
+                  ) : null}
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                {[2, 3, 4].map((n) => (
+                  <DropdownMenuItem
+                    key={n}
+                    onClick={() => {
+                      setItemStyleMode("tiles");
+                      setGridCols(n);
+                    }}
+                    className="font-semibold"
+                  >
+                    {n} columns
+                    {itemStyle === "tiles" && gridCols === n ? (
+                      <Check className="ml-auto h-4 w-4 text-black" />
+                    ) : null}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+          </>
+        ) : null}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+
+  const renderCategoriesSidebar = () => (
+    <div className="w-[200px] shrink-0 flex flex-col border-r border-zinc-200 bg-white">
+      <div className="px-3 py-3 border-b border-zinc-200 shrink-0">
+        <p className="text-[10px] font-black uppercase tracking-wider text-zinc-500">
+          Categories
+        </p>
+      </div>
+      <div className="flex-1 overflow-y-auto custom-scrollbar py-1">
+        {categories.map((cat) => {
+          const isActive = activeCategory === cat;
+          return (
+            <button
+              key={cat}
+              type="button"
+              onClick={() => setActiveCategory(cat)}
+              className={`w-full px-3 py-2.5 text-left border-b border-zinc-200 gap-2 items-center transition-colors border-l-4 ${
+                isActive
+                  ? "border-l-orange-500 bg-orange-50 text-orange-800"
+                  : "border-l-transparent text-zinc-700 hover:bg-zinc-50"
+              }`}
+            >
+              <span className="text-xs font-bold leading-tight line-clamp-2">
+                {cat}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+
+  const renderHeadsChips = () => (
+    <div className="flex items-center gap-2 px-3 py-2.5 bg-white border-b border-zinc-200 shrink-0 overflow-x-auto custom-scrollbar">
+      {heads.map((head) => {
+        const isActive = activeHead === head.name;
+        const imageUrl = head.image?.url;
+        return (
+          <button
+            key={head._id}
+            type="button"
+            onClick={() => setActiveHead(head.name)}
+            className={`flex flex-col items-center justify-center min-w-[72px] rounded-lg transition-all border px-1 py-1.5 ${
+              isActive
+                ? "border-orange-500 shadow-sm ring-2 ring-orange-500 bg-orange-50 text-orange-700"
+                : "border-zinc-200 bg-zinc-100 text-zinc-700 hover:bg-zinc-200 hover:border-zinc-300"
+            }`}
+          >
+            {imageUrl ? (
+              <span className="relative block w-[64px] h-[40px] rounded-md overflow-hidden bg-zinc-200 shrink-0">
+                <Image
+                  src={imageUrl}
+                  alt=""
+                  fill
+                  sizes="64px"
+                  className="object-cover"
+                />
+              </span>
+            ) : (
+              <span className="flex items-center justify-center w-[64px] h-[40px] shrink-0">
+                {getHeadIcon(head.name)}
+              </span>
+            )}
+            <span className="mt-1 px-0.5 text-[10px] font-black uppercase tracking-wider text-center leading-tight">
+              {head.name}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+
+  const renderOfferCard = (offer) => {
+    const basePrice = Number(offer.price) || 0;
+    const taxAmount = calculateOfferTax(offer, basePrice);
+    const totalPrice =
+      Number(offer.totalPrice) > 0
+        ? Number(offer.totalPrice)
+        : basePrice + taxAmount;
+    const hasOptions = offerNeedsOptions(offer);
+
+    if (effectiveItemStyle === "tiles") {
+      const theme = getTileTheme(offer._id || offer.name);
+      return (
+        <button
+          key={offer._id}
+          type="button"
+          onClick={() => addOfferFromList(offer)}
+          className={`relative flex flex-col items-stretch justify-between min-h-[128px] rounded-xl border-2 px-3 py-3 text-left shadow-sm transition-colors ${theme.bg}`}
+        >
+          <span
+            className={`absolute top-2 left-2 text-[10px] font-black uppercase tracking-wide rounded px-1.5 py-0.5 ${theme.code}`}
+          >
+            Offer
+          </span>
+          <span className="mt-6 text-[15px] font-extrabold text-zinc-900 text-center leading-snug line-clamp-2">
+            {offer.name}
+          </span>
+          <div className="mt-2 flex flex-col items-center gap-1.5">
+            <span className="text-lg font-black tabular-nums text-orange-600">
+              ${totalPrice.toFixed(2)}
+            </span>
+            {hasOptions ? (
+              <span className="rounded-md bg-white/90 border border-zinc-200 px-2 py-0.5 text-[11px] font-bold text-zinc-700">
+                Options
+              </span>
+            ) : (
+              <span className="rounded-md bg-orange-500 px-2 py-0.5 text-[11px] font-bold text-white">
+                Add
+              </span>
+            )}
+          </div>
+        </button>
+      );
+    }
+
+    return (
+      <div
+        key={offer._id}
+        className="flex flex-col sm:flex-row items-stretch bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden transition-all hover:shadow-md min-h-[76px]"
+      >
+        <div className="flex-1 flex flex-col justify-center px-4 py-3 border-b sm:border-b-0 sm:border-r border-zinc-200 min-w-0">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-[10px] font-bold text-violet-700 bg-violet-50 border border-violet-100 rounded px-1.5 py-0.5 shrink-0">
+              OFFER
+            </span>
+            <span className="font-bold text-zinc-900 text-xs md:text-sm leading-tight">
+              {offer.name}
+            </span>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="text-xs font-semibold text-zinc-500">
+              {OFFER_CATEGORY}
+            </span>
+          </div>
+        </div>
+        <div className="flex items-center">
+          <div className="w-20 flex flex-col items-center justify-center px-3 py-2 border-r border-zinc-200 h-full">
+            <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+              Price
+            </span>
+            <span className="text-sm font-black text-zinc-900">
+              ${totalPrice.toFixed(2)}
+            </span>
+          </div>
+        </div>
+        <div className="w-full sm:w-32 shrink-0 p-2 flex items-center justify-center">
+          <Button
+            className="w-full h-full min-h-[44px] bg-orange-500 hover:bg-orange-600 text-white font-bold text-sm rounded-lg shadow-sm transition-colors"
+            onClick={() => addOfferFromList(offer)}
+          >
+            {hasOptions ? "Options" : "Add"}
+          </Button>
+        </div>
+      </div>
+    );
+  };
+
+  const renderProductCard = (product) => {
+    const hasOptions = productNeedsOptions(product);
+    const isAvailable = product.inStock !== false;
+    const basePrice =
+      product.variants && product.variants.length > 0
+        ? product.variants[0].price
+        : product.price || 0;
+    const onAdd = () =>
+      hasOptions ? handleOpenOptions(product) : addToCart(product);
+
+    if (effectiveItemStyle === "tiles") {
+      const theme = getTileTheme(product._id || product.name);
+      return (
+        <button
+          key={product._id}
+          type="button"
+          disabled={!isAvailable}
+          onClick={onAdd}
+          className={`relative flex flex-col items-stretch justify-between min-h-[128px] rounded-xl border-2 px-3 py-3 text-left shadow-sm transition-colors disabled:opacity-45 disabled:cursor-not-allowed ${theme.bg}`}
+        >
+          {product.productCode ? (
+            <span
+              className={`absolute top-2 left-2 text-[10px] font-black rounded px-1.5 py-0.5 ${theme.code}`}
+            >
+              {product.productCode}
+            </span>
+          ) : null}
+          {!isAvailable ? (
+            <span className="absolute top-2 right-2 text-[10px] font-black bg-red-600 text-white rounded px-1.5 py-0.5">
+              Out
+            </span>
+          ) : null}
+          <span className="mt-6 text-[15px] font-extrabold text-zinc-900 text-center leading-snug line-clamp-2">
+            {product.name}
+          </span>
+          <div className="mt-2 flex flex-col items-center gap-1.5">
+            <span className="text-lg font-black tabular-nums text-orange-600">
+              ${Number(basePrice).toFixed(2)}
+            </span>
+            {hasOptions ? (
+              <span className="rounded-md bg-white/90 border border-zinc-200 px-2 py-0.5 text-[11px] font-bold text-zinc-700">
+                Options
+              </span>
+            ) : (
+              <span className="rounded-md bg-orange-500 px-2 py-0.5 text-[11px] font-bold text-white">
+                Add
+              </span>
+            )}
+          </div>
+        </button>
+      );
+    }
+
+    return (
+      <div
+        key={product._id}
+        className="flex flex-col sm:flex-row items-stretch bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden transition-all hover:shadow-md min-h-[76px]"
+      >
+        <div className="flex-1 flex flex-col justify-center px-4 py-3 border-b sm:border-b-0 sm:border-r border-zinc-200">
+          <div className="flex items-center gap-2 mb-1">
+            {product.productCode ? (
+              <span className="text-[10px] font-bold text-black bg-orange-200 border border-orange-500 rounded px-1.5 py-0.5 shrink-0">
+                {product.productCode}
+              </span>
+            ) : null}
+            <span className="font-bold text-zinc-900 text-xs xl:text-[15px]">
+              {product.name}
+            </span>
+            {!isAvailable && (
+              <Badge className="bg-red-50 text-red-600 border border-red-200 text-[10px] font-bold uppercase rounded-md px-1.5 py-0.5 shrink-0">
+                Out of Stock
+              </Badge>
+            )}
+          </div>
+          <div className="flex items-center gap-1">
+            <span className="text-[11px] tracking-wider text-wrap font-semibold text-zinc-600">
+              {product.category?.name || "Uncategorized"}
+            </span>
+          </div>
+        </div>
+        <div className="flex items-center">
+          <div className="w-20 flex flex-col items-center justify-center px-3 py-2 border-r border-zinc-200 h-full">
+            <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+              Price
+            </span>
+            <span className="text-sm font-black text-zinc-900">
+              ${Number(basePrice).toFixed(2)}
+            </span>
+          </div>
+        </div>
+        <div className="w-full sm:w-32 shrink-0 p-2 flex items-center justify-center">
+          <Button
+            className="w-full h-full min-h-[44px] bg-orange-500 hover:bg-orange-600 text-white font-bold text-sm rounded-lg shadow-sm transition-colors disabled:bg-zinc-200 disabled:text-zinc-400"
+            disabled={!isAvailable}
+            onClick={onAdd}
+          >
+            {hasOptions ? "Options" : "Add"}
+          </Button>
+        </div>
+      </div>
+    );
+  };
+
+  const renderMenuItems = () => {
+    if (activeHead === "Offer") {
+      if (filteredOffers.length === 0) {
+        return (
+          <p className="col-span-full text-sm text-zinc-500 text-center py-10">
+            No active offers available.
+          </p>
+        );
+      }
+      return filteredOffers.map((offer) => renderOfferCard(offer));
+    }
+    if (filteredProducts.length === 0) {
+      return (
+        <p className="col-span-full text-sm text-zinc-500 text-center py-10">
+          No products found.
+        </p>
+      );
+    }
+    return filteredProducts.map((product) => renderProductCard(product));
+  };
+
   if (isLoading) {
     return (
       <div className="flex flex-col h-screen w-full items-center justify-center bg-zinc-50">
@@ -1545,126 +2072,78 @@ function OrderPageContent() {
     <div className="flex flex-col h-[calc(100vh-60px)] w-full bg-zinc-50 font-sans overflow-hidden border border-zinc-200 rounded-xl shadow-sm">
       {/* SPLIT PANELS */}
       <div className="flex-1 flex min-h-0 overflow-hidden">
-        {/* LEFT PANEL (MENU) */}
-        <div className="w-[65%] flex flex-col border-r border-zinc-200 bg-zinc-50">
-          {/* LEFT PANEL HEADER */}
-          <div className="flex items-center justify-between px-4 py-3 bg-white border-b border-zinc-200 shrink-0">
-            <div className="flex min-w-0 items-center gap-2">
-              {isWalkIn ? (
-                <button
-                  type="button"
-                  onClick={goToWalkInHub}
-                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-zinc-200 text-zinc-700 hover:bg-zinc-50"
-                  aria-label="Back to walk-in orders"
-                >
-                  <ArrowLeft className="h-4 w-4" />
-                </button>
-              ) : null}
-              {isStaffOrder ? (
-                <button
-                  type="button"
-                  onClick={goToStaffHub}
-                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-zinc-200 text-zinc-700 hover:bg-zinc-50"
-                  aria-label="Back to staff orders"
-                >
-                  <ArrowLeft className="h-4 w-4" />
-                </button>
-              ) : null}
-              <div className="min-w-0">
-                <h2 className="text-[17px] font-black text-zinc-900">
-                  Create Order
-                </h2>
-                <p className="mt-0.5 truncate text-xs font-semibold text-zinc-800">
-                  {isWalkIn
-                    ? "Walk-in Customer"
-                    : isStaffOrder
-                      ? guestName
-                        ? `Staff · ${guestName}`
-                        : "Staff Order"
-                      : isLegacyNew
-                        ? guestTable
-                          ? `${guestTable} . Takeaway`
-                          : "Takeaway"
-                        : getDisplayTableNo() || "Loading table..."}
-                </p>
+        {/* CATEGORIES SIDEBAR (3-PANEL) */}
+        {panelLayout === "3" ? renderCategoriesSidebar() : null}
+
+        {/* MENU PANEL */}
+        <div
+          className={`${menuPanelWidth} flex flex-col border-r border-zinc-200 bg-zinc-50`}
+        >
+          {/* MENU HEADER */}
+          <div className="flex flex-col gap-2 px-4 py-3 bg-white border-b border-zinc-200 shrink-0">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex min-w-0 items-center gap-2">
+                {isWalkIn ? (
+                  <button
+                    type="button"
+                    onClick={goToWalkInHub}
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-zinc-200 text-zinc-700 hover:bg-zinc-50"
+                    aria-label="Back to walk-in orders"
+                  >
+                    <ArrowLeft className="h-4 w-4" />
+                  </button>
+                ) : null}
+                {isStaffOrder ? (
+                  <button
+                    type="button"
+                    onClick={goToStaffHub}
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-zinc-200 text-zinc-700 hover:bg-zinc-50"
+                    aria-label="Back to staff orders"
+                  >
+                    <ArrowLeft className="h-4 w-4" />
+                  </button>
+                ) : null}
+                <div className="min-w-0">
+                  <h2 className="text-[17px] font-black text-zinc-900">
+                    Create Order
+                  </h2>
+                  <p className="mt-0.5 truncate text-xs font-semibold text-zinc-800">
+                    {isWalkIn
+                      ? "Walk-in Customer"
+                      : isStaffOrder
+                        ? guestName
+                          ? `Staff · ${guestName}`
+                          : "Staff Order"
+                        : isLegacyNew
+                          ? guestTable
+                            ? `${guestTable} . Takeaway`
+                            : "Takeaway"
+                          : getDisplayTableNo() || "Loading table..."}
+                  </p>
+                </div>
               </div>
-            </div>
-            <div className="flex items-center gap-1 bg-zinc-100 p-1 rounded-lg">
-              <button
-                onClick={() => setViewMode("grid")}
-                className={`p-1.5 rounded-md transition-colors ${viewMode === "grid" ? "bg-white shadow-sm text-zinc-900" : "text-zinc-500 hover:text-zinc-700"}`}
-                title="Grid View"
-              >
-                <LayoutGrid className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => setViewMode("list")}
-                className={`p-1.5 rounded-md transition-colors ${viewMode === "list" ? "bg-white shadow-sm text-zinc-900" : "text-zinc-500 hover:text-zinc-700"}`}
-                title="List View"
-              >
-                <List className="w-4 h-4" />
-              </button>
+              {renderLayoutControls()}
             </div>
           </div>
 
-          {/* Heads Grid (GRID VIEW) */}
-          {viewMode === "grid" && (
-            <div className="flex items-center gap-2 px-3 py-2.5 bg-white border-b border-zinc-200 shrink-0 overflow-x-auto custom-scrollbar">
-              {heads.map((head) => {
-                const isActive = activeHead === head.name;
-                const imageUrl = head.image?.url;
-                return (
-                <button
-                  key={head._id}
-                  onClick={() => setActiveHead(head.name)}
-                  className={`flex flex-col items-center justify-center min-w-[88px] rounded-lg transition-all border px-1 py-1.5 ${
-                    isActive
-                      ? "border-orange-500 shadow-sm ring-2 ring-orange-500 bg-orange-50 text-orange-700"
-                      : "border-zinc-200 bg-zinc-100 text-zinc-700 hover:bg-zinc-200 hover:border-zinc-300"
-                  }`}
-                >
-                  {imageUrl ? (
-                    <span className="relative block w-[76px] h-[48px] rounded-md overflow-hidden bg-zinc-200 shrink-0">
-                      <Image
-                        src={imageUrl}
-                        alt=""
-                        fill
-                        sizes="76px"
-                        className="object-cover"
-                      />
-                    </span>
-                  ) : (
-                    <span className="flex items-center justify-center w-[76px] h-[48px] shrink-0">
-                      {getHeadIcon(head.name)}
-                    </span>
-                  )}
-                  <span className="mt-1 px-0.5 text-[10px] font-black uppercase tracking-wider text-center leading-tight">
-                    {head.name}
-                  </span>
-                </button>
-                );
-              })}
+          {/* Search (+ category dropdown in 2-PANEL) */}
+          <div className="flex items-center gap-2 px-3 py-2.5 bg-white border-b border-zinc-200 shrink-0">
+            <div className="relative w-full min-w-0">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
+              <Input
+                placeholder="Search menu items..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9 pr-3 h-10 bg-zinc-50 border-zinc-200 rounded-lg text-sm font-semibold focus-visible:ring-blue-500"
+              />
             </div>
-          )}
-
-          {/* Search & Category Tabs (LIST VIEW) */}
-          {viewMode === "list" && (
-            <div className="flex items-center gap-2 px-4 py-4 bg-white border-b border-zinc-200 shrink-0">
-              <div className="relative w-full">
-                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
-                <Input
-                  placeholder="Search menu items..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-9 pr-10 h-11 bg-zinc-50 border-zinc-200 rounded-lg text-sm font-semibold focus-visible:ring-blue-500"
-                />
-              </div>
-              <div className="w-80">
+            {useCategoryNav ? (
+              <div className="w-56 shrink-0">
                 <Select
                   value={activeCategory}
                   onValueChange={setActiveCategory}
                 >
-                  <SelectTrigger className="w-full h-11 bg-white border-zinc-200 rounded-lg font-bold text-zinc-900 focus:ring-blue-500">
+                  <SelectTrigger className="w-full h-10 bg-white border-zinc-200 rounded-lg font-bold text-zinc-900 focus:ring-blue-500">
                     <SelectValue placeholder="Select a category" />
                   </SelectTrigger>
                   <SelectContent>
@@ -1680,144 +2159,19 @@ function OrderPageContent() {
                   </SelectContent>
                 </Select>
               </div>
-            </div>
-          )}
+            ) : null}
+          </div>
+
+          {/* Heads under search (2 + 3 panel) — images shown by default when available */}
+          {useHeadsNav ? renderHeadsChips() : null}
 
           <div className="flex-1 bg-zinc-50/50 overflow-y-auto custom-scrollbar">
-            <div className="grid grid-cols-2 p-4 gap-3">
-              {activeHead === "Offer" ? (
-                filteredOffers.length === 0 ? (
-                  <p className="text-sm text-zinc-500 text-center py-10">
-                    No active offers available.
-                  </p>
-                ) : (
-                  filteredOffers.map((offer) => {
-                    const basePrice = Number(offer.price) || 0;
-                    const taxAmount = calculateOfferTax(offer, basePrice);
-                    const totalPrice =
-                      Number(offer.totalPrice) > 0
-                        ? Number(offer.totalPrice)
-                        : basePrice + taxAmount;
-                    const hasOptions = offerNeedsOptions(offer);
-
-                    return (
-                      <div
-                        key={offer._id}
-                        className="flex flex-col sm:flex-row items-stretch bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden transition-all hover:shadow-md min-h-[76px]"
-                      >
-                        <div className="flex-1 flex flex-col justify-center px-4 py-3 border-b sm:border-b-0 sm:border-r border-zinc-200 min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="text-[10px] font-bold text-violet-700 bg-violet-50 border border-violet-100 rounded px-1.5 py-0.5 shrink-0">
-                              OFFER
-                            </span>
-                            <span className="font-bold text-zinc-900 text-xs md:text-sm leading-tight">
-                              {offer.name}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-3">
-                            <span className="text-xs font-semibold text-zinc-500">
-                              {OFFER_CATEGORY}
-                            </span>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center">
-                          <div className="w-20 flex flex-col items-center justify-center px-3 py-2 border-r border-zinc-200 h-full">
-                            <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
-                              Price
-                            </span>
-                            <span className="text-sm font-black text-zinc-900">
-                              ${totalPrice.toFixed(2)}
-                            </span>
-                          </div>
-                        </div>
-
-                        <div className="w-full sm:w-32 shrink-0 p-2 flex items-center justify-center">
-                          <Button
-                            className="w-full h-full min-h-[44px] bg-orange-500 hover:bg-orange-600 text-white font-bold text-sm rounded-lg shadow-sm transition-colors"
-                            onClick={() => addOfferFromList(offer)}
-                          >
-                            {hasOptions ? "Options" : "Add"}
-                          </Button>
-                        </div>
-                      </div>
-                    );
-                  })
-                )
-              ) : (
-                filteredProducts.map((product) => {
-                const hasOptions = productNeedsOptions(product);
-                const isAvailable = product.inStock !== false;
-                const basePrice =
-                  product.variants && product.variants.length > 0
-                    ? product.variants[0].price
-                    : product.price || 0;
-                const taxAmount = calculateItemTax(product, basePrice);
-
-                return (
-                  <div
-                    key={product._id}
-                    className="flex flex-col sm:flex-row items-stretch bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden transition-all hover:shadow-md min-h-[76px]"
-                  >
-                    {/* Food Item Info */}
-                    <div className="flex-1 flex flex-col justify-center px-4 py-3 border-b sm:border-b-0 sm:border-r border-zinc-200">
-                      <div className="flex items-center gap-2 mb-1">
-                        {product.productCode ? (
-                          <span className="text-[10px] font-bold text-black bg-orange-200 border border-orange-500 rounded px-1.5 py-0.5 shrink-0">
-                            {product.productCode}
-                          </span>
-                        ) : null}
-                        <span className="font-bold text-zinc-900 text-xs xl:text-[15px]">
-                          {product.name}
-                        </span>
-                        {!isAvailable && (
-                          <Badge className="bg-red-50 text-red-600 border border-red-200 text-[10px] font-bold uppercase rounded-md px-1.5 py-0.5 shrink-0">
-                            Out of Stock
-                          </Badge>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <span className="text-[11px] tracking-wider text-wrap font-semibold text-zinc-600">
-                          {product.category?.name || "Uncategorized"}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center">
-                      <div className="w-20 flex flex-col items-center justify-center px-3 py-2 border-r border-zinc-200 h-full">
-                        <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
-                          Price
-                        </span>
-                        <span className="text-sm font-black text-zinc-900">
-                          ${basePrice.toFixed(2)}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Add To Cart Button */}
-                    <div className="w-full sm:w-32 shrink-0 p-2 flex items-center justify-center">
-                      <Button
-                        className="w-full h-full min-h-[44px] bg-orange-500 hover:bg-orange-600 text-white font-bold text-sm rounded-lg shadow-sm transition-colors disabled:bg-zinc-200 disabled:text-zinc-400"
-                        disabled={!isAvailable}
-                        onClick={() =>
-                          hasOptions
-                            ? handleOpenOptions(product)
-                            : addToCart(product)
-                        }
-                      >
-                        {hasOptions ? "Options" : "Add"}
-                      </Button>
-                    </div>
-                  </div>
-                );
-              })
-              )}
-            </div>
+            <div className={productGridClass}>{renderMenuItems()}</div>
           </div>
         </div>
 
         {/* RIGHT PANEL (LIVE CART) */}
-        <div className="w-[35%] flex flex-col bg-white">
+        <div className={`${cartPanelWidth} flex flex-col bg-white`}>
           <div className="p-4 border-b border-zinc-200 bg-white shrink-0 flex items-center justify-between">
             <div className="flex items-center gap-2 pb-px">
               <div className="relative">
