@@ -180,7 +180,8 @@ export function getOrderLocationLabel(order) {
 export function getOrderPartyLabel(order) {
   const party = (order?.partyName || order?.guestName || "").trim();
   if (!party) return null;
-  if (order?.source === "WALK_IN" && party === "Walk-in") return null;
-  if (order?.source === "STAFF" && party === getOrderLocationLabel(order)) return null;
+  // Hide only generic placeholders — keep real walk-in / staff names.
+  if (order?.source === "WALK_IN" && /^walk[- ]?in$/i.test(party)) return null;
+  if (order?.source === "STAFF" && /^staff$/i.test(party)) return null;
   return party;
 }

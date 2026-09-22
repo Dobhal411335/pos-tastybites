@@ -15,7 +15,9 @@ export default function UsersModuleLayout({ children }) {
       items: [
         { label: "PopUp Banner", href: "/admin/web/popup-banner" },
         { label: "Manage Banner", href: "/admin/web/manage-banners" },
-        { label: "Offer Details", href: "/admin/web/offer-details" },
+        { label: "Gallery Section", href: "/admin/web/gallery-section" },
+        { label: "Customer Reviews", href: "/admin/web/customer-reviews" },
+        // { label: "Offer Details", href: "/admin/web/offer-details" },
         { label: "Navbar Section", href: "/admin/web/navbar-section" },
         { label: "Create WebPages", href: "/admin/web/create-webpages" },
         { label: "Manage WebPages", href: "/admin/web/manage-webpages" },

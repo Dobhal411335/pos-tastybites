@@ -22,10 +22,7 @@ import { toast } from "sonner";
 import { useSocket } from "@/components/providers/SocketProvider";
 import TodayOrderPaymentModal from "@/components/sales/TodayOrderPaymentModal";
 import PrintPreviewModal from "@/components/receipts/PrintPreviewModal";
-import {
-  getOrderPartyLabel,
-  getOrderTypeBadgeClass,
-} from "@/utils/orderDisplay";
+import { getOrderTypeBadgeClass } from "@/utils/orderDisplay";
 import { cn } from "@/lib/utils";
 
 const OPEN_STATUSES = new Set(["PENDING", "CONFIRMED"]);
@@ -51,6 +48,11 @@ function getItemCount(order) {
     (sum, item) => sum + (Number(item.quantity) || 0),
     0,
   );
+}
+
+/** Staff member this order is for (party/guest name set at create). */
+function getStaffForName(order) {
+  return (order?.partyName || order?.guestName || "").trim() || "Staff";
 }
 
 function formatTime(value) {
@@ -512,7 +514,7 @@ export default function StaffOrderHubPage() {
               {filtered.map((order) => {
                 const open = isOrderOpen(order);
                 const paid = isOrderPaid(order);
-                const party = getOrderPartyLabel(order) || "Staff";
+                const staffFor = getStaffForName(order);
                 const total = getOrderGrandTotal(order);
                 const items = getItemCount(order);
                 const statusLabel = paid
@@ -552,7 +554,7 @@ export default function StaffOrderHubPage() {
                         </div>
                         <div className="flex items-center gap-1.5 text-sm font-bold text-zinc-800">
                           <User className="h-3.5 w-3.5 text-zinc-400" />
-                          <span className="truncate">{party}</span>
+                          <span className="truncate">{staffFor}</span>
                         </div>
                       </div>
                       <div className="text-right">

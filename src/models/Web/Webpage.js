@@ -51,6 +51,8 @@ const TeamCardSchema = new Schema(
     image: { type: ImageSchema, default: () => ({}) },
     name: { type: String, default: "" },
     designation: { type: String, default: "" },
+    qualification: { type: String, default: "" },
+    specialization: { type: String, default: "" },
     phone: { type: String, default: "" },
     facebook: { type: String, default: "" },
     instagram: { type: String, default: "" },
@@ -99,44 +101,104 @@ const SearchLocationSchema = new Schema(
   {
     locationName: { type: String, default: "" },
     count: { type: String, default: "" },
+    url: { type: String, default: "" },
+  },
+  { _id: false }
+);
+
+const AdvertisementSchema = new Schema(
+  {
+    image: { type: ImageSchema, default: () => ({}) },
+    url: { type: String, default: "" },
+  },
+  { _id: false }
+);
+
+const Design9CardSchema = new Schema(
+  {
+    heading: { type: String, default: "" },
+    description: { type: String, default: "" },
+    images: { type: [ImageSchema], default: [] },
   },
   { _id: false }
 );
 
 const WebpageSchema = new Schema(
   {
-    restaurant: { type: Schema.Types.ObjectId, ref: 'Restaurant', required: true },
+    restaurant: {
+      type: Schema.Types.ObjectId,
+      ref: "Restaurant",
+      required: true,
+    },
     title: { type: String, required: true, trim: true },
-    slug: { type: String, required: true, unique: true, trim: true, lowercase: true },
+    slug: {
+      type: String,
+      required: true,
+      unique: true,
+      trim: true,
+      lowercase: true,
+    },
     active: { type: Boolean, default: true },
+    titleLine: { type: String, default: "" },
+    keywords: { type: [String], default: [] },
     templateType: {
       type: String,
-      enum: ["design1", "design2", "design3", "design4", "design5", "design6", "design7"],
+      enum: [
+        "design1",
+        "design2",
+        "design3",
+        "design4",
+        "design5",
+        "design6",
+        "design7",
+        "design8",
+        "design9",
+      ],
       default: "design1",
     },
     firstTitle: { type: String, default: "" },
     imageFirst: { type: ImageSchema, default: () => ({}) },
+    imageFirstMobile: { type: ImageSchema, default: () => ({}) },
     bannerImage: { type: ImageSchema, default: () => ({}) },
+    bannerImageMobile: { type: ImageSchema, default: () => ({}) },
     secondTitle: { type: String, default: "" },
     createTags: { type: [String], default: [""] },
     postedBy: {
       admin: { type: Boolean, default: false },
       user: { type: Boolean, default: false },
     },
-    highlights: { type: [HighlightSchema], default: [{ title: "", point: "" }] },
+    highlights: {
+      type: [HighlightSchema],
+      default: [{ title: "", point: "" }],
+    },
     paragraphSections: {
       type: [ParagraphSectionSchema],
-      default: [{ title: "", description: "", firstImage: {}, secondImage: {}, bulletPoints: [""] }],
+      default: [
+        {
+          title: "",
+          description: "",
+          firstImage: {},
+          secondImage: {},
+          bulletPoints: [""],
+        },
+      ],
     },
     paragraphFirstImage: { type: ImageSchema, default: () => ({}) },
     paragraphSecondImage: { type: ImageSchema, default: () => ({}) },
     tableTitle: { type: String, default: "" },
-    tableRows: { type: [TableRowSchema], default: [{ column1: "", column2: "" }] },
+    tableRows: {
+      type: [TableRowSchema],
+      default: [{ column1: "", column2: "" }],
+    },
     blockquoteMainTitle: { type: String, default: "" },
     blockquoteLeftTitle: { type: String, default: "" },
     blockquoteDescription: { type: String, default: "" },
     blockquoteTags: { type: [String], default: [""] },
-    accordionTags: { type: [AccordionTagSchema], default: [{ left: "", right: "" }] },
+    accordionTags: {
+      type: [AccordionTagSchema],
+      default: [{ left: "", right: "" }],
+    },
+    advertisements: { type: [AdvertisementSchema], default: [] },
     advertisementImage: { type: ImageSchema, default: () => ({}) },
     advertisementUrl: { type: String, default: "" },
     sideThumbImage: { type: ImageSchema, default: () => ({}) },
@@ -166,8 +228,23 @@ const WebpageSchema = new Schema(
     design7Chip: { type: String, default: "" },
     design7ExploreLink: { type: String, default: "" },
     design7MainHeading: { type: String, default: "" },
+    design8Heading: { type: String, default: "" },
+    design8Description: { type: String, default: "" },
+    design8HotelAmenities: { type: [String], default: [] },
+    design8RoomDescription: { type: String, default: "" },
+    design8RoomAmenities: { type: [String], default: [] },
+    design9MiniHeading: { type: String, default: "" },
+    design9MainHeading: { type: String, default: "" },
+    design9Description: { type: String, default: "" },
+    design9Cards: { type: [Design9CardSchema], default: [] },
   },
   { timestamps: true }
 );
 
-export default models.Webpage || model("Webpage", WebpageSchema);
+export default (() => {
+  // Next.js HMR can keep a stale compiled schema; always rebuild in this module.
+  if (models.Webpage) {
+    delete models.Webpage;
+  }
+  return model("Webpage", WebpageSchema);
+})();

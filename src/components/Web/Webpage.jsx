@@ -91,7 +91,7 @@ const AuthorCard = ({ data }) => {
         {authorImage ? (
           <img src={authorImage} alt={authorName} className="h-12 w-12 rounded-full object-cover" />
         ) : (
-          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#ebe7ff] text-base font-bold text-[#4f46e5]">
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#ebe7ff] text-base font-bold text-[#585858]">
             {authorName.charAt(0)}
           </div>
         )}
@@ -182,125 +182,6 @@ const ShareCard = ({ slug }) => {
         </button>
       </div>
     </div>
-  );
-};
-
-const PopularDestinations = () => {
-  const [hotels, setHotels] = useState([]);
-  const [hotelCategories, setHotelCategories] = useState([]);
-  const [activeCategory, setActiveCategory] = useState("All");
-  const [hotelsLoading, setHotelsLoading] = useState(true);
-
-  useEffect(() => {
-    const fetchHotels = async () => {
-      setHotelsLoading(true);
-      try {
-        const [hotelsRes, catsRes] = await Promise.all([
-          fetch("/api/property/createHotel"),
-          fetch("/api/property/hotelCategory"),
-        ]);
-        const hotelsData = await hotelsRes.json();
-        const catsData = await catsRes.json();
-        setHotels(Array.isArray(hotelsData) ? hotelsData : []);
-        setHotelCategories(Array.isArray(catsData) ? catsData : []);
-      } catch {
-        setHotels([]);
-        setHotelCategories([]);
-      } finally {
-        setHotelsLoading(false);
-      }
-    };
-
-    // fetchHotels();
-  }, []);
-
-  const filteredHotels =
-    activeCategory === "All" ? hotels : hotels.filter((hotel) => hotel.category === activeCategory);
-
-  return (
-    <>
-      {(filteredHotels.length > 0 || hotelsLoading) && (
-        <section className="w-full border-t border-[#ece7df] bg-white px-2 py-10 md:px-20">
-          <h2 className="font-recoleta text-2xl font-bold text-gray-900 md:text-3xl">
-            Your style. These stays. A perfect match.
-          </h2>
-          <p className="mb-5 mt-1 font-sans text-sm text-gray-500">
-            Handpicked Popular Destination curated just for you
-          </p>
-
-          <div className="mb-6 flex gap-5 overflow-x-auto border-b border-gray-200">
-            <button
-              onClick={() => setActiveCategory("All")}
-              className={`whitespace-nowrap border-b-2 pb-2.5 px-1 text-sm font-medium transition-colors ${activeCategory === "All"
-                ? "border-gray-900 text-gray-900"
-                : "border-transparent text-gray-500 hover:text-gray-700"
-                }`}
-            >
-              All
-            </button>
-            {hotelCategories.map((cat, key) => (
-              <button
-                key={cat._id || key}
-                onClick={() => setActiveCategory(cat.name)}
-                className={`whitespace-nowrap border-b-2 pb-2.5 px-1 text-sm font-medium transition-colors ${activeCategory === cat.name
-                  ? "border-gray-900 text-gray-900"
-                  : "border-transparent text-gray-500 hover:text-gray-700"
-                  }`}
-              >
-                {cat.name}
-              </button>
-            ))}
-          </div>
-
-          {hotelsLoading ? (
-            <div className="grid grid-cols-2 gap-5 md:grid-cols-4">
-              {Array.from({ length: 4 }).map((_, index) => (
-                <div key={index} className="animate-pulse">
-                  <div className="mb-3 h-48 w-full rounded-xl bg-gray-200" />
-                  <div className="mb-2 h-4 w-3/4 rounded bg-gray-200" />
-                  <div className="h-3 w-1/2 rounded bg-gray-200" />
-                </div>
-              ))}
-            </div>
-          ) : filteredHotels.length > 0 ? (
-            <Carousel className="w-full" opts={{ align: "start" }}>
-              <CarouselContent className="-ml-3">
-                {filteredHotels.map((hotel) => (
-                  <CarouselItem key={hotel._id} className="pl-3 md:basis-1/4">
-                    <Link
-                      href={hotel.imageClickLink || "#"}
-                      target={hotel.imageClickLink ? "_blank" : "_self"}
-                      rel="noopener noreferrer"
-                      className="group block cursor-pointer"
-                    >
-                      <div className="relative mb-3 md:h-60 h-80 w-full overflow-hidden rounded-xl">
-                        {hotel.image?.url ? (
-                          <img
-                            src={hotel.image.url}
-                            alt={hotel.name}
-                            className="h-full w-full object-contain md:object-contain transition-transform duration-500 group-hover:scale-110"
-                          />
-                        ) : (
-                          <div className="flex h-full w-full items-center justify-center text-sm text-gray-400">
-                            No Image
-                          </div>
-                        )}
-                      </div>
-                      <h3 className="text-sm font-bold text-gray-900 md:text-base">{hotel.name}</h3>
-                      <p className="text-xs text-gray-500 md:text-sm">{hotel.location}</p>
-                    </Link>
-                  </CarouselItem>
-                ))}
-              </CarouselContent>
-              <CarouselPrevious className="!-left-3 !top-1/3 z-10 !-translate-y-1/2 rounded-full bg-white/90 shadow-md hover:bg-white" />
-              <CarouselNext className="!-right-3 !top-1/3 z-10 !-translate-y-1/2 rounded-full bg-white/90 shadow-md hover:bg-white" />
-            </Carousel>
-          ) : (
-            <p className="py-8 text-center text-gray-400">No popular destinations found in this category.</p>
-          )}
-        </section>
-      )}
-    </>
   );
 };
 
@@ -877,16 +758,7 @@ const WebPage = ({ data }) => {
                     ))}
                   </div>
                 )}
-                <div className="mt-7 flex flex-wrap items-center gap-4 text-md text-black">
-                  <div className="flex items-center gap-4">
-                    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#e8e4ff] text-sm font-bold text-[#4f46e5]">
-                      {(data.sideThumbName || "E").charAt(0)}
-                    </span>
-                    <span className="text-sm">{data.sideThumbName || "Editorial Team"}</span>
-                  </div>
-                  <span className="h-6 w-px bg-gray-400" />
-                  <span className="text-sm">{formatDate(data.updatedAt || data.createdAt) || ""}</span>
-                </div>
+                
               </div>
             )}
           </div>

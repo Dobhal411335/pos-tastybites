@@ -123,8 +123,8 @@ function MenuContent() {
           id={showOffers ? "menu-offers" : undefined}
           className="mx-auto w-full max-w-[1400px] px-5 py-10 md:px-12"
         >
-          <div className="flex items-start gap-8">
-            <div className="min-w-0 flex-1">
+          <div className="flex flex-col items-stretch gap-0 lg:flex-row lg:items-start lg:gap-8">
+            <div className="min-w-0 w-full flex-1">
               <div className="mb-6 flex items-center justify-between pb-1">
                 <div className="flex items-center gap-2">
                   {showOffers ? (
@@ -146,7 +146,7 @@ function MenuContent() {
               {showProductLoading ? (
                 <LoadingSkeleton />
               ) : error ? (
-                <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-sm text-red-700">
+                <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
                   {error}
                 </div>
               ) : showOffers ? (

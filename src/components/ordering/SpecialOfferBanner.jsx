@@ -134,7 +134,7 @@ export default function SpecialOfferBanner() {
                     key={offer.id}
                     className="group flex flex-col overflow-hidden rounded-2xl border border-[var(--border)]/20 bg-white shadow-sm transition-shadow hover:shadow-md"
                   >
-                    <div className="relative h-48 overflow-hidden bg-[var(--customer-surface-container)]">
+                    <div className="relative h-58 md:h-64 overflow-hidden bg-[var(--customer-surface-container)]">
                       <Image
                         src={productImageSrc(offer)}
                         alt={offer.name}
@@ -142,10 +142,10 @@ export default function SpecialOfferBanner() {
                         sizes="(max-width: 1024px) 50vw, 33vw"
                         className="object-cover transition-transform duration-500 group-hover:scale-105"
                       />
-                      <span className="absolute top-3 left-3 inline-flex items-center gap-1 rounded-full bg-primary px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-white">
+                      {/* <span className="absolute top-3 left-3 inline-flex items-center gap-1 rounded-full bg-primary px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-white">
                         <Tag className="h-3 w-3" />
                         Offer
-                      </span>
+                      </span> */}
                       <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/25 opacity-0 transition-opacity duration-300 group-hover:opacity-100">
                         <button
                           type="button"

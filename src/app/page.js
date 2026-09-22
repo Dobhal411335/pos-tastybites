@@ -13,7 +13,8 @@ import BookTableForm from "@/components/ordering/BookTableForm";
 import FinalOrderCta from "@/components/ordering/FinalOrderCta";
 import LocalBusinessJsonLd from "@/components/ordering/LocalBusinessJsonLd";
 import SmoothScroll from "@/components/ordering/SmoothScroll";
-
+import CustomerReviews from "@/components/ordering/CustomerReviews";
+import GallerySection from "@/components/sections/GallerySection";
 export const metadata = {
   title: "Order Online for Same-Day Pickup",
   description:
@@ -35,9 +36,10 @@ export default function Home() {
         <SpecialOfferBanner />
         <RestaurantStory />
         <PickupHowItWorks />
-        {/* <CustomerReviews /> */}
+        <CustomerReviews />
         <BookTableForm />
         <FinalOrderCta />
+        <GallerySection />
       </main>
       <Footer />
     </div>

@@ -294,22 +294,24 @@ export default function Navbar() {
         </div>
 
         <div className="flex items-center gap-2 sm:gap-3">
-          <Button
-            asChild
-            variant="outline"
-            className="hidden h-9 rounded-lg border-[var(--border)] bg-white px-3 text-xs font-bold uppercase tracking-wider text-[var(--customer-ink)] shadow-sm hover:bg-[var(--customer-surface-container)] sm:inline-flex"
-          >
-            <Link href="/order" className="inline-flex items-center gap-1.5">
-              <PackageSearch className="h-3.5 w-3.5" />
-              Track Order
-            </Link>
-          </Button>
-          <Button
-            asChild
-            className="hidden h-9 rounded-lg bg-primary px-4 text-xs font-bold uppercase tracking-wider text-white shadow-sm hover:bg-primary-hover sm:inline-flex"
-          >
-            <Link href="/menu">Order Now</Link>
-          </Button>
+          <div className="hidden sm:contents">
+            <Button
+              asChild
+              variant="outline"
+              className="h-9 rounded-lg border-[var(--border)] bg-white px-3 text-xs font-bold uppercase tracking-wider text-[var(--customer-ink)] shadow-sm hover:bg-[var(--customer-surface-container)]"
+            >
+              <Link href="/order" className="inline-flex items-center gap-1.5">
+                <PackageSearch className="h-3.5 w-3.5" />
+                Track Order
+              </Link>
+            </Button>
+            <Button
+              asChild
+              className="h-9 rounded-lg bg-primary px-4 text-xs font-bold uppercase tracking-wider text-white shadow-sm hover:bg-primary-hover"
+            >
+              <Link href="/menu">Order Now</Link>
+            </Button>
+          </div>
           <button
             type="button"
             onClick={handleCartClick}
@@ -350,7 +352,7 @@ export default function Navbar() {
                   <Button
                     asChild
                     variant="outline"
-                    className="h-12 w-full border-[var(--border)] text-xs font-bold uppercase tracking-wider"
+                    className=" h-12 w-full border-[var(--border)] text-xs font-bold uppercase tracking-wider"
                   >
                     <Link href="/order" onClick={() => setIsOpen(false)}>
                       Track Order

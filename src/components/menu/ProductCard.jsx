@@ -64,12 +64,12 @@ export default function ProductCard({ product }) {
     <>
       <article
         className={cn(
-          "group flex flex-col overflow-hidden rounded-xl bg-white shadow-[0_4px_20px_-2px_rgba(15,23,42,0.04)] transition-all hover:shadow-[0_12px_32px_-4px_rgba(15,23,42,0.08)]",
+          "group flex h-full w-full flex-col overflow-hidden rounded-xl bg-white shadow-[0_4px_20px_-2px_rgba(15,23,42,0.04)] transition-all hover:shadow-[0_12px_32px_-4px_rgba(15,23,42,0.08)]",
           !isAvailable && "opacity-75"
         )}
       >
         <div
-          className="relative h-44 w-full cursor-pointer overflow-hidden bg-[var(--customer-surface-low)]"
+          className="relative h-60 w-full shrink-0 cursor-pointer overflow-hidden bg-[var(--customer-surface-low)] md:h-48"
           onClick={() => setIsDetailOpen(true)}
           onKeyDown={(e) => e.key === "Enter" && setIsDetailOpen(true)}
           role="button"
@@ -79,9 +79,9 @@ export default function ProductCard({ product }) {
             src={productImageSrc(product)}
             alt={product.name}
             fill
-            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+            sizes="(max-width: 768px) 100vw, (max-width: 1280px) 50vw, 33vw"
             className={cn(
-              "object-cover transition-transform duration-500 group-hover:scale-105",
+              "object-contain object-center transition-transform duration-500 group-hover:scale-[1.03]",
               !isAvailable && "grayscale"
             )}
           />
@@ -104,25 +104,23 @@ export default function ProductCard({ product }) {
           </button>
         </div>
 
-        <div className="flex flex-1 flex-col justify-between gap-2 p-4">
-          <div>
-            <div className="flex items-start justify-between gap-2">
-              <h3
-                className="cursor-pointer text-lg font-semibold text-[var(--customer-ink)] transition-colors group-hover:text-primary"
-                onClick={() => setIsDetailOpen(true)}
-              >
-                {product.name}
-              </h3>
-              <span className="whitespace-nowrap text-lg font-bold tabular-nums text-[var(--customer-ink)]">
-                ${price.toFixed(2)}
-              </span>
-            </div>
-            <p className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-[var(--customer-muted)]">
-              {product.description || product.desc || "Made fresh to order."}
-            </p>
+        <div className="flex min-h-0 flex-1 flex-col gap-1.5 p-3 md:gap-1 md:p-3 lg:gap-2 lg:p-4">
+          <div className="flex items-start justify-between gap-2">
+            <h3
+              className="line-clamp-2 min-h-12 cursor-pointer text-base font-semibold leading-6 text-[var(--customer-ink)] transition-colors group-hover:text-primary lg:min-h-14 lg:text-lg lg:leading-7"
+              onClick={() => setIsDetailOpen(true)}
+            >
+              {product.name}
+            </h3>
+            <span className="shrink-0 whitespace-nowrap pt-0.5 text-base font-bold tabular-nums text-[var(--customer-ink)] lg:text-lg">
+              ${price.toFixed(2)}
+            </span>
           </div>
+          <p className="line-clamp-2 min-h-9 text-xs leading-relaxed text-[var(--customer-muted)]">
+            {product.description || product.desc || "Made fresh to order."}
+          </p>
 
-          <div className="mt-auto flex items-center justify-between gap-2 pt-2">
+          <div className="mt-auto flex items-center justify-between gap-2 pt-1 md:pt-1 lg:pt-2">
             {needsConfig ? (
               <span className="flex items-center gap-0.5 text-[11px] font-semibold text-primary">
                 <SlidersHorizontal className="h-3.5 w-3.5" /> Customize
@@ -138,10 +136,11 @@ export default function ProductCard({ product }) {
                 type="button"
                 onClick={needsConfig ? () => setIsConfigOpen(true) : quickAdd}
                 className={cn(
-                  "flex items-center gap-1 rounded-lg px-4 py-2 text-sm font-semibold shadow-sm transition-all",
+                  "inline-flex h-9 shrink-0 items-center justify-center gap-1 rounded-lg px-3 text-sm font-semibold shadow-sm transition-all lg:h-10 lg:px-4",
                   needsConfig
                     ? "bg-primary text-white hover:bg-primary-hover"
-                    : "bg-red-500 text-white hover:bg-red-600"                )}
+                    : "bg-red-500 text-white hover:bg-red-600"
+                )}
               >
                 {needsConfig ? (
                   "Choose Options"
@@ -152,7 +151,7 @@ export default function ProductCard({ product }) {
                 )}
               </button>
             ) : (
-              <span className="rounded-lg bg-zinc-100 px-4 py-2 text-sm font-semibold text-zinc-400">
+              <span className="inline-flex h-9 items-center rounded-lg bg-zinc-100 px-3 text-sm font-semibold text-zinc-400 lg:h-10 lg:px-4">
                 Unavailable
               </span>
             )}

@@ -420,7 +420,8 @@ export default function CartDrawer({ open = false, onOpenChange, mode = "drawer"
           {renderBagBody({ showClose: false })}
         </aside>
 
-        <div className="lg:hidden">
+        {/* `contents` keeps this out of the menu flex row so products stay full-width on mobile */}
+        <div className="contents lg:hidden">
           <div
             className={cn(
               "fixed inset-0 z-[60] bg-[var(--customer-ink)]/50 backdrop-blur-sm transition-opacity duration-300",

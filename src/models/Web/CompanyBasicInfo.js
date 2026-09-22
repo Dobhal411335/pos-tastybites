@@ -10,19 +10,18 @@ const imageSchema = new mongoose.Schema(
 
 const CompanyBasicInfoSchema = new mongoose.Schema(
   {
-    restaurant: { type: mongoose.Schema.Types.ObjectId, ref: 'Restaurant', required: true },
     companyName: { type: String, default: '' },
     companyDomainName: { type: String, default: '' },
-    contactNumbers: [{
-      code: { type: String, default: '+1' },
-      number: { type: String, default: '' }
-    }],
+    contactNumbers: { type: [String], default: [] },
+    whatsappNumber: { type: String, default: '' },
     mainLogo: { type: imageSchema, default: () => ({ url: '', key: '' }) },
     footerLogo: { type: imageSchema, default: () => ({ url: '', key: '' }) },
     mobileUiLogo: { type: imageSchema, default: () => ({ url: '', key: '' }) },
     emails: { type: [String], default: [] },
     officeAddresses: { type: [String], default: [] },
     googleAddress: { type: String, default: '' },
+    googleUrl: { type: String, default: '' },
+    googleLink: { type: String, default: '' },
     facebookLink: { type: String, default: '' },
     instagramLink: { type: String, default: '' },
     youtubeLink: { type: String, default: '' },
