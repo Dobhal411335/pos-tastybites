@@ -45,7 +45,7 @@ function getOrderGrandTotal(order) {
 
 function getItemCount(order) {
   return (order?.items || []).reduce(
-    (sum, item) => sum + (Number(item.quantity) || 0),
+    (sum, item) => sum + (Number(item.qty ?? item.quantity) || 0),
     0,
   );
 }
