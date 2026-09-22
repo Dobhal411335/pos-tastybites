@@ -98,6 +98,7 @@ async function printAreaSnapshot({
     restaurantId: toObjectId(restaurantId),
     printType,
     createdAt: { $gte: start, $lt: end },
+    isActive: { $ne: false },
   };
   const emp = toObjectId(employeeId);
   if (emp) match.requestedBy = emp;

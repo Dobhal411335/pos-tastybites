@@ -69,7 +69,7 @@ export default function ProductCard({ product }) {
         )}
       >
         <div
-          className="relative aspect-[4/3] w-full cursor-pointer overflow-hidden bg-[var(--customer-surface-low)]"
+          className="relative h-44 w-full cursor-pointer overflow-hidden bg-[var(--customer-surface-low)]"
           onClick={() => setIsDetailOpen(true)}
           onKeyDown={(e) => e.key === "Enter" && setIsDetailOpen(true)}
           role="button"
@@ -86,7 +86,7 @@ export default function ProductCard({ product }) {
             )}
           />
           <div className="absolute left-3 top-3 flex flex-wrap gap-1">
-            {product.categoryName ? (
+            {!product.categoryName ? (
               <span className="rounded-md border border-gray-400 bg-white/90 px-2 py-0.5 text-[11px] font-semibold text-[var(--customer-ink)]">
                 {product.categoryName}
               </span>

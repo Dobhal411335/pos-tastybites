@@ -5,6 +5,7 @@ import { buildSameDayPickupSlots } from "@/lib/public/pickup";
 import { DEFAULT_RESTAURANT_TIMEZONE } from "@/lib/restaurantTime";
 import OfferDetails from "@/models/Web/OfferDetails";
 import PopupBanner from "@/models/Web/popupBanner";
+import ManageBanner from "@/models/Web/ManageBanners";
 import connectDB from "@/lib/db";
 
 export async function GET(_request, { params }) {
@@ -16,9 +17,17 @@ export async function GET(_request, { params }) {
     }
 
     await connectDB();
-    const [offerDetails, popupBanners] = await Promise.all([
+    const [offerDetails, popupBanners, heroBanners] = await Promise.all([
       OfferDetails.findOne({ restaurant: profile.id }).lean(),
       PopupBanner.find({ restaurant: profile.id }).sort({ createdAt: -1 }).limit(5).lean(),
+      ManageBanner.find({
+        restaurant: profile.id,
+        "image.url": { $exists: true, $ne: "" },
+        link: { $exists: true, $ne: "" },
+      })
+        .sort({ createdAt: -1 })
+        .select("image link title")
+        .lean(),
     ]);
 
     return sendSuccess(
@@ -45,11 +54,16 @@ export async function GET(_request, { params }) {
                 ? { url: b.image.url, key: b.image.key || "" }
                 : null,
         })),
+        banners: (heroBanners || []).map((b) => ({
+          id: String(b._id),
+          imageUrl: b.image?.url || "",
+          link: b.link || "",
+          title: b.title || "",
+        })),
       },
       "Restaurant retrieved",
       200,
       {
-        // Pickup slots are time-sensitive; never CDN-cache them.
         "Cache-Control": "no-store, no-cache, must-revalidate",
       }
     );

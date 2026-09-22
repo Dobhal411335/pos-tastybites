@@ -354,7 +354,7 @@ function OrderPageContent() {
   const sessionFloorIdRef = useRef(null);
 
   // View / layout states (persisted for staff preference)
-  const [panelLayout, setPanelLayout] = useState("2"); // '2' | '3'
+  const [panelLayout, setPanelLayout] = useState("3"); // '2' | '3'
   const [itemStyle, setItemStyle] = useState("list"); // 'tiles' | 'list'
   const [gridCols, setGridCols] = useState(2); // 2 | 3 | 4
   const [viewMode, setViewMode] = useState("list"); // 'grid' (heads) | 'list' (categories)
@@ -1779,7 +1779,7 @@ function OrderPageContent() {
   );
 
   const renderCategoriesSidebar = () => (
-    <div className="w-[200px] shrink-0 flex flex-col border-r border-zinc-200 bg-white">
+    <div className="w-[250px] shrink-0 flex flex-col border-r border-zinc-200 bg-white">
       <div className="px-3 py-3 border-b border-zinc-200 shrink-0">
         <p className="text-[10px] font-black uppercase tracking-wider text-zinc-500">
           Categories
@@ -1793,13 +1793,13 @@ function OrderPageContent() {
               key={cat}
               type="button"
               onClick={() => setActiveCategory(cat)}
-              className={`w-full px-3 py-2.5 text-left border-b border-zinc-200 gap-2 items-center transition-colors border-l-4 ${
+              className={`w-full px-3 py-5 text-left border-b border-zinc-800 gap-2 items-center transition-colors border-l-4 ${
                 isActive
                   ? "border-l-orange-500 bg-orange-50 text-orange-800"
                   : "border-l-transparent text-zinc-700 hover:bg-zinc-50"
               }`}
             >
-              <span className="text-xs font-bold leading-tight line-clamp-2">
+              <span className="text-[14px] font-bold leading-tight line-clamp-2">
                 {cat}
               </span>
             </button>

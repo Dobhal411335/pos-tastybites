@@ -83,6 +83,8 @@ const NotificationSchema = new mongoose.Schema(
     },
     /** Compact display fields (order number, table no, amount, actor name) */
     metadata: { type: mongoose.Schema.Types.Mixed, default: {} },
+    /** Soft-hide when linked order is soft-deleted; restored with the order. */
+    isActive: { type: Boolean, default: true, index: true },
     /** Per-user read receipts for restaurant-scoped notifications */
     readBy: [
       {

@@ -49,6 +49,16 @@ export function assertPrintAdminRole(role) {
   return null;
 }
 
+/** Soft-deleted order jobs must not print, retry, or reprint. */
+function assertPrintJobActive(job) {
+  if (job?.isActive === false) {
+    throw Object.assign(
+      new Error("Print job is inactive (order was soft-deleted)"),
+      { statusCode: 404 }
+    );
+  }
+}
+
 /**
  * Compact payload for Socket.IO — no sensitive payment details.
  */
@@ -337,9 +347,16 @@ export async function executePrintJob(jobId, { simulateFailure = false, restaura
   if (restaurantId && String(job.restaurantId) !== String(restaurantId)) {
     throw Object.assign(new Error("Forbidden"), { statusCode: 403 });
   }
+  assertPrintJobActive(job);
 
   let floorId = null;
   const order = await Order.findById(job.orderId).lean();
+  if (order?.isActive === false) {
+    throw Object.assign(
+      new Error("Cannot print a soft-deleted order"),
+      { statusCode: 400 }
+    );
+  }
   if (order?.floor) floorId = order.floor;
 
   await persistStatus(
@@ -433,6 +450,7 @@ export async function retryPrintJob(jobId, { runNow = false, simulateFailure = f
   if (restaurantId && String(job.restaurantId) !== String(restaurantId)) {
     throw Object.assign(new Error("Forbidden"), { statusCode: 403 });
   }
+  assertPrintJobActive(job);
   if (job.status === "PRINTED") {
     throw Object.assign(
       new Error("Cannot retry a printed job. Use 'Print Again' to create a new print job."),
@@ -442,6 +460,12 @@ export async function retryPrintJob(jobId, { runNow = false, simulateFailure = f
 
   let floorId = null;
   const order = await Order.findById(job.orderId).lean();
+  if (order?.isActive === false) {
+    throw Object.assign(
+      new Error("Cannot retry print for a soft-deleted order"),
+      { statusCode: 400 }
+    );
+  }
   if (order?.floor) floorId = order.floor;
 
   await persistStatus(
@@ -485,6 +509,7 @@ export async function cancelPrintJob(jobId, { restaurantId } = {}) {
   if (restaurantId && String(job.restaurantId) !== String(restaurantId)) {
     throw Object.assign(new Error("Forbidden"), { statusCode: 403 });
   }
+  assertPrintJobActive(job);
   if (job.status !== "QUEUED") {
     throw Object.assign(
       new Error("Only queued print jobs can be cancelled"),
@@ -508,9 +533,16 @@ export async function markPrintJobPrinted(jobId, { restaurantId } = {}) {
   if (restaurantId && String(job.restaurantId) !== String(restaurantId)) {
     throw Object.assign(new Error("Forbidden"), { statusCode: 403 });
   }
+  assertPrintJobActive(job);
 
   let floorId = null;
   const order = await Order.findById(job.orderId).lean();
+  if (order?.isActive === false) {
+    throw Object.assign(
+      new Error("Cannot complete print for a soft-deleted order"),
+      { statusCode: 400 }
+    );
+  }
   if (order?.floor) floorId = order.floor;
 
   await persistStatus(
@@ -541,12 +573,14 @@ export async function reprintPrintJob(
   if (restaurantId && String(original.restaurantId) !== String(restaurantId)) {
     throw Object.assign(new Error("Forbidden"), { statusCode: 403 });
   }
+  assertPrintJobActive(original);
 
   // Idempotency check if caller passed an idempotencyKey
   if (idempotencyKey) {
     const existing = await PrintJob.findOne({
       restaurantId: original.restaurantId,
       idempotencyKey,
+      isActive: { $ne: false },
     });
     if (existing) {
       return { job: existing, created: false };
@@ -554,6 +588,12 @@ export async function reprintPrintJob(
   }
 
   const order = await Order.findById(original.orderId).lean();
+  if (order?.isActive === false) {
+    throw Object.assign(
+      new Error("Cannot reprint a soft-deleted order"),
+      { statusCode: 400 }
+    );
+  }
   const floorId = order?.floor || null;
 
   // Resolve printer configuration: prefer original printer if still enabled, else resolve for target
@@ -657,6 +697,7 @@ export async function reprintOrderTicket({
     restaurantId,
     orderId,
     printType: normalizedType,
+    isActive: { $ne: false },
   }).sort({ createdAt: -1 });
 
   if (existingJob) {

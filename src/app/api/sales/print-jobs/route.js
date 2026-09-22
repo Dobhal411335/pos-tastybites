@@ -40,7 +40,10 @@ export const GET = withAuth(async (request) => {
     const limit = Math.min(Math.max(1, Number(searchParams.get("limit")) || 50), 100);
     const skip = (page - 1) * limit;
 
-    const query = { restaurantId: request.restaurant };
+    const query = {
+      restaurantId: request.restaurant,
+      isActive: { $ne: false },
+    };
     if (status && status !== "ALL") query.status = status;
     if (printType && printType !== "ALL") query.printType = printType;
     if (printerTarget && printerTarget !== "ALL") query.printerTarget = printerTarget;
@@ -100,7 +103,10 @@ export const GET = withAuth(async (request) => {
       ? new mongoose.Types.ObjectId(String(request.restaurant))
       : request.restaurant;
 
-    const statsBaseMatch = { restaurantId: restObjectId };
+    const statsBaseMatch = {
+      restaurantId: restObjectId,
+      isActive: { $ne: false },
+    };
     if (query.createdAt) statsBaseMatch.createdAt = query.createdAt;
     const includeStats = searchParams.get("stats") !== "0";
 

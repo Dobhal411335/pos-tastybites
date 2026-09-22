@@ -106,7 +106,7 @@ export default function BrowseMenuLanding() {
                 className="group flex flex-col justify-between overflow-hidden rounded-2xl border border-[var(--border)]/20 bg-white shadow-sm hover:shadow-md"
               >
                 <div>
-                  <div className="relative h-44 overflow-hidden bg-[var(--customer-surface-container)]">
+                  <div className="relative h-48 overflow-hidden bg-[var(--customer-surface-container)]">
                     <Image
                       src={productImageSrc(product)}
                       alt={product.name}
@@ -114,11 +114,6 @@ export default function BrowseMenuLanding() {
                       sizes="(max-width: 1024px) 50vw, 25vw"
                       className="object-cover transition-transform duration-500 group-hover:scale-105"
                     />
-                    {product.categoryName ? (
-                      <span className="absolute top-2.5 left-2.5 rounded-full bg-[var(--ink)] px-2 py-0.5 text-[10px] font-bold text-white">
-                        {product.categoryName}
-                      </span>
-                    ) : null}
                     <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/25 opacity-0 transition-opacity duration-300 group-hover:opacity-100">
                       <button
                         type="button"

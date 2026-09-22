@@ -64,6 +64,8 @@ const PrintJobSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.Mixed,
       default: {},
     },
+    /** Soft-hide when linked order is soft-deleted; restored with the order. */
+    isActive: { type: Boolean, default: true, index: true },
     /** Prevents duplicate jobs for the same logical action */
     idempotencyKey: {
       type: String,

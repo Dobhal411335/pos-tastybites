@@ -33,6 +33,9 @@ export const POST = withAuth(async (request, { params }) => {
     if (!job) {
       return sendError(new Error("Not Found"), "Print job not found", 404);
     }
+    if (job.isActive === false) {
+      return sendError(new Error("Not Found"), "Print job not found", 404);
+    }
     if (String(job.restaurantId) !== String(request.restaurant)) {
       return sendError(new Error("Forbidden"), "Access denied", 403);
     }

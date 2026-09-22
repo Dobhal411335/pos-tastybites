@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import Order from "@/models/Order";
 import PrintJob from "@/models/PrintJob";
+import Notification from "@/models/Notification";
 import OperationalAuditLog from "@/models/OperationalAuditLog";
 import TableSession from "@/models/floor/TableSession";
 import connectDB from "@/lib/db";
@@ -11,6 +12,17 @@ import {
   renumberOrdersForBusinessDay,
 } from "@/lib/orders/renumberOrdersForBusinessDay";
 import { ensureOrderSoftDeleteIndexes } from "@/lib/orders/ensureOrderSoftDeleteIndexes";
+
+/** Soft-hide or restore PrintJobs + Notifications tied to an order. */
+async function setOrderArtifactsActive(session, { restaurantId, orderId, isActive }) {
+  const filter = { orderId, restaurantId };
+  const update = { $set: { isActive } };
+  const opts = sessionOpts(session);
+  await Promise.all([
+    PrintJob.updateMany(filter, update, opts),
+    Notification.updateMany(filter, update, opts),
+  ]);
+}
 
 function actorPayload(actor) {
   return {
@@ -152,6 +164,12 @@ export async function softDeleteOrder({
     order.restoredBy = null;
     await order.save(sessionOpts(session));
 
+    await setOrderArtifactsActive(session, {
+      restaurantId,
+      orderId: order._id,
+      isActive: false,
+    });
+
     if (order.tableSession) {
       await TableSession.updateOne(
         { _id: order.tableSession, restaurantId },
@@ -253,6 +271,12 @@ export async function restoreOrder({
     order.restoredBy = actor.actorId;
     await order.save(sessionOpts(session));
 
+    await setOrderArtifactsActive(session, {
+      restaurantId,
+      orderId: order._id,
+      isActive: true,
+    });
+
     const renumberChanges = await renumberOrdersForBusinessDay({
       restaurantId,
       businessDate,
@@ -297,7 +321,7 @@ export async function restoreOrder({
 }
 
 /**
- * Permanently remove a soft-deleted cash-only order and its print jobs.
+ * Permanently remove a soft-deleted cash-only order, its print jobs, and notifications.
  * Retains OperationalAuditLog history.
  */
 export async function permanentlyDeleteOrder({
@@ -361,6 +385,10 @@ export async function permanentlyDeleteOrder({
     }
 
     await PrintJob.deleteMany(
+      { orderId: order._id, restaurantId },
+      sessionOpts(session)
+    );
+    await Notification.deleteMany(
       { orderId: order._id, restaurantId },
       sessionOpts(session)
     );

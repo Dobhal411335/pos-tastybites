@@ -40,6 +40,9 @@ export const GET = withAuth(async (request, { params }) => {
     if (!job) {
       return sendError(new Error("Not Found"), "Print job not found", 404);
     }
+    if (job.isActive === false) {
+      return sendError(new Error("Not Found"), "Print job not found", 404);
+    }
     if (String(job.restaurantId) !== String(request.restaurant)) {
       return sendError(new Error("Forbidden"), "Access denied", 403);
     }
@@ -211,6 +214,7 @@ export const PATCH = withAuth(async (request, { params }) => {
           _id: id,
           restaurantId: request.restaurant,
           status: "QUEUED",
+          isActive: { $ne: false },
         },
         {
           $set: {

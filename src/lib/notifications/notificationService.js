@@ -310,6 +310,7 @@ export async function listNotifications({
   const query = {
     ...audienceQuery(restaurantId, userId),
     createdAt: todayCreatedAtFilter(),
+    isActive: { $ne: false },
   };
 
   if (filter === "UNREAD") {
@@ -366,6 +367,7 @@ export async function countUnread({ restaurantId, userId }) {
   const query = {
     ...audienceQuery(restaurantId, userId),
     createdAt: todayCreatedAtFilter(),
+    isActive: { $ne: false },
     readBy: { $not: { $elemMatch: { userId } } },
   };
   return Notification.countDocuments(query);
@@ -379,6 +381,7 @@ export async function markNotificationRead({
   const query = {
     _id: notificationId,
     ...audienceQuery(restaurantId, userId),
+    isActive: { $ne: false },
   };
 
   const doc = await Notification.findOne(query);
@@ -410,6 +413,7 @@ export async function markAllNotificationsRead({ restaurantId, userId }) {
   const query = {
     ...audienceQuery(restaurantId, userId),
     createdAt: todayCreatedAtFilter(),
+    isActive: { $ne: false },
     readBy: { $not: { $elemMatch: { userId } } },
   };
 

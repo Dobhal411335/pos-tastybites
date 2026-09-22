@@ -298,7 +298,7 @@ export default function StaffOrderHubPage() {
                 Staff Orders
               </h1>
               <p className="text-xs font-semibold text-zinc-500 sm:text-sm">
-                Tap an employee to start · filter today’s staff orders below
+                Pick staff on the left · manage today’s staff orders here
               </p>
             </div>
           </div>
@@ -389,35 +389,39 @@ export default function StaffOrderHubPage() {
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
-        <div className="mx-auto max-w-6xl space-y-8">
-          <section>
-            <div className="mb-3">
-              <p className="text-[11px] font-extrabold uppercase tracking-widest text-indigo-600">
-                New order
-              </p>
-              <h2 className="text-lg font-extrabold text-zinc-900">
-                Employees
-                <span className="ml-2 text-sm font-bold text-zinc-400">
-                  ({employees.length})
-                </span>
-              </h2>
-            </div>
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden md:flex-row">
+        {/* Left: employees sidebar */}
+        <aside className="flex max-h-[42vh] w-full shrink-0 flex-col border-b border-zinc-200 bg-white md:max-h-none md:w-[320px] md:border-b-0 md:border-r lg:w-[340px]">
+          <div className="shrink-0 border-b border-zinc-100 px-4 py-3">
+            <p className="text-[11px] font-extrabold uppercase tracking-widest text-indigo-600">
+              New order
+            </p>
+            <h2 className="text-base font-extrabold text-zinc-900">
+              Employees
+              <span className="ml-2 text-sm font-bold text-zinc-400">
+                ({employees.length})
+              </span>
+            </h2>
+            <p className="mt-0.5 text-[11px] font-semibold text-zinc-500">
+              Tap to start a staff order
+            </p>
+          </div>
 
+          <div className="min-h-0 flex-1 overflow-y-auto p-3">
             {loading ? (
               <div className="flex flex-col items-center justify-center gap-3 py-12 text-zinc-500">
-                <Loader2 className="h-8 w-8 animate-spin text-indigo-500" />
+                <Loader2 className="h-7 w-7 animate-spin text-indigo-500" />
                 <p className="text-sm font-semibold">Loading employees…</p>
               </div>
             ) : employees.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-zinc-300 bg-white px-6 py-12 text-center">
-                <Users className="mx-auto h-8 w-8 text-indigo-400" />
+              <div className="rounded-2xl border border-dashed border-zinc-300 bg-zinc-50 px-4 py-10 text-center">
+                <Users className="mx-auto h-7 w-7 text-indigo-400" />
                 <p className="mt-3 text-sm font-bold text-zinc-700">
                   No active employees found
                 </p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              <div className="flex flex-col gap-2">
                 {employees.map((emp) => {
                   const discount = Number(emp.staffDiscount) || 0;
                   const color = emp.color || "#4f46e5";
@@ -426,10 +430,10 @@ export default function StaffOrderHubPage() {
                       key={employeeId(emp)}
                       type="button"
                       onClick={() => startStaffOrder(emp)}
-                      className="flex items-center gap-3 rounded-2xl border border-indigo-100 bg-white p-3.5 text-left shadow-sm transition-all hover:border-indigo-300 hover:bg-indigo-50/50"
+                      className="flex w-full items-center gap-3 rounded-xl border border-indigo-100 bg-white p-3 text-left shadow-sm transition-all hover:border-indigo-300 hover:bg-indigo-50/50"
                     >
                       <div
-                        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-sm font-black text-white"
+                        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-sm font-black text-white"
                         style={{ backgroundColor: color }}
                       >
                         {(emp.name || "?").charAt(0).toUpperCase()}
@@ -453,155 +457,159 @@ export default function StaffOrderHubPage() {
                 })}
               </div>
             )}
-          </section>
+          </div>
+        </aside>
 
-          <section ref={listRef} className="scroll-mt-4">
-            <div className="mb-4 flex flex-wrap items-end justify-between gap-2">
-              <div>
-                <p className="text-[11px] font-extrabold uppercase tracking-widest text-indigo-600">
-                  Showing
-                </p>
-                <h2 className="text-lg font-extrabold text-zinc-900">
-                  {activeFilterMeta.label}
-                  <span className="ml-2 text-sm font-bold text-zinc-400">
-                    ({filtered.length})
-                  </span>
-                </h2>
-              </div>
-              {filter === "OPEN" && stats.OPEN.count > 0 ? (
-                <p className="text-sm font-bold tabular-nums text-amber-800">
-                  Unpaid total ${stats.OPEN.amount.toFixed(2)}
-                </p>
-              ) : null}
+        {/* Center: staff orders */}
+        <main
+          ref={listRef}
+          className="min-h-0 min-w-0 flex-1 overflow-y-auto scroll-mt-4 p-4 sm:p-6"
+        >
+          <div className="mb-4 flex flex-wrap items-end justify-between gap-2">
+            <div>
+              <p className="text-[11px] font-extrabold uppercase tracking-widest text-indigo-600">
+                Showing
+              </p>
+              <h2 className="text-lg font-extrabold text-zinc-900">
+                {activeFilterMeta.label}
+                <span className="ml-2 text-sm font-bold text-zinc-400">
+                  ({filtered.length})
+                </span>
+              </h2>
             </div>
+            {filter === "OPEN" && stats.OPEN.count > 0 ? (
+              <p className="text-sm font-bold tabular-nums text-amber-800">
+                Unpaid total ${stats.OPEN.amount.toFixed(2)}
+              </p>
+            ) : null}
+          </div>
 
-            {loading ? (
-              <div className="flex flex-col items-center justify-center gap-3 py-16 text-zinc-500">
-                <Loader2 className="h-8 w-8 animate-spin text-indigo-500" />
-                <p className="text-sm font-semibold">Loading staff orders…</p>
+          {loading ? (
+            <div className="flex flex-col items-center justify-center gap-3 py-16 text-zinc-500">
+              <Loader2 className="h-8 w-8 animate-spin text-indigo-500" />
+              <p className="text-sm font-semibold">Loading staff orders…</p>
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-zinc-300 bg-white px-6 py-14 text-center">
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-500">
+                <Users className="h-7 w-7" />
               </div>
-            ) : filtered.length === 0 ? (
-              <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-zinc-300 bg-white px-6 py-14 text-center">
-                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-500">
-                  <Users className="h-7 w-7" />
-                </div>
-                <div className="space-y-1">
-                  <h3 className="text-lg font-extrabold text-zinc-900">
-                    {filter === "OPEN"
-                      ? "No unpaid staff orders"
-                      : filter === "PAID"
-                        ? "No paid staff orders yet today"
-                        : "No staff orders today"}
-                  </h3>
-                  <p className="text-sm font-semibold text-zinc-500">
-                    Tap an employee above to start a staff order.
-                  </p>
-                </div>
+              <div className="space-y-1">
+                <h3 className="text-lg font-extrabold text-zinc-900">
+                  {filter === "OPEN"
+                    ? "No unpaid staff orders"
+                    : filter === "PAID"
+                      ? "No paid staff orders yet today"
+                      : "No staff orders today"}
+                </h3>
+                <p className="text-sm font-semibold text-zinc-500">
+                  Tap an employee on the left to start a staff order.
+                </p>
               </div>
-            ) : (
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-                {filtered.map((order) => {
-                  const open = isOrderOpen(order);
-                  const paid = isOrderPaid(order);
-                  const party = getOrderPartyLabel(order) || "Staff";
-                  const total = getOrderGrandTotal(order);
-                  const items = getItemCount(order);
-                  const statusLabel = paid
-                    ? "PAID"
-                    : String(order.status || "PENDING").toUpperCase();
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {filtered.map((order) => {
+                const open = isOrderOpen(order);
+                const paid = isOrderPaid(order);
+                const party = getOrderPartyLabel(order) || "Staff";
+                const total = getOrderGrandTotal(order);
+                const items = getItemCount(order);
+                const statusLabel = paid
+                  ? "PAID"
+                  : String(order.status || "PENDING").toUpperCase();
 
-                  return (
-                    <article
-                      key={order._id}
-                      className={cn(
-                        "flex flex-col rounded-2xl border bg-white p-4 shadow-sm",
-                        open
-                          ? "border-amber-200"
-                          : paid
-                            ? "border-emerald-100"
-                            : "border-zinc-200",
-                      )}
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0 space-y-1">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="text-sm font-extrabold text-zinc-900">
-                              #{order.orderNumber || "—"}
-                            </span>
-                            <Badge
-                              variant="outline"
-                              className={`border text-[10px] font-extrabold uppercase tracking-wide ${statusBadgeClass(order)}`}
-                            >
-                              {statusLabel}
-                            </Badge>
-                            <Badge
-                              variant="outline"
-                              className={`border text-[10px] font-bold ${getOrderTypeBadgeClass(order)}`}
-                            >
-                              Staff
-                            </Badge>
-                          </div>
-                          <div className="flex items-center gap-1.5 text-sm font-bold text-zinc-800">
-                            <User className="h-3.5 w-3.5 text-zinc-400" />
-                            <span className="truncate">{party}</span>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-lg font-black tabular-nums text-zinc-900">
-                            ${total.toFixed(2)}
-                          </p>
-                          <p className="flex items-center justify-end gap-1 text-[11px] font-semibold text-zinc-500">
-                            <Clock className="h-3 w-3" />
-                            {formatTime(order.createdAt || order.updatedAt)}
-                          </p>
-                        </div>
-                      </div>
-
-                      <p className="mt-3 text-xs font-semibold text-zinc-500">
-                        {items} item{items === 1 ? "" : "s"}
-                        {order.processedByName
-                          ? ` · ${order.processedByName}`
-                          : ""}
-                      </p>
-
-                      <div className="mt-4 flex flex-wrap gap-2 border-t border-zinc-100 pt-4">
-                        {open ? (
-                          <>
-                            <Button
-                              className="h-10 flex-1 rounded-xl bg-zinc-900 font-bold text-white hover:bg-zinc-800"
-                              onClick={() => continueOrder(order)}
-                            >
-                              Continue
-                            </Button>
-                            <Button
-                              className="h-10 flex-1 gap-1.5 rounded-xl bg-emerald-600 font-bold text-white hover:bg-emerald-700"
-                              onClick={() => setPayOrder(order)}
-                            >
-                              <DollarSign className="h-4 w-4" />
-                              Pay
-                            </Button>
-                          </>
-                        ) : (
-                          <Button
+                return (
+                  <article
+                    key={order._id}
+                    className={cn(
+                      "flex flex-col rounded-2xl border bg-white p-4 shadow-sm",
+                      open
+                        ? "border-amber-200"
+                        : paid
+                          ? "border-emerald-100"
+                          : "border-zinc-200",
+                    )}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0 space-y-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-sm font-extrabold text-zinc-900">
+                            #{order.orderNumber || "—"}
+                          </span>
+                          <Badge
                             variant="outline"
-                            className="h-10 flex-1 gap-1.5 rounded-xl border-zinc-200 font-bold"
-                            onClick={() => {
-                              setPrintOrder(order);
-                              setIsPrintOpen(true);
-                            }}
+                            className={`border text-[10px] font-extrabold uppercase tracking-wide ${statusBadgeClass(order)}`}
                           >
-                            <Receipt className="h-4 w-4" />
-                            Print receipt
-                          </Button>
-                        )}
+                            {statusLabel}
+                          </Badge>
+                          <Badge
+                            variant="outline"
+                            className={`border text-[10px] font-bold ${getOrderTypeBadgeClass(order)}`}
+                          >
+                            Staff
+                          </Badge>
+                        </div>
+                        <div className="flex items-center gap-1.5 text-sm font-bold text-zinc-800">
+                          <User className="h-3.5 w-3.5 text-zinc-400" />
+                          <span className="truncate">{party}</span>
+                        </div>
                       </div>
-                    </article>
-                  );
-                })}
-              </div>
-            )}
-          </section>
-        </div>
+                      <div className="text-right">
+                        <p className="text-lg font-black tabular-nums text-zinc-900">
+                          ${total.toFixed(2)}
+                        </p>
+                        <p className="flex items-center justify-end gap-1 text-[11px] font-semibold text-zinc-500">
+                          <Clock className="h-3 w-3" />
+                          {formatTime(order.createdAt || order.updatedAt)}
+                        </p>
+                      </div>
+                    </div>
+
+                    <p className="mt-3 text-xs font-semibold text-zinc-500">
+                      {items} item{items === 1 ? "" : "s"}
+                      {order.processedByName
+                        ? ` · ${order.processedByName}`
+                        : ""}
+                    </p>
+
+                    <div className="mt-4 flex flex-wrap gap-2 border-t border-zinc-100 pt-4">
+                      {open ? (
+                        <>
+                          <Button
+                            className="h-10 flex-1 rounded-xl bg-zinc-900 font-bold text-white hover:bg-zinc-800"
+                            onClick={() => continueOrder(order)}
+                          >
+                            Continue
+                          </Button>
+                          <Button
+                            className="h-10 flex-1 gap-1.5 rounded-xl bg-emerald-600 font-bold text-white hover:bg-emerald-700"
+                            onClick={() => setPayOrder(order)}
+                          >
+                            <DollarSign className="h-4 w-4" />
+                            Pay
+                          </Button>
+                        </>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          className="h-10 flex-1 gap-1.5 rounded-xl border-zinc-200 font-bold"
+                          onClick={() => {
+                            setPrintOrder(order);
+                            setIsPrintOpen(true);
+                          }}
+                        >
+                          <Receipt className="h-4 w-4" />
+                          Print receipt
+                        </Button>
+                      )}
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          )}
+        </main>
       </div>
 
       <TodayOrderPaymentModal

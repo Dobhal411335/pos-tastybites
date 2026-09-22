@@ -17,7 +17,7 @@ export default function ProductDetailModal({ isOpen, onClose, product, onAdd }) 
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent
         showCloseButton={false}
-        className="max-h-[90vh] max-w-2xl overflow-hidden rounded-2xl border-0 bg-white p-0 shadow-2xl"
+        className="max-h-[90vh] max-w-lg overflow-hidden rounded-2xl border-0 bg-white p-0 shadow-2xl"
       >
         <div className="relative flex max-h-[90vh] flex-col overflow-hidden">
           <button
@@ -30,16 +30,18 @@ export default function ProductDetailModal({ isOpen, onClose, product, onAdd }) 
           </button>
 
           <div className="overflow-y-auto flex-1">
-            <div className="relative h-64 w-full bg-[var(--customer-surface-container)] sm:h-80">
+            <div className="relative w-full bg-[var(--customer-surface-container)]">
               <Image
                 src={productImageSrc(product)}
                 alt={product.name}
-                fill
-                className="object-cover"
-                sizes="672px"
+                width={1200}
+                height={900}
+                className="mx-auto h-auto max-h-[min(52vh,30rem)] w-full object-contain"
+                sizes="(max-width: 672px) 100vw, 672px"
+                priority
               />
               {product.categoryName ? (
-                <div className="absolute bottom-4 left-4">
+                <div className="absolute bottom-4 left-4 z-[1]">
                   <span className="rounded-full bg-[var(--customer-ink)]/90 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-white">
                     {product.categoryName}
                   </span>

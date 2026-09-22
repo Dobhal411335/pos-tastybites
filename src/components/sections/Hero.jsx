@@ -1,29 +1,95 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, Leaf, Store, Star } from "lucide-react";
 import { useRestaurantPublic } from "@/context/RestaurantPublicContext";
-import { usePublicMenu } from "@/hooks/usePublicMenu";
-import { lowestMenuPrice } from "@/lib/public/landingMenu";
-import { productImageSrc } from "@/lib/public/productImage";
+import {
+  Carousel,
+  CarouselContent,
+  CarouselItem,
+  CarouselNext,
+  CarouselPrevious,
+} from "@/components/ui/carousel";
+
+function normalizeBannerHref(link) {
+  const raw = String(link || "").trim();
+  if (!raw) return "/menu";
+  if (/^https?:\/\//i.test(raw)) return raw;
+  return raw.startsWith("/") ? raw : `/${raw}`;
+}
+
+function isExternalHref(href) {
+  return /^https?:\/\//i.test(href);
+}
+
+function BannerSlide({ banner, brandName, priority = false }) {
+  const href = normalizeBannerHref(banner?.link);
+  const external = isExternalHref(href);
+  const src = banner?.imageUrl || "/burger.jpg";
+  const alt = banner?.title || brandName || "Hero banner";
+
+  const image = (
+    <Image
+      src={src}
+      alt={alt}
+      fill
+      priority={priority}
+      sizes="(max-width: 1024px) 100vw, 50vw"
+      className="object-cover object-center"
+    />
+  );
+
+  if (!banner?.imageUrl) {
+    return <div className="relative h-full w-full">{image}</div>;
+  }
+
+  if (external) {
+    return (
+      <a
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="relative block h-full w-full"
+        aria-label="Open banner link"
+      >
+        {image}
+      </a>
+    );
+  }
+
+  return (
+    <Link href={href} className="relative block h-full w-full" aria-label="Open banner link">
+      {image}
+    </Link>
+  );
+}
 
 export default function Hero() {
   const { restaurant } = useRestaurantPublic();
-  const { products, loading } = usePublicMenu();
   const brandName = restaurant?.name || "Tasty Bites";
-  const fromPrice = lowestMenuPrice(products);
+  const banners = Array.isArray(restaurant?.banners)
+    ? restaurant.banners.filter((b) => b?.imageUrl)
+    : [];
+  const [carouselApi, setCarouselApi] = useState(null);
 
-  const heroProduct =
-    products.find(
-      (p) => p.available !== false && p.imageUrl && !String(p.image || "").includes("BannerImage")
-    ) || products.find((p) => p.available !== false);
+  useEffect(() => {
+    if (!carouselApi || banners.length <= 1) return undefined;
+    const timer = setInterval(() => {
+      carouselApi.scrollNext();
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [carouselApi, banners.length]);
+
+  const frameClass =
+    "relative h-[320px] w-full overflow-hidden rounded-2xl bg-[var(--customer-surface-container)] shadow-xl sm:h-[400px] lg:h-[480px]";
 
   return (
     <section className="relative w-full overflow-hidden bg-[var(--customer-surface)] py-10 lg:py-20">
       <div className="mx-auto max-w-[1320px] px-5 lg:px-12">
-        <div className="grid grid-cols-1 items-center gap-6 lg:grid-cols-12 lg:gap-10">
-          <div className="z-10 flex flex-col items-start gap-4 lg:col-span-7">
+        <div className="grid grid-cols-1 items-center gap-8 lg:grid-cols-12 lg:gap-8">
+          <div className="z-10 flex flex-col items-start gap-4 lg:col-span-6">
             <div className="inline-flex items-center gap-2 rounded-full bg-primary/15 px-3 py-1.5 text-xs font-bold uppercase tracking-widest text-primary">
               <Leaf className="h-4 w-4" />
               <span>Fresh · Local · Made to Order</span>
@@ -57,7 +123,9 @@ export default function Hero() {
             <div className="flex flex-wrap items-center gap-4 pt-2 text-xs font-medium text-[var(--customer-muted)]">
               <div className="flex items-center gap-1">
                 <Star className="h-[18px] w-[18px] fill-primary text-primary" />
-                <span className="font-bold text-[var(--customer-ink)]">Same-day pickup</span>
+                <span className="font-bold text-[var(--customer-ink)]">
+                  Same-day pickup
+                </span>
                 <span>· Pay at restaurant</span>
               </div>
               <span className="hidden text-[var(--border)] sm:inline">•</span>
@@ -73,26 +141,49 @@ export default function Hero() {
             </div>
           </div>
 
-          <div className="relative mt-8 lg:col-span-5 lg:mt-0">
-            <div className="relative aspect-[4/3] w-full overflow-hidden rounded-2xl bg-[var(--customer-surface-container)] shadow-xl sm:aspect-[5/4]">
-              {heroProduct ? (
-                <Image
-                  src={"/burger.jpg"}
-                  alt={heroProduct.name}
-                  fill
-                  priority
-                  sizes="(max-width: 1024px) 100vw, 40vw"
-                  className="object-cover object-center"
-                />
-              ) : (
-                <div className="flex h-full items-center justify-center text-sm text-[var(--customer-muted)]">
-                  Menu coming soon
+          <div className="relative mt-4 pb-6 lg:col-span-6 lg:mt-0 lg:pb-8">
+            {banners.length > 1 ? (
+              <Carousel
+                className="w-full"
+                opts={{ loop: true, align: "start" }}
+                setApi={setCarouselApi}
+              >
+                <div className={frameClass}>
+                  <div className="absolute inset-0">
+                    <CarouselContent className="-ml-0 h-full">
+                      {banners.map((banner, index) => (
+                        <CarouselItem
+                          key={banner.id}
+                          className="h-[320px] pl-0 sm:h-[400px] lg:h-[480px]"
+                        >
+                          <div className="relative h-full w-full">
+                            <BannerSlide
+                              banner={banner}
+                              brandName={brandName}
+                              priority={index === 0}
+                            />
+                            <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[var(--ink)]/30 via-transparent to-transparent" />
+                          </div>
+                        </CarouselItem>
+                      ))}
+                    </CarouselContent>
+                  </div>
+                  <CarouselPrevious className="left-3 top-1/2 z-10 h-9 w-9 -translate-y-1/2 border-0 bg-white/90 text-[var(--customer-ink)] shadow-md hover:bg-white disabled:opacity-40" />
+                  <CarouselNext className="right-3 top-1/2 z-10 h-9 w-9 -translate-y-1/2 border-0 bg-white/90 text-[var(--customer-ink)] shadow-md hover:bg-white disabled:opacity-40" />
                 </div>
-              )}
-              <div className="absolute inset-0 bg-gradient-to-t from-[var(--ink)]/30 via-transparent to-transparent" />
-            </div>
+              </Carousel>
+            ) : (
+              <div className={frameClass}>
+                <BannerSlide
+                  banner={banners[0] || null}
+                  brandName={brandName}
+                  priority
+                />
+                <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[var(--ink)]/30 via-transparent to-transparent" />
+              </div>
+            )}
 
-            <div className="absolute -bottom-5 -left-3 flex max-w-[280px] items-center gap-3 rounded-xl border border-[var(--border)]/20 bg-white/95 p-3.5 shadow-2xl backdrop-blur-md sm:left-4">
+            <div className="absolute -bottom-1 -left-3 z-10 flex max-w-[280px] items-center gap-3 rounded-xl border border-[var(--border)]/20 bg-white/95 p-3.5 shadow-2xl backdrop-blur-md sm:left-4">
               <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/15 text-primary">
                 <Store className="h-5 w-5" />
                 <span className="absolute top-1 right-1 h-2.5 w-2.5 animate-ping rounded-full bg-primary" />

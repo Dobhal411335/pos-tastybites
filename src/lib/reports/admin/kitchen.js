@@ -60,6 +60,7 @@ export async function buildAdminPrintTickets({
     restaurantId: toObjectId(restaurantId),
     printType,
     createdAt: { $gte: start, $lt: end },
+    isActive: { $ne: false },
   };
   if (filters.employeeId) {
     match.requestedBy = toObjectId(filters.employeeId);
