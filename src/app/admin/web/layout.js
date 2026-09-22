@@ -20,7 +20,7 @@ export default function UsersModuleLayout({ children }) {
         // { label: "Offer Details", href: "/admin/web/offer-details" },
         { label: "Navbar Section", href: "/admin/web/navbar-section" },
         { label: "Create WebPages", href: "/admin/web/create-webpages" },
-        { label: "Manage WebPages", href: "/admin/web/manage-webpages" },
+        // { label: "Manage WebPages", href: "/admin/web/manage-webpages" },
       ],
     },
 
