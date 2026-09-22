@@ -1,5 +1,15 @@
 export const OFFER_CATEGORY = "Offers";
 
+/** URL-safe slug from an offer name (e.g. "Lunch Combo!" → "lunch-combo"). */
+export function slugifyOfferName(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80);
+}
+
 export function isOfferItem(item) {
   if (!item) return false;
   if (item.isOffer) return true;

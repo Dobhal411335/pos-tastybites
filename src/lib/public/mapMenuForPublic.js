@@ -116,6 +116,10 @@ export function mapOfferForPublic(offer) {
   return {
     id: String(offer._id),
     name: offer.name,
+    slug:
+      String(offer.slug || "").trim().toLowerCase() ||
+      slugify(offer.name) ||
+      String(offer._id),
     description: offer.description || "",
     price: Number(offer.price) || 0,
     totalPrice: Number(offer.totalPrice) || Number(offer.price) || 0,

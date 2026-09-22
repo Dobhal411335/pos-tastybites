@@ -9,11 +9,15 @@ import { useLoadMore } from "@/hooks/useLoadMore";
 const PAGE_SIZE = 10;
 const SCROLL_STEP = 220;
 
-export default function CategoryFilter({ categories = [] }) {
+export default function CategoryFilter({ categories = [], offersCount = 0 }) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const activeCategory = searchParams.get("category") || "all";
+  const filterVal = (searchParams.get("filter") || "").toLowerCase();
+  const offerVal = searchParams.get("offer") || "";
+  const offersActive =
+    filterVal === "offers" || filterVal === "offer" || Boolean(offerVal);
   const [expanded, setExpanded] = useState(false);
   const scrollerRef = useRef(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
@@ -41,7 +45,10 @@ export default function CategoryFilter({ categories = [] }) {
     if (!el) return;
     updateScrollState();
     el.addEventListener("scroll", updateScrollState, { passive: true });
-    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(updateScrollState) : null;
+    const ro =
+      typeof ResizeObserver !== "undefined"
+        ? new ResizeObserver(updateScrollState)
+        : null;
     ro?.observe(el);
     window.addEventListener("resize", updateScrollState);
     return () => {
@@ -49,7 +56,7 @@ export default function CategoryFilter({ categories = [] }) {
       ro?.disconnect();
       window.removeEventListener("resize", updateScrollState);
     };
-  }, [updateScrollState, categories.length, expanded]);
+  }, [updateScrollState, categories.length, expanded, offersCount]);
 
   const scrollByDir = (dir) => {
     const el = scrollerRef.current;
@@ -60,17 +67,37 @@ export default function CategoryFilter({ categories = [] }) {
   const shownCategories = expanded ? categories : visible;
   const items = [
     { id: "all", slug: "all", name: "All Items", items: null },
+    ...(offersCount > 0
+      ? [
+          {
+            id: "offers",
+            slug: "__offers__",
+            name: "Offers",
+            items: offersCount,
+          },
+        ]
+      : []),
     ...shownCategories,
   ];
 
   const handleCategoryClick = (categorySlug) => {
     const params = new URLSearchParams(searchParams.toString());
-    if (categorySlug === "all") {
+    params.delete("page");
+
+    if (categorySlug === "__offers__") {
       params.delete("category");
+      params.delete("offer");
+      params.set("filter", "offers");
+    } else if (categorySlug === "all") {
+      params.delete("category");
+      params.delete("filter");
+      params.delete("offer");
     } else {
       params.set("category", categorySlug);
+      params.delete("filter");
+      params.delete("offer");
     }
-    params.delete("page");
+
     const qs = params.toString();
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
   };
@@ -115,7 +142,10 @@ export default function CategoryFilter({ categories = [] }) {
         <div className="flex min-w-max items-center gap-2">
           {items.map((cat) => {
             const slug = cat.slug || cat.id;
-            const isActive = activeCategory === slug;
+            const isOffersChip = slug === "__offers__";
+            const isActive = isOffersChip
+              ? offersActive
+              : !offersActive && activeCategory === slug;
             const count = cat.items;
             return (
               <button

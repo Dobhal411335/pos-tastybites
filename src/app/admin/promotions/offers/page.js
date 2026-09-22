@@ -24,6 +24,7 @@ import { PALETTE } from "@/utils/paletteeColor";
 import { DatePicker } from "@/components/ui/date-picker";
 import { format } from "date-fns";
 import DeleteDialog from "@/components/common/DeleteDialog";
+import { slugifyOfferName } from "@/utils/offerDetails";
 
 export default function CreatePromoOfferPage() {
   const [offers, setOffers] = useState([]);
@@ -128,6 +129,12 @@ export default function CreatePromoOfferPage() {
       return;
     }
 
+    const generatedSlug = slugifyOfferName(offerName);
+    if (!generatedSlug) {
+      toast.error("Please enter a valid offer name.");
+      return;
+    }
+
     setSaving(true);
 
     // Clean arrays
@@ -137,6 +144,7 @@ export default function CreatePromoOfferPage() {
 
     const payload = {
       name: offerName.trim(),
+      slug: generatedSlug,
       price: parseFloat(priceAmount),
       description,
       inclusions: cleanInclusions,
@@ -608,7 +616,12 @@ export default function CreatePromoOfferPage() {
                         )}
                       </TableCell>
                       <TableCell className="px-6">
-                        <span className="text-[15px] font-semibold text-zinc-900">{off.name}</span>
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-[15px] font-semibold text-zinc-900">{off.name}</span>
+                          {off.slug ? (
+                            <span className="text-[12px] font-mono text-zinc-500">/{off.slug}</span>
+                          ) : null}
+                        </div>
                       </TableCell>
                       <TableCell className="px-6 text-center">
                         <div className="font-bold text-[15px] text-[#F97316]">

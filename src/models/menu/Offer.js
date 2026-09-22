@@ -4,6 +4,8 @@ const OfferSchema = new mongoose.Schema(
   {
     restaurant: { type: mongoose.Schema.Types.ObjectId, ref: 'Restaurant', required: true },
     name: { type: String, required: true, trim: true },
+    /** URL key for menu deep-links, e.g. /menu?offer=lunch-combo */
+    slug: { type: String, trim: true, lowercase: true, default: "" },
     price: { type: Number, required: true },
     totalPrice: { type: Number, default: 0 },
     description: { type: String, trim: true, default: '' },
@@ -34,6 +36,14 @@ const OfferSchema = new mongoose.Schema(
     updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   },
   { timestamps: true }
+);
+
+OfferSchema.index(
+  { restaurant: 1, slug: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { slug: { $type: "string", $gt: "" } },
+  }
 );
 
 export default mongoose.models.Offer || mongoose.model('Offer', OfferSchema);

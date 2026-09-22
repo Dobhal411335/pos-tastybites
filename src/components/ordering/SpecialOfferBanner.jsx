@@ -2,7 +2,8 @@
 
 import { useMemo, useState } from "react";
 import Image from "next/image";
-import { Clock3, Eye, ShoppingBag, Tag } from "lucide-react";
+import Link from "next/link";
+import { ArrowRight, Clock3, Eye, ShoppingBag, Tag } from "lucide-react";
 import { usePublicMenu } from "@/hooks/usePublicMenu";
 import { useCart } from "@/context/CartContext";
 import OfferConfigModal from "@/components/menu/OfferConfigModal";
@@ -15,6 +16,8 @@ import {
 } from "@/utils/offerDetails";
 import { productImageSrc } from "@/lib/public/productImage";
 import { toast } from "sonner";
+
+const LANDING_OFFER_LIMIT = 6;
 
 function formatOfferTiming(offer) {
   const from = offer.validFrom ? new Date(offer.validFrom) : null;
@@ -46,6 +49,7 @@ export default function SpecialOfferBanner() {
   const [activeOffer, setActiveOffer] = useState(null);
 
   const list = useMemo(() => (Array.isArray(offers) ? offers : []), [offers]);
+  const previewList = useMemo(() => list.slice(0, LANDING_OFFER_LIMIT), [list]);
 
   const addOfferDirect = (offer) => {
     const inclusions = cleanOfferList(offer.inclusions);
@@ -110,7 +114,7 @@ export default function SpecialOfferBanner() {
 
         {loading ? (
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {Array.from({ length: 3 }).map((_, i) => (
+            {Array.from({ length: 6 }).map((_, i) => (
               <div
                 key={i}
                 className="h-80 animate-pulse rounded-2xl bg-[var(--customer-surface-container)]"
@@ -118,107 +122,121 @@ export default function SpecialOfferBanner() {
             ))}
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {list.map((offer) => {
-              const preview = optionPreview(offer);
-              const needsConfig = offerNeedsOptions(offer);
-              const price = Number(offer.price || 0);
+          <>
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              {previewList.map((offer) => {
+                const preview = optionPreview(offer);
+                const needsConfig = offerNeedsOptions(offer);
+                const price = Number(offer.price || 0);
 
-              return (
-                <article
-                  key={offer.id}
-                  className="group flex flex-col overflow-hidden rounded-2xl border border-[var(--border)]/20 bg-white shadow-sm transition-shadow hover:shadow-md"
-                >
-                  <div className="relative h-48 overflow-hidden bg-[var(--customer-surface-container)]">
-                    <Image
-                      src={productImageSrc(offer)}
-                      alt={offer.name}
-                      fill
-                      sizes="(max-width: 1024px) 50vw, 33vw"
-                      className="object-cover transition-transform duration-500 group-hover:scale-105"
-                    />
-                    <span className="absolute top-3 left-3 inline-flex items-center gap-1 rounded-full bg-primary px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-white">
-                      <Tag className="h-3 w-3" />
-                      Offer
-                    </span>
-                    <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/25 opacity-0 transition-opacity duration-300 group-hover:opacity-100">
+                return (
+                  <article
+                    key={offer.id}
+                    className="group flex flex-col overflow-hidden rounded-2xl border border-[var(--border)]/20 bg-white shadow-sm transition-shadow hover:shadow-md"
+                  >
+                    <div className="relative h-48 overflow-hidden bg-[var(--customer-surface-container)]">
+                      <Image
+                        src={productImageSrc(offer)}
+                        alt={offer.name}
+                        fill
+                        sizes="(max-width: 1024px) 50vw, 33vw"
+                        className="object-cover transition-transform duration-500 group-hover:scale-105"
+                      />
+                      <span className="absolute top-3 left-3 inline-flex items-center gap-1 rounded-full bg-primary px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-white">
+                        <Tag className="h-3 w-3" />
+                        Offer
+                      </span>
+                      <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/25 opacity-0 transition-opacity duration-300 group-hover:opacity-100">
+                        <button
+                          type="button"
+                          aria-label={`View ${offer.name}`}
+                          onClick={() => setActiveOffer(offer)}
+                          className="pointer-events-auto flex h-11 w-11 items-center justify-center rounded-full bg-white/95 text-[var(--customer-ink)] shadow-md transition-transform hover:scale-105"
+                        >
+                          <Eye className="h-5 w-5" />
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-1 flex-col gap-3 p-4">
+                      <div className="flex items-start justify-between gap-2">
+                        <h3 className="text-base font-bold text-[var(--customer-ink)]">
+                          {offer.name}
+                        </h3>
+                        <span className="shrink-0 text-lg font-extrabold tabular-nums text-primary">
+                          ${price.toFixed(2)}
+                        </span>
+                      </div>
+
+                      <p className="line-clamp-2 text-xs leading-relaxed text-[var(--customer-muted)]">
+                        {offer.description || ""}
+                      </p>
+
+                      <div className="flex items-center gap-1.5 text-[11px] font-semibold text-[var(--customer-muted)]">
+                        <Clock3 className="h-3.5 w-3.5 text-primary" />
+                        {formatOfferTiming(offer)}
+                      </div>
+
+                      {preview ? (
+                        <p className="text-[11px] font-semibold text-[var(--customer-ink)]">
+                          {preview}
+                        </p>
+                      ) : null}
+
+                      {(cleanOfferList(offer.inclusions).length > 0 ||
+                        cleanOfferList(offer.choices).length > 0 ||
+                        cleanOfferList(offer.drinks).length > 0) && (
+                        <div className="space-y-1.5 rounded-xl bg-[var(--customer-surface-low)] p-3 text-[11px] text-[var(--customer-muted)]">
+                          {cleanOfferList(offer.inclusions).length > 0 ? (
+                            <div>
+                              <span className="font-bold text-[var(--customer-ink)]">Includes: </span>
+                              {cleanOfferList(offer.inclusions).slice(0, 3).join(", ")}
+                              {cleanOfferList(offer.inclusions).length > 3 ? "…" : ""}
+                            </div>
+                          ) : null}
+                          {cleanOfferList(offer.choices).length > 0 ? (
+                            <div>
+                              <span className="font-bold text-[var(--customer-ink)]">Choices: </span>
+                              {cleanOfferList(offer.choices).slice(0, 3).join(", ")}
+                              {cleanOfferList(offer.choices).length > 3 ? "…" : ""}
+                            </div>
+                          ) : null}
+                          {cleanOfferList(offer.drinks).length > 0 ? (
+                            <div>
+                              <span className="font-bold text-[var(--customer-ink)]">Drinks: </span>
+                              {cleanOfferList(offer.drinks).slice(0, 3).join(", ")}
+                              {cleanOfferList(offer.drinks).length > 3 ? "…" : ""}
+                            </div>
+                          ) : null}
+                        </div>
+                      )}
+
                       <button
                         type="button"
-                        aria-label={`View ${offer.name}`}
-                        onClick={() => setActiveOffer(offer)}
-                        className="pointer-events-auto flex h-11 w-11 items-center justify-center rounded-full bg-white/95 text-[var(--customer-ink)] shadow-md transition-transform hover:scale-105"
+                        onClick={() => handleAddOffer(offer)}
+                        className="mt-auto flex w-full items-center justify-center gap-1.5 rounded-lg bg-primary px-3 py-2.5 text-xs font-bold uppercase tracking-wider text-white transition-colors hover:bg-primary-hover"
                       >
-                        <Eye className="h-5 w-5" />
+                        <ShoppingBag className="h-4 w-4" />
+                        {needsConfig ? "Customize & Add" : "Add to Cart"}
                       </button>
                     </div>
-                  </div>
+                  </article>
+                );
+              })}
+            </div>
 
-                  <div className="flex flex-1 flex-col gap-3 p-4">
-                    <div className="flex items-start justify-between gap-2">
-                      <h3 className="text-base font-bold text-[var(--customer-ink)]">
-                        {offer.name}
-                      </h3>
-                      <span className="shrink-0 text-lg font-extrabold tabular-nums text-primary">
-                        ${price.toFixed(2)}
-                      </span>
-                    </div>
-
-                    <p className="line-clamp-2 text-xs leading-relaxed text-[var(--customer-muted)]">
-                      {offer.description || ""}
-                    </p>
-
-                    <div className="flex items-center gap-1.5 text-[11px] font-semibold text-[var(--customer-muted)]">
-                      <Clock3 className="h-3.5 w-3.5 text-primary" />
-                      {formatOfferTiming(offer)}
-                    </div>
-
-                    {preview ? (
-                      <p className="text-[11px] font-semibold text-[var(--customer-ink)]">
-                        {preview}
-                      </p>
-                    ) : null}
-
-                    {(cleanOfferList(offer.inclusions).length > 0 ||
-                      cleanOfferList(offer.choices).length > 0 ||
-                      cleanOfferList(offer.drinks).length > 0) && (
-                      <div className="space-y-1.5 rounded-xl bg-[var(--customer-surface-low)] p-3 text-[11px] text-[var(--customer-muted)]">
-                        {cleanOfferList(offer.inclusions).length > 0 ? (
-                          <div>
-                            <span className="font-bold text-[var(--customer-ink)]">Includes: </span>
-                            {cleanOfferList(offer.inclusions).slice(0, 3).join(", ")}
-                            {cleanOfferList(offer.inclusions).length > 3 ? "…" : ""}
-                          </div>
-                        ) : null}
-                        {cleanOfferList(offer.choices).length > 0 ? (
-                          <div>
-                            <span className="font-bold text-[var(--customer-ink)]">Choices: </span>
-                            {cleanOfferList(offer.choices).slice(0, 3).join(", ")}
-                            {cleanOfferList(offer.choices).length > 3 ? "…" : ""}
-                          </div>
-                        ) : null}
-                        {cleanOfferList(offer.drinks).length > 0 ? (
-                          <div>
-                            <span className="font-bold text-[var(--customer-ink)]">Drinks: </span>
-                            {cleanOfferList(offer.drinks).slice(0, 3).join(", ")}
-                            {cleanOfferList(offer.drinks).length > 3 ? "…" : ""}
-                          </div>
-                        ) : null}
-                      </div>
-                    )}
-
-                    <button
-                      type="button"
-                      onClick={() => handleAddOffer(offer)}
-                      className="mt-auto flex w-full items-center justify-center gap-1.5 rounded-lg bg-primary px-3 py-2.5 text-xs font-bold uppercase tracking-wider text-white transition-colors hover:bg-primary-hover"
-                    >
-                      <ShoppingBag className="h-4 w-4" />
-                      {needsConfig ? "Customize & Add" : "Add to Cart"}
-                    </button>
-                  </div>
-                </article>
-              );
-            })}
-          </div>
+            {list.length > 0 && (
+              <div className="mt-10 flex justify-center">
+                <Link
+                  href="/menu?filter=offers"
+                  className="inline-flex items-center gap-2 rounded-lg border border-[var(--border)]/30 bg-white px-5 py-3 text-sm font-bold text-[var(--customer-ink)] shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:text-primary"
+                >
+                  <span>See all offers</span>
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+              </div>
+            )}
+          </>
         )}
       </div>
 

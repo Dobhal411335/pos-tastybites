@@ -1,7 +1,7 @@
 import { sendSuccess } from "@/utils/apiResponse";
 import { sendError } from "@/utils/errorHandler";
 import { resolveRestaurantBySlug } from "@/lib/public/resolveRestaurant";
-import { mapMenuForPublic } from "@/lib/public/mapMenuForPublic";
+import { mapMenuForPublic, slugify } from "@/lib/public/mapMenuForPublic";
 import Category from "@/models/menu/Category";
 import Product from "@/models/menu/Product";
 import Offer from "@/models/menu/Offer";
@@ -36,11 +36,24 @@ export async function GET(_request, { params }) {
         restaurant: restaurant._id,
         status: true,
       })
+        .select(
+          "name slug price totalPrice description inclusions choices drinks validFrom validTo image status"
+        )
         .sort({ createdAt: -1 })
         .lean(),
     ]);
 
-    const menu = mapMenuForPublic({ categories, products, offers });
+    // Ensure every offer has a slug for /menu?offer=<slug> deep-links
+    const offersWithSlug = offers.map((o) => ({
+      ...o,
+      slug: o.slug || slugify(o.name) || String(o._id),
+    }));
+
+    const menu = mapMenuForPublic({
+      categories,
+      products,
+      offers: offersWithSlug,
+    });
 
     return sendSuccess(
       {
@@ -50,6 +63,9 @@ export async function GET(_request, { params }) {
           name: restaurant.name,
         },
         ...menu,
+        meta: {
+          offersCount: menu.offers.length,
+        },
       },
       "Menu retrieved",
       200,

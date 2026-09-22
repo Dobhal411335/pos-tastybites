@@ -1,7 +1,5 @@
-"use client";
+import { redirect } from "next/navigation";
 
-import AdminLoginForm from "@/components/auth/AdminLoginForm";
-
-export default function AdminLoginPage() {
-  return <AdminLoginForm />;
+export default function LoginPage() {
+  redirect("/");
 }

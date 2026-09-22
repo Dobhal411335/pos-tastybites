@@ -13,6 +13,8 @@ import {
   PencilIcon,
   Trash2Icon,
   Link as LinkIcon,
+  Tag,
+  Loader2,
 } from "lucide-react";
 import {
   Card,
@@ -21,8 +23,16 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import DeleteDialog from "@/components/common/DeleteDialog";
 import imageCompression from "browser-image-compression";
+import { slugifyOfferName } from "@/utils/offerDetails";
 
 const emptyForm = () => ({
   image: { url: "", key: "" },
@@ -41,6 +51,9 @@ const ManageBanners = () => {
     id: null,
     imageKey: null,
   });
+  const [offerPickerOpen, setOfferPickerOpen] = useState(false);
+  const [activeOffers, setActiveOffers] = useState([]);
+  const [loadingOffers, setLoadingOffers] = useState(false);
 
   const fetchBanners = async () => {
     try {
@@ -63,6 +76,42 @@ const ManageBanners = () => {
   useEffect(() => {
     fetchBanners();
   }, []);
+
+  const fetchActiveOffers = async () => {
+    setLoadingOffers(true);
+    try {
+      const response = await fetch(`/api/menu/offers?active=1`);
+      const data = await response.json();
+      if (data.success && Array.isArray(data.data)) {
+        setActiveOffers(data.data.filter((o) => o.status !== false));
+      } else {
+        setActiveOffers([]);
+        toast.error("Failed to load active offers");
+      }
+    } catch (error) {
+      console.error("Error fetching offers:", error);
+      setActiveOffers([]);
+      toast.error("Failed to fetch offers");
+    } finally {
+      setLoadingOffers(false);
+    }
+  };
+
+  const openOfferPicker = async () => {
+    setOfferPickerOpen(true);
+    await fetchActiveOffers();
+  };
+
+  const handleSelectOffer = (offer) => {
+    const slug = slugifyOfferName(offer.slug || offer.name);
+    if (!slug) {
+      toast.error("This offer needs a slug. Edit it under Promotions → Offers.");
+      return;
+    }
+    setFormData((prev) => ({ ...prev, link: `/menu?offer=${slug}` }));
+    setOfferPickerOpen(false);
+    toast.success(`Link set to /menu?offer=${slug}`);
+  };
 
   const handleEdit = (banner) => {
     setEditingId(banner._id);
@@ -271,14 +320,30 @@ const ManageBanners = () => {
                   <Label className="ml-1 text-sm font-medium text-slate-600">
                     Link URL <span className="text-red-500">*</span>
                   </Label>
-                  <Input
-                    name="link"
-                    placeholder="e.g. /menu or https://example.com"
-                    value={formData.link}
-                    onChange={handleChange}
-                    required
-                    className="h-11 rounded-xl border-slate-200 bg-slate-50/50 transition-colors hover:bg-slate-50 focus-visible:border-slate-400 focus-visible:ring-slate-200"
-                  />
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <Input
+                      name="link"
+                      placeholder="e.g. /menu or /menu?offer=lunch-combo"
+                      value={formData.link}
+                      onChange={handleChange}
+                      required
+                      className="h-11 flex-1 rounded-xl border-slate-200 bg-slate-50/50 transition-colors hover:bg-slate-50 focus-visible:border-slate-400 focus-visible:ring-slate-200"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={openOfferPicker}
+                      className="h-11 shrink-0 rounded-xl border-slate-200 px-4 font-semibold text-slate-700 hover:bg-slate-50"
+                    >
+                      <Tag className="mr-2 h-4 w-4 text-orange-500" />
+                      Pick offer
+                    </Button>
+                  </div>
+                  <p className="ml-1 text-xs text-slate-500">
+                    Pick an active offer to set{" "}
+                    <span className="font-mono text-slate-700">/menu?offer=slug</span>, or
+                    type any URL manually.
+                  </p>
                 </div>
 
                 <div className="space-y-3">
@@ -458,6 +523,74 @@ const ManageBanners = () => {
         title="Delete Banner"
         description="Are you sure you want to delete this hero banner? This action cannot be undone."
       />
+
+      <Dialog open={offerPickerOpen} onOpenChange={setOfferPickerOpen}>
+        <DialogContent className="max-h-[85vh] max-w-lg overflow-hidden p-0 sm:rounded-2xl">
+          <DialogHeader className="border-b border-slate-100 px-6 py-5">
+            <DialogTitle className="text-lg font-bold text-slate-900">
+              Choose an active offer
+            </DialogTitle>
+            <DialogDescription className="text-sm text-slate-500">
+              Selecting an offer fills the banner link with its slug so the menu can
+              open filtered to that offer.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="max-h-[60vh] overflow-y-auto px-4 py-4">
+            {loadingOffers ? (
+              <div className="flex items-center justify-center gap-2 py-16 text-sm text-slate-500">
+                <Loader2 className="h-5 w-5 animate-spin" />
+                Loading offers…
+              </div>
+            ) : activeOffers.length === 0 ? (
+              <div className="py-16 text-center text-sm text-slate-500">
+                No active offers found. Create one under Promotions → Offers.
+              </div>
+            ) : (
+              <ul className="space-y-2">
+                {activeOffers.map((offer) => {
+                  const slug = slugifyOfferName(offer.slug || offer.name);
+                  return (
+                    <li key={offer._id}>
+                      <button
+                        type="button"
+                        onClick={() => handleSelectOffer(offer)}
+                        className="flex w-full items-center gap-3 rounded-xl border border-slate-100 bg-white p-3 text-left transition-colors hover:border-orange-200 hover:bg-orange-50/40"
+                      >
+                        <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-slate-100">
+                          {offer.image?.url ? (
+                            <Image
+                              src={offer.image.url}
+                              alt={offer.name}
+                              fill
+                              className="object-cover"
+                            />
+                          ) : (
+                            <div className="flex h-full w-full items-center justify-center">
+                              <Tag className="h-4 w-4 text-slate-300" />
+                            </div>
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-semibold text-slate-900">
+                            {offer.name}
+                          </p>
+                          <p className="truncate font-mono text-xs text-slate-500">
+                            /menu?offer={slug || "—"}
+                          </p>
+                        </div>
+                        <span className="shrink-0 text-sm font-bold text-orange-600">
+                          ${Number(offer.price || 0).toFixed(2)}
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
