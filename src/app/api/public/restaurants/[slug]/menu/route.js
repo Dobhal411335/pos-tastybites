@@ -17,10 +17,17 @@ export async function GET(_request, { params }) {
 
     await connectDB();
 
-    const categories = await Category.find({
+    let categories = await Category.find({
       restaurant: restaurant._id,
       status: "Active",
     }).lean();
+
+    // Filter out Beer and Wine for public pages
+    categories = categories.filter(
+      (c) =>
+        !c.name.toLowerCase().includes("beer") &&
+        !c.name.toLowerCase().includes("wine")
+    );
 
     const categoryIds = categories.map((c) => c._id);
 

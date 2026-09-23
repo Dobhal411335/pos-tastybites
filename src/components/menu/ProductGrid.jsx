@@ -23,7 +23,7 @@ export default function ProductGrid({ products, isLoading, resetKey = "" }) {
   }
 
   return (
-    <div className="w-full space-y-4 md:space-y-4 lg:space-y-6">
+    <div className="w-full space-y-4 md:space-y-4 lg:space-y-6 px-1">
       <div className="mx-auto grid w-full grid-cols-1 items-stretch gap-2 md:grid-cols-2 md:gap-4 xl:grid-cols-3 xl:gap-4">
         {visible.map((product) => (
           <ProductCard key={product.id} product={product} />

@@ -111,7 +111,7 @@ function GalleryImage({ image, alt, className, sizes }) {
         fill
         loading="lazy"
         sizes={sizes}
-        className="object-cover"
+        className="object-cover object-center"
       />
     </div>
   );
@@ -122,12 +122,12 @@ function GalleryColumn({ column, columnIndex, slideIndex, columnsPerSlide }) {
 
   if (column.type === "tall") {
     return (
-      <div className="flex h-full min-h-0 flex-col">
+      <div className="flex h-[50vh] md:h-full md:min-h-[26rem] flex-col">
         <GalleryImage
           image={column.images[0]}
           alt={`Gallery image ${baseIndex + 1}`}
-          className="h-full min-h-[22rem] w-full md:min-h-[26rem]"
-          sizes="(max-width: 768px) 50vw, 20vw"
+          className="h-full w-full"
+          sizes="(max-width: 768px) 100vw, 20vw"
         />
       </div>
     );
@@ -135,14 +135,14 @@ function GalleryColumn({ column, columnIndex, slideIndex, columnsPerSlide }) {
 
   if (column.type === "stack") {
     return (
-      <div className="flex h-full min-h-[22rem] flex-col gap-3 md:min-h-[26rem] md:gap-4">
+      <div className="flex h-[50vh] md:h-full md:min-h-[26rem] flex-col gap-3 md:gap-4">
         {column.images.map((image, index) => (
           <GalleryImage
             key={image.key || `${baseIndex}-${index}`}
             image={image}
             alt={`Gallery image ${baseIndex + 1}-${index + 1}`}
             className="min-h-0 flex-1 w-full"
-            sizes="(max-width: 768px) 50vw, 20vw"
+            sizes="(max-width: 768px) 100vw, 20vw"
           />
         ))}
       </div>
@@ -166,7 +166,7 @@ function GallerySlide({ columns, slideIndex, allImages, columnsPerSlide }) {
 
   return (
     <div className="relative">
-      <div className="grid grid-cols-2 items-stretch gap-3 sm:grid-cols-3 md:grid-cols-5 md:gap-4">
+      <div className="grid grid-cols-1 items-stretch gap-3 sm:grid-cols-3 md:grid-cols-5 md:gap-4">
         {columns.map((column, index) => (
           <GalleryColumn
             key={`col-${slideIndex}-${index}`}
@@ -220,7 +220,7 @@ export default function HomeGallerySection() {
   useEffect(() => {
     const handleResize = () => {
       if (window.innerWidth < 640) {
-        setColumnsPerSlide(2);
+        setColumnsPerSlide(1);
       } else if (window.innerWidth < 768) {
         setColumnsPerSlide(3);
       } else {
@@ -299,7 +299,7 @@ export default function HomeGallerySection() {
         </div>
 
         {showSkeleton ? (
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5 md:gap-4">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 md:grid-cols-5 md:gap-4">
             {Array.from({ length: columnsPerSlide }).map((_, index) => (
               <Skeleton
                 key={index}

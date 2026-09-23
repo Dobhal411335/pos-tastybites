@@ -103,16 +103,16 @@ export default function BrowseMenuLanding() {
             {filtered.map((product) => (
               <article
                 key={product.id}
-                className="group flex flex-col justify-between overflow-hidden rounded-2xl border border-[var(--border)]/20 bg-white shadow-sm hover:shadow-md"
+                className="group flex flex-col justify-between overflow-hidden rounded-xl border border-[var(--border)]/20 bg-white shadow-sm hover:shadow-md"
               >
                 <div>
-                  <div className="relative h-66 md:h-48 overflow-hidden bg-[var(--customer-surface-container)]">
+                  <div className="relative h-60 md:h-48 overflow-hidden bg-[var(--customer-surface-container)]">
                     <Image
                       src={productImageSrc(product)}
                       alt={product.name}
                       fill
                       sizes="(max-width: 1024px) 50vw, 25vw"
-                      className="object-cover transition-transform duration-500 group-hover:scale-105"
+                      className="object-fill md:object-cover transition-transform duration-500 group-hover:scale-105"
                     />
                     <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/25 opacity-0 transition-opacity duration-300 group-hover:opacity-100">
                       <button

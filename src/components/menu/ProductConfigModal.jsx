@@ -339,21 +339,23 @@ export default function ProductConfigModal({ isOpen, onClose, product }) {
                     <div
                       key={key}
                       className={cn(
-                        "flex flex-wrap items-center gap-3 rounded-lg border p-3 transition-colors",
+                        "flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3 transition-colors",
                         qty > 0
                           ? "border-primary bg-primary/5"
                           : "border-zinc-200",
                       )}
                     >
-                      <div className="min-w-[120px] flex-1 text-sm font-bold text-zinc-800">
+                      <div className="text-sm font-bold text-zinc-800">
                         {v.size || "Standard"}
                       </div>
-                      <QtyStepper
-                        value={qty}
-                        onChange={(next) => setVariantQty(key, next)}
-                      />
-                      <div className="w-20 text-right text-sm font-bold tabular-nums text-zinc-900">
-                        ${price.toFixed(2)}
+                      <div className="flex items-center gap-3">
+                        <QtyStepper
+                          value={qty}
+                          onChange={(next) => setVariantQty(key, next)}
+                        />
+                        <div className="w-16 text-right text-sm font-bold tabular-nums text-zinc-900">
+                          ${price.toFixed(2)}
+                        </div>
                       </div>
                     </div>
                   );
@@ -446,16 +448,18 @@ export default function ProductConfigModal({ isOpen, onClose, product }) {
                           : "border-zinc-200",
                       )}
                     >
-                      <div className="flex flex-wrap items-center gap-3">
-                        <div className="min-w-[120px] flex-1 text-sm font-bold text-zinc-800">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div className="text-sm font-bold text-zinc-800">
                           {addon.name}
                         </div>
-                        <QtyStepper
-                          value={qty}
-                          onChange={(next) => setAddonQty(key, addon, next)}
-                        />
-                        <div className="w-20 text-right text-sm font-bold tabular-nums text-zinc-900">
-                          +${price.toFixed(2)}
+                        <div className="flex items-center gap-3">
+                          <QtyStepper
+                            value={qty}
+                            onChange={(next) => setAddonQty(key, addon, next)}
+                          />
+                          <div className="w-16 text-right text-sm font-bold tabular-nums text-zinc-900">
+                            +${price.toFixed(2)}
+                          </div>
                         </div>
                       </div>
 
