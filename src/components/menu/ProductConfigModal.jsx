@@ -105,11 +105,6 @@ export default function ProductConfigModal({ isOpen, onClose, product }) {
     ([, entry]) => entry?.qty > 0 && entry?.addon,
   );
 
-  const requiredChoicesMissing = choiceOptions.some((group) => {
-    const selected = choiceSelections[group.name];
-    return !selected || selected.length === 0;
-  });
-
   const productChoicePayload = choiceOptions
     .map((group) => ({
       name: group.name,
@@ -188,10 +183,6 @@ export default function ProductConfigModal({ isOpen, onClose, product }) {
   const handleAddToCart = () => {
     if (variants.length > 0 && variantEntries.length === 0) {
       toast.error("Select at least one variant quantity.");
-      return;
-    }
-    if (requiredChoicesMissing) {
-      toast.error("Please complete required options before adding.");
       return;
     }
     if (variantEntries.length === 0 && addonEntries.length === 0) {
@@ -378,9 +369,6 @@ export default function ProductConfigModal({ isOpen, onClose, product }) {
               <div key={group.name} className="space-y-2">
                 <span className="mb-1 block text-[13px] font-bold text-zinc-900">
                   {group.name}{" "}
-                  <span className="text-xs font-semibold text-primary">
-                    * Required
-                  </span>
                 </span>
                 <div className="grid gap-2 sm:grid-cols-2">
                   {(group.subChoices || []).map((sub) => {
@@ -549,10 +537,7 @@ export default function ProductConfigModal({ isOpen, onClose, product }) {
             <Button
               type="button"
               onClick={handleAddToCart}
-              disabled={
-                requiredChoicesMissing ||
-                (variantEntries.length === 0 && addonEntries.length === 0)
-              }
+              disabled={variantEntries.length === 0 && addonEntries.length === 0}
               className="h-11 rounded-xl bg-primary px-6 font-bold text-white hover:bg-primary-hover"
             >
               Add to Cart
