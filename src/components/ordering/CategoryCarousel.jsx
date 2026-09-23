@@ -75,7 +75,7 @@ export default function CategoryCarousel() {
               <Link
                 key={cat.id}
                 href={`/menu?category=${encodeURIComponent(cat.slug)}`}
-                className="group w-44 shrink-0 overflow-hidden rounded-xl border border-[var(--border)]/20 bg-white shadow-sm transition-all hover:shadow-md sm:w-48"
+                className="group w-48 shrink-0 overflow-hidden rounded-xl border border-[var(--border)]/20 bg-white shadow-sm transition-all hover:shadow-md sm:w-48"
               >
                 <div className="relative h-32 overflow-hidden bg-[var(--customer-surface-container)]">
                   <Image

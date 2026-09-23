@@ -106,7 +106,7 @@ export default function BrowseMenuLanding() {
                 className="group flex flex-col justify-between overflow-hidden rounded-2xl border border-[var(--border)]/20 bg-white shadow-sm hover:shadow-md"
               >
                 <div>
-                  <div className="relative h-48 overflow-hidden bg-[var(--customer-surface-container)]">
+                  <div className="relative h-66 md:h-48 overflow-hidden bg-[var(--customer-surface-container)]">
                     <Image
                       src={productImageSrc(product)}
                       alt={product.name}

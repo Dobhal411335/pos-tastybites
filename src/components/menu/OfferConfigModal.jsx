@@ -41,12 +41,11 @@ export default function OfferConfigModal({ isOpen, onClose, offer }) {
   if (!offer) return null;
 
   const handleAdd = () => {
-    if (choices.length > 0 && selectedChoices.length === 0) {
-      toast.error("Please select at least one choice option.");
-      return;
-    }
-    if (drinks.length > 0 && selectedDrinks.length === 0) {
-      toast.error("Please select at least one drink option.");
+    const hasAnyOptions = inclusions.length > 0 || choices.length > 0 || drinks.length > 0;
+    const hasAnySelection = selectedInclusions.length > 0 || selectedChoices.length > 0 || selectedDrinks.length > 0;
+
+    if (hasAnyOptions && !hasAnySelection) {
+      toast.error("Please select at least one option.");
       return;
     }
 
@@ -173,7 +172,7 @@ export default function OfferConfigModal({ isOpen, onClose, offer }) {
           {choices.length > 0 && (
             <fieldset className="space-y-3">
               <legend className="text-xs font-bold uppercase tracking-widest text-zinc-500">
-                Choices <span className="text-primary">* Required</span>
+                Choices 
               </legend>
               <div className="space-y-2">
                 {choices.map((item) => {
@@ -205,7 +204,7 @@ export default function OfferConfigModal({ isOpen, onClose, offer }) {
           {drinks.length > 0 && (
             <fieldset className="space-y-3">
               <legend className="text-xs font-bold uppercase tracking-widest text-zinc-500">
-                Drinks <span className="text-primary">* Required</span>
+                Drinks
               </legend>
               <div className="space-y-2">
                 {drinks.map((item) => {

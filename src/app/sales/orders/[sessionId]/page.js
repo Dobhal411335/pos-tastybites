@@ -1726,7 +1726,6 @@ function OrderPageContent() {
           ) : null}
         </DropdownMenuItem>
 
-        {panelLayout === "2" ? (
           <>
             <DropdownMenuSeparator />
             <DropdownMenuLabel className="text-[10px] uppercase tracking-wider text-zinc-500">
@@ -1737,11 +1736,11 @@ function OrderPageContent() {
                 <List className="h-4 w-4" />
                 List
                 {itemStyle === "tiles" ? (
-                  <span className="ml-auto mr-1 text-[10px] font-bold text-orange-600">
-                    {gridCols}
+                  <span className="ml-auto mr-1 text-[10px] font-bold text-black">
+                    {gridCols} columns
                   </span>
                 ) : itemStyle === "list" ? (
-                  <Check className="ml-auto mr-1 h-4 w-4 text-orange-600" />
+                  <Check className="ml-auto mr-1 h-4 w-4 text-black" />
                 ) : null}
               </DropdownMenuSubTrigger>
               <DropdownMenuSubContent className="w-40 bg-white">
@@ -1773,7 +1772,7 @@ function OrderPageContent() {
               </DropdownMenuSubContent>
             </DropdownMenuSub>
           </>
-        ) : null}
+       
       </DropdownMenuContent>
     </DropdownMenu>
   );

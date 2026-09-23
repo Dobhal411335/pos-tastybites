@@ -183,7 +183,7 @@ export default function Hero() {
               </div>
             )}
 
-            <div className="absolute -bottom-1 -left-3 z-10 flex max-w-[280px] items-center gap-3 rounded-xl border border-[var(--border)]/20 bg-white/95 p-3.5 shadow-2xl backdrop-blur-md sm:left-4">
+            <div className="hidden md:flex absolute -bottom-1 -left-3 z-10 flex max-w-[280px] items-center gap-3 rounded-xl border border-[var(--border)]/20 bg-white/95 p-3.5 shadow-2xl backdrop-blur-md sm:left-4">
               <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/15 text-primary">
                 <Store className="h-5 w-5" />
                 <span className="absolute top-1 right-1 h-2.5 w-2.5 animate-ping rounded-full bg-primary" />

@@ -23,7 +23,7 @@ export default function QuickOrderBar() {
   };
 
   return (
-    <section className="relative z-20 w-full bg-[var(--customer-surface)] pb-10 -mt-4" id="quick-order">
+    <section className="relative z-20 w-full bg-[var(--customer-surface)] pb-10 -mt-4 py-10" id="quick-order">
       <div className="mx-auto max-w-[1320px] px-5 lg:px-12">
         <div className="flex flex-col gap-4 rounded-2xl border border-[var(--border)]/20 bg-white p-5 shadow-xl lg:p-6">
           <div className="flex flex-col justify-between gap-3 md:flex-row md:items-center">
@@ -94,7 +94,7 @@ export default function QuickOrderBar() {
           </div>
 
           {chips.length > 0 ? (
-            <div className="flex items-center gap-2 overflow-x-auto pb-1 text-nowrap scrollbar-none">
+            <div className="hidden md:flex items-center gap-2 overflow-x-auto pb-1 text-nowrap scrollbar-none">
               <span className="mr-1 text-xs font-bold uppercase tracking-wider text-[var(--customer-muted)]">
                 Popular:
               </span>

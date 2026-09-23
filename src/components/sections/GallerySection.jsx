@@ -21,7 +21,6 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 
-const COLUMNS_PER_SLIDE = 5;
 const TALL_RATIO = 1.05;
 
 function loadImageMeta(image) {
@@ -118,8 +117,8 @@ function GalleryImage({ image, alt, className, sizes }) {
   );
 }
 
-function GalleryColumn({ column, columnIndex, slideIndex }) {
-  const baseIndex = slideIndex * COLUMNS_PER_SLIDE + columnIndex;
+function GalleryColumn({ column, columnIndex, slideIndex, columnsPerSlide }) {
+  const baseIndex = slideIndex * columnsPerSlide + columnIndex;
 
   if (column.type === "tall") {
     return (
@@ -162,7 +161,7 @@ function GalleryColumn({ column, columnIndex, slideIndex }) {
   );
 }
 
-function GallerySlide({ columns, slideIndex, allImages }) {
+function GallerySlide({ columns, slideIndex, allImages, columnsPerSlide }) {
   if (!columns.length) return null;
 
   return (
@@ -174,6 +173,7 @@ function GallerySlide({ columns, slideIndex, allImages }) {
             column={column}
             columnIndex={index}
             slideIndex={slideIndex}
+            columnsPerSlide={columnsPerSlide}
           />
         ))}
       </div>
@@ -215,6 +215,22 @@ export default function HomeGallerySection() {
   const [measuredImages, setMeasuredImages] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isMeasuring, setIsMeasuring] = useState(false);
+  const [columnsPerSlide, setColumnsPerSlide] = useState(5);
+
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth < 640) {
+        setColumnsPerSlide(2);
+      } else if (window.innerWidth < 768) {
+        setColumnsPerSlide(3);
+      } else {
+        setColumnsPerSlide(5);
+      }
+    };
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   useEffect(() => {
     const fetchGallery = async () => {
@@ -260,8 +276,8 @@ export default function HomeGallerySection() {
 
   const slides = useMemo(() => {
     const columns = packGalleryColumns(measuredImages);
-    return chunkColumns(columns, COLUMNS_PER_SLIDE);
-  }, [measuredImages]);
+    return chunkColumns(columns, columnsPerSlide);
+  }, [measuredImages, columnsPerSlide]);
 
   if (!isLoading && images.length === 0) return null;
 
@@ -272,24 +288,19 @@ export default function HomeGallerySection() {
       <div className="mx-auto w-full max-w-8xl px-4 md:px-6">
         <div className="mb-10 ">
           <p className="font-body text-sm text-heading md:text-base text-center">
-            Glimpses of the luxury Sanctuary
+          Culinary Gallery & Ambiance
           </p>
-          <h2 className="mt-3 font-heading text-3xl leading-[1.2] text-heading md:text-4xl lg:text-5xl text-center">
-            Moments of Peace{" "}
-            <span className="text-primary">& Transformation</span>
+          <h2 className="mt-3 font-heading text-3xl leading-[1.2] text-heading md:text-2xl text-center">
+          A Feast for the Eyes Before Your Very First Bite
           </h2>
-          <p className="mt-4 font-body text-sm leading-relaxed text-foreground md:text-base md:leading-[1.8] text-center mx-auto max-w-3xl">
-            Step into the serene world of luxurious and discover moments created
-            for inner peace, mindful living, and meaningful transformation.
-            Explore our tranquil meditation spaces, immersive yoga sessions,
-            nourishing organic cuisine, soulful experiences, and the
-            breathtaking natural beauty of Himalya.
+          <p className="mt-4 font-body text-sm leading-relaxed text-foreground md:leading-[1.8] text-center mx-auto max-w-2xl">
+          Explore our photo gallery showcasing signature dishes, handcrafted cocktails, and the warm, inviting ambiance of our dining space.
           </p>
         </div>
 
         {showSkeleton ? (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5 md:gap-4">
-            {Array.from({ length: COLUMNS_PER_SLIDE }).map((_, index) => (
+            {Array.from({ length: columnsPerSlide }).map((_, index) => (
               <Skeleton
                 key={index}
                 className="min-h-[22rem] rounded-image md:min-h-[26rem]"
@@ -314,6 +325,7 @@ export default function HomeGallerySection() {
                     columns={slideColumns}
                     slideIndex={index}
                     allImages={measuredImages}
+                    columnsPerSlide={columnsPerSlide}
                   />
                 </CarouselItem>
               ))}
