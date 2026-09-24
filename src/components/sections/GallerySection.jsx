@@ -122,7 +122,7 @@ function GalleryColumn({ column, columnIndex, slideIndex, columnsPerSlide }) {
 
   if (column.type === "tall") {
     return (
-      <div className="flex h-[50vh] md:h-full md:min-h-[26rem] flex-col">
+      <div className="flex h-[65vh] md:h-full md:min-h-[26rem] flex-col">
         <GalleryImage
           image={column.images[0]}
           alt={`Gallery image ${baseIndex + 1}`}
@@ -135,7 +135,7 @@ function GalleryColumn({ column, columnIndex, slideIndex, columnsPerSlide }) {
 
   if (column.type === "stack") {
     return (
-      <div className="flex h-[50vh] md:h-full md:min-h-[26rem] flex-col gap-3 md:gap-4">
+      <div className="flex h-[65vh] md:h-full md:min-h-[26rem] flex-col gap-3 md:gap-4">
         {column.images.map((image, index) => (
           <GalleryImage
             key={image.key || `${baseIndex}-${index}`}
