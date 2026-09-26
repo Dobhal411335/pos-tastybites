@@ -197,11 +197,11 @@ const QUICK_ACTION_LINKS = [
     label: "Stock Control / Inventory Management",
     icon: Boxes,
   },
-  {
-    href: "/admin/web",
-    label: "Email Marketing",
-    icon: Mail,
-  },
+  // {
+  //   href: "/admin/web",
+  //   label: "Email Marketing",
+  //   icon: Mail,
+  // },
 ];
 
 /** All dashboard destinations (category views + legacy list) */

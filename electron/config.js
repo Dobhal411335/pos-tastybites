@@ -1,4 +1,4 @@
-import { app } from 'electron';
+﻿import { app } from 'electron';
 
 /**
  * Desktop POS load URL and navigation allowlist.
@@ -14,7 +14,7 @@ const DEV_PORT = process.env.PORT || 3000;
 
 export const PRODUCTION_POS_URL =
   process.env.ELECTRON_PRODUCTION_URL ||
-  'https://sales.tastybitesrestaurant.com/sales/login';
+  '__PRODUCTION_URL_PLACEHOLDER__';
 
 const DEV_POS_URL =
   process.env.ELECTRON_DEV_URL ||
@@ -63,3 +63,5 @@ export function isAllowedNavigation(targetUrl, allowedOrigins) {
     return false;
   }
 }
+
+

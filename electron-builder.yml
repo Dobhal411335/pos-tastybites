@@ -1,4 +1,4 @@
-appId: com.tastybites.pos
+﻿appId: com.tastybites.pos
 productName: Tasty Bites POS
 electronVersion: "35.0.0"
 directories:
@@ -15,3 +15,7 @@ mac:
 win:
   target: nsis
   icon: public/branding/tastybites-sales.png
+
+
+
+
