@@ -327,6 +327,7 @@ export async function repricePosCartItems({
       choiceSelections,
       addonChoiceSelections,
       drinks,
+      notes: String(item.notes || "").trim(),
       cartId: item.cartId || String(Date.now() + Math.random()),
     });
 

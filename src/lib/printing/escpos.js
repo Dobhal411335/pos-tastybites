@@ -685,12 +685,17 @@ export function buildReceiptTicket({
   const tableNo = resolveTableNo(job, order);
   const floorName = resolveFloorName(job, order);
   const tableLabel = formatTableNumbersWithFloor(tableNo, floorName);
-  const partyLabel =
-    order?.partyName ||
-    order?.guestName ||
-    job?.metadata?.partyName ||
-    job?.metadata?.guestName ||
-    "";
+  const meta = job?.metadata || {};
+  const partyLabel = isSplitReceipt
+    ? String(meta.splitName || meta.partyName || meta.guestName || "").trim() ||
+      order?.partyName ||
+      order?.guestName ||
+      ""
+    : order?.partyName ||
+      order?.guestName ||
+      job?.metadata?.partyName ||
+      job?.metadata?.guestName ||
+      "";
 
   const taxBreakdown = Array.isArray(order?.taxBreakdown)
     ? order.taxBreakdown
@@ -701,7 +706,6 @@ export function buildReceiptTicket({
       : Number(order?.taxTotal || 0);
 
   const rawOrder = order || {};
-  const meta = job?.metadata || {};
 
   const methodStr = String(
     rawOrder.paymentMethod ||
@@ -822,6 +826,15 @@ export function buildReceiptTicket({
   if (reprint) {
     e.align(1).bold(true).line("*** REPRINT ***").bold(false);
   }
+  const isSplitReceipt = Boolean(meta.isSplitReceipt);
+  if (isSplitReceipt) {
+    const splitIdx = Number(meta.splitIndex) || 1;
+    const splitTot = Number(meta.splitTotal) || 1;
+    e.align(1).bold(true).line(`SPLIT ${splitIdx} of ${splitTot}`).bold(false);
+    if (meta.splitName) {
+      e.align(1).bold(true).line(toPrinterText(String(meta.splitName))).bold(false);
+    }
+  }
   for (const addrLine of String(restAddress).split(/\r?\n/)) {
     e.line(toPrinterText(addrLine));
   }
@@ -901,7 +914,37 @@ export function buildReceiptTicket({
     .line(formatTwoColumnLine("TOTAL", money(grandTotal)))
     .bold(false);
 
-  if (hasPaymentSplit) {
+  if (isSplitReceipt) {
+    e.line(divider("-"));
+    e.bold(true).line("THIS SLIP").bold(false);
+    const slipAmount = Number(meta.splitAmount ?? 0);
+    const slipMethod = String(meta.splitMethod || methodStr || "");
+    const slipCardMatch = slipMethod.match(/Card\s*-\s*([^+/]+)/i);
+    const slipCardLabel = slipCardMatch
+      ? `Card (${slipCardMatch[1].trim()})`
+      : "Card";
+    if (meta.splitName) {
+      e.line(`Payer: ${toPrinterText(String(meta.splitName))}`);
+    }
+    if (/cash/i.test(slipMethod)) {
+      e.line(formatTwoColumnLine("Cash", money(slipAmount)));
+    } else if (/card/i.test(slipMethod)) {
+      e.line(formatTwoColumnLine(slipCardLabel, money(slipAmount)));
+    } else {
+      e.line(
+        formatTwoColumnLine(
+          toPrinterText(slipMethod || "Paid"),
+          money(slipAmount),
+        ),
+      );
+    }
+    e.line(
+      formatTwoColumnLine(
+        `Bill total (Order #${orderNumber})`,
+        money(grandTotal),
+      ),
+    );
+  } else if (hasPaymentSplit) {
     e.line(divider("-"));
     e.bold(true).line("PAYMENT METHOD").bold(false);
     if (giftUsed > 0) {

@@ -27,8 +27,17 @@ const CustomerReceipt = ({
   serverName,
   guestCount,
   isReprint = false,
+  jobMetadata = null,
 }) => {
   if (!order) return null;
+
+  const meta = jobMetadata && typeof jobMetadata === "object" ? jobMetadata : {};
+  const isSplitReceipt = Boolean(meta.isSplitReceipt);
+  const splitIndex = Number(meta.splitIndex) || 0;
+  const splitTotal = Number(meta.splitTotal) || 0;
+  const splitName = meta.splitName ? String(meta.splitName) : "";
+  const splitAmount = Number(meta.splitAmount) || 0;
+  const splitMethod = String(meta.splitMethod || meta.paymentMethod || "").trim();
 
   const {
     orderNumber,
@@ -51,7 +60,9 @@ const CustomerReceipt = ({
     tableNo,
     createdAt,
   } = order;
-  const partyLabel = order.partyName || guestName;
+  const partyLabel = isSplitReceipt
+    ? splitName || order.partyName || guestName
+    : order.partyName || guestName;
   const floorName = order.floorName || order.floor?.name;
   const tableLabel = formatTableNumbersWithFloor(tableNo, floorName);
 
@@ -93,15 +104,6 @@ const CustomerReceipt = ({
   const tip = Number(tipAmount || 0);
   const discount = Number(discountTotal || 0);
   const serviceCharge = Number(serviceChargeTotal || 0);
-  const giftUsed = Number(
-    order.giftcardUsedAmount ??
-      order.giftCardUsedAmount ??
-      order.giftCardUsed ??
-      giftcardUsedAmount ??
-      0,
-  );
-  const cash = Number(cashAmount || 0);
-  const card = Number(cardAmount || 0);
   const orderTotal = Number(totalAmount || 0);
   const grandTotal = orderTotal + tip;
 
@@ -160,7 +162,26 @@ const CustomerReceipt = ({
       ? `HST (${totalHstRate}%)`
       : "HST";
 
-  const methodStr = String(order.paymentMethod || paymentMethod || "").trim();
+  const methodStr = String(
+    isSplitReceipt
+      ? splitMethod || meta.paymentMethod || ""
+      : order.paymentMethod || paymentMethod || "",
+  ).trim();
+  const cash = isSplitReceipt
+    ? Number(meta.cashAmount ?? 0)
+    : Number(cashAmount || 0);
+  const card = isSplitReceipt
+    ? Number(meta.cardAmount ?? 0)
+    : Number(cardAmount || 0);
+  const giftUsed = isSplitReceipt
+    ? 0
+    : Number(
+        order.giftcardUsedAmount ??
+          order.giftCardUsedAmount ??
+          order.giftCardUsed ??
+          giftcardUsedAmount ??
+          0,
+      );
   const cardLabelMatch = methodStr.match(/Card\s*-\s*([^+/]+)/i);
   const cardLabel = cardLabelMatch
     ? `Card (${cardLabelMatch[1].trim()})`
@@ -229,6 +250,12 @@ const CustomerReceipt = ({
         {isReprint && (
           <div className="text-xs receipt-bold tracking-wider text-center mb-1">
             *** REPRINT ***
+          </div>
+        )}
+        {isSplitReceipt && (
+          <div className="text-xs receipt-bold tracking-wider text-center mb-1 text-violet-800">
+            SPLIT {splitIndex} of {splitTotal}
+            {splitName ? ` · ${splitName}` : ""}
           </div>
         )}
         <div className="text-[9px] text-nowrap">{restAddress}</div>
@@ -347,7 +374,37 @@ const CustomerReceipt = ({
         <Row label="TOTAL" value={money(grandTotal)} bold />
       </div>
 
-      {hasPaymentSplit && (
+      {isSplitReceipt ? (
+        <>
+          <div className="receipt-divider border-t border-black border-dashed my-1.5" />
+          <div className="mb-2 space-y-1 text-[11px]">
+            <div className="receipt-bold uppercase text-[10px] mb-1">
+              This Slip
+            </div>
+            {splitName ? (
+              <Row label="Payer" value={splitName} />
+            ) : null}
+            <Row
+              label={
+                /cash/i.test(splitMethod)
+                  ? "Cash"
+                  : cardLabelMatch
+                    ? cardLabel
+                    : /card/i.test(splitMethod)
+                      ? "Card"
+                      : splitMethod || "Paid"
+              }
+              value={money(splitAmount || cash || card)}
+              bold
+            />
+            <Row
+              label={`Bill total (#${orderNumber})`}
+              value={money(grandTotal)}
+              muted
+            />
+          </div>
+        </>
+      ) : hasPaymentSplit ? (
         <>
           <div className="receipt-divider border-t border-black border-dashed my-1.5" />
           <div className="mb-2 space-y-1 text-[11px]">
@@ -377,7 +434,7 @@ const CustomerReceipt = ({
             )}
           </div>
         </>
-      )}
+      ) : null}
 
       <div className="receipt-divider" />
       <div className="text-center text-[10px] space-y-1">

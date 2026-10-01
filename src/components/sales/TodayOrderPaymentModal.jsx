@@ -13,6 +13,9 @@ import {
   User,
   CheckCircle2,
   DollarSign,
+  Plus,
+  Trash2,
+  Users,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -64,6 +67,11 @@ export default function TodayOrderPaymentModal({
   serviceTax = null,
 }) {
   const [paymentMethod, setPaymentMethod] = useState("Card");
+  const [billMode, setBillMode] = useState("full"); // full | split
+  const [paymentSplits, setPaymentSplits] = useState([
+    { id: "split-1", name: "", amount: "", method: "Card", cardType: "" },
+    { id: "split-2", name: "", amount: "", method: "Card", cardType: "" },
+  ]);
   const [includeServiceCharge, setIncludeServiceCharge] = useState(false);
   const [internalGuestName, setInternalGuestName] = useState("");
   const [discountCode, setDiscountCode] = useState("");
@@ -187,6 +195,32 @@ export default function TodayOrderPaymentModal({
   const giftUsed =
     giftCardBalance !== null ? giftCardUsedPreview : 0;
 
+  const splitDue = round2(Math.max(0, total - giftUsed));
+  const splitAllocated = round2(
+    paymentSplits.reduce(
+      (sum, row) => sum + (parseFloat(row.amount) || 0),
+      0,
+    ),
+  );
+  const splitRemaining = round2(splitDue - splitAllocated);
+  const giftCoversSplitBill =
+    billMode === "split" && giftUsed > 0 && splitDue < 0.01;
+  const splitsValid =
+    billMode === "split" &&
+    (giftCoversSplitBill ||
+      (paymentSplits.length >= 2 &&
+        Math.abs(splitRemaining) < 0.01 &&
+        paymentSplits.every((row) => {
+          const nameOk = String(row.name || "").trim().length > 0;
+          const amt = parseFloat(row.amount);
+          const amtOk = Number.isFinite(amt) && amt > 0;
+          const methodOk = row.method === "Cash" || row.method === "Card";
+          const cardOk =
+            row.method !== "Card" ||
+            Boolean(String(row.cardType || "").trim());
+          return nameOk && amtOk && methodOk && cardOk;
+        })));
+
   const effectiveCardDue = round2(
     Math.max(0, total - giftUsed - lockedCash),
   );
@@ -251,6 +285,56 @@ export default function TodayOrderPaymentModal({
       setLockedCashAmount(round2(Math.max(0, lockCash)));
     }
     setPaymentMethod(method);
+  };
+
+  const addSplitRow = () => {
+    setPaymentSplits((prev) => [
+      ...prev,
+      {
+        id: `split-${Date.now()}-${prev.length + 1}`,
+        name: "",
+        amount: "",
+        method: "Card",
+        cardType: "",
+      },
+    ]);
+  };
+
+  const removeSplitRow = (id) => {
+    setPaymentSplits((prev) =>
+      prev.length <= 2 ? prev : prev.filter((row) => row.id !== id),
+    );
+  };
+
+  const updateSplitRow = (id, patch) => {
+    setPaymentSplits((prev) =>
+      prev.map((row) => (row.id === id ? { ...row, ...patch } : row)),
+    );
+  };
+
+  const splitEqually = (count) => {
+    const n = Math.max(2, Math.min(12, Number(count) || 2));
+    const each = Math.floor((splitDue * 100) / n) / 100;
+    const last = round2(splitDue - each * (n - 1));
+    setPaymentSplits(
+      Array.from({ length: n }, (_, i) => ({
+        id: `split-${Date.now()}-${i}`,
+        name: paymentSplits[i]?.name || `Guest ${String.fromCharCode(65 + i)}`,
+        amount: (i === n - 1 ? last : each).toFixed(2),
+        method: paymentSplits[i]?.method || "Card",
+        cardType: paymentSplits[i]?.cardType || "",
+      })),
+    );
+  };
+
+  const fillRemainingOnLast = () => {
+    if (paymentSplits.length === 0) return;
+    const lastId = paymentSplits[paymentSplits.length - 1].id;
+    const others = paymentSplits
+      .slice(0, -1)
+      .reduce((sum, row) => sum + (parseFloat(row.amount) || 0), 0);
+    const fill = round2(Math.max(0, splitDue - others));
+    updateSplitRow(lastId, { amount: fill.toFixed(2) });
   };
 
   useEffect(() => {
@@ -445,7 +529,14 @@ export default function TodayOrderPaymentModal({
 
   const handlePayment = async () => {
     try {
-      if (includeServiceCharge && autoTip > 0) {
+      if (billMode === "split") {
+        if (!splitsValid) {
+          toast.error(
+            "Complete all split payers so amounts equal the total due.",
+          );
+          return;
+        }
+      } else if (includeServiceCharge && autoTip > 0) {
         toast.error(SERVICE_CHARGE_NO_TIP_MESSAGE);
         return;
       }
@@ -455,93 +546,151 @@ export default function TodayOrderPaymentModal({
       const giftCardUsedAmount =
         giftCardBalance !== null ? round2(giftCardUsedPreview) : 0;
       const partyName = guestName.trim() || null;
-      const tip = includeServiceCharge ? 0 : autoTip;
 
-      let resolvedCashAmount = lockedCash;
-      let resolvedCardAmount = lockedCard;
+      let tip = 0;
+      let tipMethodResolved = null;
+      let resolvedCashAmount = 0;
+      let resolvedCardAmount = 0;
       let resolvedPaymentMethod = paymentMethod;
-      const parts = [];
+      let selectedCardForPayload = selectedCardType;
+      let splitsPayload = null;
 
-      if (giftCardUsedAmount > 0) parts.push("Gift Card");
+      if (billMode === "split") {
+        tip = 0;
+        if (giftCardUsedAmount > 0 && splitDue < 0.01) {
+          // Gift card covers the full bill — no named payer slips needed
+          splitsPayload = null;
+          resolvedCashAmount = 0;
+          resolvedCardAmount = 0;
+          resolvedPaymentMethod = "Gift Card";
+          selectedCardForPayload = "";
+        } else {
+          splitsPayload = paymentSplits.map((row) => ({
+            name: String(row.name || "").trim(),
+            amount: round2(parseFloat(row.amount) || 0),
+            method: row.method === "Cash" ? "Cash" : "Card",
+            cardType:
+              row.method === "Card"
+                ? String(row.cardType || "").trim() || null
+                : null,
+          }));
+          resolvedCashAmount = round2(
+            splitsPayload
+              .filter((s) => s.method === "Cash")
+              .reduce((s, row) => s + row.amount, 0),
+          );
+          resolvedCardAmount = round2(
+            splitsPayload
+              .filter((s) => s.method === "Card")
+              .reduce((s, row) => s + row.amount, 0),
+          );
+          const methodParts = [
+            ...new Set(
+              splitsPayload.map((s) =>
+                s.method === "Card" && s.cardType
+                  ? `Card - ${s.cardType}`
+                  : s.method,
+              ),
+            ),
+          ];
+          resolvedPaymentMethod =
+            methodParts.length <= 3
+              ? `Split (${splitsPayload.length}) · ${methodParts.join(" + ")}`
+              : `Split (${splitsPayload.length})`;
+          if (giftCardUsedAmount > 0) {
+            resolvedPaymentMethod = `${resolvedPaymentMethod} + Gift Card`;
+          }
+          const firstCard = splitsPayload.find(
+            (s) => s.method === "Card" && s.cardType,
+          );
+          selectedCardForPayload = firstCard?.cardType || "";
+        }
+      } else {
+        tip = includeServiceCharge ? 0 : autoTip;
+        tipMethodResolved = tip > 0 ? tipMethod : null;
+        resolvedCashAmount = lockedCash;
+        resolvedCardAmount = lockedCard;
+        const parts = [];
 
-      if (paymentMethod === "Card") {
-        const cardPortion = round2(
-          Math.min(cardPayAmount, effectiveCardDue),
-        );
-        resolvedCardAmount = round2(lockedCard + cardPortion);
-        if (resolvedCardAmount > 0) {
-          parts.push(
-            selectedCardType ? `Card - ${selectedCardType}` : "Card",
+        if (giftCardUsedAmount > 0) parts.push("Gift Card");
+
+        if (paymentMethod === "Card") {
+          const cardPortion = round2(
+            Math.min(cardPayAmount, effectiveCardDue),
           );
-        }
-        if (lockedCash > 0) parts.push("Cash");
-        if (tip > 0 && resolvedCardAmount > 0) {
-          resolvedCardAmount = round2(resolvedCardAmount + tip);
-        } else if (tip > 0 && lockedCash > 0) {
-          resolvedCashAmount = round2(lockedCash + tip);
-        }
-      } else if (paymentMethod === "Cash") {
-        const cashPortion = Number.isFinite(parsedCashAmount)
-          ? round2(Math.min(cashPayAmount, effectiveCashDue))
-          : round2(effectiveCashDue);
-        resolvedCashAmount = round2(lockedCash + cashPortion);
-        if (resolvedCashAmount > 0 || giftCardUsedAmount <= 0) {
-          parts.push("Cash");
-        }
-        if (lockedCard > 0) {
-          parts.push(
-            selectedCardType ? `Card - ${selectedCardType}` : "Card",
-          );
-        }
-        if (tip > 0) {
-          resolvedCashAmount = round2(resolvedCashAmount + tip);
-        }
-      } else if (paymentMethod === "GiftCard") {
-        if (lockedCard > 0) {
-          parts.push(
-            selectedCardType ? `Card - ${selectedCardType}` : "Card",
-          );
-        }
-        if (lockedCash > 0) parts.push("Cash");
-        if (remainingAfterGift > 0) {
-          // Should not submit with remainder; keep safe fallback
-          resolvedCashAmount = round2(lockedCash + remainingAfterGift + tip);
-          if (!parts.includes("Cash")) parts.push("Cash");
-        } else if (tip > 0) {
-          if (lockedCash > 0) {
+          resolvedCardAmount = round2(lockedCard + cardPortion);
+          if (resolvedCardAmount > 0) {
+            parts.push(
+              selectedCardType ? `Card - ${selectedCardType}` : "Card",
+            );
+          }
+          if (lockedCash > 0) parts.push("Cash");
+          if (tip > 0 && resolvedCardAmount > 0) {
+            resolvedCardAmount = round2(resolvedCardAmount + tip);
+          } else if (tip > 0 && lockedCash > 0) {
             resolvedCashAmount = round2(lockedCash + tip);
-          } else if (lockedCard > 0) {
-            resolvedCardAmount = round2(lockedCard + tip);
-          } else {
-            resolvedCashAmount = tip;
+          }
+        } else if (paymentMethod === "Cash") {
+          const cashPortion = Number.isFinite(parsedCashAmount)
+            ? round2(Math.min(cashPayAmount, effectiveCashDue))
+            : round2(effectiveCashDue);
+          resolvedCashAmount = round2(lockedCash + cashPortion);
+          if (resolvedCashAmount > 0 || giftCardUsedAmount <= 0) {
             parts.push("Cash");
           }
+          if (lockedCard > 0) {
+            parts.push(
+              selectedCardType ? `Card - ${selectedCardType}` : "Card",
+            );
+          }
+          if (tip > 0) {
+            resolvedCashAmount = round2(resolvedCashAmount + tip);
+          }
+        } else if (paymentMethod === "GiftCard") {
+          if (lockedCard > 0) {
+            parts.push(
+              selectedCardType ? `Card - ${selectedCardType}` : "Card",
+            );
+          }
+          if (lockedCash > 0) parts.push("Cash");
+          if (remainingAfterGift > 0) {
+            resolvedCashAmount = round2(lockedCash + remainingAfterGift + tip);
+            if (!parts.includes("Cash")) parts.push("Cash");
+          } else if (tip > 0) {
+            if (lockedCash > 0) {
+              resolvedCashAmount = round2(lockedCash + tip);
+            } else if (lockedCard > 0) {
+              resolvedCardAmount = round2(lockedCard + tip);
+            } else {
+              resolvedCashAmount = tip;
+              parts.push("Cash");
+            }
+          }
         }
-      }
 
-      if (parts.length === 0) {
-        resolvedPaymentMethod =
-          giftCardUsedAmount > 0
-            ? "Gift Card"
-            : paymentMethod === "GiftCard"
-              ? "Cash"
-              : paymentMethod;
-      } else if (parts.length === 1) {
-        resolvedPaymentMethod = parts[0];
-      } else {
-        resolvedPaymentMethod = parts.join(" + ");
-      }
+        if (parts.length === 0) {
+          resolvedPaymentMethod =
+            giftCardUsedAmount > 0
+              ? "Gift Card"
+              : paymentMethod === "GiftCard"
+                ? "Cash"
+                : paymentMethod;
+        } else if (parts.length === 1) {
+          resolvedPaymentMethod = parts[0];
+        } else {
+          resolvedPaymentMethod = parts.join(" + ");
+        }
 
-      // Ensure tender amounts do not exceed the actual payable total + tip
-      const payableTotalWithTip = round2(total + tip);
-      if (resolvedCardAmount > 0) {
-        const maxCard = round2(
-          Math.max(
-            0,
-            payableTotalWithTip - resolvedCashAmount - giftCardUsedAmount,
-          ),
-        );
-        resolvedCardAmount = Math.min(resolvedCardAmount, maxCard);
+        const payableTotalWithTip = round2(total + tip);
+        if (resolvedCardAmount > 0) {
+          const maxCard = round2(
+            Math.max(
+              0,
+              payableTotalWithTip - resolvedCashAmount - giftCardUsedAmount,
+            ),
+          );
+          resolvedCardAmount = Math.min(resolvedCardAmount, maxCard);
+        }
       }
 
       const paymentPayload = {
@@ -550,7 +699,7 @@ export default function TodayOrderPaymentModal({
         method: resolvedPaymentMethod,
         sessionId: resolvedSessionId || undefined,
         tipAmount: tip,
-        tipMethod: tip > 0 ? tipMethod : null,
+        tipMethod: tip > 0 ? tipMethodResolved : null,
         discountTotal: discountAmount,
         discountCode: appliedDiscount ? appliedDiscount.code : null,
         discountPercent:
@@ -569,13 +718,16 @@ export default function TodayOrderPaymentModal({
         serviceChargeName: includeServiceCharge ? serviceChargeName : null,
       };
 
-      if (resolvedCardAmount > 0) {
-        paymentPayload.cardType = selectedCardType;
+      if (splitsPayload) {
+        paymentPayload.paymentSplits = splitsPayload;
+      }
+
+      if (resolvedCardAmount > 0 && selectedCardForPayload) {
+        paymentPayload.cardType = selectedCardForPayload;
       }
 
       if (giftCardBalance !== null && giftCardUsedAmount > 0) {
         paymentPayload.giftCardCode = giftCardCode.trim().toUpperCase();
-        // Explicit amount to debit — do not infer solely from remainder (locks break that math)
         paymentPayload.giftCardUsedAmount = giftCardUsedAmount;
         paymentPayload.splitAmount = round2(
           Math.max(0, total - giftCardUsedAmount),
@@ -589,16 +741,27 @@ export default function TodayOrderPaymentModal({
       });
       const json = await res.json();
       if (json.success) {
-        toast.success("Payment collected successfully!");
-
         const paidOrder = json.data || {};
+        const slipCount =
+          Array.isArray(paidOrder.printJobIds) && paidOrder.printJobIds.length > 1
+            ? paidOrder.printJobIds.length
+            : Array.isArray(splitsPayload) && splitsPayload.length > 1
+              ? splitsPayload.length
+              : 0;
+        toast.success(
+          slipCount > 1
+            ? `Payment collected · ${slipCount} receipt slips queued`
+            : "Payment collected successfully!",
+        );
+
         const updatedOrder = {
           ...order,
           ...paidOrder,
           paymentStatus: "PAID",
           paymentMethod: paidOrder.paymentMethod || resolvedPaymentMethod,
+          paymentSplits: paidOrder.paymentSplits || splitsPayload || [],
           tipAmount: paidOrder.tipAmount ?? tip,
-          tipMethod: paidOrder.tipMethod ?? (tip > 0 ? tipMethod : null),
+          tipMethod: paidOrder.tipMethod ?? (tip > 0 ? tipMethodResolved : null),
           discountTotal: paidOrder.discountTotal ?? discountAmount,
           discountCode:
             paidOrder.discountCode ??
@@ -659,14 +822,16 @@ export default function TodayOrderPaymentModal({
   const completeDisabled =
     isSubmitting ||
     staffDiscountLoading ||
-    (includeServiceCharge && autoTip > 0) ||
-    (paymentMethod === "GiftCard" && giftCardBalance === null) ||
-    (paymentMethod === "GiftCard" && remainingAfterGift > 0) ||
-    (paymentMethod === "Cash" && cardSplitFromCash > 0) ||
-    (paymentMethod === "Card" && cashSplitAmount > 0) ||
-    (paymentMethod === "Card" &&
-      currentCardContribution > 0 &&
-      !selectedCardType);
+    (billMode === "split"
+      ? !splitsValid
+      : (includeServiceCharge && autoTip > 0) ||
+        (paymentMethod === "GiftCard" && giftCardBalance === null) ||
+        (paymentMethod === "GiftCard" && remainingAfterGift > 0) ||
+        (paymentMethod === "Cash" && cardSplitFromCash > 0) ||
+        (paymentMethod === "Card" && cashSplitAmount > 0) ||
+        (paymentMethod === "Card" &&
+          currentCardContribution > 0 &&
+          !selectedCardType));
 
   return (
     <>
@@ -715,17 +880,29 @@ export default function TodayOrderPaymentModal({
                   <div className="space-y-2 mb-4">
                     <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider flex items-center gap-1.5">
                       <User className="w-3.5 h-3.5" />
-                      Party / Customer Name
+                      {billMode === "split"
+                        ? "Table / Party Name"
+                        : "Party / Customer Name"}
                       <span className="text-zinc-400 font-semibold normal-case">
                         (optional)
                       </span>
                     </label>
                     <Input
-                      placeholder="e.g. John Doe"
+                      placeholder={
+                        billMode === "split"
+                          ? "Optional table party (each payer name prints on their slip)"
+                          : "e.g. John Doe"
+                      }
                       value={guestName}
                       onChange={(e) => setGuestName(e.target.value)}
                       className="h-11 bg-white border-zinc-200 rounded-xl text-sm font-semibold focus-visible:ring-orange-500"
                     />
+                    {billMode === "split" && (
+                      <p className="text-[11px] font-semibold text-violet-700">
+                        Each payer’s name is printed as Party on that guest’s
+                        receipt slip.
+                      </p>
+                    )}
                   </div>
 
                   {canOfferServiceCharge && computedServiceCharge > 0 && (
@@ -788,6 +965,72 @@ export default function TodayOrderPaymentModal({
                       </span>
                     </div>
                   </div>
+
+                  {billMode === "split" && (
+                    <div className="mt-4 bg-white rounded-xl border border-violet-200 p-4 space-y-2.5 shadow-sm">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-[11px] font-bold text-violet-700 uppercase tracking-wider flex items-center gap-1.5">
+                          <Users className="w-3.5 h-3.5" />
+                          Split Allocation
+                        </p>
+                        <span
+                          className={`text-xs font-black ${
+                            Math.abs(splitRemaining) < 0.01
+                              ? "text-green-600"
+                              : splitRemaining > 0
+                                ? "text-amber-600"
+                                : "text-red-600"
+                          }`}
+                        >
+                          {Math.abs(splitRemaining) < 0.01
+                            ? "Balanced"
+                            : splitRemaining > 0
+                              ? `Remaining $${splitRemaining.toFixed(2)}`
+                              : `Over by $${Math.abs(splitRemaining).toFixed(2)}`}
+                        </span>
+                      </div>
+                      {giftUsed > 0 && (
+                        <div className="flex justify-between text-sm font-semibold text-zinc-600">
+                          <span>Gift Card</span>
+                          <span>${giftUsed.toFixed(2)}</span>
+                        </div>
+                      )}
+                      {paymentSplits.map((row, idx) => {
+                        const amt = parseFloat(row.amount);
+                        if (!Number.isFinite(amt) || amt <= 0) return null;
+                        const label =
+                          String(row.name || "").trim() || `Payer ${idx + 1}`;
+                        const methodLabel =
+                          row.method === "Card"
+                            ? row.cardType
+                              ? `Card · ${row.cardType}`
+                              : "Card"
+                            : "Cash";
+                        return (
+                          <div
+                            key={row.id}
+                            className="flex justify-between text-sm font-semibold text-zinc-800"
+                          >
+                            <span className="truncate pr-2">
+                              {label}
+                              <span className="text-zinc-500 font-medium">
+                                {" "}
+                                · {methodLabel}
+                              </span>
+                            </span>
+                            <span className="shrink-0">${amt.toFixed(2)}</span>
+                          </div>
+                        );
+                      })}
+                      <div className="h-px bg-violet-100" />
+                      <div className="flex justify-between text-sm font-black text-zinc-900">
+                        <span>Allocated / Due</span>
+                        <span>
+                          ${splitAllocated.toFixed(2)} / ${splitDue.toFixed(2)}
+                        </span>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div className="space-y-2">
@@ -978,6 +1221,241 @@ export default function TodayOrderPaymentModal({
 
               {/* RIGHT — Payment Method */}
               <div className="p-5 md:p-6 space-y-5">
+                <div>
+                  <p className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider mb-3">
+                    Billing Mode
+                  </p>
+                  <div className="grid grid-cols-2 gap-2.5 mb-5">
+                    <button
+                      type="button"
+                      onClick={() => setBillMode("full")}
+                      className={`min-h-[48px] rounded-xl border-2 text-sm font-black uppercase tracking-wide transition-all ${
+                        billMode === "full"
+                          ? "border-orange-500 bg-orange-50 text-orange-700"
+                          : "border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300"
+                      }`}
+                    >
+                      Pay in full
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setBillMode("split")}
+                      className={`min-h-[48px] rounded-xl border-2 text-sm font-black uppercase tracking-wide transition-all ${
+                        billMode === "split"
+                          ? "border-violet-500 bg-violet-50 text-violet-700"
+                          : "border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300"
+                      }`}
+                    >
+                      Split bill
+                    </button>
+                  </div>
+                </div>
+
+                {billMode === "split" ? (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between gap-2">
+                      <h3 className="text-sm font-black text-zinc-900 uppercase tracking-wide">
+                        Split Payment
+                      </h3>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => splitEqually(paymentSplits.length)}
+                          disabled={splitDue < 0.01}
+                          className="h-9 px-3 rounded-lg text-xs font-bold border-zinc-200 shadow-none"
+                        >
+                          Equal split
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={fillRemainingOnLast}
+                          disabled={splitDue < 0.01}
+                          className="h-9 px-3 rounded-lg text-xs font-bold border-zinc-200 shadow-none"
+                        >
+                          Fill remaining
+                        </Button>
+                      </div>
+                    </div>
+
+                    <GiftCardField
+                      giftCardCode={giftCardCode}
+                      setGiftCardCode={setGiftCardCode}
+                      giftCardBalance={giftCardBalance}
+                      isVerifyingGiftCard={isVerifyingGiftCard}
+                      giftCardError={giftCardError}
+                      onVerify={verifyGiftCard}
+                      onRemove={handleRemoveGiftCard}
+                      label="Apply Gift Card (Optional)"
+                    />
+
+                    {giftCardBalance !== null && (
+                      <GiftUseEditor
+                        giftCardBalance={giftCardBalance}
+                        giftCardUseAmount={giftCardUseAmount}
+                        total={total}
+                        remainingAfterGift={splitDue}
+                        remainingLabel="Remaining to Split"
+                        onChangeUseAmount={updateGiftCardUseAmount}
+                        hint={
+                          splitDue < 0.01
+                            ? "Gift card covers the full bill — no payer splits needed."
+                            : "Split the remaining amount across named payers below."
+                        }
+                      />
+                    )}
+
+                    <p className="text-xs font-semibold text-zinc-500">
+                      Same order # · one receipt slip per payer. Cover $
+                      {splitDue.toFixed(2)}
+                      {giftUsed > 0
+                        ? ` after $${giftUsed.toFixed(2)} gift card`
+                        : ""}
+                      .
+                    </p>
+
+                    {giftCoversSplitBill ? (
+                      <div className="rounded-xl border border-green-200 bg-green-50 p-4">
+                        <p className="text-sm font-bold text-green-900">
+                          Gift card covers the full ${total.toFixed(2)}. You can
+                          complete payment without adding payers.
+                        </p>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="space-y-3">
+                          {paymentSplits.map((row, idx) => (
+                            <div
+                              key={row.id}
+                              className="rounded-xl border border-zinc-200 bg-zinc-50/80 p-3 space-y-2.5"
+                            >
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider">
+                                  Payer {idx + 1}
+                                </span>
+                                {paymentSplits.length > 2 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => removeSplitRow(row.id)}
+                                    className="w-8 h-8 rounded-lg flex items-center justify-center text-zinc-400 hover:text-red-600 hover:bg-red-50"
+                                    aria-label={`Remove payer ${idx + 1}`}
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                )}
+                              </div>
+                          <Input
+                            placeholder="Name (prints as Party on this slip)"
+                            value={row.name}
+                            onChange={(e) =>
+                              updateSplitRow(row.id, { name: e.target.value })
+                            }
+                            className="h-11 bg-white border-zinc-200 rounded-xl text-sm font-semibold"
+                          />
+                              <div className="flex gap-2">
+                                <div className="relative flex-1">
+                                  <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+                                  <Input
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    placeholder="0.00"
+                                    value={row.amount}
+                                    onChange={(e) =>
+                                      updateSplitRow(row.id, {
+                                        amount: e.target.value,
+                                      })
+                                    }
+                                    className="h-11 pl-9 bg-white border-zinc-200 rounded-xl text-sm font-semibold"
+                                  />
+                                </div>
+                                <div className="grid grid-cols-2 gap-1.5 w-[140px]">
+                                  {["Card", "Cash"].map((m) => (
+                                    <button
+                                      key={m}
+                                      type="button"
+                                      onClick={() =>
+                                        updateSplitRow(row.id, {
+                                          method: m,
+                                          cardType:
+                                            m === "Cash" ? "" : row.cardType,
+                                        })
+                                      }
+                                      className={`h-11 rounded-xl border-2 text-xs font-black uppercase ${
+                                        row.method === m
+                                          ? m === "Card"
+                                            ? "border-orange-500 bg-orange-50 text-orange-700"
+                                            : "border-emerald-500 bg-emerald-50 text-emerald-700"
+                                          : "border-zinc-200 bg-white text-zinc-600"
+                                      }`}
+                                    >
+                                      {m}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                              {row.method === "Card" && (
+                                <div className="grid grid-cols-5 gap-1.5">
+                                  {CARD_TYPES.map((card) => (
+                                    <button
+                                      key={card.name}
+                                      type="button"
+                                      onClick={() =>
+                                        updateSplitRow(row.id, {
+                                          cardType: card.name,
+                                        })
+                                      }
+                                      className={`flex flex-col items-center gap-1 p-1.5 rounded-lg border-2 transition-all ${
+                                        row.cardType === card.name
+                                          ? "border-orange-500 bg-orange-50"
+                                          : "border-zinc-200 bg-white hover:border-zinc-300"
+                                      }`}
+                                    >
+                                      <Image
+                                        src={card.image}
+                                        alt={card.name}
+                                        width={28}
+                                        height={18}
+                                        className="object-contain h-[18px] w-auto"
+                                      />
+                                      <span className="text-[9px] font-bold text-zinc-600 truncate w-full text-center">
+                                        {card.name}
+                                      </span>
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={addSplitRow}
+                            className="h-11 px-4 rounded-xl font-bold border-dashed border-zinc-300 shadow-none"
+                          >
+                            <Plus className="w-4 h-4 mr-1.5" />
+                            Add payer
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() =>
+                              splitEqually(paymentSplits.length + 1)
+                            }
+                            className="h-11 px-4 rounded-xl font-bold border-zinc-200 shadow-none"
+                          >
+                            +1 equal
+                          </Button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                ) : (
+                  <>
                 <div>
                   <p className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider mb-3">
                     Payment Method
@@ -1346,6 +1824,8 @@ export default function TodayOrderPaymentModal({
                       </div>
                     )}
                   </div>
+                )}
+                  </>
                 )}
               </div>
             </div>

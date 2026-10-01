@@ -276,6 +276,11 @@ export default function OrderDetailBody({ order }) {
                           ))}
                         </div>
                       ) : null}
+                      {item.notes ? (
+                        <div className="mt-1 text-[12px] font-medium italic text-amber-800">
+                          Remark: {item.notes}
+                        </div>
+                      ) : null}
                     </TableCell>
                     <TableCell className={`${cellBorder} text-right align-top tabular-nums ${even ? "bg-amber-50/80" : ""}`}>
                       {item.qty}
@@ -322,6 +327,33 @@ export default function OrderDetailBody({ order }) {
             {card > 0 ? (
               <TotalsRow label={cardPaymentLabel(order.paymentMethod)} value={card} muted />
             ) : null}
+          </div>
+        ) : null}
+        {Array.isArray(order.paymentSplits) && order.paymentSplits.length > 0 ? (
+          <div className="pt-1.5 space-y-1 border-t border-dashed border-violet-200">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-violet-700">
+              Named splits
+            </p>
+            {order.paymentSplits.map((split, idx) => (
+              <div
+                key={`od-split-${idx}`}
+                className="flex justify-between text-xs text-zinc-700"
+              >
+                <span>
+                  {split.name}
+                  {split.method
+                    ? ` · ${
+                        split.cardType
+                          ? `Card - ${split.cardType}`
+                          : split.method
+                      }`
+                    : ""}
+                </span>
+                <span className="font-semibold tabular-nums">
+                  ${(Number(split.amount) || 0).toFixed(2)}
+                </span>
+              </div>
+            ))}
           </div>
         ) : null}
         <TotalsRow label="Total" value={grandTotal} bold />

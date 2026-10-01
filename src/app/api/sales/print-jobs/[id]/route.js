@@ -14,7 +14,13 @@ import {
   cancelPrintJob,
   assertPrintAdminRole,
   toPrintJobEventPayload,
+  expireStaleQueuedPrintJobs,
 } from "@/lib/printing/printJobService";
+import {
+  DEFAULT_RESTAURANT_TIMEZONE,
+  todayRestaurantISO,
+} from "@/lib/restaurantTime";
+import { businessDateBounds } from "@/lib/eod/eodHelpers";
 
 /** Floor staff + admins — Electron print agent needs job detail for ESC/POS. */
 const PRINT_JOB_READ_ROLES = [
@@ -209,12 +215,25 @@ export const PATCH = withAuth(async (request, { params }) => {
     }
 
     if (action === "claim") {
+      // Expire prior-day leftovers first; only claim jobs eligible for today.
+      const { dayStart } = await expireStaleQueuedPrintJobs(request.restaurant);
+      const eligibleAfter =
+        dayStart ||
+        businessDateBounds(todayRestaurantISO(DEFAULT_RESTAURANT_TIMEZONE))
+          .start;
+
       const claimedJob = await PrintJob.findOneAndUpdate(
         {
           _id: id,
           restaurantId: request.restaurant,
           status: "QUEUED",
           isActive: { $ne: false },
+          $expr: {
+            $gte: [
+              { $ifNull: ["$metadata.requeuedAt", "$createdAt"] },
+              eligibleAfter,
+            ],
+          },
         },
         {
           $set: {
@@ -229,7 +248,7 @@ export const PATCH = withAuth(async (request, { params }) => {
       if (!claimedJob) {
         return sendSuccess(
           { claimed: false },
-          "Job already claimed or processed by another device"
+          "Job already claimed, expired, or processed by another device"
         );
       }
 

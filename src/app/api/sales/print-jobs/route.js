@@ -7,8 +7,14 @@ import { logger } from "@/utils/logger";
 import {
   SALES_PRINT_ROLES,
   assertPrintAdminRole,
+  expireStaleQueuedPrintJobs,
 } from "@/lib/printing/printJobService";
-import Employee from "@/models/employee/Employee";
+import {
+  DEFAULT_RESTAURANT_TIMEZONE,
+  todayRestaurantISO,
+} from "@/lib/restaurantTime";
+import { businessDateBounds, isValidBusinessDate } from "@/lib/eod/eodHelpers";
+
 /**
  * GET /api/sales/print-jobs
  * Sales/admin print queue for the restaurant.
@@ -18,14 +24,20 @@ import Employee from "@/models/employee/Employee";
  *   - printerTarget: ALL | RECEIPT | KITCHEN | COUNTER
  *   - printerId: string (id of specific PrinterConfig)
  *   - search / orderNumber: string (matches orderNumber)
- *   - startDate, endDate: ISO date strings
+ *   - date: YYYY-MM-DD (restaurant-local calendar day) | "all"
+ *   - startDate, endDate: ISO / YYYY-MM-DD (used when date is omitted)
  *   - page: number (default 1)
  *   - limit: number (default 50, max 100)
+ *
+ * Default: restaurant-local today when no date / startDate / endDate is sent.
  */
 export const GET = withAuth(async (request) => {
   try {
     const denied = assertPrintAdminRole(request.role);
     if (denied) return denied;
+
+    // Drop overnight leftovers so agents never pick up yesterday's queue.
+    await expireStaleQueuedPrintJobs(request.restaurant);
 
     const { searchParams } = new URL(request.url);
     const status = searchParams.get("status");
@@ -34,6 +46,7 @@ export const GET = withAuth(async (request) => {
     const printerId = searchParams.get("printerId");
     const search = searchParams.get("search") || searchParams.get("orderNumber");
     const isReprint = searchParams.get("reprint");
+    const dateParam = searchParams.get("date");
     const startDate = searchParams.get("startDate");
     const endDate = searchParams.get("endDate");
     const page = Math.max(1, Number(searchParams.get("page")) || 1);
@@ -49,23 +62,47 @@ export const GET = withAuth(async (request) => {
     if (printerTarget && printerTarget !== "ALL") query.printerTarget = printerTarget;
     if (printerId && printerId !== "ALL") query.printerId = printerId;
 
-    if (startDate || endDate) {
+    let resolvedDate = null;
+    const tz = DEFAULT_RESTAURANT_TIMEZONE;
+
+    if (dateParam && String(dateParam).toLowerCase() === "all") {
+      // No createdAt filter — all days
+      resolvedDate = "all";
+    } else if (dateParam && isValidBusinessDate(dateParam)) {
+      const { start, end } = businessDateBounds(dateParam, tz);
+      query.createdAt = { $gte: start, $lt: end };
+      resolvedDate = dateParam;
+    } else if (startDate || endDate) {
       query.createdAt = {};
       if (startDate) {
-        const start = new Date(startDate);
-        if (!isNaN(start.getTime())) {
-          query.createdAt.$gte = start;
+        if (isValidBusinessDate(startDate)) {
+          query.createdAt.$gte = businessDateBounds(startDate, tz).start;
+        } else {
+          const start = new Date(startDate);
+          if (!isNaN(start.getTime())) query.createdAt.$gte = start;
         }
       }
       if (endDate) {
-        const end = new Date(endDate);
-        if (!isNaN(end.getTime())) {
-          if (endDate.length === 10) {
-            end.setHours(23, 59, 59, 999);
+        if (isValidBusinessDate(endDate)) {
+          query.createdAt.$lt = businessDateBounds(endDate, tz).end;
+        } else {
+          const end = new Date(endDate);
+          if (!isNaN(end.getTime())) {
+            if (endDate.length === 10) {
+              end.setHours(23, 59, 59, 999);
+            }
+            query.createdAt.$lte = end;
           }
-          query.createdAt.$lte = end;
         }
       }
+      if (!Object.keys(query.createdAt).length) delete query.createdAt;
+      resolvedDate = startDate || endDate || null;
+    } else {
+      // Default: restaurant-local today
+      const today = todayRestaurantISO(tz);
+      const { start, end } = businessDateBounds(today, tz);
+      query.createdAt = { $gte: start, $lt: end };
+      resolvedDate = today;
     }
 
     if (search && search.trim()) {
@@ -117,7 +154,7 @@ export const GET = withAuth(async (request) => {
         .limit(limit)
         .populate(
           "orderId",
-          "orderNumber invoiceNumber tableNo guestName partyName status paymentStatus totalAmount paymentMethod cashAmount cardAmount giftcardUsedAmount tipAmount tipMethod discountTotal discountPercent subTotal taxTotal items taxBreakdown"
+          "orderNumber invoiceNumber tableNo guestName partyName status paymentStatus totalAmount paymentMethod cashAmount cardAmount giftcardUsedAmount tipAmount tipMethod discountTotal discountPercent subTotal taxTotal items taxBreakdown paymentSplits"
         )
         .populate("requestedBy", "firstName lastName name")
         .populate("parentPrintJobId", "status printType createdAt")
@@ -188,6 +225,10 @@ export const GET = withAuth(async (request) => {
         message: "Print jobs retrieved",
         data: jobs,
         stats,
+        filters: {
+          date: resolvedDate,
+          timezone: tz,
+        },
         pagination: {
           page,
           limit,
@@ -203,3 +244,65 @@ export const GET = withAuth(async (request) => {
     return sendError(error, "Failed to list print jobs", 500);
   }
 }, SALES_PRINT_ROLES);
+
+/**
+ * DELETE /api/sales/print-jobs
+ * Soft-delete all print jobs for the restaurant (admin only).
+ * Body: { confirm: true }
+ */
+export const DELETE = withAuth(async (request) => {
+  try {
+    const denied = assertPrintAdminRole(request.role);
+    if (denied) return denied;
+
+    let body = {};
+    try {
+      body = await request.json();
+    } catch {
+      body = {};
+    }
+
+    if (!body?.confirm) {
+      return Response.json(
+        {
+          success: false,
+          message: "Confirmation required. Pass { confirm: true } to clear print jobs.",
+        },
+        { status: 400 }
+      );
+    }
+
+    const result = await PrintJob.updateMany(
+      {
+        restaurantId: request.restaurant,
+        isActive: { $ne: false },
+      },
+      {
+        $set: {
+          isActive: false,
+          status: "CANCELLED",
+          cancelledAt: new Date(),
+          cancelReason: "Cleared by admin",
+        },
+      }
+    );
+
+    logger.info("Print jobs cleared by admin", {
+      restaurantId: String(request.restaurant),
+      cleared: result.modifiedCount,
+      userId: request.userId,
+    });
+
+    return Response.json(
+      {
+        success: true,
+        message: `Cleared ${result.modifiedCount} print job(s)`,
+        data: { cleared: result.modifiedCount },
+      },
+      { status: 200 }
+    );
+  } catch (error) {
+    logger.error("Failed to clear print jobs", error);
+    return sendError(error, "Failed to clear print jobs", 500);
+  }
+}, ["admin", "superadmin"]);

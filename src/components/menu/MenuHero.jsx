@@ -4,6 +4,13 @@ import { useEffect, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Search, RotateCcw, X, Clock, Store, Loader2 } from "lucide-react";
 import { useRestaurantPublic } from "@/context/RestaurantPublicContext";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 const SEARCH_DEBOUNCE_MS = 400;
 
@@ -189,26 +196,32 @@ export default function MenuHero({
               ) : null}
             </div>
 
-            <div className="relative min-w-[200px]">
-              <select
-                value={category}
-                onChange={(e) => {
-                  const next = e.target.value;
+            <div className="relative min-w-[300px]">
+              <Select
+                value={category || "all"}
+                onValueChange={(next) => {
                   setCategory(next);
                   pushFilters({ category: next });
                 }}
-                className="w-full cursor-pointer appearance-none rounded-lg bg-[var(--customer-surface-low)] px-4 py-3 pr-10 text-sm font-semibold text-[var(--customer-ink)] focus:outline-none"
-                aria-label="Filter by category"
               >
-                <option value="all">
-                  All Categories ({products.filter((p) => p.available !== false).length})
-                </option>
-                {categories.map((cat) => (
-                  <option key={cat.id} value={cat.slug}>
-                    {cat.name} ({cat.items || 0})
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger
+                  aria-label="Filter by category"
+                  className="h-auto w-full rounded-lg border-0 bg-[var(--customer-surface-low)] px-4 py-3 text-sm font-semibold text-[var(--customer-ink)] shadow-none focus:ring-0 focus:ring-offset-0"
+                >
+                  <SelectValue placeholder="All Categories" />
+                </SelectTrigger>
+                <SelectContent className="bg-white">
+                  <SelectItem value="all">
+                    All Categories (
+                    {products.filter((p) => p.available !== false).length})
+                  </SelectItem>
+                  {categories.map((cat) => (
+                    <SelectItem key={cat.id} value={cat.slug}>
+                      {cat.name} ({cat.items || 0})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <button
               type="button"

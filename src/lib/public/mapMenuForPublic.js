@@ -4,12 +4,23 @@ import { PRODUCT_IMAGE_PLACEHOLDER } from "@/lib/public/productImage";
  * Map POS Product/Category documents into a safe public menu payload.
  */
 
+function normalizeIngredientList(ingredients = []) {
+  return [
+    ...new Set(
+      (Array.isArray(ingredients) ? ingredients : [])
+        .map((i) => String(i || "").trim())
+        .filter(Boolean),
+    ),
+  ];
+}
+
 function activeVariants(variants = []) {
   return (Array.isArray(variants) ? variants : [])
     .filter((v) => v && v.status !== false)
     .map((v) => ({
       size: v.size,
       price: Number(v.price) || 0,
+      ingredients: normalizeIngredientList(v.ingredients),
     }));
 }
 
@@ -24,6 +35,7 @@ function activeAddons(addons = []) {
         name: c.name,
         subChoices: c.subChoices || [],
       })),
+      ingredients: normalizeIngredientList(a.ingredients),
     }));
 }
 
@@ -77,12 +89,14 @@ export function mapProductForPublic(product, categoryMap = new Map()) {
       price: 0,
       absolutePrice: v.price,
       tax: 0,
+      ingredients: v.ingredients || [],
     })),
     addons: addons.map((a) => ({
       name: a.name,
       price: a.price,
       tax: 0,
       choiceOptions: a.choiceOptions,
+      ingredients: a.ingredients || [],
     })),
     choiceOptions,
     preparationStyles: product.preparationStyles || [],

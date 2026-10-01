@@ -11,6 +11,7 @@ import {
   cartChoiceSelectionsKey,
 } from "@/utils/productChoices";
 import { cn } from "@/lib/utils";
+import IngredientChips from "@/components/menu/IngredientChips";
 
 function buildCartKey(parts) {
   return parts
@@ -61,9 +62,10 @@ export default function ProductConfigModal({ isOpen, onClose, product }) {
           s.absolutePrice != null
             ? s.absolutePrice
             : (product.price || 0) + (s.price || 0),
+        ingredients: Array.isArray(s.ingredients) ? s.ingredients : [],
       }));
     }
-    return [{ size: "Standard", price: Number(product?.price) || 0 }];
+    return [{ size: "Standard", price: Number(product?.price) || 0, ingredients: [] }];
   }, [product]);
 
   const addons = useMemo(
@@ -83,6 +85,7 @@ export default function ProductConfigModal({ isOpen, onClose, product }) {
   const [addonQtyById, setAddonQtyById] = useState({});
   const [choiceSelections, setChoiceSelections] = useState({});
   const [preparationStyle, setPreparationStyle] = useState("");
+  const [itemNotes, setItemNotes] = useState("");
   const [configuredProductId, setConfiguredProductId] = useState(null);
 
   const productId = product?.id || product?._id || null;
@@ -96,6 +99,7 @@ export default function ProductConfigModal({ isOpen, onClose, product }) {
     setAddonQtyById({});
     setChoiceSelections({});
     setPreparationStyle(prepStyles[0] || "");
+    setItemNotes("");
   }
 
   const variantEntries = Object.entries(variantQtyBySize).filter(
@@ -192,6 +196,10 @@ export default function ProductConfigModal({ isOpen, onClose, product }) {
 
     const choiceKey = cartChoiceSelectionsKey(productChoicePayload);
     const prep = preparationStyle || "";
+    const notes = String(itemNotes || "").trim();
+    const noteKey = notes
+      ? notes.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 40)
+      : "";
 
     variantEntries.forEach(([key, qty]) => {
       const variant = variants[Number(key)];
@@ -202,6 +210,7 @@ export default function ProductConfigModal({ isOpen, onClose, product }) {
         sizeName,
         choiceKey,
         prep,
+        noteKey ? `note-${noteKey}` : "",
       ]);
 
       addToCart(
@@ -220,6 +229,7 @@ export default function ProductConfigModal({ isOpen, onClose, product }) {
           choiceSelections: productChoicePayload,
           addonChoiceSelections: [],
           preparationStyle: prep || null,
+          notes,
           category: product.category,
           categoryName: product.categoryName,
           productType: product.productType,
@@ -248,6 +258,7 @@ export default function ProductConfigModal({ isOpen, onClose, product }) {
         "Extra",
         addon.name,
         addonChoiceKey,
+        noteKey ? `note-${noteKey}` : "",
       ]);
 
       addToCart(
@@ -266,6 +277,7 @@ export default function ProductConfigModal({ isOpen, onClose, product }) {
           choiceSelections: [],
           addonChoiceSelections: addonChoices,
           preparationStyle: null,
+          notes,
           category: product.category,
           categoryName: product.categoryName,
           productType: product.productType,
@@ -339,24 +351,30 @@ export default function ProductConfigModal({ isOpen, onClose, product }) {
                     <div
                       key={key}
                       className={cn(
-                        "flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3 transition-colors",
+                        "rounded-lg border p-3 transition-colors",
                         qty > 0
                           ? "border-primary bg-primary/5"
                           : "border-zinc-200",
                       )}
                     >
-                      <div className="text-sm font-bold text-zinc-800">
-                        {v.size || "Standard"}
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <QtyStepper
-                          value={qty}
-                          onChange={(next) => setVariantQty(key, next)}
-                        />
-                        <div className="w-16 text-right text-sm font-bold tabular-nums text-zinc-900">
-                          ${price.toFixed(2)}
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div className="text-sm font-bold text-zinc-800">
+                          {v.size || "Standard"}
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <QtyStepper
+                            value={qty}
+                            onChange={(next) => setVariantQty(key, next)}
+                          />
+                          <div className="w-16 text-right text-sm font-bold tabular-nums text-zinc-900">
+                            ${price.toFixed(2)}
+                          </div>
                         </div>
                       </div>
+                      <IngredientChips
+                        ingredients={v.ingredients}
+                        label="Includes"
+                      />
                     </div>
                   );
                 })}
@@ -449,8 +467,15 @@ export default function ProductConfigModal({ isOpen, onClose, product }) {
                       )}
                     >
                       <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div className="text-sm font-bold text-zinc-800">
-                          {addon.name}
+                        <div className="min-w-0 flex-1">
+                          <div className="text-sm font-bold text-zinc-800">
+                            {addon.name}
+                          </div>
+                          {addon.fromCategory ? (
+                            <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-400">
+                              Linked from category
+                            </p>
+                          ) : null}
                         </div>
                         <div className="flex items-center gap-3">
                           <QtyStepper
@@ -462,8 +487,12 @@ export default function ProductConfigModal({ isOpen, onClose, product }) {
                           </div>
                         </div>
                       </div>
+                      <IngredientChips
+                        ingredients={addon.ingredients}
+                        label="Addon includes"
+                      />
 
-                      {nested.length > 0 && qty > 0 ? (
+                      {nested.length > 0 ? (
                         <div className="mt-3 space-y-3 border-t border-zinc-100 pt-3">
                           {nested.map((group, groupIndex) => {
                             const multi = group.subChoices.length > 2;
@@ -518,6 +547,27 @@ export default function ProductConfigModal({ isOpen, onClose, product }) {
               </div>
             </div>
           ) : null}
+
+          <div className="space-y-2">
+            <label
+              htmlFor="product-item-notes"
+              className="mb-1 block text-[13px] font-bold text-zinc-900"
+            >
+              Special request / remark
+            </label>
+            <textarea
+              id="product-item-notes"
+              value={itemNotes}
+              onChange={(e) => setItemNotes(e.target.value)}
+              rows={2}
+              maxLength={200}
+              placeholder="e.g. No onions, extra spicy, sauce on the side…"
+              className="w-full resize-none rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-800 placeholder:text-zinc-400 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+            <p className="text-[11px] text-zinc-400">
+              Optional — sent to the kitchen with this item
+            </p>
+          </div>
         </div>
 
         <div className="flex shrink-0 items-center justify-between gap-3 border-t border-zinc-100 bg-zinc-50 px-5 py-4">

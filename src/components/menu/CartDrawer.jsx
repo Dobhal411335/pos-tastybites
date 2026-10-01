@@ -61,6 +61,7 @@ export default function CartDrawer({ open = false, onOpenChange, mode = "drawer"
   const {
     cartItems,
     updateQuantity,
+    updateCartItem,
     removeFromCart,
     clearCart,
     itemCount,
@@ -82,6 +83,18 @@ export default function CartDrawer({ open = false, onOpenChange, mode = "drawer"
   const brandName = restaurant?.name || "Tasty Bites";
   const slots = restaurant?.pickupSlots || [];
   const address = restaurant?.address || "";
+
+  // Notes don't affect price — exclude them so typing remarks doesn't re-quote.
+  const quoteSignature = useMemo(
+    () =>
+      cartItems
+        .map(
+          (item) =>
+            `${item.cartKey}|${item.id}|${item.quantity}|${item.price}|${item.size || ""}|${item.selectedSize || ""}`,
+        )
+        .join(";"),
+    [cartItems],
+  );
 
   // Fresh slots when opening checkout (timezone / clock sensitive).
   useEffect(() => {
@@ -122,7 +135,8 @@ export default function CartDrawer({ open = false, onOpenChange, mode = "drawer"
     return () => {
       cancelled = true;
     };
-  }, [quoteActive, cartItems, itemCount, slug]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- quote only when priced fields change
+  }, [quoteActive, quoteSignature, itemCount, slug]);
 
   const totals = useMemo(() => {
     if (quote) {
@@ -291,49 +305,76 @@ export default function CartDrawer({ open = false, onOpenChange, mode = "drawer"
             {cartItems.map((item) => (
               <div
                 key={item.cartKey}
-                className="flex items-start justify-between gap-3 rounded-xl bg-[var(--customer-surface-low)] p-3.5"
+                className="flex flex-col gap-2 rounded-xl bg-[var(--customer-surface-low)] p-3.5"
               >
-                <div className="min-w-0 flex-1">
-                  <h4 className="text-sm font-bold leading-snug text-[var(--customer-ink)]">
-                    {item.name}
-                  </h4>
-                  <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-[var(--customer-muted)]">
-                    {lineNote(item)}
-                  </p>
-                  <span className="mt-1.5 inline-block text-xs font-bold tabular-nums text-primary">
-                    ${(item.price * item.quantity).toFixed(2)}
-                  </span>
-                </div>
-                <div className="flex shrink-0 items-center gap-2 pt-0.5">
-                  <div className="flex items-center rounded-lg bg-white shadow-sm">
-                    <button
-                      type="button"
-                      onClick={() => updateQuantity(item.cartKey, item.quantity - 1)}
-                      className="flex h-8 w-8 items-center justify-center text-[var(--customer-ink)] hover:text-primary"
-                      aria-label="Decrease"
-                    >
-                      <Minus className="h-3.5 w-3.5" />
-                    </button>
-                    <span className="w-7 text-center text-xs font-bold tabular-nums">
-                      {item.quantity}
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <h4 className="text-sm font-bold leading-snug text-[var(--customer-ink)]">
+                      {item.name}
+                    </h4>
+                    <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-[var(--customer-muted)]">
+                      {lineNote(item)}
+                    </p>
+                    <span className="mt-1.5 inline-block text-xs font-bold tabular-nums text-primary">
+                      ${(item.price * item.quantity).toFixed(2)}
                     </span>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2 pt-0.5">
+                    <div className="flex items-center rounded-lg bg-white shadow-sm">
+                      <button
+                        type="button"
+                        onClick={() => updateQuantity(item.cartKey, item.quantity - 1)}
+                        className="flex h-8 w-8 items-center justify-center text-[var(--customer-ink)] hover:text-primary"
+                        aria-label="Decrease"
+                      >
+                        <Minus className="h-3.5 w-3.5" />
+                      </button>
+                      <span className="w-7 text-center text-xs font-bold tabular-nums">
+                        {item.quantity}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => updateQuantity(item.cartKey, item.quantity + 1)}
+                        className="flex h-8 w-8 items-center justify-center text-[var(--customer-ink)] hover:text-primary"
+                        aria-label="Increase"
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
                     <button
                       type="button"
-                      onClick={() => updateQuantity(item.cartKey, item.quantity + 1)}
-                      className="flex h-8 w-8 items-center justify-center text-[var(--customer-ink)] hover:text-primary"
-                      aria-label="Increase"
+                      onClick={() => removeFromCart(item.cartKey)}
+                      className="p-1 text-[var(--customer-muted)] hover:text-red-600"
+                      aria-label={`Remove ${item.name}`}
                     >
-                      <Plus className="h-3.5 w-3.5" />
+                      <Trash2 className="h-4 w-4" />
                     </button>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => removeFromCart(item.cartKey)}
-                    className="p-1 text-[var(--customer-muted)] hover:text-red-600"
-                    aria-label={`Remove ${item.name}`}
+                </div>
+                <div>
+                  <label
+                    htmlFor={`cart-notes-${item.cartKey}`}
+                    className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-[var(--customer-muted)]"
                   >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
+                    Item remark
+                  </label>
+                  <textarea
+                    id={`cart-notes-${item.cartKey}`}
+                    value={item.notes || ""}
+                    onChange={(e) =>
+                      updateCartItem(item.cartKey, { notes: e.target.value })
+                    }
+                    onBlur={(e) =>
+                      updateCartItem(item.cartKey, {
+                        notes: String(e.target.value || "").trim(),
+                      })
+                    }
+                    onKeyDown={(e) => e.stopPropagation()}
+                    rows={2}
+                    maxLength={200}
+                    placeholder="Special request for this item…"
+                    className="w-full resize-none rounded-lg border border-[var(--border)]/30 bg-white px-2.5 py-2 text-xs text-[var(--customer-ink)] placeholder:text-[var(--customer-muted)] focus:border-primary focus:outline-none"
+                  />
                 </div>
               </div>
             ))}
@@ -798,6 +839,11 @@ function CheckoutFlowModal({
                           <div className="line-clamp-2 pl-4 text-xs leading-relaxed text-[var(--customer-muted)]">
                             {lineNote(item)}
                           </div>
+                          {item.notes ? (
+                            <div className="mt-0.5 pl-4 text-xs font-medium italic text-amber-800">
+                              Remark: {item.notes}
+                            </div>
+                          ) : null}
                         </div>
                         <span className="shrink-0 font-semibold tabular-nums">
                           ${(item.price * item.quantity).toFixed(2)}

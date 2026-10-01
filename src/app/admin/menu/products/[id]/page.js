@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Plus, Edit, Trash2, Upload, MoreHorizontal, Image as ImageIcon, Trash, Loader2 } from "lucide-react";
+import { ArrowLeft, Plus, Edit, Trash2, Upload, MoreHorizontal, Image as ImageIcon, Trash, Loader2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -13,7 +13,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { PALETTE } from "@/utils/paletteeColor";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import Image from "next/image";
 import AddonChoiceOptionsEditor, {
   normalizeAddonChoiceOptionsForForm,
@@ -27,6 +26,7 @@ export default function ProductDetailsConfigPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [uploadingSalesImage, setUploadingSalesImage] = useState(false);
 
   // Product state
   const [product, setProduct] = useState(null);
@@ -48,13 +48,16 @@ export default function ProductDetailsConfigPage() {
   // Custom selection lists
   const [sizesList, setSizesList] = useState([]);
   const [addonsList, setAddonsList] = useState([]);
+  const [ingredientsList, setIngredientsList] = useState([]);
 
   // Custom Modal states
   const [isSizeModalOpen, setIsSizeModalOpen] = useState(false);
   const [isAddonModalOpen, setIsAddonModalOpen] = useState(false);
+  const [isIngredientModalOpen, setIsIngredientModalOpen] = useState(false);
 
   const [newSizeName, setNewSizeName] = useState("");
   const [newAddonName, setNewAddonName] = useState("");
+  const [newIngredientName, setNewIngredientName] = useState("");
 
   const fetchProduct = async () => {
     try {
@@ -65,10 +68,16 @@ export default function ProductDetailsConfigPage() {
         setProduct(p);
         setDescription(p.description || "");
         setTaxValue(p.taxValue?.toString() || "0");
-        setVariants(p.variants || []);
+        setVariants(
+          (p.variants || []).map((variant) => ({
+            ...variant,
+            ingredients: Array.isArray(variant.ingredients) ? variant.ingredients : [],
+          }))
+        );
         setAddons(
           (p.addons || []).map((addon) => ({
             ...addon,
+            ingredients: Array.isArray(addon.ingredients) ? addon.ingredients : [],
             choiceOptions: normalizeAddonChoiceOptionsForForm(addon.choiceOptions),
           })),
         );
@@ -139,6 +148,16 @@ export default function ProductDetailsConfigPage() {
     }
   };
 
+  const fetchIngredients = async () => {
+    try {
+      const res = await fetch("/api/menu/ingredients");
+      const json = await res.json();
+      if (json.success) setIngredientsList(json.data.map((i) => i.name));
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   useEffect(() => {
     if (id) {
       fetchProduct();
@@ -146,6 +165,7 @@ export default function ProductDetailsConfigPage() {
       fetchServiceTax();
       fetchSizes();
       fetchAddons();
+      fetchIngredients();
     }
   }, [id]);
 
@@ -203,6 +223,81 @@ export default function ProductDetailsConfigPage() {
     }
   };
 
+  const handleAddIngredientSubmit = async (e) => {
+    e.preventDefault();
+    if (!newIngredientName.trim()) {
+      toast.error("Please enter an ingredient name.");
+      return;
+    }
+
+    try {
+      const res = await fetch("/api/menu/ingredients", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: newIngredientName.trim() }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        toast.success("Ingredient created!");
+        setNewIngredientName("");
+        setIsIngredientModalOpen(false);
+        fetchIngredients();
+      } else {
+        toast.error(json.message);
+      }
+    } catch (e) {
+      toast.error("Failed to create ingredient");
+    }
+  };
+
+  const addIngredientToVariant = (index, name) => {
+    const trimmed = String(name || "").trim();
+    if (!trimmed) return;
+    const newVariants = [...variants];
+    const current = Array.isArray(newVariants[index].ingredients)
+      ? newVariants[index].ingredients
+      : [];
+    if (current.some((i) => i.toLowerCase() === trimmed.toLowerCase())) return;
+    newVariants[index] = { ...newVariants[index], ingredients: [...current, trimmed] };
+    setVariants(newVariants);
+  };
+
+  const removeIngredientFromVariant = (index, name) => {
+    const newVariants = [...variants];
+    const current = Array.isArray(newVariants[index].ingredients)
+      ? newVariants[index].ingredients
+      : [];
+    newVariants[index] = {
+      ...newVariants[index],
+      ingredients: current.filter((i) => i !== name),
+    };
+    setVariants(newVariants);
+  };
+
+  const addIngredientToAddon = (index, name) => {
+    const trimmed = String(name || "").trim();
+    if (!trimmed) return;
+    const newAddons = [...addons];
+    const current = Array.isArray(newAddons[index].ingredients)
+      ? newAddons[index].ingredients
+      : [];
+    if (current.some((i) => i.toLowerCase() === trimmed.toLowerCase())) return;
+    newAddons[index] = { ...newAddons[index], ingredients: [...current, trimmed] };
+    setAddons(newAddons);
+  };
+
+  const removeIngredientFromAddon = (index, name) => {
+    const newAddons = [...addons];
+    const current = Array.isArray(newAddons[index].ingredients)
+      ? newAddons[index].ingredients
+      : [];
+    newAddons[index] = {
+      ...newAddons[index],
+      ingredients: current.filter((i) => i !== name),
+    };
+    setAddons(newAddons);
+  };
+
 
 
   const handleToggleVariantStatus = (index) => {
@@ -249,10 +344,15 @@ export default function ProductDetailsConfigPage() {
           productType,
           taxValue: parseFloat(taxValue) || 0,
           taxes: availableTaxes.map(t => t._id),
-          variants: variants.filter(v => v.size).map(v => ({ ...v, price: parseFloat(v.price) || 0 })),
+          variants: variants.filter(v => v.size).map(v => ({
+            ...v,
+            price: parseFloat(v.price) || 0,
+            ingredients: Array.isArray(v.ingredients) ? v.ingredients : [],
+          })),
           addons: addons.filter(a => a.name).map(a => ({
             ...a,
             price: parseFloat(a.price) || 0,
+            ingredients: Array.isArray(a.ingredients) ? a.ingredients : [],
             choiceOptions: serializeAddonChoiceOptions(a.choiceOptions),
           })),
           preparationStyles: preparationStyles.filter(s => s.trim() !== ""),
@@ -262,7 +362,8 @@ export default function ProductDetailsConfigPage() {
               subChoices: (group.subChoices || []).map((value) => value.trim()).filter(Boolean),
             }))
             .filter((group) => group.name && group.subChoices.length > 0),
-          image: product?.image
+          image: product?.image,
+          salesImage: product?.salesImage,
         })
       });
       const json = await res.json();
@@ -308,7 +409,7 @@ export default function ProductDetailsConfigPage() {
       });
       const data = await res.json();
       if (res.ok && data.url) {
-        toast.success("Image uploaded!");
+        toast.success("Online image uploaded!");
         setProduct((prev) => ({ ...prev, image: { url: data.url, key: data.key || "" } }));
       } else {
         toast.error("Cloudinary upload failed: " + (data.error || "Unknown error"));
@@ -318,6 +419,50 @@ export default function ProductDetailsConfigPage() {
     } finally {
       setUploadingImage(false);
       // Reset input value so same file can be selected again if needed
+      e.target.value = "";
+    }
+  };
+
+  const handleSalesImageUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      return toast.error("Please select an image file.");
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      return toast.error("Image size must be less than 5MB.");
+    }
+
+    setUploadingSalesImage(true);
+    const formDataUpload = new FormData();
+    formDataUpload.append("file", file);
+
+    const existingKey = product?.salesImage?.key;
+    if (existingKey) {
+      try { await fetch(`/api/cloudinary?key=${existingKey}`, { method: "DELETE" }); } catch (err) { /* ignore */ }
+    }
+
+    try {
+      const res = await fetch("/api/cloudinary", {
+        method: "POST",
+        body: formDataUpload,
+      });
+      const data = await res.json();
+      if (res.ok && data.url) {
+        toast.success("Sales POS image uploaded!");
+        setProduct((prev) => ({
+          ...prev,
+          salesImage: { url: data.url, key: data.key || "" },
+        }));
+      } else {
+        toast.error("Cloudinary upload failed: " + (data.error || "Unknown error"));
+      }
+    } catch (error) {
+      toast.error("Cloudinary upload error: " + error.message);
+    } finally {
+      setUploadingSalesImage(false);
       e.target.value = "";
     }
   };
@@ -507,7 +652,7 @@ export default function ProductDetailsConfigPage() {
                           <label className="text-[14px] font-semibold text-zinc-900">
                             Add Option :
                           </label>
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                             {group.subChoices.map((option, optionIndex) => (
                               <div
                                 key={`choice-${groupIndex}-${optionIndex}`}
@@ -596,7 +741,8 @@ export default function ProductDetailsConfigPage() {
                   <CardContent className="p-6 space-y-6">
                     <div className="space-y-4">
                       {variants.map((variant, index) => (
-                        <div key={index} className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end border border-zinc-100 p-4 rounded-md bg-zinc-50/50">
+                        <div key={index} className="border border-zinc-100 p-4 rounded-md bg-zinc-50/50 space-y-4">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
                           <div className="space-y-2">
                             <label className="text-[14px] font-semibold text-zinc-900">
                               Price Amount ($) <span className="text-red-500">*</span>
@@ -655,6 +801,56 @@ export default function ProductDetailsConfigPage() {
                               </Button>
                             </div>
                           </div>
+                          </div>
+
+                          <div className="space-y-2">
+                            <label className="text-[14px] font-semibold text-zinc-900">
+                              Ingredients
+                            </label>
+                            <div className="flex gap-2">
+                              <Select
+                                key={`variant-ing-${index}-${(variant.ingredients || []).length}`}
+                                onValueChange={(val) => addIngredientToVariant(index, val)}
+                              >
+                                <SelectTrigger className="h-11 text-[16px] bg-white flex-1">
+                                  <SelectValue placeholder="Select ingredient" />
+                                </SelectTrigger>
+                                <SelectContent className="bg-white max-h-60 overflow-y-auto">
+                                  {ingredientsList.map((ing, idx) => (
+                                    <SelectItem key={idx} value={ing}>{ing}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <Button
+                                type="button"
+                                onClick={() => setIsIngredientModalOpen(true)}
+                                variant="outline"
+                                className="h-11 w-11 p-0 shrink-0 text-zinc-600 hover:text-zinc-900 border-zinc-200"
+                              >
+                                <Plus className="h-5 w-5" />
+                              </Button>
+                            </div>
+                            {(variant.ingredients || []).length > 0 && (
+                              <div className="flex flex-wrap gap-2 pt-1">
+                                {(variant.ingredients || []).map((ing) => (
+                                  <Badge
+                                    key={ing}
+                                    className="bg-orange-50 text-orange-800 border border-orange-200 hover:bg-orange-50 pl-2.5 pr-1 py-1 gap-1 font-medium"
+                                  >
+                                    {ing}
+                                    <button
+                                      type="button"
+                                      onClick={() => removeIngredientFromVariant(index, ing)}
+                                      className="ml-0.5 rounded-full p-0.5 hover:bg-orange-100"
+                                      aria-label={`Remove ${ing}`}
+                                    >
+                                      <X className="h-3 w-3" />
+                                    </button>
+                                  </Badge>
+                                ))}
+                              </div>
+                            )}
+                          </div>
                         </div>
                       ))}
                       <div className="mt-4 flex justify-end">
@@ -662,7 +858,7 @@ export default function ProductDetailsConfigPage() {
                           type="button"
                           variant="secondary"
                           className="h-9"
-                          onClick={() => setVariants([...variants, { price: "", size: sizesList[0] || "Regular", status: true }])}
+                          onClick={() => setVariants([...variants, { price: "", size: sizesList[0] || "Regular", status: true, ingredients: [] }])}
                         >
                           Add More Variants
                         </Button>
@@ -740,6 +936,54 @@ export default function ProductDetailsConfigPage() {
                               </div>
                             </div>
                             </div>
+                            <div className="space-y-2">
+                              <label className="text-[13px] font-semibold text-zinc-900">
+                                Ingredients
+                              </label>
+                              <div className="flex gap-2">
+                                <Select
+                                  key={`addon-ing-${index}-${(addon.ingredients || []).length}`}
+                                  onValueChange={(val) => addIngredientToAddon(index, val)}
+                                >
+                                  <SelectTrigger className="h-11 text-[16px] bg-white flex-1">
+                                    <SelectValue placeholder="Select ingredient" />
+                                  </SelectTrigger>
+                                  <SelectContent className="bg-white max-h-60 overflow-y-auto">
+                                    {ingredientsList.map((ing, idx) => (
+                                      <SelectItem key={idx} value={ing}>{ing}</SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                                <Button
+                                  type="button"
+                                  onClick={() => setIsIngredientModalOpen(true)}
+                                  variant="outline"
+                                  className="h-11 w-11 p-0 shrink-0 text-zinc-600 hover:text-zinc-900 border-zinc-200"
+                                >
+                                  <Plus className="h-5 w-5" />
+                                </Button>
+                              </div>
+                              {(addon.ingredients || []).length > 0 && (
+                                <div className="flex flex-wrap gap-2 pt-1">
+                                  {(addon.ingredients || []).map((ing) => (
+                                    <Badge
+                                      key={ing}
+                                      className="bg-orange-50 text-orange-800 border border-orange-200 hover:bg-orange-50 pl-2.5 pr-1 py-1 gap-1 font-medium"
+                                    >
+                                      {ing}
+                                      <button
+                                        type="button"
+                                        onClick={() => removeIngredientFromAddon(index, ing)}
+                                        className="ml-0.5 rounded-full p-0.5 hover:bg-orange-100"
+                                        aria-label={`Remove ${ing}`}
+                                      >
+                                        <X className="h-3 w-3" />
+                                      </button>
+                                    </Badge>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
                             <AddonChoiceOptionsEditor
                               choiceOptions={addon.choiceOptions || []}
                               onChange={(choiceOptions) => {
@@ -755,7 +999,7 @@ export default function ProductDetailsConfigPage() {
                             type="button"
                             variant="secondary"
                             className="h-9"
-                            onClick={() => setAddons([...addons, { name: addonsList[0] || "", price: "", size: "Regular", status: true, choiceOptions: normalizeAddonChoiceOptionsForForm([]) }])}
+                            onClick={() => setAddons([...addons, { name: addonsList[0] || "", price: "", size: "Regular", status: true, ingredients: [], choiceOptions: normalizeAddonChoiceOptionsForForm([]) }])}
                           >
                             Add More Addons
                           </Button>
@@ -829,8 +1073,11 @@ export default function ProductDetailsConfigPage() {
 
                     <div className="space-y-2">
                       <label className="text-[14px] font-semibold text-zinc-900">
-                        Product Image
+                        Online menu image
                       </label>
+                      <p className="text-[12px] text-zinc-500">
+                        Used on the public / online menu only.
+                      </p>
                       <input
                         type="file"
                         accept="image/*"
@@ -850,7 +1097,7 @@ export default function ProductDetailsConfigPage() {
                             <Image
                               width={100}
                               height={150}
-                              src={product.image.url} alt="Product" className="w-full h-full object-contain rounded-md" />
+                              src={product.image.url} alt="Online product" className="w-full h-full object-contain rounded-md" />
                             <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity rounded-md">
                               <span className="text-white text-xs font-semibold">Change Image</span>
                             </div>
@@ -860,7 +1107,54 @@ export default function ProductDetailsConfigPage() {
                             <div className="h-10 w-10 rounded-full bg-zinc-100 group-hover:bg-orange-100 flex items-center justify-center transition-colors">
                               <ImageIcon className="h-5 w-5 text-zinc-500 group-hover:text-[#F97316]" />
                             </div>
-                            <span className="text-[13px] font-medium text-zinc-600 group-hover:text-zinc-900">Click to upload image</span>
+                            <span className="text-[13px] font-medium text-zinc-600 group-hover:text-zinc-900">Click to upload online image</span>
+                          </>
+                        )}
+                      </label>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-[14px] font-semibold text-zinc-900">
+                        Sales POS image
+                      </label>
+                      <p className="text-[12px] text-zinc-500">
+                        Shown only on Sales create-order tiles and list cards.
+                      </p>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        id="product-sales-image-upload"
+                        className="hidden"
+                        onChange={handleSalesImageUpload}
+                        disabled={uploadingSalesImage}
+                      />
+                      <label
+                        htmlFor="product-sales-image-upload"
+                        className={`w-full flex flex-col items-center justify-center gap-2 border-2 border-dashed border-zinc-300 rounded-lg h-32 hover:border-[#F97316] hover:bg-orange-50/50 transition-colors cursor-pointer group ${uploadingSalesImage ? "opacity-50 pointer-events-none" : ""}`}
+                      >
+                        {uploadingSalesImage ? (
+                          <Loader2 className="h-6 w-6 animate-spin text-zinc-400" />
+                        ) : product?.salesImage?.url ? (
+                          <div className="relative w-full h-full p-1 rounded-md overflow-hidden">
+                            <Image
+                              width={100}
+                              height={150}
+                              src={product.salesImage.url}
+                              alt="Sales POS product"
+                              className="w-full h-full object-contain rounded-md"
+                            />
+                            <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity rounded-md">
+                              <span className="text-white text-xs font-semibold">Change Image</span>
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="h-10 w-10 rounded-full bg-zinc-100 group-hover:bg-orange-100 flex items-center justify-center transition-colors">
+                              <ImageIcon className="h-5 w-5 text-zinc-500 group-hover:text-[#F97316]" />
+                            </div>
+                            <span className="text-[13px] font-medium text-zinc-600 group-hover:text-zinc-900">
+                              Click to upload sales image
+                            </span>
                           </>
                         )}
                       </label>
@@ -1078,6 +1372,43 @@ export default function ProductDetailsConfigPage() {
                     </Button>
                     <Button type="submit" className="h-11 px-6 font-semibold cursor-pointer text-white" style={{ backgroundColor: PALETTE.accent }}>
                       Save Addon
+                    </Button>
+                  </DialogFooter>
+                </form>
+              </DialogContent>
+            </Dialog>
+
+            {/* 3. Create Ingredient Modal */}
+            <Dialog open={isIngredientModalOpen} onOpenChange={setIsIngredientModalOpen}>
+              <DialogContent className="sm:max-w-106.25">
+                <form onSubmit={handleAddIngredientSubmit}>
+                  <DialogHeader>
+                    <DialogTitle className="text-[22px] font-bold text-zinc-900">Create Ingredient</DialogTitle>
+                    <DialogDescription className="text-[15px]">
+                      Add a new ingredient that can be linked to pricing variants and addons.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="py-6">
+                    <div className="space-y-2">
+                      <label className="text-[14px] font-semibold text-zinc-900">
+                        Ingredient Name <span className="text-red-500">*</span>
+                      </label>
+                      <Input
+                        autoFocus
+                        required
+                        placeholder="e.g. Lettuce, Cheddar Cheese"
+                        className="h-11 text-[16px]"
+                        value={newIngredientName}
+                        onChange={(e) => setNewIngredientName(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <Button type="button" variant="outline" onClick={() => setIsIngredientModalOpen(false)} className="h-11 px-6 font-semibold cursor-pointer">
+                      Cancel
+                    </Button>
+                    <Button type="submit" className="h-11 px-6 font-semibold cursor-pointer text-white" style={{ backgroundColor: PALETTE.accent }}>
+                      Save Ingredient
                     </Button>
                   </DialogFooter>
                 </form>

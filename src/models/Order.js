@@ -30,6 +30,7 @@ const OrderItemSchema = new mongoose.Schema({
     },
   ],
   drinks: [{ type: String }],
+  notes: { type: String, default: "" },
   sentQty: { type: Number, default: 0 },
   cartId: { type: String }, // To match incoming items reliably
 });
@@ -67,6 +68,17 @@ const OrderSchema = new mongoose.Schema(
     tipMethod: { type: String, default: null }, // Cash | Card | Gift Card
     cashAmount: { type: Number, default: null },
     cardAmount: { type: Number, default: null },
+    /** Named multi-payer amount splits (same orderNumber; one slip each). */
+    paymentSplits: [
+      {
+        name: { type: String, required: true },
+        amount: { type: Number, required: true },
+        method: { type: String, required: true }, // Cash | Card | Gift Card
+        cardType: { type: String, default: null },
+        tipAmount: { type: Number, default: 0 },
+        paidAt: { type: Date, default: Date.now },
+      },
+    ],
     taxBreakdown: [
       {
         taxId: { type: mongoose.Schema.Types.ObjectId, ref: 'Tax' },

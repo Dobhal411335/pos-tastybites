@@ -4,6 +4,7 @@ const VariantSchema = new mongoose.Schema({
   size: { type: String, required: true },
   price: { type: Number, required: true },
   status: { type: Boolean, default: true },
+  ingredients: { type: [String], default: [] },
 });
 
 const ChoiceOptionSchema = new mongoose.Schema({
@@ -17,6 +18,7 @@ const AddonSchema = new mongoose.Schema({
   size: { type: String, default: 'Regular' },
   status: { type: Boolean, default: true },
   choiceOptions: { type: [ChoiceOptionSchema], default: [] },
+  ingredients: { type: [String], default: [] },
 });
 
 const ProductSchema = new mongoose.Schema(
@@ -41,7 +43,10 @@ const ProductSchema = new mongoose.Schema(
     status: { type: String, enum: ['Active', 'Inactive'], default: 'Active' },
     discount: { type: mongoose.Schema.Types.ObjectId, ref: 'Coupon' },
     discountActive: { type: Boolean, default: true },
+    /** Online / public menu image */
     image: { url: { type: String }, key: { type: String } },
+    /** Sales POS create-order image (separate from online) */
+    salesImage: { url: { type: String }, key: { type: String } },
     variants: [VariantSchema],
     addons: [AddonSchema],
     choiceOptions: [ChoiceOptionSchema],

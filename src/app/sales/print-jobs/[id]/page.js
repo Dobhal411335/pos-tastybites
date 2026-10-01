@@ -305,10 +305,32 @@ export default function PrintJobDetailPage() {
                   <dd className="font-semibold text-zinc-900">#{orderNumber}</dd>
                 </div>
 
+                {job.metadata?.isSplitReceipt && (
+                  <div className="flex justify-between items-start gap-3">
+                    <dt className="text-zinc-500 shrink-0">Split Slip</dt>
+                    <dd className="font-medium text-zinc-900 text-right">
+                      {job.metadata.splitIndex}/{job.metadata.splitTotal}
+                      {job.metadata.splitName
+                        ? ` · ${job.metadata.splitName}`
+                        : ""}
+                      {job.metadata.splitAmount != null && (
+                        <span className="block text-[11px] text-zinc-500 font-normal">
+                          ${(Number(job.metadata.splitAmount) || 0).toFixed(2)}
+                          {job.metadata.splitMethod
+                            ? ` · ${job.metadata.splitMethod}`
+                            : ""}
+                        </span>
+                      )}
+                    </dd>
+                  </div>
+                )}
+
                 <div className="flex justify-between items-center">
                   <dt className="text-zinc-500">Print Type</dt>
                   <dd className="font-medium text-zinc-800">
-                    {PRINT_TYPE_LABELS[job.printType] || job.printType}
+                    {job.metadata?.isSplitReceipt
+                      ? `Split Receipt (${job.metadata.splitIndex}/${job.metadata.splitTotal})`
+                      : PRINT_TYPE_LABELS[job.printType] || job.printType}
                   </dd>
                 </div>
 
@@ -624,6 +646,34 @@ export default function PrintJobDetailPage() {
                           <span>{order.paymentMethod}</span>
                         </div>
                       )}
+                      {Array.isArray(order.paymentSplits) &&
+                        order.paymentSplits.length > 0 && (
+                          <div className="pt-2 space-y-1 border-t border-zinc-100 mt-1">
+                            <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">
+                              Payment Splits
+                            </p>
+                            {order.paymentSplits.map((split, idx) => (
+                              <div
+                                key={`${split.name}-${idx}`}
+                                className="flex justify-between text-[11px] text-zinc-700"
+                              >
+                                <span>
+                                  {split.name}
+                                  {split.method
+                                    ? ` · ${
+                                        split.cardType
+                                          ? `Card - ${split.cardType}`
+                                          : split.method
+                                      }`
+                                    : ""}
+                                </span>
+                                <span className="font-semibold">
+                                  ${(Number(split.amount) || 0).toFixed(2)}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                     </div>
                   );
                 })()}
@@ -686,6 +736,7 @@ export default function PrintJobDetailPage() {
                       serverName={serverName || job.metadata?.serverName}
                       guestCount={guestCount ?? job.metadata?.guestCount}
                       isReprint={isReprint}
+                      jobMetadata={job.metadata || null}
                     />
                   )}
                 </div>

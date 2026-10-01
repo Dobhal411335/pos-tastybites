@@ -5,6 +5,11 @@ import { getPrinterAdapter } from "./getPrinterAdapter";
 import { logger } from "@/utils/logger";
 import { sendError } from "@/utils/errorHandler";
 import { createNotification } from "@/lib/notifications/notificationService";
+import {
+  DEFAULT_RESTAURANT_TIMEZONE,
+  todayRestaurantISO,
+} from "@/lib/restaurantTime";
+import { businessDateBounds } from "@/lib/eod/eodHelpers";
 
 /** Roles that may administer the print queue (not plain floor EMPLOYEE). */
 export const SALES_PRINT_ROLES = [
@@ -273,14 +278,19 @@ export async function createReceiptPrintJob({
   restaurantName,
   floorName,
 }) {
-  // One active/success receipt job per paid order (retry reuses FAILED)
-  const existing = await PrintJob.findOne({
-    orderId: order._id,
-    printType: "RECEIPT",
-    status: { $in: ["QUEUED", "PRINTING", "PRINTED"] },
-  });
-  if (existing) {
-    return { job: existing, created: false };
+  // One active/success receipt job per paid order (retry reuses FAILED).
+  // Named multi-payer splits use createSplitReceiptPrintJobs instead.
+  const hasNamedSplits =
+    Array.isArray(order.paymentSplits) && order.paymentSplits.length > 1;
+  if (!hasNamedSplits) {
+    const existing = await PrintJob.findOne({
+      orderId: order._id,
+      printType: "RECEIPT",
+      status: { $in: ["QUEUED", "PRINTING", "PRINTED"] },
+    });
+    if (existing) {
+      return { job: existing, created: false };
+    }
   }
 
   const idempotencyKey = `receipt:${order._id}:paid`;
@@ -318,6 +328,115 @@ export async function createReceiptPrintJob({
       totalAmount: order.totalAmount ?? null,
     },
   });
+}
+
+/**
+ * One RECEIPT PrintJob per named payment split (same orderNumber, multi slips).
+ */
+export async function createSplitReceiptPrintJobs({
+  order,
+  requestedBy,
+  guestCount,
+  serverName,
+  restaurantName,
+  floorName,
+}) {
+  const rawSplits = Array.isArray(order.paymentSplits) ? order.paymentSplits : [];
+  const splits = rawSplits.map((s) =>
+    s && typeof s.toObject === "function" ? s.toObject() : s,
+  );
+  if (splits.length < 2) {
+    const result = await createReceiptPrintJob({
+      order,
+      requestedBy,
+      guestCount,
+      serverName,
+      restaurantName,
+      floorName,
+    });
+    return {
+      jobs: result.job ? [result.job] : [],
+      created: result.created,
+    };
+  }
+
+  const billTotal = Number(order.totalAmount) || 0;
+  const baseMeta = {
+    guestCount: guestCount ?? null,
+    tableNo: order.tableNo || null,
+    guestName: order.guestName || null,
+    partyName: order.partyName || order.guestName || null,
+    floorName: floorName || order.floorName || null,
+    serverName: serverName || null,
+    restaurantName: restaurantName || null,
+    orderNumber: order.orderNumber,
+    tipAmount: order.tipAmount ?? null,
+    tipMethod: order.tipMethod ?? null,
+    serviceChargeTotal: order.serviceChargeTotal ?? null,
+    serviceChargeName: order.serviceChargeName ?? null,
+    discountTotal: order.discountTotal ?? null,
+    discountPercent: order.discountPercent ?? null,
+    subTotal: order.subTotal ?? null,
+    taxTotal: order.taxTotal ?? null,
+    totalAmount: billTotal,
+    billTotal,
+    orderPaymentMethod: order.paymentMethod || null,
+    orderCashAmount: order.cashAmount ?? null,
+    orderCardAmount: order.cardAmount ?? null,
+    orderGiftcardUsedAmount: order.giftcardUsedAmount ?? null,
+  };
+
+  const jobs = [];
+  for (let i = 0; i < splits.length; i++) {
+    const split = splits[i] || {};
+    const methodRaw = String(split.method || "Cash").trim();
+    const isCash = /^cash$/i.test(methodRaw);
+    const amount = Number(split.amount) || 0;
+    const cardType = split.cardType ? String(split.cardType).trim() : null;
+    const splitMethod =
+      !isCash && cardType ? `Card - ${cardType}` : isCash ? "Cash" : "Card";
+    const splitName = String(split.name || `Guest ${i + 1}`).trim();
+    const idempotencyKey = `receipt:${order._id}:split:${i}`;
+    const existing = await PrintJob.findOne({
+      restaurantId: order.restaurantId,
+      idempotencyKey,
+    });
+    if (existing) {
+      jobs.push(existing);
+      continue;
+    }
+    const { job } = await createPrintJob({
+      restaurantId: order.restaurantId,
+      orderId: order._id,
+      printType: "RECEIPT",
+      printerTarget: "RECEIPT",
+      requestedBy,
+      floorId: order.floor,
+      orderNumber: order.orderNumber,
+      idempotencyKey,
+      metadata: {
+        ...baseMeta,
+        isSplitReceipt: true,
+        splitIndex: i + 1,
+        splitTotal: splits.length,
+        splitName,
+        splitAmount: amount,
+        splitMethod,
+        splitCardType: cardType,
+        // Each slip’s Party line uses this payer’s name
+        guestName: splitName,
+        partyName: splitName,
+        // Slip-specific tender (overrides order aggregates for this job)
+        paymentMethod: splitMethod,
+        cashAmount: isCash ? amount : 0,
+        cardAmount: isCash ? 0 : amount,
+        giftcardUsedAmount: 0,
+      },
+    });
+    if (job) jobs.push(job);
+  }
+
+  return { jobs, created: true };
 }
 
 async function persistStatus(job, updates, floorId) {
@@ -440,6 +559,61 @@ export async function executePrintJob(jobId, { simulateFailure = false, restaura
 }
 
 /**
+ * Cancel leftover QUEUED / stuck PRINTING jobs from before the restaurant-local
+ * business day so overnight agents never print yesterday's queue.
+ * Jobs intentionally requeued today (metadata.requeuedAt) are kept.
+ */
+export async function expireStaleQueuedPrintJobs(restaurantId) {
+  if (!restaurantId) return { expired: 0 };
+
+  const tz = DEFAULT_RESTAURANT_TIMEZONE;
+  const today = todayRestaurantISO(tz);
+  const { start } = businessDateBounds(today, tz);
+
+  const result = await PrintJob.updateMany(
+    {
+      restaurantId,
+      isActive: { $ne: false },
+      status: { $in: ["QUEUED", "PRINTING"] },
+      $expr: {
+        $lt: [{ $ifNull: ["$metadata.requeuedAt", "$createdAt"] }, start],
+      },
+    },
+    {
+      $set: {
+        status: "CANCELLED",
+        errorMessage: "Expired — left unprinted from a previous day",
+      },
+    }
+  );
+
+  const expired = result.modifiedCount || 0;
+  if (expired > 0) {
+    logger.info("Expired stale print jobs from prior business day", {
+      restaurantId: String(restaurantId),
+      expired,
+      businessDate: today,
+    });
+  }
+
+  return { expired, businessDate: today, dayStart: start };
+}
+
+/** True when a job is still eligible to print on the current restaurant day. */
+export function isPrintJobEligibleToday(job, dayStart = null) {
+  if (!job) return false;
+  const start =
+    dayStart ||
+    businessDateBounds(todayRestaurantISO(DEFAULT_RESTAURANT_TIMEZONE))
+      .start;
+  const effective =
+    job.metadata?.requeuedAt != null
+      ? new Date(job.metadata.requeuedAt)
+      : new Date(job.createdAt);
+  return !Number.isNaN(effective.getTime()) && effective >= start;
+}
+
+/**
  * Reset a failed (or any) job back to QUEUED and optionally re-run.
  */
 export async function retryPrintJob(jobId, { runNow = false, simulateFailure = false, restaurantId } = {}) {
@@ -468,6 +642,7 @@ export async function retryPrintJob(jobId, { runNow = false, simulateFailure = f
   }
   if (order?.floor) floorId = order.floor;
 
+  const requeuedAt = new Date();
   await persistStatus(
     job,
     {
@@ -476,6 +651,10 @@ export async function retryPrintJob(jobId, { runNow = false, simulateFailure = f
       startedAt: null,
       printedAt: null,
       failedAt: null,
+      metadata: {
+        ...(job.metadata || {}),
+        requeuedAt,
+      },
     },
     floorId
   );

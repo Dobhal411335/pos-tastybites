@@ -6,8 +6,19 @@ import { sendError } from "@/utils/errorHandler";
 import { logger } from "@/utils/logger";
 import { deleteImage } from "@/lib/cloudinary/deleteImage";
 import Tax from "@/models/tax/Tax";
-import { markCategoryAddons, mergeAddons, normalizeAddons, stripAddonClientFields } from "@/lib/menu/addons";
-// GET - Get single product details
+import { markCategoryAddons, mergeAddons, normalizeAddons, normalizeIngredients, stripAddonClientFields } from "@/lib/menu/addons";
+
+function sanitizeVariants(variants = []) {
+  return (Array.isArray(variants) ? variants : [])
+    .filter((v) => v && String(v.size || "").trim())
+    .map((v) => ({
+      ...v,
+      size: String(v.size).trim(),
+      price: Number(v.price) || 0,
+      status: v.status !== false,
+      ingredients: normalizeIngredients(v.ingredients),
+    }));
+}
 export const GET = withAuth(async (request, { params }) => {
   try {
     const { id } = await params;
@@ -44,8 +55,22 @@ export const PUT = withAuth(async (request, { params }) => {
     }
 
     const data = await request.json();
-    // Allow updating basic info, description, taxes, status, variants, addons, image, discount
-    const { name, category, productCode, productType, description, taxes, status, variants, addons, image, preparationStyles, choiceOptions } = data;
+    // Allow updating basic info, description, taxes, status, variants, addons, images, discount
+    const {
+      name,
+      category,
+      productCode,
+      productType,
+      description,
+      taxes,
+      status,
+      variants,
+      addons,
+      image,
+      salesImage,
+      preparationStyles,
+      choiceOptions,
+    } = data;
 
     const updateData = { updatedBy: request.user.id };
 
@@ -82,9 +107,10 @@ export const PUT = withAuth(async (request, { params }) => {
       updateData.taxData = { totalPercentage, totalFixed, taxNames };
     }
     if (status) updateData.status = status;
-    if (variants) updateData.variants = variants;
+    if (variants) updateData.variants = sanitizeVariants(variants);
     if (addons) updateData.addons = stripAddonClientFields(addons);
     if (image !== undefined) updateData.image = image;
+    if (salesImage !== undefined) updateData.salesImage = salesImage;
     if (preparationStyles !== undefined) updateData.preparationStyles = preparationStyles;
     if (choiceOptions !== undefined) {
       updateData.choiceOptions = (Array.isArray(choiceOptions) ? choiceOptions : [])
@@ -142,6 +168,9 @@ export const DELETE = withAuth(async (request, { params }) => {
 
     if (product.image?.key) {
       try { await deleteImage(product.image.key); } catch (e) { logger.error("Cloudinary delete error", e); }
+    }
+    if (product.salesImage?.key) {
+      try { await deleteImage(product.salesImage.key); } catch (e) { logger.error("Cloudinary delete error", e); }
     }
 
     await Product.findOneAndDelete({ _id: id, restaurant: request.restaurant });

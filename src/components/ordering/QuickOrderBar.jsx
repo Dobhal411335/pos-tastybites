@@ -4,6 +4,13 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Search, Store, UtensilsCrossed } from "lucide-react";
 import { usePublicMenu } from "@/hooks/usePublicMenu";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 export default function QuickOrderBar() {
   const router = useRouter();
@@ -46,22 +53,28 @@ export default function QuickOrderBar() {
 
           <div className="grid grid-cols-1 gap-3 md:grid-cols-12">
             <div className="relative md:col-span-4">
-              <div className="flex h-12 items-center rounded-lg border border-transparent bg-[var(--customer-surface-low)] px-3.5 text-[var(--customer-ink)] transition-all focus-within:border-primary">
-                <UtensilsCrossed className="mr-2 h-5 w-5 text-[var(--customer-muted)]" />
-                <select
+              <div className="flex h-12 items-center gap-2 rounded-lg border border-transparent bg-[var(--customer-surface-low)] px-3.5 text-[var(--customer-ink)] transition-all focus-within:border-primary">
+                <UtensilsCrossed className="h-5 w-5 shrink-0 text-[var(--customer-muted)]" />
+                <Select
                   value={categorySlug}
-                  onChange={(e) => setCategorySlug(e.target.value)}
+                  onValueChange={setCategorySlug}
                   disabled={loading}
-                  className="w-full cursor-pointer appearance-none bg-transparent text-sm focus:outline-none"
-                  aria-label="Menu category"
                 >
-                  <option value="all">All Menu Categories</option>
-                  {categories.map((cat) => (
-                    <option key={cat.id} value={cat.slug}>
-                      {cat.name}
-                    </option>
-                  ))}
-                </select>
+                  <SelectTrigger
+                    aria-label="Menu category"
+                    className="h-auto w-full border-0 bg-transparent p-0 text-sm shadow-none focus:ring-0 focus:ring-offset-0 [&>svg]:opacity-60"
+                  >
+                    <SelectValue placeholder="All Menu Categories" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-white">
+                    <SelectItem value="all">All Menu Categories</SelectItem>
+                    {categories.map((cat) => (
+                      <SelectItem key={cat.id} value={cat.slug}>
+                        {cat.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
 

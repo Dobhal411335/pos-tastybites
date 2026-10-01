@@ -715,6 +715,14 @@ export default function AdminDashboardPage() {
                       desc="Configure categories, items, modifiers, pricing, and availability."
                     />
                     <ModuleCard
+                      href="/admin/menu/update-price"
+                      icon={Percent}
+                      color="emerald"
+                      title="Update Product Price"
+                      stat="Pricing"
+                      desc="Increase or decrease menu prices by percent for a category or a single product."
+                    />
+                    <ModuleCard
                       href="/admin/floor-plan"
                       icon={LayoutGrid}
                       color="amber"

@@ -30,12 +30,14 @@ export default function OfferConfigModal({ isOpen, onClose, offer }) {
   const [selectedInclusions, setSelectedInclusions] = useState(inclusions);
   const [selectedChoices, setSelectedChoices] = useState([]);
   const [selectedDrinks, setSelectedDrinks] = useState([]);
+  const [itemNotes, setItemNotes] = useState("");
 
   useEffect(() => {
     if (!offer) return;
     setSelectedInclusions(cleanOfferList(offer.inclusions));
     setSelectedChoices([]);
     setSelectedDrinks([]);
+    setItemNotes("");
   }, [offer]);
 
   if (!offer) return null;
@@ -52,6 +54,10 @@ export default function OfferConfigModal({ isOpen, onClose, offer }) {
     const inc = selectedInclusions;
     const ch = selectedChoices;
     const dr = selectedDrinks;
+    const notes = String(itemNotes || "").trim();
+    const noteKey = notes
+      ? notes.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 40)
+      : "";
     const options = buildOfferOptions({ inclusions: inc, choices: ch, drinks: dr });
     const modifier = buildOfferCartModifier({ inclusions: inc, choices: ch, drinks: dr });
     const cartKey = [
@@ -60,7 +66,9 @@ export default function OfferConfigModal({ isOpen, onClose, offer }) {
       inc.join("+"),
       ch.join("+"),
       dr.join("+"),
+      noteKey ? `note-${noteKey}` : "",
     ]
+      .filter(Boolean)
       .join("-")
       .replace(/\s+/g, "-");
 
@@ -84,6 +92,7 @@ export default function OfferConfigModal({ isOpen, onClose, offer }) {
         inclusions: inc,
         choices: ch,
         drinks: dr,
+        notes,
         productType: "KITCHEN",
       },
       1
@@ -238,6 +247,24 @@ export default function OfferConfigModal({ isOpen, onClose, offer }) {
               No customization required — add this offer as packaged.
             </p>
           ) : null}
+
+          <div className="space-y-2">
+            <label
+              htmlFor="offer-item-notes"
+              className="text-xs font-bold uppercase tracking-widest text-zinc-500"
+            >
+              Special request / remark
+            </label>
+            <textarea
+              id="offer-item-notes"
+              value={itemNotes}
+              onChange={(e) => setItemNotes(e.target.value)}
+              rows={2}
+              maxLength={200}
+              placeholder="e.g. No onions, sauce on the side…"
+              className="w-full resize-none rounded-xl border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-800 placeholder:text-zinc-400 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+          </div>
         </div>
 
         <div className="flex shrink-0 items-center gap-3 border-t border-zinc-100 px-5 py-4">

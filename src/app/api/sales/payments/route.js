@@ -8,7 +8,7 @@ import OperationalAuditLog from "@/models/OperationalAuditLog";
 import { sendSuccess } from "@/utils/apiResponse";
 import { sendError } from "@/utils/errorHandler";
 import { logger } from "@/utils/logger";
-import { createReceiptPrintJob } from "@/lib/printing/printJobService";
+import { createReceiptPrintJob, createSplitReceiptPrintJobs } from "@/lib/printing/printJobService";
 import { createNotification } from "@/lib/notifications/notificationService";
 import { buildTaxBreakdownForOrder } from "@/lib/eod/buildTaxBreakdown";
 import { redeemGiftCardAtomic } from "@/lib/giftcards/redeemGiftCardAtomic";
@@ -51,6 +51,7 @@ export const POST = withAuth(async (request) => {
       applyServiceCharge,
       serviceChargeTotal,
       serviceChargeName,
+      paymentSplits: paymentSplitsRaw,
     } = data;
 
     if (!orderId) {
@@ -208,9 +209,73 @@ export const POST = withAuth(async (request) => {
       }
     }
 
+    // Named multi-payer splits (optional). Gift card stays order-level.
+    let normalizedSplits = null;
+    if (Array.isArray(paymentSplitsRaw) && paymentSplitsRaw.length > 0) {
+      if (paymentSplitsRaw.length < 2) {
+        return sendError(
+          new Error("Invalid Splits"),
+          "Split bill requires at least 2 payers",
+          400,
+        );
+      }
+      normalizedSplits = [];
+      for (let i = 0; i < paymentSplitsRaw.length; i++) {
+        const row = paymentSplitsRaw[i] || {};
+        const name = String(row.name || "").trim();
+        const amt = r2(row.amount);
+        const methodRaw = String(row.method || "").trim();
+        const isCash = /^cash$/i.test(methodRaw);
+        const isCard = /^card$/i.test(methodRaw);
+        if (!name) {
+          return sendError(
+            new Error("Invalid Splits"),
+            `Split #${i + 1} requires a payer name`,
+            400,
+          );
+        }
+        if (!(amt > 0)) {
+          return sendError(
+            new Error("Invalid Splits"),
+            `Split #${i + 1} amount must be greater than 0`,
+            400,
+          );
+        }
+        if (!isCash && !isCard) {
+          return sendError(
+            new Error("Invalid Splits"),
+            `Split #${i + 1} method must be Cash or Card`,
+            400,
+          );
+        }
+        const splitCardType =
+          isCard && row.cardType ? String(row.cardType).trim() : null;
+        normalizedSplits.push({
+          name,
+          amount: amt,
+          method: isCash ? "Cash" : "Card",
+          cardType: splitCardType || null,
+          tipAmount: 0,
+          paidAt: new Date(),
+        });
+      }
+    }
+
     order.paymentStatus = "PAID";
     const methodLabel = String(method || "Cash");
-    if (methodLabel === "Card" && cardType) {
+    if (normalizedSplits) {
+      const methodParts = normalizedSplits.map((s) =>
+        s.method === "Card" && s.cardType
+          ? `Card - ${s.cardType}`
+          : s.method,
+      );
+      const uniqueParts = [...new Set(methodParts)];
+      order.paymentMethod =
+        uniqueParts.length <= 3
+          ? `Split (${normalizedSplits.length}) · ${uniqueParts.join(" + ")}`
+          : `Split (${normalizedSplits.length})`;
+      order.paymentSplits = normalizedSplits;
+    } else if (methodLabel === "Card" && cardType) {
       order.paymentMethod = `Card - ${cardType}`;
     } else if (
       /card/i.test(methodLabel) &&
@@ -282,18 +347,51 @@ export const POST = withAuth(async (request) => {
       order.giftcardUsedAmount = giftCardDebitAmount;
     }
 
+    // Validate named splits cover the order after gift card (v1: no tip on splits)
+    if (normalizedSplits) {
+      const splitSum = r2(
+        normalizedSplits.reduce((s, row) => s + Number(row.amount || 0), 0),
+      );
+      const covered = r2(splitSum + giftCardDebitAmount);
+      if (Math.abs(covered - dueAmount) > 0.02) {
+        return sendError(
+          new Error("Invalid Splits"),
+          `Split amounts ($${splitSum.toFixed(2)}) plus gift card ($${giftCardDebitAmount.toFixed(2)}) must equal order total ($${dueAmount.toFixed(2)})`,
+          400,
+        );
+      }
+      // Derive tender aggregates from named splits
+      order.cashAmount = r2(
+        normalizedSplits
+          .filter((s) => s.method === "Cash")
+          .reduce((s, row) => s + Number(row.amount || 0), 0),
+      );
+      order.cardAmount = r2(
+        normalizedSplits
+          .filter((s) => s.method === "Card")
+          .reduce((s, row) => s + Number(row.amount || 0), 0),
+      );
+    }
+
     // Clean up paymentMethod if gift card was not actually debited
     if (!order.giftcardUsedAmount || order.giftcardUsedAmount <= 0) {
       order.giftcardUsedAmount = 0;
-      order.paymentMethod = String(order.paymentMethod || "")
-        .replace(/\bGift\s*Card\s*\+\s*/i, "")
-        .replace(/\s*\+\s*Gift\s*Card\b/i, "")
-        .trim();
-      if (!order.paymentMethod || /^Gift\s*Card$/i.test(order.paymentMethod)) {
-        order.paymentMethod =
-          methodLabel && !/gift\s*card/i.test(methodLabel)
-            ? methodLabel
-            : "Card";
+      if (!normalizedSplits) {
+        order.paymentMethod = String(order.paymentMethod || "")
+          .replace(/\bGift\s*Card\s*\+\s*/i, "")
+          .replace(/\s*\+\s*Gift\s*Card\b/i, "")
+          .trim();
+        if (!order.paymentMethod || /^Gift\s*Card$/i.test(order.paymentMethod)) {
+          order.paymentMethod =
+            methodLabel && !/gift\s*card/i.test(methodLabel)
+              ? methodLabel
+              : "Card";
+        }
+      }
+    } else if (normalizedSplits && order.giftcardUsedAmount > 0) {
+      // Keep Split (N) label; gift is shown via giftcardUsedAmount on receipt/UI
+      if (!/gift/i.test(String(order.paymentMethod || ""))) {
+        order.paymentMethod = `${order.paymentMethod} + Gift Card`;
       }
     }
 
@@ -345,50 +443,52 @@ export const POST = withAuth(async (request) => {
       }
     }
 
-    // Persist tender split amounts when provided by POS
-    if (cashAmount !== undefined && cashAmount !== null && cashAmount !== "") {
-      const n = Number(cashAmount);
-      if (Number.isFinite(n)) order.cashAmount = r2(n);
-    }
-    if (cardAmount !== undefined && cardAmount !== null && cardAmount !== "") {
-      const n = Number(cardAmount);
-      if (Number.isFinite(n)) order.cardAmount = r2(n);
-    }
-
-    // Infer tenders from method when UI did not send split amounts
-    if (
-      (order.cashAmount == null || order.cashAmount === undefined) &&
-      (order.cardAmount == null || order.cardAmount === undefined)
-    ) {
-      const due = r2(order.totalAmount);
-      const tip = r2(order.tipAmount);
-      const gc = r2(order.giftcardUsedAmount);
-      const methodStr = String(order.paymentMethod || methodLabel || "");
-      const isCashOnly = /^cash$/i.test(methodStr.trim());
-      const isGiftOnly = /gift\s*card/i.test(methodStr) && !/card\s*-/i.test(methodStr);
-      if (isCashOnly) {
-        order.cashAmount = r2(due + tip - gc);
-        order.cardAmount = 0;
-      } else if (isGiftOnly || gc >= due) {
-        order.cashAmount = 0;
-        order.cardAmount = 0;
-      } else if (/cash/i.test(methodStr) && /card/i.test(methodStr)) {
-        // Split without amounts: leave nulls so EOD can fall back to method string
-      } else if (/card/i.test(methodStr) || /visa|master|debit|credit/i.test(methodStr)) {
-        order.cardAmount = r2(due + tip - gc);
-        order.cashAmount = 0;
+    // Persist tender split amounts when provided by POS (skip when named splits already set them)
+    if (!normalizedSplits) {
+      if (cashAmount !== undefined && cashAmount !== null && cashAmount !== "") {
+        const n = Number(cashAmount);
+        if (Number.isFinite(n)) order.cashAmount = r2(n);
       }
-    }
+      if (cardAmount !== undefined && cardAmount !== null && cardAmount !== "") {
+        const n = Number(cardAmount);
+        if (Number.isFinite(n)) order.cardAmount = r2(n);
+      }
 
-    // Ensure cardAmount does not exceed actual grand total due after cash and gift card
-    if (order.cardAmount != null && order.cardAmount > 0) {
-      const due = r2(order.totalAmount);
-      const tip = r2(order.tipAmount);
-      const gc = r2(order.giftcardUsedAmount);
-      const cash = r2(order.cashAmount);
-      const maxCardTender = r2(Math.max(0, due + tip - gc - cash));
-      if (order.cardAmount > maxCardTender) {
-        order.cardAmount = maxCardTender;
+      // Infer tenders from method when UI did not send split amounts
+      if (
+        (order.cashAmount == null || order.cashAmount === undefined) &&
+        (order.cardAmount == null || order.cardAmount === undefined)
+      ) {
+        const due = r2(order.totalAmount);
+        const tip = r2(order.tipAmount);
+        const gc = r2(order.giftcardUsedAmount);
+        const methodStr = String(order.paymentMethod || methodLabel || "");
+        const isCashOnly = /^cash$/i.test(methodStr.trim());
+        const isGiftOnly = /gift\s*card/i.test(methodStr) && !/card\s*-/i.test(methodStr);
+        if (isCashOnly) {
+          order.cashAmount = r2(due + tip - gc);
+          order.cardAmount = 0;
+        } else if (isGiftOnly || gc >= due) {
+          order.cashAmount = 0;
+          order.cardAmount = 0;
+        } else if (/cash/i.test(methodStr) && /card/i.test(methodStr)) {
+          // Split without amounts: leave nulls so EOD can fall back to method string
+        } else if (/card/i.test(methodStr) || /visa|master|debit|credit/i.test(methodStr)) {
+          order.cardAmount = r2(due + tip - gc);
+          order.cashAmount = 0;
+        }
+      }
+
+      // Ensure cardAmount does not exceed actual grand total due after cash and gift card
+      if (order.cardAmount != null && order.cardAmount > 0) {
+        const due = r2(order.totalAmount);
+        const tip = r2(order.tipAmount);
+        const gc = r2(order.giftcardUsedAmount);
+        const cash = r2(order.cashAmount);
+        const maxCardTender = r2(Math.max(0, due + tip - gc - cash));
+        if (order.cardAmount > maxCardTender) {
+          order.cardAmount = maxCardTender;
+        }
       }
     }
 
@@ -497,6 +597,7 @@ export const POST = withAuth(async (request) => {
     // Receipt PrintJob — only after successful payment (not on order create).
     // Server name is the original order taker (processedBy), not whoever collected payment.
     let printJobId = null;
+    let printJobIds = [];
     let processedByName = null;
     try {
       const creditEmployeeId = order.processedBy || request.user.id;
@@ -512,15 +613,30 @@ export const POST = withAuth(async (request) => {
         [emp?.firstName, emp?.lastName].filter(Boolean).join(" ") ||
         null;
 
-      const { job } = await createReceiptPrintJob({
+      const printOpts = {
         order,
         requestedBy: request.user.id,
         guestCount: receiptGuestCount,
         serverName: processedByName,
         restaurantName: restaurant?.name || null,
         floorName: order.floorName || floorDoc?.name || null,
-      });
-      printJobId = job?._id || null;
+      };
+
+      if (
+        Array.isArray(order.paymentSplits) &&
+        order.paymentSplits.length > 1
+      ) {
+        const { jobs } = await createSplitReceiptPrintJobs(printOpts);
+        printJobIds = (jobs || []).map((j) => j?._id).filter(Boolean);
+        printJobId = printJobIds[0] || null;
+        logger.info(
+          `Split receipt jobs created for Order ${order.orderNumber}: ${printJobIds.length} slips`,
+        );
+      } else {
+        const { job } = await createReceiptPrintJob(printOpts);
+        printJobId = job?._id || null;
+        if (printJobId) printJobIds = [printJobId];
+      }
     } catch (printErr) {
       logger.error("Failed to create RECEIPT PrintJob (payment still succeeded)", printErr);
     }
@@ -534,6 +650,10 @@ export const POST = withAuth(async (request) => {
           order.tableNo
             ? ` • ${/^tables?\b/i.test(String(order.tableNo).trim()) ? order.tableNo : `Table ${order.tableNo}`}`
             : ""
+        }${
+          Array.isArray(order.paymentSplits) && order.paymentSplits.length > 1
+            ? ` · Split ${order.paymentSplits.length} ways`
+            : ""
         }`,
         orderId: order._id,
         tableId: order.table || null,
@@ -546,6 +666,10 @@ export const POST = withAuth(async (request) => {
           amount: order.totalAmount,
           method: order.paymentMethod,
           tipAmount: order.tipAmount || 0,
+          splitCount:
+            Array.isArray(order.paymentSplits) && order.paymentSplits.length > 1
+              ? order.paymentSplits.length
+              : 0,
         },
       });
     } catch (notifErr) {
@@ -554,7 +678,12 @@ export const POST = withAuth(async (request) => {
 
     logger.info(`Payment processed for Order ${order.orderNumber} via ${method}`);
     return sendSuccess(
-      { ...order.toObject(), printJobId, processedByName },
+      {
+        ...order.toObject(),
+        printJobId,
+        printJobIds,
+        processedByName,
+      },
       "Payment processed successfully",
       200
     );

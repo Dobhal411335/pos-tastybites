@@ -7,6 +7,7 @@ import {
   buildTestTicket,
   buildTicketFromJob,
 } from "@/lib/printing/escpos";
+import { todayRestaurantISO } from "@/lib/restaurantTime";
 import { toast } from "sonner";
 
 const HEALTH_INTERVAL_MS = 90_000;
@@ -233,7 +234,7 @@ export default function ElectronPrintAgent() {
         if (!hasNetwork) return;
 
         const listRes = await employeeFetch(
-          "/api/sales/print-jobs?status=QUEUED&limit=20&stats=0",
+          `/api/sales/print-jobs?status=QUEUED&limit=20&stats=0&date=${encodeURIComponent(todayRestaurantISO())}`,
         );
         const listJson = await listRes.json();
         const jobs = listJson?.data || [];

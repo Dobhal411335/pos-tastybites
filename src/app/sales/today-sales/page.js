@@ -1011,6 +1011,34 @@ export default function EmployeeSalesPage() {
                       <span className="text-zinc-800 font-semibold">{selectedOrder.paymentMethod}</span>
                     </div>
                   )}
+                  {Array.isArray(selectedOrder.paymentSplits) &&
+                    selectedOrder.paymentSplits.length > 0 && (
+                      <div className="rounded-xl border border-violet-200 bg-violet-50/60 px-3 py-2.5 space-y-1.5">
+                        <span className="text-[11px] font-bold text-violet-700 uppercase tracking-wider">
+                          Payment Splits
+                        </span>
+                        {selectedOrder.paymentSplits.map((split, idx) => (
+                          <div
+                            key={`${split.name}-${idx}`}
+                            className="flex justify-between text-sm font-semibold text-zinc-800"
+                          >
+                            <span className="truncate pr-2">
+                              {split.name}
+                              <span className="text-zinc-500 font-medium">
+                                {" "}
+                                ·{" "}
+                                {split.cardType
+                                  ? `Card - ${split.cardType}`
+                                  : split.method}
+                              </span>
+                            </span>
+                            <span className="shrink-0">
+                              ${(Number(split.amount) || 0).toFixed(2)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   <div className="flex justify-between text-zinc-500 font-medium">
                     <span>Tip</span>
                     <span className="text-zinc-800 font-semibold">${Number(selectedOrder.tipAmount || 0).toFixed(2)}</span>
@@ -1057,6 +1085,11 @@ export default function EmployeeSalesPage() {
                                 + {opt}
                               </span>
                             ))}
+                          {item.notes ? (
+                            <span className="text-xs text-amber-800 font-semibold italic block mt-0.5">
+                              Remark: {item.notes}
+                            </span>
+                          ) : null}
                         </div>
                       </div>
                       <span className="text-sm font-bold text-zinc-900 shrink-0 ml-3">
@@ -1172,6 +1205,34 @@ export default function EmployeeSalesPage() {
                         <span className="font-semibold text-zinc-700">{selectedOrder.paymentMethod}</span>
                       </div>
                     )}
+                    {Array.isArray(selectedOrder.paymentSplits) &&
+                      selectedOrder.paymentSplits.length > 0 && (
+                        <div className="pt-2 space-y-1 border-t border-zinc-100">
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-violet-700">
+                            Payment Splits
+                          </p>
+                          {selectedOrder.paymentSplits.map((split, idx) => (
+                            <div
+                              key={`ts-split-${idx}`}
+                              className="flex justify-between text-xs text-zinc-700"
+                            >
+                              <span>
+                                {split.name}
+                                {split.method
+                                  ? ` · ${
+                                      split.cardType
+                                        ? `Card - ${split.cardType}`
+                                        : split.method
+                                    }`
+                                  : ""}
+                              </span>
+                              <span className="font-semibold">
+                                ${(Number(split.amount) || 0).toFixed(2)}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                   </div>
                 );
               })()}

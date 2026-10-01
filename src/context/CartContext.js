@@ -65,6 +65,15 @@ export function CartProvider({ children }) {
     );
   };
 
+  const updateCartItem = (cartKey, patch = {}) => {
+    setCartItems((prevItems) =>
+      prevItems.map((item) => {
+        if (item.cartKey !== cartKey) return item;
+        return { ...item, ...patch };
+      }),
+    );
+  };
+
   const clearCart = () => {
     setCartItems([]);
   };
@@ -90,6 +99,7 @@ export function CartProvider({ children }) {
         addToCart,
         removeFromCart,
         updateQuantity,
+        updateCartItem,
         clearCart,
         itemCount,
         displaySubtotal,

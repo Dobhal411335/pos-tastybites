@@ -62,6 +62,7 @@ import {
 import PrintPreviewModal from "@/components/receipts/PrintPreviewModal";
 import TodayOrderPaymentModal from "@/components/sales/TodayOrderPaymentModal";
 import StaffOrderPartyModal from "@/components/sales/StaffOrderPartyModal";
+import IngredientChips from "@/components/menu/IngredientChips";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { buildStaffDiscountState } from "@/lib/orders/staffDiscount";
 import { formatTableLocation, resolveDocumentId } from "@/utils/orderDisplay";
@@ -144,6 +145,7 @@ function isSameCartLine(a, b) {
     String(a.preparationStyle || "") === String(b.preparationStyle || "") &&
     Number(a.price) === Number(b.price) &&
     Boolean(a.isOffer) === Boolean(b.isOffer) &&
+    String(a.notes || "").trim() === String(b.notes || "").trim() &&
     cartOptionsKey(a.options) === cartOptionsKey(b.options) &&
     cartChoiceSelectionsKey(a.choiceSelections) ===
       cartChoiceSelectionsKey(b.choiceSelections) &&
@@ -217,6 +219,7 @@ function buildCartFromOrderItems(items = []) {
       choiceSelections: normalizeChoiceSelections(item.choiceSelections),
       addonChoiceSelections: normalizeChoiceSelections(item.addonChoiceSelections),
       modifier: parts.length > 0 ? parts.join(" | ") : undefined,
+      notes: String(item.notes || "").trim(),
       cartId: item.cartId || `r-${Date.now()}-${idx}`,
     };
   });
@@ -318,6 +321,7 @@ function OrderPageContent() {
   const [selectedOfferDrinks, setSelectedOfferDrinks] = useState([]);
   const [selectedOfferInclusions, setSelectedOfferInclusions] = useState([]);
   const [selectedProductChoices, setSelectedProductChoices] = useState({});
+  const [itemNotes, setItemNotes] = useState("");
 
   // New states
   const [isKitchenModalOpen, setIsKitchenModalOpen] = useState(false);
@@ -367,8 +371,8 @@ function OrderPageContent() {
 
   const useHeadsNav = true; // heads always available in 2 + 3 panel
   const useCategoryNav = panelLayout === "2"; // category dropdown in 2-panel search row
-  // 3-panel always uses list product cards; category left + heads under search
-  const effectiveItemStyle = panelLayout === "3" ? "list" : itemStyle;
+  // Tiles and list both work in 2 + 3 panel (3-panel defaults to 2 tile columns)
+  const effectiveItemStyle = itemStyle;
   const useCategoryFilter = true; // both panels filter by category
   const useHeadsFilter = true; // both panels filter by head
 
@@ -424,13 +428,20 @@ function OrderPageContent() {
     return TILE_PALETTE[hash % TILE_PALETTE.length];
   };
 
+  // 3-panel center column is narrower — ramp column counts more gently.
   const productGridClass =
     effectiveItemStyle === "tiles"
-      ? gridCols === 4
-        ? "grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 p-3 gap-2.5"
-        : gridCols === 3
-          ? "grid grid-cols-2 md:grid-cols-3 p-3 gap-2.5"
-          : "grid grid-cols-2 p-3 gap-2.5"
+      ? panelLayout === "3"
+        ? gridCols === 4
+          ? "grid grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 p-3 gap-2.5"
+          : gridCols === 3
+            ? "grid grid-cols-2 xl:grid-cols-3 p-3 gap-2.5"
+            : "grid grid-cols-2 p-3 gap-2.5"
+        : gridCols === 4
+          ? "grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 p-3 gap-2.5"
+          : gridCols === 3
+            ? "grid grid-cols-2 md:grid-cols-3 p-3 gap-2.5"
+            : "grid grid-cols-2 p-3 gap-2.5"
       : "grid grid-cols-1 xl:grid-cols-2 p-4 gap-3";
 
   const headIconMap = {
@@ -498,16 +509,22 @@ function OrderPageContent() {
 
   const setPanelLayoutMode = (mode) => {
     setPanelLayout(mode);
-    if (mode === "3") {
-      setItemStyle("list");
-      setViewMode("list");
+    // Narrower menu column in 3-panel — default to 2 tile columns.
+    if (mode === "3" && itemStyle === "tiles") {
+      setGridCols(2);
     }
   };
 
   const setItemStyleMode = (style) => {
     setItemStyle(style);
-    if (style === "tiles") setViewMode("grid");
-    if (style === "list" && panelLayout === "2") setViewMode("list");
+    if (style === "tiles") {
+      setViewMode("grid");
+      if (panelLayout === "3" && gridCols > 3) {
+        setGridCols(2);
+      }
+    } else {
+      setViewMode("list");
+    }
   };
 
   const isOfferActive = (offer) => {
@@ -980,6 +997,7 @@ function OrderPageContent() {
     setSelectedOfferDrinks([]);
     setSelectedOfferInclusions([]);
     setSelectedProductChoices({});
+    setItemNotes("");
   };
 
   const handleOpenOptions = (item) => {
@@ -992,6 +1010,7 @@ function OrderPageContent() {
     setSelectedOfferDrinks([]);
     setSelectedOfferInclusions([]);
     setSelectedProductChoices({});
+    setItemNotes("");
     setIsOptionsModalOpen(true);
   };
 
@@ -1007,6 +1026,7 @@ function OrderPageContent() {
     setSelectedOfferChoices(choices.length === 1 ? choices : []);
     setSelectedOfferDrinks(drinks.length === 1 ? drinks : []);
     setSelectedProductChoices({});
+    setItemNotes("");
     setIsOptionsModalOpen(true);
   };
 
@@ -1120,6 +1140,7 @@ function OrderPageContent() {
             options: [],
             productType: product.productType === "BAR" ? "BAR" : "KITCHEN",
             choiceSelections: [],
+            notes: "",
           },
         ],
         cartIdSeq,
@@ -1141,6 +1162,7 @@ function OrderPageContent() {
     const drinks = cleanOfferList(selection.drinks);
     const extras = buildOfferOptions({ inclusions, choices, drinks });
     const modifier = buildOfferCartModifier({ inclusions, choices, drinks });
+    const notes = String(selection.notes ?? itemNotes ?? "").trim();
 
     setCart((prev) =>
       mergeCartLines(
@@ -1165,6 +1187,7 @@ function OrderPageContent() {
             inclusions,
             choices,
             drinks,
+            notes,
           },
         ],
         cartIdSeq,
@@ -1190,6 +1213,7 @@ function OrderPageContent() {
         inclusions: selectedOfferInclusions,
         choices: selectedOfferChoices,
         drinks: selectedOfferDrinks,
+        notes: itemNotes,
       });
       if (added) closeOptionsModal();
       return;
@@ -1218,6 +1242,7 @@ function OrderPageContent() {
       }))
       .filter((group) => group.subChoices.length > 0);
 
+    const notes = String(itemNotes || "").trim();
     const newLines = [];
 
     if (hasVariants) {
@@ -1249,6 +1274,7 @@ function OrderPageContent() {
             selectedProduct.productType === "BAR" ? "BAR" : "KITCHEN",
           modifier: parts.join(" | "),
           choiceSelections,
+          notes,
         });
       });
     } else {
@@ -1272,6 +1298,7 @@ function OrderPageContent() {
         productType: selectedProduct.productType === "BAR" ? "BAR" : "KITCHEN",
         modifier: selectedPreparationStyle || undefined,
         choiceSelections,
+        notes,
       });
     }
 
@@ -1299,6 +1326,7 @@ function OrderPageContent() {
         productType: selectedProduct.productType === "BAR" ? "BAR" : "KITCHEN",
         modifier: `Addons: ${addon.name}`,
         addonChoiceSelections,
+        notes,
       });
     });
 
@@ -1322,6 +1350,16 @@ function OrderPageContent() {
           return item;
         })
         .filter((item) => item.qty > 0),
+    );
+  };
+
+  const updateCartItemNotes = (id, notes) => {
+    setCart((prev) =>
+      prev.map((item) =>
+        item.id === id || item.cartId === id
+          ? { ...item, notes: String(notes ?? "") }
+          : item,
+      ),
     );
   };
 
@@ -1681,7 +1719,7 @@ function OrderPageContent() {
 
   const layoutSummaryLabel = (() => {
     const panels = panelLayout === "3" ? "3 panels" : "2 panels";
-    if (panelLayout === "3" || itemStyle === "list") return `${panels} · List`;
+    if (itemStyle === "list") return `${panels} · List`;
     return `${panels} · Tiles ${gridCols}`;
   })();
 
@@ -1856,6 +1894,7 @@ function OrderPageContent() {
         ? Number(offer.totalPrice)
         : basePrice + taxAmount;
     const hasOptions = offerNeedsOptions(offer);
+    const imageUrl = offer.image?.url || null;
 
     if (effectiveItemStyle === "tiles") {
       const theme = getTileTheme(offer._id || offer.name);
@@ -1864,29 +1903,46 @@ function OrderPageContent() {
           key={offer._id}
           type="button"
           onClick={() => addOfferFromList(offer)}
-          className={`relative flex flex-col items-stretch justify-between min-h-[128px] rounded-xl border-2 px-3 py-3 text-left shadow-sm transition-colors ${theme.bg}`}
+          className={`relative flex flex-col items-stretch overflow-hidden rounded-xl border-2 text-left shadow-sm transition-colors ${theme.bg}`}
         >
+          {imageUrl ? (
+            <span className="relative block w-full aspect-[4/3] shrink-0 bg-zinc-100 border-b border-zinc-200/80">
+              <Image
+                src={imageUrl}
+                alt=""
+                fill
+                sizes="(max-width: 768px) 50vw, 25vw"
+                className="object-contain p-1"
+              />
+            </span>
+          ) : null}
           <span
-            className={`absolute top-2 left-2 text-[10px] font-black uppercase tracking-wide rounded px-1.5 py-0.5 ${theme.code}`}
+            className={`absolute top-2 left-2 z-10 text-[10px] font-black uppercase tracking-wide rounded px-1.5 py-0.5 ${theme.code}`}
           >
             Offer
           </span>
-          <span className="mt-6 text-[15px] font-extrabold text-zinc-900 text-center leading-snug line-clamp-2">
-            {offer.name}
-          </span>
-          <div className="mt-2 flex flex-col items-center gap-1.5">
-            <span className="text-lg font-black tabular-nums text-orange-600">
-              ${totalPrice.toFixed(2)}
+          <div
+            className={`flex flex-1 flex-col items-center justify-between px-3 py-3 ${
+              imageUrl ? "" : "min-h-[128px] pt-8"
+            }`}
+          >
+            <span className="text-[15px] font-extrabold text-zinc-900 text-center leading-snug line-clamp-2">
+              {offer.name}
             </span>
-            {hasOptions ? (
-              <span className="rounded-md bg-white/90 border border-zinc-200 px-2 py-0.5 text-[11px] font-bold text-zinc-700">
-                Options
+            <div className="mt-2 flex flex-col items-center gap-1.5">
+              <span className="text-lg font-black tabular-nums text-orange-600">
+                ${totalPrice.toFixed(2)}
               </span>
-            ) : (
-              <span className="rounded-md bg-orange-500 px-2 py-0.5 text-[11px] font-bold text-white">
-                Add
-              </span>
-            )}
+              {hasOptions ? (
+                <span className="rounded-md bg-white/90 border border-zinc-200 px-2 py-0.5 text-[11px] font-bold text-zinc-700">
+                  Options
+                </span>
+              ) : (
+                <span className="rounded-md bg-orange-500 px-2 py-0.5 text-[11px] font-bold text-white">
+                  Add
+                </span>
+              )}
+            </div>
           </div>
         </button>
       );
@@ -1895,8 +1951,19 @@ function OrderPageContent() {
     return (
       <div
         key={offer._id}
-        className="flex flex-col sm:flex-row items-stretch bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden transition-all hover:shadow-md min-h-[76px]"
+        className="flex flex-col sm:flex-row items-stretch bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden transition-all hover:shadow-md min-h-[96px]"
       >
+        {imageUrl ? (
+          <div className="relative w-full sm:w-32 h-28 sm:h-auto sm:min-h-[96px] shrink-0 bg-zinc-100 border-b sm:border-b-0 sm:border-r border-zinc-200">
+            <Image
+              src={imageUrl}
+              alt=""
+              fill
+              sizes="128px"
+              className="object-contain p-1.5"
+            />
+          </div>
+        ) : null}
         <div className="flex-1 flex flex-col justify-center px-4 py-3 border-b sm:border-b-0 sm:border-r border-zinc-200 min-w-0">
           <div className="flex items-center gap-2 mb-1">
             <span className="text-[10px] font-bold text-violet-700 bg-violet-50 border border-violet-100 rounded px-1.5 py-0.5 shrink-0">
@@ -1941,6 +2008,7 @@ function OrderPageContent() {
       product.variants && product.variants.length > 0
         ? product.variants[0].price
         : product.price || 0;
+    const imageUrl = product.salesImage?.url || null;
     const onAdd = () =>
       hasOptions ? handleOpenOptions(product) : addToCart(product);
 
@@ -1952,36 +2020,53 @@ function OrderPageContent() {
           type="button"
           disabled={!isAvailable}
           onClick={onAdd}
-          className={`relative flex flex-col items-stretch justify-between min-h-[128px] rounded-xl border-2 px-3 py-3 text-left shadow-sm transition-colors disabled:opacity-45 disabled:cursor-not-allowed ${theme.bg}`}
+          className={`relative flex flex-col items-stretch overflow-hidden rounded-xl border-2 text-left shadow-sm transition-colors disabled:opacity-45 disabled:cursor-not-allowed ${theme.bg}`}
         >
+          {imageUrl ? (
+            <span className="relative block w-full aspect-[4/3] shrink-0 bg-zinc-100 border-b border-zinc-200/80">
+              <Image
+                src={imageUrl}
+                alt=""
+                fill
+                sizes="(max-width: 768px) 50vw, 25vw"
+                className="object-contain p-1"
+              />
+            </span>
+          ) : null}
           {product.productCode ? (
             <span
-              className={`absolute top-2 left-2 text-[10px] font-black rounded px-1.5 py-0.5 ${theme.code}`}
+              className={`absolute top-2 left-2 z-10 text-[10px] font-black rounded px-1.5 py-0.5 ${theme.code}`}
             >
               {product.productCode}
             </span>
           ) : null}
           {!isAvailable ? (
-            <span className="absolute top-2 right-2 text-[10px] font-black bg-red-600 text-white rounded px-1.5 py-0.5">
+            <span className="absolute top-2 right-2 z-10 text-[10px] font-black bg-red-600 text-white rounded px-1.5 py-0.5">
               Out
             </span>
           ) : null}
-          <span className="mt-6 text-[15px] font-extrabold text-zinc-900 text-center leading-snug line-clamp-2">
-            {product.name}
-          </span>
-          <div className="mt-2 flex flex-col items-center gap-1.5">
-            <span className="text-lg font-black tabular-nums text-orange-600">
-              ${Number(basePrice).toFixed(2)}
+          <div
+            className={`flex flex-1 flex-col items-center justify-between px-3 py-3 ${
+              imageUrl ? "" : "min-h-[128px] pt-8"
+            }`}
+          >
+            <span className="text-[15px] font-extrabold text-zinc-900 text-center leading-snug line-clamp-2">
+              {product.name}
             </span>
-            {hasOptions ? (
-              <span className="rounded-md bg-white/90 border border-zinc-200 px-2 py-0.5 text-[11px] font-bold text-zinc-700">
-                Options
+            <div className="mt-2 flex flex-col items-center gap-1.5">
+              <span className="text-lg font-black tabular-nums text-orange-600">
+                ${Number(basePrice).toFixed(2)}
               </span>
-            ) : (
-              <span className="rounded-md bg-orange-500 px-2 py-0.5 text-[11px] font-bold text-white">
-                Add
-              </span>
-            )}
+              {hasOptions ? (
+                <span className="rounded-md bg-white/90 border border-zinc-200 px-2 py-0.5 text-[11px] font-bold text-zinc-700">
+                  Options
+                </span>
+              ) : (
+                <span className="rounded-md bg-orange-500 px-2 py-0.5 text-[11px] font-bold text-white">
+                  Add
+                </span>
+              )}
+            </div>
           </div>
         </button>
       );
@@ -1990,9 +2075,20 @@ function OrderPageContent() {
     return (
       <div
         key={product._id}
-        className="flex flex-col sm:flex-row items-stretch bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden transition-all hover:shadow-md min-h-[76px]"
+        className="flex flex-col sm:flex-row items-stretch bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden transition-all hover:shadow-md min-h-[96px]"
       >
-        <div className="flex-1 flex flex-col justify-center px-4 py-3 border-b sm:border-b-0 sm:border-r border-zinc-200">
+        {imageUrl ? (
+          <div className="relative w-full sm:w-32 h-28 sm:h-auto sm:min-h-[96px] shrink-0 bg-zinc-100 border-b sm:border-b-0 sm:border-r border-zinc-200">
+            <Image
+              src={imageUrl}
+              alt=""
+              fill
+              sizes="128px"
+              className="object-contain p-1.5"
+            />
+          </div>
+        ) : null}
+        <div className="flex-1 flex flex-col justify-center px-4 py-3 border-b sm:border-b-0 sm:border-r border-zinc-200 min-w-0">
           <div className="flex items-center gap-2 mb-1">
             {product.productCode ? (
               <span className="text-[10px] font-bold text-black bg-orange-200 border border-orange-500 rounded px-1.5 py-0.5 shrink-0">
@@ -2319,6 +2415,35 @@ function OrderPageContent() {
                         <span className="font-bold text-sm text-zinc-900 shrink-0">
                           ${(item.price * item.qty).toFixed(2)}
                         </span>
+                      </div>
+                      <div className="mt-2">
+                        <label
+                          htmlFor={`pos-cart-notes-${item.cartId || item.id}-${idx}`}
+                          className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-zinc-500"
+                        >
+                          Item remark
+                        </label>
+                        <textarea
+                          id={`pos-cart-notes-${item.cartId || item.id}-${idx}`}
+                          value={item.notes || ""}
+                          onChange={(e) =>
+                            updateCartItemNotes(
+                              item.cartId || item.id,
+                              e.target.value,
+                            )
+                          }
+                          onBlur={(e) =>
+                            updateCartItemNotes(
+                              item.cartId || item.id,
+                              String(e.target.value || "").trim(),
+                            )
+                          }
+                          onKeyDown={(e) => e.stopPropagation()}
+                          rows={2}
+                          maxLength={200}
+                          placeholder="Special request for this item…"
+                          className="w-full resize-none rounded-lg border border-zinc-200 bg-zinc-50 px-2.5 py-2 text-xs font-medium text-zinc-800 placeholder:text-zinc-400 focus:border-orange-400 focus:bg-white focus:outline-none focus:ring-1 focus:ring-orange-400"
+                        />
                       </div>
                       <div className="flex items-center justify-between mt-2">
                         <div className="flex items-center gap-1">
@@ -2700,6 +2825,16 @@ function OrderPageContent() {
               type: "$",
             });
           }
+          const splitCount = Array.isArray(updatedOrder?.paymentSplits)
+            ? updatedOrder.paymentSplits.length
+            : 0;
+          if (splitCount > 1) {
+            // Thermal print jobs already queued per payer — skip single full-bill preview
+            toast.success(
+              `${splitCount} split receipt slips sent to the printer`,
+            );
+            return;
+          }
           setPrintOrderData(updatedOrder);
           setPrintTaxBreakdown(generateTaxBreakdown());
           setPrintType("customer");
@@ -2902,12 +3037,13 @@ function OrderPageContent() {
                           return (
                             <div
                               key={variantKey}
-                              className={`flex items-center border p-3 rounded-lg transition-colors gap-1 ${
+                              className={`border p-3 rounded-lg transition-colors gap-1 ${
                                 isChecked
                                   ? "border-orange-500 bg-orange-50/30"
                                   : "border-zinc-200"
                               }`}
                             >
+                              <div className="flex items-center gap-1">
                               <div
                                 className={`flex-1 min-w-[100px] text-[14px] font-bold ${isChecked ? "text-zinc-900" : "text-zinc-700"}`}
                               >
@@ -2953,6 +3089,11 @@ function OrderPageContent() {
                                 $
                                 {(qty > 0 ? lineTotal : unitFinal).toFixed(2)}
                               </div>
+                              </div>
+                              <IngredientChips
+                                ingredients={v.ingredients}
+                                label="Includes"
+                              />
                             </div>
                           );
                         })}
@@ -3092,7 +3233,12 @@ function OrderPageContent() {
                               <div
                                 className={`flex-1 min-w-[100px] text-[14px] font-bold ${isChecked ? "text-zinc-900" : "text-zinc-700"}`}
                               >
-                                {addon.name}
+                                <div>{addon.name}</div>
+                                {addon.fromCategory ? (
+                                  <span className="mt-0.5 block text-[10px] font-semibold uppercase tracking-wide text-zinc-400">
+                                    Linked from category
+                                  </span>
+                                ) : null}
                               </div>
                               <div className="w-20 flex items-center justify-center gap-1">
                                 <button
@@ -3130,6 +3276,13 @@ function OrderPageContent() {
                                 +$
                                 {(qty > 0 ? lineTotal : unitFinal).toFixed(2)}
                               </div>
+                              </div>
+                              <div className="px-3 pb-2">
+                                <IngredientChips
+                                  ingredients={addon.ingredients}
+                                  label="Addon includes"
+                                  compact
+                                />
                               </div>
                               {addonChoiceGroups.length > 0 && (
                                 <div className="px-3 pb-3 pt-1 space-y-4 border-t border-zinc-100/80">
@@ -3186,6 +3339,24 @@ function OrderPageContent() {
                   )}
                   </>
                 )}
+
+                <div className="space-y-2 pt-2">
+                  <label
+                    htmlFor="pos-item-notes"
+                    className="text-[13px] font-bold text-zinc-900 block"
+                  >
+                    Special request / remark
+                  </label>
+                  <textarea
+                    id="pos-item-notes"
+                    value={itemNotes}
+                    onChange={(e) => setItemNotes(e.target.value)}
+                    rows={2}
+                    maxLength={200}
+                    placeholder="e.g. No onions, extra spicy, sauce on the side…"
+                    className="w-full resize-none rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-800 placeholder:text-zinc-400 focus:border-orange-400 focus:outline-none focus:ring-1 focus:ring-orange-400"
+                  />
+                </div>
               </div>
             </div>
 

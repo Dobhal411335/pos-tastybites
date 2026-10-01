@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import {
   AlertTriangle,
   ArrowLeft,
+  CalendarDays,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
@@ -20,6 +21,10 @@ import {
   Wine,
   X,
 } from "lucide-react";
+import {
+  formatTimeInRestaurantTz,
+  todayRestaurantISO,
+} from "@/lib/restaurantTime";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -70,6 +75,7 @@ const TYPE_STYLES = {
   RECEIPT: "bg-orange-50 text-orange-700 border-orange-200",
   KOT: "bg-blue-50 text-blue-700 border-blue-200",
   BAR_RECEIPT: "bg-purple-50 text-purple-700 border-purple-200",
+  SPLIT_RECEIPT: "bg-violet-50 text-violet-800 border-violet-200",
 };
 
 function employeeLabel(emp) {
@@ -89,6 +95,21 @@ function orderLabel(job) {
   );
 }
 
+function printTypeLabel(job) {
+  if (job?.metadata?.isSplitReceipt) {
+    const idx = job.metadata.splitIndex;
+    const total = job.metadata.splitTotal;
+    if (idx && total) return `Split ${idx}/${total}`;
+    return "Split Receipt";
+  }
+  return PRINT_TYPE_LABELS[job?.printType] || job?.printType || "—";
+}
+
+function printTypeStyle(job) {
+  if (job?.metadata?.isSplitReceipt) return TYPE_STYLES.SPLIT_RECEIPT;
+  return TYPE_STYLES[job?.printType] || "bg-zinc-100 text-zinc-700 border-zinc-200";
+}
+
 export default function PrintJobsPage() {
   const router = useRouter();
   const { socket } = useSocket();
@@ -97,7 +118,8 @@ export default function PrintJobsPage() {
   const [printers, setPrinters] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Filters & Search
+  // Filters & Search — default to restaurant-local today
+  const [dateFilter, setDateFilter] = useState(() => todayRestaurantISO());
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [typeFilter, setTypeFilter] = useState("ALL");
   const [targetFilter, setTargetFilter] = useState("ALL");
@@ -105,6 +127,10 @@ export default function PrintJobsPage() {
   const [serverStats, setServerStats] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
+
+  const todayISO = useMemo(() => todayRestaurantISO(), []);
+  const isViewingToday = dateFilter === todayISO;
+  const isViewingAllDates = dateFilter === "all";
 
   // Pagination
   const [page, setPage] = useState(1);
@@ -134,6 +160,7 @@ export default function PrintJobsPage() {
   const fetchJobs = useCallback(async () => {
     try {
       const params = new URLSearchParams();
+      params.set("date", dateFilter || todayRestaurantISO());
       if (statusFilter !== "ALL") params.set("status", statusFilter);
       if (typeFilter !== "ALL") params.set("printType", typeFilter);
       if (targetFilter !== "ALL") params.set("printerTarget", targetFilter);
@@ -160,7 +187,7 @@ export default function PrintJobsPage() {
     } finally {
       setLoading(false);
     }
-  }, [statusFilter, typeFilter, targetFilter, reprintOnly, debouncedSearch, page]);
+  }, [dateFilter, statusFilter, typeFilter, targetFilter, reprintOnly, debouncedSearch, page]);
 
   const fetchPrinters = useCallback(async () => {
     try {
@@ -325,7 +352,40 @@ export default function PrintJobsPage() {
     typeFilter !== "ALL" ||
     targetFilter !== "ALL" ||
     reprintOnly ||
-    Boolean(searchQuery.trim());
+    Boolean(searchQuery.trim()) ||
+    dateFilter !== todayISO;
+
+  const dateHeading = useMemo(() => {
+    if (isViewingAllDates) return "All dates";
+    if (isViewingToday) return "Today";
+    try {
+      const [y, m, d] = String(dateFilter).split("-").map(Number);
+      const dt = new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
+      return new Intl.DateTimeFormat("en-CA", {
+        weekday: "short",
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      }).format(dt);
+    } catch {
+      return dateFilter;
+    }
+  }, [dateFilter, isViewingAllDates, isViewingToday]);
+
+  const formatCreatedAt = useCallback(
+    (value) => {
+      if (!value) return "—";
+      const time = formatTimeInRestaurantTz(value);
+      if (!isViewingAllDates) return time;
+      return `${moment(value).format("MMM D")} · ${time}`;
+    },
+    [isViewingAllDates]
+  );
+
+  const formatPrintedAt = useCallback((value) => {
+    if (!value) return "—";
+    return formatTimeInRestaurantTz(value);
+  }, []);
 
   const stats = useMemo(() => {
     const s = serverStats;
@@ -472,6 +532,19 @@ export default function PrintJobsPage() {
                 <Printer className="w-4.5 h-4.5 text-orange-500" />
                 <span>Print Jobs</span>
               </h1>
+              <Badge
+                variant="outline"
+                className={`text-[11px] px-1.5 py-0 h-5 font-semibold border ${
+                  isViewingToday
+                    ? "border-orange-200 bg-orange-50 text-orange-800"
+                    : isViewingAllDates
+                      ? "border-zinc-200 bg-zinc-50 text-zinc-600"
+                      : "border-sky-200 bg-sky-50 text-sky-800"
+                }`}
+              >
+                <CalendarDays className="w-3 h-3 mr-1" />
+                {dateHeading}
+              </Badge>
               {pagination.total > 0 && (
                 <Badge
                   variant="secondary"
@@ -485,6 +558,55 @@ export default function PrintJobsPage() {
 
           {/* Right: Search, Filters & Actions all aligned in ONE line */}
           <div className="flex items-center gap-2 flex-wrap">
+            {/* Date filter — defaults to today */}
+            <div className="flex items-center gap-1.5">
+              <div className="relative">
+                <CalendarDays className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400 pointer-events-none" />
+                <Input
+                  type="date"
+                  value={isViewingAllDates ? "" : dateFilter}
+                  max={todayISO}
+                  onChange={(e) => {
+                    const next = e.target.value;
+                    if (!next) return;
+                    setDateFilter(next);
+                    setPage(1);
+                  }}
+                  className="h-8 w-40 pl-8 pr-2 text-xs bg-zinc-50 border-zinc-200 rounded-lg focus-visible:ring-1 focus-visible:ring-orange-500"
+                  title="Filter by print date"
+                />
+              </div>
+              {!isViewingToday && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setDateFilter(todayISO);
+                    setPage(1);
+                  }}
+                  className="h-8 px-2.5 text-xs font-medium border-orange-200 text-orange-700 hover:bg-orange-50"
+                >
+                  Today
+                </Button>
+              )}
+              {!isViewingAllDates && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setDateFilter("all");
+                    setPage(1);
+                  }}
+                  className="h-8 px-2 text-xs text-zinc-500 hover:text-zinc-800"
+                  title="Show prints from all dates"
+                >
+                  All
+                </Button>
+              )}
+            </div>
+
             {/* Search Order # */}
             <div className="relative w-36 sm:w-44">
               <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400" />
@@ -598,6 +720,7 @@ export default function PrintJobsPage() {
                 variant="ghost"
                 size="sm"
                 onClick={() => {
+                  setDateFilter(todayISO);
                   setStatusFilter("ALL");
                   setTypeFilter("ALL");
                   setTargetFilter("ALL");
@@ -675,8 +798,29 @@ export default function PrintJobsPage() {
               <Loader2 className="w-8 h-8 animate-spin text-orange-500" />
             </div>
           ) : jobs.length === 0 ? (
-            <div className="text-center py-20 text-zinc-500 text-sm">
-              No print jobs match your filter.
+            <div className="text-center py-20 text-zinc-500 text-sm space-y-2">
+              <p>
+                {isViewingAllDates
+                  ? "No print jobs match your filters."
+                  : isViewingToday
+                    ? "No print jobs for today yet."
+                    : `No print jobs for ${dateHeading}.`}
+              </p>
+              {!isViewingToday && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setDateFilter(todayISO);
+                    setPage(1);
+                  }}
+                  className="mt-1"
+                >
+                  <CalendarDays className="w-3.5 h-3.5 mr-1.5" />
+                  View today
+                </Button>
+              )}
             </div>
           ) : (
             <div className="bg-white border border-zinc-200 rounded-xl overflow-hidden shadow-xs">
@@ -693,7 +837,7 @@ export default function PrintJobsPage() {
                       Target / Printer
                     </TableHead>
                     <TableHead className="py-3 px-3 text-[11px] font-bold uppercase tracking-wider text-zinc-600 min-w-27.5">
-                      Created
+                      {isViewingAllDates ? "Created" : "Time"}
                     </TableHead>
                     <TableHead className="py-3 px-3 text-[11px] font-bold uppercase tracking-wider text-zinc-600 min-w-27.5">
                       Status
@@ -763,8 +907,16 @@ export default function PrintJobsPage() {
                       >
                         {/* Order # */}
                         <TableCell className="py-3 px-3 align-middle">
-                          <div className="font-semibold text-zinc-900 flex items-center gap-1.5">
+                          <div className="font-semibold text-zinc-900 flex items-center gap-1.5 flex-wrap">
                             <span>#{orderNum}</span>
+                            {job.metadata?.isSplitReceipt && (
+                              <Badge
+                                variant="outline"
+                                className="text-[9px] px-1.5 py-0 h-4 border-violet-200 text-violet-700 bg-violet-50 font-medium"
+                              >
+                                Split {job.metadata.splitIndex}/{job.metadata.splitTotal}
+                              </Badge>
+                            )}
                             {isReprintChild && (
                               <Badge
                                 variant="outline"
@@ -774,14 +926,34 @@ export default function PrintJobsPage() {
                               </Badge>
                             )}
                           </div>
-                          {(tableLabel || partyLabel || guestCount != null) && (
+                          {(tableLabel ||
+                            partyLabel ||
+                            guestCount != null ||
+                            job.metadata?.isSplitReceipt) && (
                             <div className="text-[11px] text-zinc-500 font-normal mt-0.5 leading-snug">
+                              {job.metadata?.isSplitReceipt && (
+                                <span className="text-violet-700 font-semibold">
+                                  {job.metadata.splitName || "Payer"}
+                                  {job.metadata.splitAmount != null
+                                    ? ` · $${Number(job.metadata.splitAmount || 0).toFixed(2)}`
+                                    : ""}
+                                  {job.metadata.splitMethod
+                                    ? ` · ${job.metadata.splitMethod}`
+                                    : ""}
+                                </span>
+                              )}
+                              {job.metadata?.isSplitReceipt &&
+                                (tableLabel || partyLabel || guestCount != null) && (
+                                  <span> · </span>
+                                )}
                               {tableLabel && <span>{tableLabel}</span>}
                               {tableLabel && partyLabel && <span> • </span>}
                               {partyLabel && <span>{partyLabel}</span>}
                               {guestCount != null && (
                                 <span className="text-zinc-400">
-                                  {(tableLabel || partyLabel) ? " · " : ""}{guestCount} {guestCount === 1 ? "guest" : "guests"}
+                                  {(tableLabel || partyLabel) ? " · " : ""}
+                                  {guestCount}{" "}
+                                  {guestCount === 1 ? "guest" : "guests"}
                                 </span>
                               )}
                             </div>
@@ -791,11 +963,9 @@ export default function PrintJobsPage() {
                         {/* Print Type */}
                         <TableCell className="py-3 px-3 align-middle">
                           <span
-                            className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold border ${
-                              TYPE_STYLES[job.printType] || "bg-zinc-100 text-zinc-700 border-zinc-200"
-                            }`}
+                            className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold border ${printTypeStyle(job)}`}
                           >
-                            {PRINT_TYPE_LABELS[job.printType] || job.printType}
+                            {printTypeLabel(job)}
                           </span>
                         </TableCell>
 
@@ -819,7 +989,7 @@ export default function PrintJobsPage() {
 
                         {/* Created */}
                         <TableCell className="py-3 px-3 align-middle text-xs text-zinc-600 whitespace-nowrap font-medium">
-                          {moment(job.createdAt).format("MMM D, HH:mm")}
+                          {formatCreatedAt(job.createdAt)}
                         </TableCell>
 
                         {/* Status */}
@@ -846,7 +1016,7 @@ export default function PrintJobsPage() {
 
                         {/* Printed At */}
                         <TableCell className="py-3 px-3 align-middle text-xs text-zinc-600 font-mono whitespace-nowrap">
-                          {job.printedAt ? moment(job.printedAt).format("HH:mm:ss") : "—"}
+                          {formatPrintedAt(job.printedAt)}
                         </TableCell>
 
                         {/* Employee */}
