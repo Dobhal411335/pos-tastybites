@@ -4,6 +4,7 @@ import Category from "@/models/menu/Category";
 import { sendSuccess } from "@/utils/apiResponse";
 import { sendError } from "@/utils/errorHandler";
 import { logger } from "@/utils/logger";
+import { emitMenuStale } from "@/lib/menu/menuStale";
 
 function applyPercentToPrice(price, percent) {
   // Work in integer cents to avoid float drift, then round once.
@@ -130,6 +131,7 @@ export const POST = withAuth(async (request) => {
       `Price update ${percentValue}% (${mode}) on category ${categoryId}: ${updatedCount} updated, ${skippedCount} skipped`
     );
 
+    emitMenuStale(request.restaurant);
     return sendSuccess(
       {
         updatedCount,

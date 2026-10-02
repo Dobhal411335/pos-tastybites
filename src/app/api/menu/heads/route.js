@@ -4,6 +4,8 @@ import { sendSuccess } from "@/utils/apiResponse";
 import { sendError } from "@/utils/errorHandler";
 import { logger } from "@/utils/logger";
 import { deleteImage } from "@/lib/cloudinary/deleteImage";
+import { recordMenuDeletion } from "@/lib/menu/recordMenuDeletion";
+import { emitMenuStale } from "@/lib/menu/menuStale";
 
 // GET - List all heads
 export const GET = withAuth(async (request) => {
@@ -52,6 +54,7 @@ export const POST = withAuth(async (request) => {
     });
 
     logger.info(`Head created: ${name}`);
+    emitMenuStale(request.restaurant);
     return sendSuccess(newHead, "Head created successfully", 201);
   } catch (error) {
     logger.error("Failed to create head", error);
@@ -85,6 +88,7 @@ export const PUT = withAuth(async (request) => {
     }
 
     logger.info(`Head updated: ${_id}`);
+    emitMenuStale(request.restaurant);
     return sendSuccess(updatedHead, "Head updated successfully");
   } catch (error) {
     logger.error("Failed to update head", error);
@@ -111,6 +115,12 @@ export const DELETE = withAuth(async (request) => {
     if (deleted.image?.key) {
       try { await deleteImage(deleted.image.key); } catch (e) { logger.error("Cloudinary delete error", e); }
     }
+
+    await recordMenuDeletion({
+      restaurantId: request.restaurant,
+      entityType: "head",
+      entityId: id,
+    });
 
     logger.info(`Head deleted: ${id}`);
     return sendSuccess(null, "Head deleted successfully");

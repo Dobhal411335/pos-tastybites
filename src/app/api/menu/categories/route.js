@@ -6,6 +6,8 @@ import { sendError } from "@/utils/errorHandler";
 import { logger } from "@/utils/logger";
 import mongoose from "mongoose";
 import { mergeAddons, normalizeAddons } from "@/lib/menu/addons";
+import { recordMenuDeletion } from "@/lib/menu/recordMenuDeletion";
+import { emitMenuStale } from "@/lib/menu/menuStale";
 
 async function syncCategoryAddonsToProducts(restaurantId, categoryId, categoryAddons) {
   const incoming = normalizeAddons(categoryAddons);
@@ -82,6 +84,7 @@ export const POST = withAuth(async (request) => {
     });
 
     logger.info(`Category created: ${name}`);
+    emitMenuStale(request.restaurant);
     return sendSuccess(newCategory, "Category created successfully", 201);
   } catch (error) {
     logger.error("Failed to create category", error);
@@ -119,6 +122,7 @@ export const PUT = withAuth(async (request) => {
     }
 
     logger.info(`Category updated: ${_id}`);
+    emitMenuStale(request.restaurant);
     return sendSuccess(updatedCategory, "Category updated successfully");
   } catch (error) {
     logger.error("Failed to update category", error);
@@ -146,6 +150,12 @@ export const DELETE = withAuth(async (request) => {
     if (!deleted) {
       return sendError(new Error("Not Found"), "Category not found", 404);
     }
+
+    await recordMenuDeletion({
+      restaurantId: request.restaurant,
+      entityType: "category",
+      entityId: id,
+    });
 
     logger.info(`Category deleted: ${id}`);
     return sendSuccess(null, "Category deleted successfully");

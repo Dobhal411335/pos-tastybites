@@ -4,11 +4,17 @@ import { sendSuccess } from "@/utils/apiResponse";
 import { sendError } from "@/utils/errorHandler";
 import { logger } from "@/utils/logger";
 
-const ADMIN_ROLES = ["ADMIN", "MASTER TERMINAL", "MANAGER TERMINAL"];
+/** All sales floor roles may send a test print (agents on LAN print it). */
+const SALES_ROLES = [
+  "STAFF",
+  "SUPER ADMIN",
+  "MANAGER TERMINAL",
+  "MASTER TERMINAL",
+];
 
 /**
- * POST /api/admin/printers/[id]/test
- * Emits PRINTER_TEST on the restaurant Socket.IO room so Electron on the LAN can print a test ticket.
+ * POST /api/sales/printers/[id]/test
+ * Emits PRINTER_TEST so Electron / MobilePrintAgent can print a test ticket.
  */
 export const POST = withAuth(async (request, { params }) => {
   try {
@@ -51,7 +57,9 @@ export const POST = withAuth(async (request, { params }) => {
       .to(`restaurant:${request.restaurant}`)
       .emit("PRINTER_TEST", payload);
 
-    const isUsb = String(printer.connectionType || "").toUpperCase() === "USB";
+    const conn = String(printer.connectionType || "").toUpperCase();
+    const isUsb = conn === "USB";
+    const isBt = conn === "BLUETOOTH";
     const sys = String(printer.systemPrinterName || "").trim().toUpperCase();
     const isBuiltIn =
       isUsb &&
@@ -63,12 +71,14 @@ export const POST = withAuth(async (request, { params }) => {
       payload,
       isBuiltIn
         ? "Test print signal sent. Keep the Android Sales app open on the POS tablet."
-        : isUsb
-          ? "Test print signal sent. Ensure the local print bridge is running on this laptop."
-          : "Test print signal sent. Ensure Tasty Bites POS desktop or mobile Sales is open on the restaurant network.",
+        : isBt
+          ? "Test print signal sent. Keep the Android Sales app open near the Bluetooth printer."
+          : isUsb
+            ? "Test print signal sent. Ensure the local print bridge is running on this laptop."
+            : "Test print signal sent. Ensure Sales (desktop or mobile) is open on the restaurant network.",
     );
   } catch (error) {
-    logger.error("Failed to send printer test", error);
+    logger.error("Failed to send sales printer test", error);
     return sendError(error, "Failed to send test print", 500);
   }
-}, ADMIN_ROLES);
+}, SALES_ROLES);

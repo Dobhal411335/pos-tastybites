@@ -5,7 +5,7 @@ import { sendSuccess } from "@/utils/apiResponse";
 import { sendError } from "@/utils/errorHandler";
 import { logger } from "@/utils/logger";
 
-const ADMIN_ROLES = ["ADMIN", "SUPER ADMIN", "MANAGER"];
+const ADMIN_ROLES = ["ADMIN", "MASTER TERMINAL", "MANAGER TERMINAL"];
 
 export const GET = withAuth(async (request) => {
   try {

@@ -3,6 +3,8 @@ import Tax from "@/models/tax/Tax";
 import { sendSuccess } from "@/utils/apiResponse";
 import { sendError } from "@/utils/errorHandler";
 import { logger } from "@/utils/logger";
+import { recordMenuDeletion } from "@/lib/menu/recordMenuDeletion";
+import { emitMenuStale } from "@/lib/menu/menuStale";
 
 // GET - List all taxes for the restaurant
 export const GET = withAuth(async (request) => {
@@ -35,6 +37,7 @@ export const POST = withAuth(async (request) => {
     });
 
     logger.info(`Tax created: ${name}`);
+    emitMenuStale(request.restaurant);
     return sendSuccess(newTax, "Tax created successfully", 201);
   } catch (error) {
     logger.error("Failed to create tax", error);
@@ -69,6 +72,7 @@ export const PUT = withAuth(async (request) => {
     }
 
     logger.info(`Tax updated: ${_id}`);
+    emitMenuStale(request.restaurant);
     return sendSuccess(updatedTax, "Tax updated successfully");
   } catch (error) {
     logger.error("Failed to update tax", error);
@@ -91,6 +95,12 @@ export const DELETE = withAuth(async (request) => {
     if (!deletedTax) {
       return sendError(new Error("Not Found"), "Tax not found", 404);
     }
+
+    await recordMenuDeletion({
+      restaurantId: request.restaurant,
+      entityType: "tax",
+      entityId: id,
+    });
 
     logger.info(`Tax deleted: ${id}`);
     return sendSuccess(null, "Tax deleted successfully");

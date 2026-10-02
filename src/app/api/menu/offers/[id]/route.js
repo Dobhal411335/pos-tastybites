@@ -6,6 +6,8 @@ import { logger } from "@/utils/logger";
 import { deleteImage } from "@/lib/cloudinary/deleteImage";
 import Tax from "@/models/tax/Tax";
 import { slugifyOfferName } from "@/utils/offerDetails";
+import { recordMenuDeletion } from "@/lib/menu/recordMenuDeletion";
+import { emitMenuStale } from "@/lib/menu/menuStale";
 
 async function ensureUniqueOfferSlug(restaurantId, baseSlug, excludeId = null) {
   let slug = slugifyOfferName(baseSlug);
@@ -102,6 +104,7 @@ export const PUT = withAuth(async (request, { params }) => {
     );
 
     logger.info(`Offer updated: ${id}`);
+    emitMenuStale(request.restaurant);
     return sendSuccess(updatedOffer, "Offer updated successfully");
   } catch (error) {
     if (error?.code === 11000) {
@@ -136,6 +139,11 @@ export const DELETE = withAuth(async (request, { params }) => {
     }
 
     await Offer.findOneAndDelete({ _id: id, restaurant: request.restaurant });
+    await recordMenuDeletion({
+      restaurantId: request.restaurant,
+      entityType: "offer",
+      entityId: id,
+    });
 
     logger.info(`Offer deleted: ${id}`);
     return sendSuccess(null, "Offer deleted successfully");

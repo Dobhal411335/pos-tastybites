@@ -1048,7 +1048,7 @@ export default function SalesFloorPage() {
             {[
               {
                 href: "/sales/walk-in",
-                label: "Walk-in unpaid",
+                label: "Take Away",
                 count: orderAttention.walkInUnpaid,
                 Icon: ShoppingBag,
                 tone: "border-orange-200 bg-orange-50 text-orange-900",

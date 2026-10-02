@@ -41,6 +41,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import CreateOrderSkeleton from "@/components/sales/CreateOrderSkeleton";
 import {
   Select,
   SelectContent,
@@ -358,7 +359,7 @@ function OrderPageContent() {
   const sessionFloorIdRef = useRef(null);
 
   // View / layout states (persisted for staff preference)
-  const [panelLayout, setPanelLayout] = useState("3"); // '2' | '3'
+  const [panelLayout, setPanelLayout] = useState("4"); // '2' | '3'
   const [itemStyle, setItemStyle] = useState("list"); // 'tiles' | 'list'
   const [gridCols, setGridCols] = useState(2); // 2 | 3 | 4
   const [viewMode, setViewMode] = useState("list"); // 'grid' (heads) | 'list' (categories)
@@ -2156,10 +2157,11 @@ function OrderPageContent() {
 
   if (isLoading) {
     return (
-      <div className="flex flex-col h-screen w-full items-center justify-center bg-zinc-50">
-        <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
-        <p className="mt-4 text-zinc-500 font-semibold">Loading menu...</p>
-      </div>
+      <CreateOrderSkeleton
+        panelLayout={panelLayout}
+        itemStyle={effectiveItemStyle}
+        gridCols={gridCols}
+      />
     );
   }
 

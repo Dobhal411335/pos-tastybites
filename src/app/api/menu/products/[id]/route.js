@@ -7,6 +7,8 @@ import { logger } from "@/utils/logger";
 import { deleteImage } from "@/lib/cloudinary/deleteImage";
 import Tax from "@/models/tax/Tax";
 import { markCategoryAddons, mergeAddons, normalizeAddons, normalizeIngredients, stripAddonClientFields } from "@/lib/menu/addons";
+import { recordMenuDeletion } from "@/lib/menu/recordMenuDeletion";
+import { emitMenuStale } from "@/lib/menu/menuStale";
 
 function sanitizeVariants(variants = []) {
   return (Array.isArray(variants) ? variants : [])
@@ -145,6 +147,7 @@ export const PUT = withAuth(async (request, { params }) => {
     }
 
     logger.info(`Product updated: ${id}`);
+    emitMenuStale(request.restaurant);
     return sendSuccess(updatedProduct, "Product updated successfully");
   } catch (error) {
     logger.error(`Failed to update product ${params?.id}`, error);
@@ -174,6 +177,11 @@ export const DELETE = withAuth(async (request, { params }) => {
     }
 
     await Product.findOneAndDelete({ _id: id, restaurant: request.restaurant });
+    await recordMenuDeletion({
+      restaurantId: request.restaurant,
+      entityType: "product",
+      entityId: id,
+    });
 
     logger.info(`Product deleted: ${id}`);
     return sendSuccess(null, "Product deleted successfully");

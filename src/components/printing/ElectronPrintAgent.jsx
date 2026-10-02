@@ -181,6 +181,7 @@ export default function ElectronPrintAgent() {
           restaurantDetails: restaurant || null,
           serverName,
           guestCount,
+          paperWidthMm: printer?.paperWidthMm,
         });
 
         const printResult = await sendToPrinter(printer, dataBase64);
@@ -280,6 +281,7 @@ export default function ElectronPrintAgent() {
         host: printer.host,
         port: printer.port || payload?.port || 9100,
         connectionType: printer.connectionType || "LAN",
+        paperWidthMm: printer.paperWidthMm || payload?.paperWidthMm,
       });
 
       const result = await sendToPrinter(printer, dataBase64);

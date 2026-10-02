@@ -7,6 +7,7 @@ import { logger } from "@/utils/logger";
 import Coupon from "@/models/menu/Coupon";
 import Tax from "@/models/tax/Tax";
 import { normalizeAddons } from "@/lib/menu/addons";
+import { emitMenuStale } from "@/lib/menu/menuStale";
 // GET - List all products
 export const GET = withAuth(async (request) => {
   try {
@@ -88,6 +89,7 @@ export const POST = withAuth(async (request) => {
     const newProducts = await Product.insertMany(productsToCreate);
 
     logger.info(`Products created: ${names.join(", ")}`);
+    emitMenuStale(request.restaurant);
     return sendSuccess(newProducts, "Products created successfully", 201);
   } catch (error) {
     logger.error("Failed to create product", error);

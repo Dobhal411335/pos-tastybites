@@ -5,6 +5,7 @@ import { sendError } from "@/utils/errorHandler";
 import { logger } from "@/utils/logger";
 import Tax from "@/models/tax/Tax";
 import { slugifyOfferName } from "@/utils/offerDetails";
+import { emitMenuStale } from "@/lib/menu/menuStale";
 
 async function ensureUniqueOfferSlug(restaurantId, baseSlug, excludeId = null) {
   let slug = slugifyOfferName(baseSlug);
@@ -116,6 +117,7 @@ export const POST = withAuth(async (request) => {
     });
 
     logger.info(`Offer created: ${name}`);
+    emitMenuStale(request.restaurant);
     return sendSuccess(newOffer, "Offer created successfully", 201);
   } catch (error) {
     if (error?.code === 11000) {

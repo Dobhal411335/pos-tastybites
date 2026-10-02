@@ -4,6 +4,8 @@ const PRINTER_TARGETS = ["KITCHEN", "COUNTER", "RECEIPT"];
 const CONNECTION_TYPES = ["USB", "NETWORK", "BLUETOOTH", "LAN"];
 const PRINTER_TYPES = ["THERMAL"];
 const PRINTER_LOCATIONS = ["COUNTER", "KITCHEN", "BAR"];
+const ORDER_TYPES = ["TAKE_AWAY", "DINE_IN", "DELIVERY"];
+const PAPER_WIDTHS_MM = [58, 72, 78, 80];
 
 const PrinterConfigSchema = new mongoose.Schema(
   {
@@ -34,13 +36,13 @@ const PrinterConfigSchema = new mongoose.Schema(
       enum: CONNECTION_TYPES,
       default: "LAN",
     },
-    /** Windows spooler queue name — required for USB */
+    /** Windows spooler queue name — required for USB; BUILTIN for Android tablet */
     systemPrinterName: {
       type: String,
       trim: true,
       default: null,
     },
-    /** IP / hostname — required for NETWORK/LAN; unused for USB */
+    /** IP / hostname — required for NETWORK/LAN; unused for USB/BT */
     host: {
       type: String,
       trim: true,
@@ -52,6 +54,41 @@ const PrinterConfigSchema = new mongoose.Schema(
       min: 1,
       max: 65535,
     },
+    /** Classic Bluetooth MAC address (AA:BB:CC:DD:EE:FF) */
+    bluetoothAddress: {
+      type: String,
+      trim: true,
+      default: null,
+    },
+    /** Optional Android USB device identity */
+    usbVendorId: {
+      type: Number,
+      default: null,
+      min: 0,
+      max: 65535,
+    },
+    usbProductId: {
+      type: Number,
+      default: null,
+      min: 0,
+      max: 65535,
+    },
+    /** Thermal paper width in mm */
+    paperWidthMm: {
+      type: Number,
+      enum: PAPER_WIDTHS_MM,
+      default: 80,
+    },
+    /** Which order types this printer should handle */
+    orderTypes: {
+      type: [
+        {
+          type: String,
+          enum: ORDER_TYPES,
+        },
+      ],
+      default: () => ["TAKE_AWAY", "DINE_IN", "DELIVERY"],
+    },
     location: {
       type: String,
       enum: PRINTER_LOCATIONS,
@@ -61,7 +98,7 @@ const PrinterConfigSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
-    /** Last on-site TCP/USB reachability check (reported by mobile / Electron / print-bridge) */
+    /** Last on-site TCP/USB/BT reachability check (reported by mobile / Electron / print-bridge) */
     lastReachability: {
       status: {
         type: String,
@@ -100,6 +137,8 @@ export {
   CONNECTION_TYPES,
   PRINTER_TYPES,
   PRINTER_LOCATIONS,
+  ORDER_TYPES,
+  PAPER_WIDTHS_MM,
 };
 
 export default mongoose.models.PrinterConfig ||

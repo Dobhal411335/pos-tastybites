@@ -4,6 +4,8 @@ import { sendSuccess } from "@/utils/apiResponse";
 import { sendError } from "@/utils/errorHandler";
 import { logger } from "@/utils/logger";
 import mongoose from "mongoose";
+import { recordMenuDeletion } from "@/lib/menu/recordMenuDeletion";
+import { emitMenuStale } from "@/lib/menu/menuStale";
 
 // GET - List all product head mappings
 export const GET = withAuth(async (request) => {
@@ -61,6 +63,7 @@ export const PUT = withAuth(async (request) => {
     ).populate('head').populate('categories.category', 'name');
 
     logger.info(`Product Head mapping saved for head: ${headId}`);
+    emitMenuStale(request.restaurant);
     return sendSuccess(updatedProductHead, "Product Head configuration saved successfully");
   } catch (error) {
     logger.error("Failed to save product head configuration", error);
@@ -83,6 +86,12 @@ export const DELETE = withAuth(async (request) => {
     if (!deleted) {
       return sendError(new Error("Not Found"), "Product Head mapping not found", 404);
     }
+
+    await recordMenuDeletion({
+      restaurantId: request.restaurant,
+      entityType: "productHead",
+      entityId: id,
+    });
 
     logger.info(`Product Head mapping deleted: ${id}`);
     return sendSuccess(null, "Product Head mapping deleted successfully");

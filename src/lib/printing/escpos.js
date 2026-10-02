@@ -1,6 +1,6 @@
 /**
- * ESC/POS byte builder for 80mm thermal printers (KPC307-UEWB / 576-dot).
- * Font A ≈ 12 dots/char → 576 / 12 = 48 characters per line.
+ * ESC/POS byte builder for thermal printers (KPC307-UEWB / Font A).
+ * Default 80mm ≈ 576-dot → 48 cols. Narrower paperWidthMm uses fewer columns.
  *
  * Layouts must match the React receipt templates:
  *   - KitchenOrderTicket.jsx
@@ -17,6 +17,28 @@ const LF = 0x0a;
 
 /** Printable columns for Font A on 576-dot (≈80mm) paper */
 const WIDTH = 48;
+
+/** Active layout width for the ticket currently being built */
+let activeWidth = WIDTH;
+
+/** Map saved paperWidthMm → Font A columns (≈12 dots/char). */
+export function colsForPaperWidthMm(mm) {
+  const n = Number(mm);
+  if (n === 58) return 32;
+  if (n === 72) return 42;
+  if (n === 78) return 46;
+  return 48;
+}
+
+function withPaperWidthMm(mm, fn) {
+  const prev = activeWidth;
+  activeWidth = colsForPaperWidthMm(mm);
+  try {
+    return fn();
+  } finally {
+    activeWidth = prev;
+  }
+}
 
 function encoder() {
   const chunks = [];
@@ -85,7 +107,7 @@ function encoder() {
   };
 }
 
-function divider(char = "-", width = WIDTH) {
+function divider(char = "-", width = activeWidth) {
   return char.repeat(width);
 }
 
@@ -111,7 +133,7 @@ function money(n, opts = {}) {
   return `$${abs}`;
 }
 
-function formatTwoColumnLine(label, value, width = WIDTH) {
+function formatTwoColumnLine(label, value, width = activeWidth) {
   const l = toPrinterText(label);
   const r = toPrinterText(value);
   if (l.length + r.length >= width) {
@@ -126,7 +148,7 @@ function formatTwoColumnLine(label, value, width = WIDTH) {
 }
 
 /** Wrap long lines instead of truncating with unicode ellipsis. */
-function wrapText(text, width = WIDTH) {
+function wrapText(text, width = activeWidth) {
   const s = toPrinterText(text).trim();
   if (!s) return [];
   if (s.length <= width) return [s];
@@ -142,7 +164,7 @@ function wrapText(text, width = WIDTH) {
   return lines;
 }
 
-function writeWrapped(e, text, width = WIDTH) {
+function writeWrapped(e, text, width = activeWidth) {
   for (const line of wrapText(text, width)) e.line(line);
 }
 
@@ -358,13 +380,13 @@ function writeTicketItem(e, item, { qtySep = "x", includeSeats = false } = {}) {
 }
 
 /** Legacy export — wraps long names instead of unicode truncation. */
-function formatKotItemLine(name, qty, width = WIDTH) {
+function formatKotItemLine(name, qty, width = activeWidth) {
   const left = `${qty}x  ${name || "Item"}`;
   const lines = wrapText(left, width);
   return lines[0] || left;
 }
 
-function formatReceiptItemLine(name, qty, unitPrice, width = WIDTH) {
+function formatReceiptItemLine(name, qty, unitPrice, width = activeWidth) {
   const lineTotal = (Number(unitPrice) || 0) * (Number(qty) || 1);
   const right = money(lineTotal);
   const left = Number(qty) > 1 ? `${qty} x ${name || "Item"}` : `${name || "Item"}`;
@@ -379,7 +401,7 @@ function writeReceiptItem(e, item) {
   const right = money((Number(item.price) || 0) * Number(qty || 1));
   const first = formatTwoColumnLine(left, right);
   // If name was truncated for the price column, print remainder on next lines
-  const maxLeft = WIDTH - right.length - 1;
+  const maxLeft = activeWidth - right.length - 1;
   if (toPrinterText(left).length > maxLeft) {
     e.line(first);
     const overflow = toPrinterText(left).slice(maxLeft - 3);
@@ -408,28 +430,33 @@ export function buildTestTicket({
   port,
   connectionType,
   systemPrinterName,
+  paperWidthMm,
 }) {
-  const e = encoder();
-  e.init();
-  e.align(1).bold(true).line("TASTY BITES").bold(false);
-  e.line("PRINTER TEST");
-  e.resetStyle();
-  e.line(divider());
-  e.line(`Printer: ${name || "Test"}`);
-  e.line(`Target:  ${target || "-"}`);
-  e.line(`Conn:    ${connectionType || "-"}`);
-  if (systemPrinterName) {
-    e.line(`System:  ${systemPrinterName}`);
-  } else if (host) {
-    e.line(`Address: ${host}:${port || 9100}`);
-  }
-  e.line(`Width:   ${WIDTH} cols (Font A / 576 dots)`);
-  e.line(divider());
-  e.align(1).line(toPrinterText(new Date().toLocaleString()));
-  e.resetStyle();
-  e.line("");
-  e.cut();
-  return e.toBase64();
+  return withPaperWidthMm(paperWidthMm, () => {
+    const e = encoder();
+    e.init();
+    e.align(1).bold(true).line("TASTY BITES").bold(false);
+    e.line("PRINTER TEST");
+    e.resetStyle();
+    e.line(divider());
+    e.line(`Printer: ${name || "Test"}`);
+    e.line(`Target:  ${target || "-"}`);
+    e.line(`Conn:    ${connectionType || "-"}`);
+    if (systemPrinterName) {
+      e.line(`System:  ${systemPrinterName}`);
+    } else if (host) {
+      e.line(`Address: ${host}:${port || 9100}`);
+    }
+    e.line(
+      `Width:   ${activeWidth} cols / ${Number(paperWidthMm) || 80}mm`,
+    );
+    e.line(divider());
+    e.align(1).line(toPrinterText(new Date().toLocaleString()));
+    e.resetStyle();
+    e.line("");
+    e.cut();
+    return e.toBase64();
+  });
 }
 
 /**
@@ -443,7 +470,31 @@ export function buildKotTicket({
   serverName,
   guestCount,
   isReprint = false,
+  paperWidthMm,
 }) {
+  return withPaperWidthMm(paperWidthMm, () =>
+    buildKotTicketInner({
+      job,
+      order,
+      kotItems,
+      restaurantName,
+      serverName,
+      guestCount,
+      isReprint,
+    }),
+  );
+}
+
+function buildKotTicketInner({
+  job,
+  order,
+  kotItems = [],
+  restaurantName,
+  serverName,
+  guestCount,
+  isReprint = false,
+}) {
+
   const e = encoder();
   e.init();
 
@@ -552,7 +603,31 @@ export function buildBarTicket({
   serverName,
   guestCount,
   isReprint = false,
+  paperWidthMm,
 }) {
+  return withPaperWidthMm(paperWidthMm, () =>
+    buildBarTicketInner({
+      job,
+      order,
+      kotItems,
+      restaurantName,
+      serverName,
+      guestCount,
+      isReprint,
+    }),
+  );
+}
+
+function buildBarTicketInner({
+  job,
+  order,
+  kotItems = [],
+  restaurantName,
+  serverName,
+  guestCount,
+  isReprint = false,
+}) {
+
   const e = encoder();
   e.init();
 
@@ -658,7 +733,31 @@ export function buildReceiptTicket({
   serverName,
   guestCount,
   isReprint = false,
+  paperWidthMm,
 }) {
+  return withPaperWidthMm(paperWidthMm, () =>
+    buildReceiptTicketInner({
+      job,
+      order,
+      restaurantName,
+      restaurantDetails,
+      serverName,
+      guestCount,
+      isReprint,
+    }),
+  );
+}
+
+function buildReceiptTicketInner({
+  job,
+  order,
+  restaurantName,
+  restaurantDetails = null,
+  serverName,
+  guestCount,
+  isReprint = false,
+}) {
+
   const e = encoder();
   const rest = restaurantDetails || {};
   const brand =
@@ -988,6 +1087,7 @@ export function buildTicketFromJob({
   serverName,
   guestCount,
   isReprint,
+  paperWidthMm,
 }) {
   const reprintFlag =
     isReprint !== undefined
@@ -1005,6 +1105,7 @@ export function buildTicketFromJob({
       serverName,
       guestCount,
       isReprint: reprintFlag,
+      paperWidthMm,
     });
   }
   if (printType === "BAR_RECEIPT") {
@@ -1016,6 +1117,7 @@ export function buildTicketFromJob({
       serverName,
       guestCount,
       isReprint: reprintFlag,
+      paperWidthMm,
     });
   }
   return buildKotTicket({
@@ -1026,6 +1128,7 @@ export function buildTicketFromJob({
     serverName,
     guestCount,
     isReprint: reprintFlag,
+    paperWidthMm,
   });
 }
 

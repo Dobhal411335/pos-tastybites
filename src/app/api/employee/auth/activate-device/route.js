@@ -34,7 +34,7 @@ export async function POST(request) {
     const body = await request.json();
     const employeeId = asNonEmptyString(body?.employeeId);
     const password = asNonEmptyString(body?.password);
-    const activationCode = asNonEmptyString(body?.activationCode);
+    const activationCode = asNonEmptyString(body?.activationCode)?.toUpperCase() || null;
 
     // Reject objects / operators (NoSQL injection) — only plain strings allowed.
     if (!employeeId || !password || !activationCode) {
@@ -71,7 +71,10 @@ export async function POST(request) {
     });
 
     if (!device) {
-      return NextResponse.json({ success: false, message: 'Invalid activation code' }, { status: 400 });
+      return NextResponse.json({
+        success: false,
+        message: 'Invalid or already used activation code. Generate a new code from Admin → Devices.',
+      }, { status: 400 });
     }
 
     if (device.status !== 'Active') {
@@ -112,7 +115,11 @@ export async function POST(request) {
 
     const response = NextResponse.json({
       success: true,
-      message: 'Device activated successfully'
+      message: 'Device activated successfully',
+      data: {
+        // React Native often cannot read Set-Cookie; persist this on the client.
+        deviceToken,
+      },
     });
 
     setDeviceTokenCookie(response, deviceToken);

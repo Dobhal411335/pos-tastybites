@@ -49,11 +49,14 @@ const PRINT_BRIDGE_URL =
     process.env.NEXT_PUBLIC_PRINT_BRIDGE_URL) ||
   "http://127.0.0.1:9105";
 
+const BUILTIN_SYSTEM_NAME = "BUILTIN";
+
 const EMPTY_FORM = {
   name: "",
   target: "RECEIPT",
-  connectionType: "NETWORK",
-  systemPrinterName: "",
+  /** UI connection: NETWORK | LAN | USB | USB_BUILTIN */
+  connectionType: "USB_BUILTIN",
+  systemPrinterName: BUILTIN_SYSTEM_NAME,
   host: "",
   port: "9100",
   location: "COUNTER",
@@ -62,12 +65,53 @@ const EMPTY_FORM = {
 };
 
 function isUsb(connectionType) {
-  return String(connectionType || "").toUpperCase() === "USB";
+  const t = String(connectionType || "").toUpperCase();
+  return t === "USB" || t === "USB_BUILTIN";
+}
+
+function isBuiltInUsb(printerOrConn, systemPrinterName) {
+  if (printerOrConn && typeof printerOrConn === "object") {
+    if (String(printerOrConn.connectionType || "").toUpperCase() !== "USB") {
+      return false;
+    }
+    const sys = String(printerOrConn.systemPrinterName || "")
+      .trim()
+      .toUpperCase();
+    return (
+      sys === "BUILTIN" ||
+      sys === "ANDROID_BUILTIN" ||
+      sys === "ANDROID-BUILTIN"
+    );
+  }
+  if (String(printerOrConn || "").toUpperCase() === "USB_BUILTIN") return true;
+  if (String(printerOrConn || "").toUpperCase() !== "USB") return false;
+  const sys = String(systemPrinterName || "").trim().toUpperCase();
+  return (
+    sys === "BUILTIN" ||
+    sys === "ANDROID_BUILTIN" ||
+    sys === "ANDROID-BUILTIN"
+  );
+}
+
+function isWindowsUsb(printer) {
+  return isUsb(printer?.connectionType) && !isBuiltInUsb(printer);
 }
 
 function isNetwork(connectionType) {
   const t = String(connectionType || "LAN").toUpperCase();
   return t === "LAN" || t === "NETWORK";
+}
+
+/** Map DB printer → form connectionType value */
+function formConnectionFromPrinter(printer) {
+  if (isBuiltInUsb(printer)) return "USB_BUILTIN";
+  return printer.connectionType || "LAN";
+}
+
+function connectionLabel(printer) {
+  if (isBuiltInUsb(printer)) return "Built-in USB (Android POS)";
+  if (isWindowsUsb(printer)) return "USB (Windows bridge)";
+  return printer.connectionType || "LAN";
 }
 
 export default function AdminPrintersPage() {
@@ -143,11 +187,15 @@ export default function AdminPrintersPage() {
 
   const handleEdit = (printer) => {
     setEditId(printer._id);
+    const conn = formConnectionFromPrinter(printer);
     setForm({
       name: printer.name || "",
       target: printer.target || "RECEIPT",
-      connectionType: printer.connectionType || "LAN",
-      systemPrinterName: printer.systemPrinterName || "",
+      connectionType: conn,
+      systemPrinterName:
+        conn === "USB_BUILTIN"
+          ? BUILTIN_SYSTEM_NAME
+          : printer.systemPrinterName || "",
       host: printer.host || "",
       port: String(printer.port || 9100),
       location: printer.location || "COUNTER",
@@ -161,7 +209,9 @@ export default function AdminPrintersPage() {
     if (!form.name.trim()) {
       return toast.error("Printer name is required.");
     }
-    if (isUsb(form.connectionType) && !form.systemPrinterName.trim()) {
+    const builtIn = form.connectionType === "USB_BUILTIN";
+    const windowsUsb = form.connectionType === "USB";
+    if (windowsUsb && !form.systemPrinterName.trim()) {
       return toast.error("Windows system printer name is required for USB.");
     }
     if (isNetwork(form.connectionType) && !form.host.trim()) {
@@ -175,13 +225,17 @@ export default function AdminPrintersPage() {
         target: form.target,
         purpose: form.target,
         type: form.type || "THERMAL",
-        connectionType: form.connectionType,
+        connectionType: builtIn || windowsUsb ? "USB" : form.connectionType,
         location: form.location || null,
         enabled: form.enabled,
         isActive: form.enabled,
       };
 
-      if (isUsb(form.connectionType)) {
+      if (builtIn) {
+        payload.systemPrinterName = BUILTIN_SYSTEM_NAME;
+        payload.host = null;
+        payload.port = null;
+      } else if (windowsUsb) {
         payload.systemPrinterName = form.systemPrinterName.trim();
         payload.host = null;
         payload.port = null;
@@ -254,7 +308,12 @@ export default function AdminPrintersPage() {
       };
     }
 
-    if (isUsb(printer.connectionType)) {
+    if (isBuiltInUsb(printer)) {
+      // Built-in USB status comes only from the Android Sales app probe
+      return { label: "Unknown", tone: "muted" };
+    }
+
+    if (isWindowsUsb(printer)) {
       if (bridgeStatus === "down") {
         return { label: "Offline", tone: "bad" };
       }
@@ -381,7 +440,8 @@ export default function AdminPrintersPage() {
   const handleTestPrint = async (printer) => {
     setTestingId(printer._id);
     try {
-      if (isUsb(printer.connectionType)) {
+      // Windows spooler USB only — built-in Android uses socket PRINTER_TEST like network
+      if (isWindowsUsb(printer)) {
         if (bridgeStatus !== "ok") {
           toast.error("Local printer service is not running.");
           return;
@@ -402,7 +462,6 @@ export default function AdminPrintersPage() {
           throw new Error(json.error || "Test print failed");
         }
         toast.success(`Test print sent to ${printer.systemPrinterName}`);
-        // Also notify bridge listeners via backend (optional redundancy)
         await fetch(`/api/admin/printers/${printer._id}/test`, {
           method: "POST",
         }).catch(() => {});
@@ -418,7 +477,9 @@ export default function AdminPrintersPage() {
       }
       toast.success(
         json.message ||
-          "Test print signal sent. Use Check connection to verify reachability; keep sales APK or desktop POS open to print.",
+          (isBuiltInUsb(printer)
+            ? "Test print signal sent. Keep the Android Sales app open on the POS tablet."
+            : "Test print signal sent. Use Check connection to verify reachability; keep sales APK or desktop POS open to print."),
       );
     } catch (err) {
       toast.error(err?.message || "Test print failed");
@@ -427,7 +488,8 @@ export default function AdminPrintersPage() {
     }
   };
 
-  const usbForm = isUsb(form.connectionType);
+  const builtInForm = form.connectionType === "USB_BUILTIN";
+  const windowsUsbForm = form.connectionType === "USB";
   const enabledPrinters = printers.filter((p) => p.enabled !== false);
   const singlePrinterDefault = enabledPrinters.length === 1;
 
@@ -438,12 +500,17 @@ export default function AdminPrintersPage() {
           Printer Configuration
         </h1>
         <p className="text-slate-500 mt-2 max-w-2xl">
-          Prefer <span className="font-medium text-slate-700">NETWORK / Wi‑Fi</span>{" "}
-          for multi-device restaurants (Android + desktop on the same LAN). USB
-          still works via the local print bridge on a Windows PC. Reserve the
-          printer IP in your router DHCP so daily use does not require re-entry.
-          Status: Online / Offline / Checking / Unknown (TCP probe from an on-site
-          Sales app or desktop POS — not from the cloud server).
+          One printer list is shared by{" "}
+          <span className="font-medium text-slate-700">Admin</span> and{" "}
+          <span className="font-medium text-slate-700">Mobile Sales</span>{" "}
+          (same database). Use{" "}
+          <span className="font-medium text-slate-700">
+            Built-in USB (Android POS)
+          </span>{" "}
+          for the dual-screen tablet&apos;s 80mm printer,{" "}
+          <span className="font-medium text-slate-700">NETWORK / Wi‑Fi</span> for
+          kitchen printers, and Windows USB only when a PC print bridge is
+          running. Only one printer per Target (Kitchen / Counter / Receipt).
         </p>
       </div>
 
@@ -531,14 +598,32 @@ export default function AdminPrintersPage() {
               <Select
                 value={form.connectionType}
                 onValueChange={(value) =>
-                  setForm({ ...form, connectionType: value })
+                  setForm({
+                    ...form,
+                    connectionType: value,
+                    systemPrinterName:
+                      value === "USB_BUILTIN"
+                        ? BUILTIN_SYSTEM_NAME
+                        : value === "USB"
+                          ? form.systemPrinterName === BUILTIN_SYSTEM_NAME
+                            ? ""
+                            : form.systemPrinterName
+                          : form.systemPrinterName,
+                    name:
+                      value === "USB_BUILTIN" && !form.name.trim()
+                        ? "Built-in Receipt"
+                        : form.name,
+                  })
                 }
               >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="NETWORK">NETWORK / Wi‑Fi (recommended)</SelectItem>
+                  <SelectItem value="USB_BUILTIN">
+                    Built-in USB (Android POS tablet)
+                  </SelectItem>
+                  <SelectItem value="NETWORK">NETWORK / Wi‑Fi</SelectItem>
                   <SelectItem value="LAN">LAN (legacy alias)</SelectItem>
                   <SelectItem value="USB">USB (Windows print bridge)</SelectItem>
                 </SelectContent>
@@ -563,7 +648,17 @@ export default function AdminPrintersPage() {
               </Select>
             </div>
 
-            {usbForm ? (
+            {builtInForm ? (
+              <div className="space-y-2 md:col-span-2">
+                <p className="text-sm text-slate-600 rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+                  Uses the POS tablet&apos;s built-in 80mm printer via USB.
+                  System name is stored as{" "}
+                  <span className="font-mono text-xs">{BUILTIN_SYSTEM_NAME}</span>
+                  . No IP address. Keep the Android Sales app open to print and
+                  report Online status.
+                </p>
+              </div>
+            ) : windowsUsbForm ? (
               <div className="space-y-2 md:col-span-2">
                 <Label htmlFor="systemPrinterName">
                   Windows system printer name
@@ -664,8 +759,8 @@ export default function AdminPrintersPage() {
             </div>
           ) : printers.length === 0 ? (
             <p className="text-sm text-slate-500 py-8 text-center">
-              No printers configured yet. Add a USB receipt printer
-              (KPC307-UEWB) to start Milestone 1 testing.
+              No printers configured yet. Add Built-in USB for the Android POS
+              tablet, or a NETWORK kitchen printer.
             </p>
           ) : (
             <Table>
@@ -702,12 +797,17 @@ export default function AdminPrintersPage() {
                       </TableCell>
                       <TableCell>
                         <Badge variant="secondary">
-                          {printer.connectionType || "LAN"}
+                          {connectionLabel(printer)}
                         </Badge>
                       </TableCell>
                       <TableCell className="font-mono text-xs">
                         <span className="inline-flex items-center gap-1">
-                          {isUsb(printer.connectionType) ? (
+                          {isBuiltInUsb(printer) ? (
+                            <>
+                              <Usb className="h-3.5 w-3.5 text-slate-400" />
+                              Built-in ({printer.systemPrinterName || "BUILTIN"})
+                            </>
+                          ) : isUsb(printer.connectionType) ? (
                             <>
                               <Usb className="h-3.5 w-3.5 text-slate-400" />
                               {printer.systemPrinterName || "—"}

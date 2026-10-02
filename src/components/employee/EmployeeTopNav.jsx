@@ -16,6 +16,7 @@ import {
   ChevronDown,
   AlertTriangle,
   CalendarDays,
+  Settings2,
 } from "lucide-react";
 import { toast } from "sonner";
 import DateTimeDisplay from "@/components/common/DateTimeDisplay";
@@ -67,6 +68,11 @@ const MENU_LINKS = [
     label: "Print Jobs",
     href: "/sales/print-jobs",
     icon: Printer,
+  },
+  {
+    label: "Printers",
+    href: "/sales/printers",
+    icon: Settings2,
   },
   {
     label: "Notifications",

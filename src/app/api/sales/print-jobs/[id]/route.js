@@ -26,7 +26,7 @@ import { businessDateBounds } from "@/lib/eod/eodHelpers";
 const PRINT_JOB_READ_ROLES = [
   ...SALES_PRINT_ROLES,
   "SUPER ADMIN",
-  "EMPLOYEE",
+  "Master Terminal",
   "STAFF",
 ];
 

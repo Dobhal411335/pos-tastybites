@@ -51,6 +51,14 @@ if (process.env.NODE_ENV !== "production") {
 
 const nextConfig = {
   reactStrictMode: false,
+  // Allow tablet / LAN access to the Next.js dev server (POS Wi‑Fi testing).
+  allowedDevOrigins: [
+    "192.168.29.104",
+    "localhost",
+    "127.0.0.1",
+    "sales.localhost",
+    "pos.localhost",
+  ],
   // Keep pdfkit/exceljs/sharp outside the bundler so native binaries/assets resolve from real node_modules
   serverExternalPackages: ["pdfkit", "fontkit", "exceljs", "sharp"],
   outputFileTracingIncludes: {
