@@ -34,6 +34,7 @@ import {
   getOrderPartyLabel,
   shouldShowTable,
 } from "@/utils/orderDisplay";
+import { getItemLineTotal, normalizeCustomExtras } from "@/utils/productChoices";
 
 const COLORS = ["#f97316", "#3b82f6", "#10b981", "#8b5cf6", "#ec4899"];
 
@@ -1085,6 +1086,14 @@ export default function EmployeeSalesPage() {
                                 + {opt}
                               </span>
                             ))}
+                          {normalizeCustomExtras(item.customExtras).map((extra, i) => (
+                            <span
+                              key={`custom-${extra.name}-${i}`}
+                              className="text-xs text-zinc-500 font-medium block italic"
+                            >
+                              + {extra.name} (+${Number(extra.price).toFixed(2)})
+                            </span>
+                          ))}
                           {item.notes ? (
                             <span className="text-xs text-amber-800 font-semibold italic block mt-0.5">
                               Remark: {item.notes}
@@ -1093,7 +1102,7 @@ export default function EmployeeSalesPage() {
                         </div>
                       </div>
                       <span className="text-sm font-bold text-zinc-900 shrink-0 ml-3">
-                        ${(Number(item.price || 0) * Number(item.qty || 1)).toFixed(2)}
+                        ${getItemLineTotal(item).toFixed(2)}
                       </span>
                     </div>
                   ))}

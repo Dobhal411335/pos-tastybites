@@ -250,6 +250,12 @@ export const POST = withAuth(async (request) => {
         }
         const splitCardType =
           isCard && row.cardType ? String(row.cardType).trim() : null;
+        const seatRaw = row.seatNumber;
+        let seatNumber = null;
+        if (seatRaw !== undefined && seatRaw !== null && seatRaw !== "") {
+          const n = Number(seatRaw);
+          if (Number.isFinite(n) && n >= 1) seatNumber = Math.floor(n);
+        }
         normalizedSplits.push({
           name,
           amount: amt,
@@ -257,6 +263,7 @@ export const POST = withAuth(async (request) => {
           cardType: splitCardType || null,
           tipAmount: 0,
           paidAt: new Date(),
+          seatNumber,
         });
       }
     }

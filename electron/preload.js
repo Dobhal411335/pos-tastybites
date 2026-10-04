@@ -9,4 +9,5 @@ contextBridge.exposeInMainWorld('electronPOS', {
   },
   printRaw: (payload) => ipcRenderer.invoke('pos:print-raw', payload),
   probePrinter: (payload) => ipcRenderer.invoke('pos:probe-printer', payload),
+  scanSubnet: (payload) => ipcRenderer.invoke('pos:scan-subnet', payload),
 });

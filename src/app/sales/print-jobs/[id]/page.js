@@ -35,6 +35,7 @@ import KitchenOrderTicket from "@/components/receipts/KitchenOrderTicket";
 import BarReceipt from "@/components/receipts/BarReceipt";
 import moment from "moment";
 import { joinTableNumbers } from "@/utils/orderDisplay";
+import { getItemLineTotal } from "@/utils/productChoices";
 
 const STATUS_STYLES = {
   QUEUED: "bg-amber-100 text-amber-800 border-amber-200",
@@ -502,7 +503,7 @@ export default function PrintJobDetailPage() {
                             )}
                           </div>
                           <span className="font-mono text-zinc-700">
-                            ${((item.price || 0) * (item.qty || 1)).toFixed(2)}
+                            ${getItemLineTotal(item).toFixed(2)}
                           </span>
                         </div>
                       ))}

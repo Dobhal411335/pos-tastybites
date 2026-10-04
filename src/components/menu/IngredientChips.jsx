@@ -34,10 +34,10 @@ export default function IngredientChips({
           <Leaf className="h-3.5 w-3.5" strokeWidth={2.25} aria-hidden />
         </span>
         <div className="min-w-0 flex-1">
-          <p className="text-[12px] font-bold leading-tight text-emerald-950">
+          <p className="text-[15px] font-bold leading-tight text-emerald-950">
             {label}
           </p>
-          <p className="text-[10px] font-medium leading-tight text-emerald-800/70">
+          <p className="text-[11px] font-medium leading-tight text-emerald-800/70">
             {list.length} item{list.length === 1 ? "" : "s"} in this option
           </p>
         </div>
@@ -48,7 +48,7 @@ export default function IngredientChips({
           <li key={name}>
             <span
               className={cn(
-                "inline-flex max-w-full items-center gap-1.5 rounded-full border border-emerald-200 bg-white/90 px-2.5 py-1 text-[12px] font-semibold text-emerald-950 shadow-sm",
+                "inline-flex max-w-full items-center gap-1.5 rounded-md border border-emerald-200 bg-white/90 px-2.5 py-1 text-[13px] font-semibold text-emerald-950 shadow-sm",
                 chipClassName,
               )}
               title={name}

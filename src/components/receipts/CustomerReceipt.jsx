@@ -2,7 +2,10 @@ import React from "react";
 import "./print.css";
 import moment from "moment";
 import { isOfferItem } from "@/utils/offerDetails";
-import { getReceiptModifierLines } from "@/utils/productChoices";
+import {
+  getReceiptModifierLines,
+  getItemLineTotal,
+} from "@/utils/productChoices";
 import { shouldShowTable, formatTableNumbersWithFloor } from "@/utils/orderDisplay";
 
 const money = (n) => `$${(Number(n) || 0).toFixed(2)}`;
@@ -207,8 +210,43 @@ const CustomerReceipt = ({
   const hasPaymentSplit =
     giftUsed > 0 || cash > 0 || card > 0 || Boolean(methodStr);
 
-  const regularItems = items.filter((item) => !isOfferItem(item));
-  const offerItems = items.filter((item) => isOfferItem(item));
+  const normalizeSeat = (item) => {
+    if (item?.seatNumber != null && item.seatNumber !== "") {
+      const n = Number(item.seatNumber);
+      return Number.isFinite(n) && n >= 1 ? Math.floor(n) : null;
+    }
+    if (
+      item?.seat != null &&
+      item.seat !== "" &&
+      !/^table$/i.test(String(item.seat))
+    ) {
+      const n = Number(item.seat);
+      return Number.isFinite(n) && n >= 1 ? Math.floor(n) : null;
+    }
+    return null;
+  };
+
+  const showSeatHeaders = items.some((it) => normalizeSeat(it) != null);
+  const seatGroups = (() => {
+    const map = new Map();
+    for (const item of items) {
+      const seat = normalizeSeat(item);
+      const key = seat == null ? "table" : String(seat);
+      if (!map.has(key)) {
+        map.set(key, {
+          seat,
+          label: seat == null ? "Table" : `Seat ${seat}`,
+          items: [],
+        });
+      }
+      map.get(key).items.push(item);
+    }
+    const numbered = [...map.values()]
+      .filter((g) => g.seat != null)
+      .sort((a, b) => a.seat - b.seat);
+    const table = map.get("table");
+    return table ? [...numbered, table] : numbered;
+  })();
 
   const renderReceiptItem = (item, idx) => {
     const modifierLines = getReceiptModifierLines(item);
@@ -224,14 +262,36 @@ const CustomerReceipt = ({
             ) : null}
           </div>
           <span className="shrink-0">
-            ${(Number(item.price) * Number(item.qty)).toFixed(2)}
+            ${getItemLineTotal(item).toFixed(2)}
           </span>
         </div>
         {modifierLines.length > 0 ? (
           <div className="pl-3 mt-0.5 space-y-0.5 text-[9px] text-zinc-600">
             {modifierLines.map((line, lineIdx) => (
-              <div key={`${line.kind}-${lineIdx}`}>{line.text}</div>
+              <div
+                key={`${line.kind}-${lineIdx}`}
+                className={
+                  line.kind === "addon-choice-item" ||
+                  line.kind === "choice-item"
+                    ? "pl-2 font-semibold"
+                    : line.kind === "custom-extra"
+                      ? "flex justify-between gap-2"
+                      : ""
+                }
+              >
+                <span>{line.text}</span>
+                {line.kind === "custom-extra" && line.price != null ? (
+                  <span className="shrink-0">
+                    +${Number(line.price).toFixed(2)}
+                  </span>
+                ) : null}
+              </div>
             ))}
+          </div>
+        ) : null}
+        {item.notes ? (
+          <div className="pl-3 mt-0.5 text-[9px] italic text-zinc-700">
+            Note: {item.notes}
           </div>
         ) : null}
       </div>
@@ -318,18 +378,35 @@ const CustomerReceipt = ({
           <span>AMOUNT</span>
         </div>
         <div className="receipt-divider" />
-        {regularItems.map((item, idx) => renderReceiptItem(item, idx))}
-        {offerItems.length > 0 ? (
-          <div className={regularItems.length > 0 ? "mt-2" : ""}>
-            {regularItems.length > 0 && <div className="receipt-divider mb-2" />}
-            <div className="receipt-bold uppercase text-[10px] mb-1.5 pb-0.5 border-b border-zinc-300">
-              Offers
+        {seatGroups.map((group, gIdx) => {
+          const regularItems = group.items.filter((item) => !isOfferItem(item));
+          const offerItems = group.items.filter((item) => isOfferItem(item));
+          return (
+            <div key={group.label || gIdx} className={gIdx > 0 ? "mt-2" : ""}>
+              {showSeatHeaders ? (
+                <div className="receipt-bold uppercase text-[10px] mb-1.5 pb-0.5 border-b border-black">
+                  {group.label}
+                </div>
+              ) : null}
+              {regularItems.map((item, idx) =>
+                renderReceiptItem(item, `${group.label}-r-${idx}`),
+              )}
+              {offerItems.length > 0 ? (
+                <div className={regularItems.length > 0 ? "mt-2" : ""}>
+                  {regularItems.length > 0 && (
+                    <div className="receipt-divider mb-2" />
+                  )}
+                  <div className="receipt-bold uppercase text-[10px] mb-1.5 pb-0.5 border-b border-zinc-300">
+                    Offers
+                  </div>
+                  {offerItems.map((item, idx) =>
+                    renderReceiptItem(item, `${group.label}-o-${idx}`),
+                  )}
+                </div>
+              ) : null}
             </div>
-            {offerItems.map((item, idx) =>
-              renderReceiptItem(item, `offer-${idx}`),
-            )}
-          </div>
-        ) : null}
+          );
+        })}
       </div>
 
       <div className="receipt-divider" />

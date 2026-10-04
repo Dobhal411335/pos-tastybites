@@ -21,6 +21,10 @@ import {
   getOrderPartyLabel,
   shouldShowTable,
 } from "@/utils/orderDisplay";
+import {
+  getReceiptModifierLines,
+  getItemLineTotal,
+} from "@/utils/productChoices";
 import { resolveTenders } from "@/lib/eod/eodHelpers";
 
 const STATUSES = ["All", "PENDING", "CONFIRMED", "CANCELLED", "WAIVED", "PAID", "ONLINE"];
@@ -1138,47 +1142,63 @@ function TodayOrdersPageContent() {
               <div>
                 <h3 className="text-sm font-bold text-zinc-900 uppercase tracking-wider mb-4">Order Items</h3>
                 <div className="space-y-4">
-                  {selectedOrder.items?.map((item, idx) => (
-                    <div key={idx} className="flex justify-between items-start">
-                      <div className="flex gap-3 min-w-0">
-                        <span className="text-base font-black text-zinc-900 shrink-0">{item.qty}x</span>
-                        <div className="min-w-0">
-                          <span className="text-base font-bold text-zinc-900 block">{item.name}</span>
-                          {item.size && item.size !== "Standard" && (
-                            <span className="text-sm mt-1 text-zinc-900 font-semibold block">Variant: {item.size}</span>
-                          )}
-                          {item.preparationStyle && (
-                            <span className="text-sm mt-1 text-zinc-900 font-semibold italic block">
-                              {item.preparationStyle}
+                  {selectedOrder.items?.map((item, idx) => {
+                    // Includes prep style, product choices, nested addon qtys (e.g. Hot Sauce ×3), extras, offers
+                    const modifierLines = getReceiptModifierLines(item);
+                    return (
+                      <div key={idx} className="flex justify-between items-start">
+                        <div className="flex gap-3 min-w-0">
+                          <span className="text-base font-black text-zinc-900 shrink-0">
+                            {item.qty}x
+                          </span>
+                          <div className="min-w-0">
+                            <span className="text-base font-bold text-zinc-900 block">
+                              {item.productCode ? `${item.productCode} ` : ""}
+                              {item.name}
                             </span>
-                          )}
-                          {item.options
-                            ?.filter((opt) => {
-                              const value = String(opt || "");
-                              if (value.toLowerCase().startsWith("style:")) return false;
-                              if (
-                                item.preparationStyle &&
-                                value.toLowerCase() === String(item.preparationStyle).toLowerCase()
-                              ) {
-                                return false;
-                              }
-                              return true;
-                            })
-                            .map((opt, i) => (
-                              <span key={i} className="text-sm mt-1 text-zinc-900 font-semibold block italic">
-                                + {opt}
+                            {item.size && item.size !== "Standard" ? (
+                              <span className="text-sm mt-1 text-zinc-900 font-semibold block">
+                                Variant: {item.size}
+                              </span>
+                            ) : null}
+                            {modifierLines.map((line, lineIdx) => (
+                              <span
+                                key={`${line.kind}-${lineIdx}`}
+                                className={`text-sm mt-1 font-semibold block ${
+                                  line.kind === "addon-choice-item" ||
+                                  line.kind === "choice-item"
+                                    ? "pl-3 text-sky-800"
+                                    : line.kind === "addon-choice" ||
+                                        line.kind === "choice"
+                                      ? "text-sky-900"
+                                      : line.kind === "custom-extra"
+                                        ? "text-zinc-900"
+                                        : "text-zinc-900 italic"
+                                }`}
+                              >
+                                {line.text}
+                                {line.kind === "custom-extra" &&
+                                line.price != null ? (
+                                  <span className="text-zinc-600 font-bold">
+                                    {" "}
+                                    (+${Number(line.price).toFixed(2)})
+                                  </span>
+                                ) : null}
                               </span>
                             ))}
-                          {item.notes ? (
-                            <span className="text-sm mt-1 text-amber-800 font-semibold italic block">
-                              Remark: {item.notes}
-                            </span>
-                          ) : null}
+                            {item.notes ? (
+                              <span className="text-sm mt-1 text-amber-800 font-semibold italic block">
+                                Remark: {item.notes}
+                              </span>
+                            ) : null}
+                          </div>
                         </div>
+                        <span className="text-base font-bold text-zinc-900 shrink-0 ml-3">
+                          ${getItemLineTotal(item).toFixed(2)}
+                        </span>
                       </div>
-                      <span className="text-base font-bold text-zinc-900 shrink-0 ml-3">${(item.price * item.qty).toFixed(2)}</span>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
 

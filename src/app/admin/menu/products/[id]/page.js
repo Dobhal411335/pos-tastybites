@@ -936,54 +936,6 @@ export default function ProductDetailsConfigPage() {
                               </div>
                             </div>
                             </div>
-                            <div className="space-y-2">
-                              <label className="text-[13px] font-semibold text-zinc-900">
-                                Ingredients
-                              </label>
-                              <div className="flex gap-2">
-                                <Select
-                                  key={`addon-ing-${index}-${(addon.ingredients || []).length}`}
-                                  onValueChange={(val) => addIngredientToAddon(index, val)}
-                                >
-                                  <SelectTrigger className="h-11 text-[16px] bg-white flex-1">
-                                    <SelectValue placeholder="Select ingredient" />
-                                  </SelectTrigger>
-                                  <SelectContent className="bg-white max-h-60 overflow-y-auto">
-                                    {ingredientsList.map((ing, idx) => (
-                                      <SelectItem key={idx} value={ing}>{ing}</SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                                <Button
-                                  type="button"
-                                  onClick={() => setIsIngredientModalOpen(true)}
-                                  variant="outline"
-                                  className="h-11 w-11 p-0 shrink-0 text-zinc-600 hover:text-zinc-900 border-zinc-200"
-                                >
-                                  <Plus className="h-5 w-5" />
-                                </Button>
-                              </div>
-                              {(addon.ingredients || []).length > 0 && (
-                                <div className="flex flex-wrap gap-2 pt-1">
-                                  {(addon.ingredients || []).map((ing) => (
-                                    <Badge
-                                      key={ing}
-                                      className="bg-orange-50 text-orange-800 border border-orange-200 hover:bg-orange-50 pl-2.5 pr-1 py-1 gap-1 font-medium"
-                                    >
-                                      {ing}
-                                      <button
-                                        type="button"
-                                        onClick={() => removeIngredientFromAddon(index, ing)}
-                                        className="ml-0.5 rounded-full p-0.5 hover:bg-orange-100"
-                                        aria-label={`Remove ${ing}`}
-                                      >
-                                        <X className="h-3 w-3" />
-                                      </button>
-                                    </Badge>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
                             <AddonChoiceOptionsEditor
                               choiceOptions={addon.choiceOptions || []}
                               onChange={(choiceOptions) => {

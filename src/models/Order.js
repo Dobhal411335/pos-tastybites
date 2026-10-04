@@ -20,19 +20,31 @@ const OrderItemSchema = new mongoose.Schema({
   choiceSelections: [
     {
       name: { type: String, trim: true },
+      // Plain labels, or qty labels like "Ranch ×3" for nested addon choices
       subChoices: [{ type: String, trim: true }],
     },
   ],
   addonChoiceSelections: [
     {
       name: { type: String, trim: true },
+      // Nested addon option breakdown for kitchen, e.g. ["Ranch ×3", "BBQ ×1"]
+      // Totals across a group must equal this line's qty when options exist.
       subChoices: [{ type: String, trim: true }],
     },
   ],
   drinks: [{ type: String }],
   notes: { type: String, default: "" },
+  /** Free-text extras from POS (name + price not in catalog addons). */
+  customExtras: [
+    {
+      name: { type: String, trim: true },
+      price: { type: Number, default: 0 },
+    },
+  ],
   sentQty: { type: Number, default: 0 },
   cartId: { type: String }, // To match incoming items reliably
+  /** 1-based seat within guestCount; null = shared Table bucket */
+  seatNumber: { type: Number, default: null },
 });
 
 const OrderSchema = new mongoose.Schema(
@@ -77,6 +89,8 @@ const OrderSchema = new mongoose.Schema(
         cardType: { type: String, default: null },
         tipAmount: { type: Number, default: 0 },
         paidAt: { type: Date, default: Date.now },
+        /** Set when paying via split-by-seat */
+        seatNumber: { type: Number, default: null },
       },
     ],
     taxBreakdown: [

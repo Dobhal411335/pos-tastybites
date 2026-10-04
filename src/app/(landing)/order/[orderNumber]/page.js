@@ -9,6 +9,10 @@ import Footer from "@/components/sections/Footer";
 import { Button } from "@/components/ui/button";
 import { publicApiBase, getPublicRestaurantSlug } from "@/lib/public/clientConfig";
 import OrderStatusTracker from "@/components/ordering/OrderStatusTracker";
+import {
+  getReceiptModifierLines,
+  getItemLineTotal,
+} from "@/utils/productChoices";
 
 function OrderContent() {
   const params = useParams();
@@ -30,18 +34,42 @@ function OrderContent() {
     setLoading(true);
     setError(null);
     try {
-      const qs = phoneFromQuery
-        ? `?phone=${encodeURIComponent(String(phoneFromQuery).replace(/\D/g, ""))}`
-        : "";
-      const res = await fetch(
-        `${publicApiBase(slug)}/orders/${encodeURIComponent(orderNumber)}${qs}`,
-        { cache: "no-store" }
-      );
-      const json = await res.json();
-      if (!res.ok || !json.success) {
-        throw new Error(json.message || "Order not found");
+      const ticket = encodeURIComponent(String(orderNumber).replace(/^#/, ""));
+      // Prefer /orders/track/:n — nested /orders/:n was returning HTML 404 under Turbopack.
+      // Fallback query on /orders stays on the always-registered route.
+      const urls = [
+        `${publicApiBase(slug)}/orders/track/${ticket}`,
+        `${publicApiBase(slug)}/orders?orderNumber=${ticket}`,
+      ];
+
+      let lastMessage = "Order not found";
+      let loaded = null;
+
+      for (const url of urls) {
+        const res = await fetch(url, {
+          cache: "no-store",
+          headers: { Accept: "application/json" },
+        });
+        const contentType = res.headers.get("content-type") || "";
+        if (!contentType.includes("application/json")) {
+          lastMessage =
+            res.status === 404
+              ? "Order not found"
+              : "Could not load order (invalid server response).";
+          continue;
+        }
+        const json = await res.json();
+        if (res.ok && json?.success && json.data) {
+          loaded = json.data;
+          break;
+        }
+        lastMessage = json?.message || lastMessage;
       }
-      setOrder(json.data);
+
+      if (!loaded) {
+        throw new Error(lastMessage);
+      }
+      setOrder(loaded);
     } catch (err) {
       setOrder(null);
       setError(err.message || "Could not load order");
@@ -133,18 +161,48 @@ function OrderContent() {
                 </div>
               </div>
 
-              <ul className="border-t border-zinc-100 pt-4 space-y-2">
-                {order.items?.map((item, idx) => (
-                  <li key={idx} className="flex justify-between text-sm gap-3">
-                    <span>
-                      <span className="font-semibold">{item.qty}×</span> {item.name}
-                      {item.size && item.size !== "Standard" ? ` (${item.size})` : ""}
-                    </span>
-                    <span className="tabular-nums font-bold">
-                      ${(Number(item.price) * Number(item.qty)).toFixed(2)}
-                    </span>
-                  </li>
-                ))}
+              <ul className="border-t border-zinc-100 pt-4 space-y-3">
+                {order.items?.map((item, idx) => {
+                  const modifierLines = getReceiptModifierLines(item);
+                  return (
+                    <li key={idx} className="text-sm">
+                      <div className="flex justify-between gap-3">
+                        <span>
+                          <span className="font-semibold">{item.qty}×</span>{" "}
+                          {item.name}
+                          {item.size && item.size !== "Standard"
+                            ? ` (${item.size})`
+                            : ""}
+                        </span>
+                        <span className="tabular-nums font-bold">
+                          ${getItemLineTotal(item).toFixed(2)}
+                        </span>
+                      </div>
+                      {modifierLines.length > 0 ? (
+                        <ul className="mt-1 space-y-0.5 pl-5 text-xs text-zinc-600">
+                          {modifierLines.map((line, lineIdx) => (
+                            <li
+                              key={`${line.kind}-${lineIdx}`}
+                              className={
+                                line.kind === "addon-choice-item" ||
+                                line.kind === "choice-item"
+                                  ? "pl-2 font-semibold text-sky-800"
+                                  : "font-semibold text-zinc-700"
+                              }
+                            >
+                              {line.text}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : null}
+                      {item.notes ? (
+                        <p className="mt-1 pl-5 text-xs text-amber-700">
+                          Note: {item.notes}
+                        </p>
+                      ) : null}
+                    </li>
+                  );
+                })}
               </ul>
 
               {order.specialNote && (

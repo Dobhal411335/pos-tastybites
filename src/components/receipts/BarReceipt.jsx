@@ -130,7 +130,10 @@ const BarReceipt = ({
         {items.map((item, itemIdx) => {
           const modifierLines = getReceiptModifierLines(item);
           const seatBits = [];
-          if (item.seat) seatBits.push(item.seat);
+          if (item.seat != null && item.seat !== "") seatBits.push(item.seat);
+          else if (item.seatNumber != null && item.seatNumber !== "") {
+            seatBits.push(item.seatNumber);
+          }
           if (Array.isArray(item.seats)) {
             item.seats.filter(Boolean).forEach((s) => seatBits.push(s));
           }
@@ -162,7 +165,12 @@ const BarReceipt = ({
                   {modifierLines.map((line, lineIdx) => (
                     <div
                       key={`${line.kind}-${lineIdx}`}
-                      className="text-[11px] font-semibold italic"
+                      className={`text-[11px] font-semibold ${
+                        line.kind === "addon-choice-item" ||
+                        line.kind === "choice-item"
+                          ? "pl-2"
+                          : "italic"
+                      }`}
                     >
                       {line.text}
                     </div>

@@ -30,7 +30,12 @@ export default function SalesAppShell({ children }) {
   useEmployeeSessionRefresh({ enabled: !isLoginPage && !loading && Boolean(employeeUser) });
 
   useEffect(() => {
-    if (isLoginPage) return;
+    if (isLoginPage) {
+      setLoading(false);
+      return;
+    }
+
+    let cancelled = false;
 
     const verifyAuth = async () => {
       try {
@@ -38,19 +43,27 @@ export default function SalesAppShell({ children }) {
         if (!res.ok) throw new Error("Unauthorized");
         const data = await res.json();
         const user = data.data?.employee || data.data;
+        if (cancelled) return;
         if (data.success && user) {
           setEmployeeUser(user);
         } else {
           throw new Error("Unauthorized");
         }
       } catch (err) {
-        window.location.assign("/sales/login");
+        if (!cancelled) {
+          window.location.assign("/sales/login");
+        }
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
+    // Auth once for the sales shell; child pages should use AuthProvider (useAuth), not /me again.
     verifyAuth();
-  }, [pathname, isLoginPage]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isLoginPage]);
 
   const restaurantId = useMemo(() => {
     const user = employeeUser?.employee || employeeUser;

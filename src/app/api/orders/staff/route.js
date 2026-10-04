@@ -43,7 +43,8 @@ export const POST = withAuth(async (request) => {
         qty: item.qty,
         price: item.price,
         tax: item.tax || 0,
-        options: item.options || []
+        options: item.options || [],
+        customExtras: Array.isArray(item.customExtras) ? item.customExtras : [],
       })),
       subTotal: Number(subTotal) || 0,
       taxTotal: Number(taxTotal) || 0,

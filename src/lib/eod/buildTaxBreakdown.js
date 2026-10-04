@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import Product from "@/models/menu/Product";
 import Tax from "@/models/tax/Tax";
+import { customExtrasUnitTotal } from "@/utils/productChoices";
 
 const r2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 
@@ -55,7 +56,9 @@ export async function buildTaxBreakdownForOrder(order, restaurantId) {
     if (!taxes?.length) continue;
     usedProductTaxes = true;
     const lineBase =
-      (Number(item.price) || 0) * (Number(item.qty) || 0) * taxableRatio;
+      ((Number(item.price) || 0) + customExtrasUnitTotal(item.customExtras)) *
+      (Number(item.qty) || 0) *
+      taxableRatio;
     for (const tax of taxes) {
       const isPercent =
         String(tax.type || "")

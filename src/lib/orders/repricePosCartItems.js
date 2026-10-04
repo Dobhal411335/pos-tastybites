@@ -11,7 +11,13 @@ import {
 } from "@/lib/orders/staffDiscount";
 import { computeOrderServiceCharge } from "@/lib/orders/serviceCharge";
 import { filterOfferSelections } from "@/utils/offerDetails";
-import { filterProductChoiceSelections } from "@/utils/productChoices";
+import {
+  filterProductChoiceSelections,
+  normalizeChoiceOptions,
+  normalizeCustomExtras,
+  customExtrasUnitTotal,
+  validateAddonChoiceSelectionsAgainstLineQty,
+} from "@/utils/productChoices";
 
 const r2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 
@@ -196,7 +202,7 @@ export async function repricePosCartItems({
       : sizes.length > 0
         ? sizes.join(", ")
         : rawSize || "Standard";
-    const options = Array.isArray(item.options) ? item.options.filter(Boolean) : [];
+    let options = Array.isArray(item.options) ? item.options.filter(Boolean) : [];
     const isOffer =
       Boolean(item.isOffer) || /^offers?$/i.test(String(item.category || ""));
 
@@ -211,6 +217,7 @@ export async function repricePosCartItems({
     let drinks = [];
     let choiceSelections = [];
     let addonChoiceSelections = [];
+    let customExtras = [];
 
     if (isOffer) {
       const offer = offerMap.get(String(id));
@@ -265,6 +272,25 @@ export async function repricePosCartItems({
           item.addonChoiceSelections,
           matchedAddon?.choiceOptions || [],
         );
+        if (
+          matchedAddon &&
+          normalizeChoiceOptions(matchedAddon.choiceOptions).length > 0
+        ) {
+          const nestedCheck = validateAddonChoiceSelectionsAgainstLineQty({
+            addon: matchedAddon,
+            lineQty: qty,
+            addonChoiceSelections,
+            addonName: matchedAddon.name || addonName || "Addon",
+          });
+          if (!nestedCheck.ok) {
+            const err = new Error(
+              nestedCheck.errors[0]?.message ||
+                `Nested choices for ${matchedAddon.name || "addon"} must equal quantity ${qty}.`,
+            );
+            err.status = 400;
+            throw err;
+          }
+        }
         name = matchedAddon?.name || addonName || product.name;
         productCode = product.productCode || "";
         category = item.category || "ITEMS";
@@ -272,14 +298,6 @@ export async function repricePosCartItems({
       } else {
         unitPrice =
           resolveVariantUnitPrice(product, sizes) + addonExtra(product, options);
-
-        if (product.taxData && (product.taxData.totalPercentage || product.taxData.totalFixed)) {
-          unitTax = taxFromTaxData(product.taxData, unitPrice);
-        } else if (product.taxes?.length) {
-          unitTax = taxFromTaxDocs(product.taxes, unitPrice);
-        } else {
-          unitTax = taxFromTaxDocs(globalTaxes, unitPrice);
-        }
 
         name = product.name;
         productCode = product.productCode || "";
@@ -289,16 +307,41 @@ export async function repricePosCartItems({
           item.choiceSelections,
           product.choiceOptions,
         );
+        customExtras = normalizeCustomExtras(item.customExtras);
+        // Reject incomplete client rows (name without price / invalid)
+        if (Array.isArray(item.customExtras)) {
+          for (const raw of item.customExtras) {
+            const rawName = String(raw?.name || "").trim();
+            if (!rawName && (raw?.price === "" || raw?.price == null)) continue;
+            if (!rawName) {
+              const err = new Error("Custom item name is required");
+              err.status = 400;
+              throw err;
+            }
+            if (rawName.length > 80) {
+              const err = new Error(
+                "Custom item name is too long (max 80 characters)",
+              );
+              err.status = 400;
+              throw err;
+            }
+            const rawPrice = Number(raw?.price);
+            if (!Number.isFinite(rawPrice) || rawPrice < 0) {
+              const err = new Error(`Invalid custom item price for: ${rawName}`);
+              err.status = 400;
+              throw err;
+            }
+          }
+        }
       }
 
-      if (isExtraLine) {
-        if (product.taxData && (product.taxData.totalPercentage || product.taxData.totalFixed)) {
-          unitTax = taxFromTaxData(product.taxData, unitPrice);
-        } else if (product.taxes?.length) {
-          unitTax = taxFromTaxDocs(product.taxes, unitPrice);
-        } else {
-          unitTax = taxFromTaxDocs(globalTaxes, unitPrice);
-        }
+      const taxableUnit = unitPrice + customExtrasUnitTotal(customExtras);
+      if (product.taxData && (product.taxData.totalPercentage || product.taxData.totalFixed)) {
+        unitTax = taxFromTaxData(product.taxData, taxableUnit);
+      } else if (product.taxes?.length) {
+        unitTax = taxFromTaxDocs(product.taxes, taxableUnit);
+      } else {
+        unitTax = taxFromTaxDocs(globalTaxes, taxableUnit);
       }
     }
 
@@ -322,6 +365,7 @@ export async function repricePosCartItems({
       preparationStyle: item.preparationStyle || null,
       productType,
       isOffer,
+      customExtras,
       inclusions,
       choices,
       choiceSelections,
@@ -329,9 +373,21 @@ export async function repricePosCartItems({
       drinks,
       notes: String(item.notes || "").trim(),
       cartId: item.cartId || String(Date.now() + Math.random()),
+      seatNumber: (() => {
+        if (
+          item.seatNumber === undefined ||
+          item.seatNumber === null ||
+          item.seatNumber === "" ||
+          item.seatNumber === "table"
+        ) {
+          return null;
+        }
+        const n = Number(item.seatNumber);
+        return Number.isFinite(n) && n >= 1 ? Math.floor(n) : null;
+      })(),
     });
 
-    subTotal += unitPrice * qty;
+    subTotal += (unitPrice + customExtrasUnitTotal(customExtras)) * qty;
     taxTotal += unitTax * qty;
   }
 

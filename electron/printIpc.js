@@ -89,6 +89,65 @@ function probePrinter(host, port) {
   });
 }
 
+function probePrinterQuick(host, port, timeoutMs = 400) {
+  return new Promise((resolve) => {
+    const socket = new net.Socket();
+    let settled = false;
+
+    const finish = (ok) => {
+      if (settled) return;
+      settled = true;
+      socket.destroy();
+      resolve(ok);
+    };
+
+    socket.setTimeout(timeoutMs);
+    socket.on('timeout', () => finish(false));
+    socket.on('error', () => finish(false));
+    socket.connect(port, host, () => finish(true));
+  });
+}
+
+async function scanSubnet(payload = {}) {
+  const prefix = String(payload.subnetPrefix || '')
+    .trim()
+    .replace(/\.$/, '');
+  if (!/^\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(prefix)) {
+    throw new Error('Subnet must look like 192.168.1');
+  }
+
+  const port = Number(payload.port) || 9100;
+  const fromHost = Math.max(1, Number(payload.fromHost) || 1);
+  const toHost = Math.min(254, Number(payload.toHost) || 254);
+  const concurrency = Math.max(1, Math.min(48, Number(payload.concurrency) || 32));
+  const timeoutMs = Math.max(150, Number(payload.timeoutMs) || 400);
+
+  const hosts = [];
+  for (let i = fromHost; i <= toHost; i += 1) {
+    hosts.push(`${prefix}.${i}`);
+  }
+
+  const found = [];
+  const queue = [...hosts];
+
+  const worker = async () => {
+    while (queue.length) {
+      const host = queue.shift();
+      if (!host) return;
+      const ok = await probePrinterQuick(host, port, timeoutMs);
+      if (ok) found.push({ host, port });
+    }
+  };
+
+  await Promise.all(Array.from({ length: concurrency }, () => worker()));
+  found.sort((a, b) => {
+    const aa = Number(a.host.split('.').pop() || 0);
+    const bb = Number(b.host.split('.').pop() || 0);
+    return aa - bb;
+  });
+  return found;
+}
+
 export function registerPrintIpc() {
   ipcMain.handle('pos:print-raw', async (_event, payload) => {
     try {
@@ -123,6 +182,19 @@ export function registerPrintIpc() {
       return {
         success: false,
         error: err?.message || 'Probe failed',
+      };
+    }
+  });
+
+  ipcMain.handle('pos:scan-subnet', async (_event, payload) => {
+    try {
+      const printers = await scanSubnet(payload || {});
+      return { success: true, printers };
+    } catch (err) {
+      return {
+        success: false,
+        error: err?.message || 'Subnet scan failed',
+        printers: [],
       };
     }
   });

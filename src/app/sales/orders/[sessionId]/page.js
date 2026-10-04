@@ -40,7 +40,6 @@ import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import CreateOrderSkeleton from "@/components/sales/CreateOrderSkeleton";
 import {
   Select,
@@ -67,6 +66,7 @@ import IngredientChips from "@/components/menu/IngredientChips";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { buildStaffDiscountState } from "@/lib/orders/staffDiscount";
 import { formatTableLocation, resolveDocumentId } from "@/utils/orderDisplay";
+import { canPayFromCreateOrder } from "@/utils/floorRoles";
 import { countryCodes } from "@/utils/countryCodes";
 import {
   OFFER_CATEGORY,
@@ -80,8 +80,13 @@ import {
   productHasChoiceOptions,
   normalizeChoiceOptions,
   normalizeChoiceSelections,
+  normalizeCustomExtras,
+  customExtrasUnitTotal,
   cartChoiceSelectionsKey,
+  cartCustomExtrasKey,
+  getItemLineTotal,
 } from "@/utils/productChoices";
+import { buildModifiedRequestRemark } from "@/utils/modifiedRequestRemark";
 
 function formatOrderServerName(order, fallbackUser) {
   if (order?.processedByName) return order.processedByName;
@@ -123,9 +128,21 @@ function persistSalesFloorId(floorId) {
   return id;
 }
 
+function normalizeCartSeatNumber(value) {
+  if (value === undefined || value === null || value === "" || value === "table") {
+    return null;
+  }
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < 1) return null;
+  return Math.floor(n);
+}
+
 function getCartFingerprint(items) {
   return (items || [])
-    .map((item) => `${item.cartId || item.id}:${item.qty}:${item.name}:${item.size || ""}`)
+    .map(
+      (item) =>
+        `${item.cartId || item.id}:${item.qty}:${item.name}:${item.size || ""}:s${normalizeCartSeatNumber(item.seatNumber) ?? "t"}`,
+    )
     .sort()
     .join("|");
 }
@@ -146,13 +163,23 @@ function isSameCartLine(a, b) {
     String(a.preparationStyle || "") === String(b.preparationStyle || "") &&
     Number(a.price) === Number(b.price) &&
     Boolean(a.isOffer) === Boolean(b.isOffer) &&
+    normalizeCartSeatNumber(a.seatNumber) === normalizeCartSeatNumber(b.seatNumber) &&
     String(a.notes || "").trim() === String(b.notes || "").trim() &&
     cartOptionsKey(a.options) === cartOptionsKey(b.options) &&
+    cartCustomExtrasKey(a.customExtras) === cartCustomExtrasKey(b.customExtras) &&
     cartChoiceSelectionsKey(a.choiceSelections) ===
       cartChoiceSelectionsKey(b.choiceSelections) &&
     cartChoiceSelectionsKey(a.addonChoiceSelections) ===
       cartChoiceSelectionsKey(b.addonChoiceSelections)
   );
+}
+
+function newCustomExtraRow() {
+  return {
+    id: `custom-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    name: "",
+    price: "",
+  };
 }
 
 function getVariantKey(_variant, index) {
@@ -219,9 +246,11 @@ function buildCartFromOrderItems(items = []) {
       drinks,
       choiceSelections: normalizeChoiceSelections(item.choiceSelections),
       addonChoiceSelections: normalizeChoiceSelections(item.addonChoiceSelections),
+      customExtras: normalizeCustomExtras(item.customExtras),
       modifier: parts.length > 0 ? parts.join(" | ") : undefined,
       notes: String(item.notes || "").trim(),
       cartId: item.cartId || `r-${Date.now()}-${idx}`,
+      seatNumber: normalizeCartSeatNumber(item.seatNumber),
     };
   });
 }
@@ -310,6 +339,8 @@ function OrderPageContent() {
   const [activeCategory, setActiveCategory] = useState("All");
   const [searchQuery, setSearchQuery] = useState("");
   const [cart, setCart] = useState([]);
+  /** null = shared Table bucket; 1..guestCount = seat */
+  const [activeSeatNumber, setActiveSeatNumber] = useState(null);
   const [orderType, setOrderType] = useState("Dine-in");
   const [orderStatus, setOrderStatus] = useState("Draft");
 
@@ -322,7 +353,9 @@ function OrderPageContent() {
   const [selectedOfferDrinks, setSelectedOfferDrinks] = useState([]);
   const [selectedOfferInclusions, setSelectedOfferInclusions] = useState([]);
   const [selectedProductChoices, setSelectedProductChoices] = useState({});
-  const [itemNotes, setItemNotes] = useState("");
+  const [noteWithout, setNoteWithout] = useState("");
+  const [noteAdd, setNoteAdd] = useState("");
+  const [customExtras, setCustomExtras] = useState([]);
 
   // New states
   const [isKitchenModalOpen, setIsKitchenModalOpen] = useState(false);
@@ -352,6 +385,10 @@ function OrderPageContent() {
     name: "TASTY BITES",
   });
   const [redirectAfterPrint, setRedirectAfterPrint] = useState(false);
+  const [pendingReleaseAfterPrint, setPendingReleaseAfterPrint] = useState(false);
+  const [pendingLeaveAfterPrint, setPendingLeaveAfterPrint] = useState(false);
+  // Open bill only after payment overlay has closed (avoids lost preview).
+  const [pendingBillAfterPay, setPendingBillAfterPay] = useState(false);
   const [serverName, setServerName] = useState("Server");
   const [kotCartFingerprint, setKotCartFingerprint] = useState(null);
   const [isReleaseModalOpen, setIsReleaseModalOpen] = useState(false);
@@ -793,6 +830,32 @@ function OrderPageContent() {
     setServerName(formatOrderServerName(activeOrder, currentUser));
   }, [currentUser, activeOrder]);
 
+  // After Pay Now succeeds, wait until payment modal unmounts, then show bill.
+  useEffect(() => {
+    if (!pendingBillAfterPay) return;
+    if (isPaymentModalOpen) return;
+    if (!printOrderData && !activeOrder) return;
+    setPendingBillAfterPay(false);
+    setIsPrintModalOpen(true);
+  }, [pendingBillAfterPay, isPaymentModalOpen, printOrderData, activeOrder]);
+
+  const seatCount = hasTableSession
+    ? Math.max(1, Math.floor(Number(sessionData?.guestCount) || 1))
+    : 0;
+
+  useEffect(() => {
+    if (!hasTableSession) {
+      setActiveSeatNumber(null);
+      return;
+    }
+    if (
+      activeSeatNumber != null &&
+      (activeSeatNumber < 1 || activeSeatNumber > seatCount)
+    ) {
+      setActiveSeatNumber(null);
+    }
+  }, [hasTableSession, seatCount, activeSeatNumber]);
+
   useEffect(() => {
     if (!isStaffOrder || !queryStaffId || employees.length === 0) return;
     const emp = employees.find(
@@ -977,15 +1040,22 @@ function OrderPageContent() {
           : globalTaxes;
       if (!taxesToUse) return;
       taxesToUse.forEach((t) => {
+        const lineBase =
+          ((Number(item.price) || 0) + customExtrasUnitTotal(item.customExtras)) *
+          (Number(item.qty) || 0);
         const amount =
           t.type && t.type.toLowerCase().includes("percent")
-            ? item.price * item.qty * (t.value / 100)
+            ? lineBase * (t.value / 100)
             : t.value * item.qty;
         hstTotal += amount;
       });
     });
     if (hstTotal <= 0) return [];
     return [{ name: "HST", amount: hstTotal }];
+  };
+
+  const resetCustomExtraState = () => {
+    setCustomExtras([]);
   };
 
   const closeOptionsModal = () => {
@@ -998,7 +1068,9 @@ function OrderPageContent() {
     setSelectedOfferDrinks([]);
     setSelectedOfferInclusions([]);
     setSelectedProductChoices({});
-    setItemNotes("");
+    setNoteWithout("");
+    setNoteAdd("");
+    resetCustomExtraState();
   };
 
   const handleOpenOptions = (item) => {
@@ -1011,7 +1083,9 @@ function OrderPageContent() {
     setSelectedOfferDrinks([]);
     setSelectedOfferInclusions([]);
     setSelectedProductChoices({});
-    setItemNotes("");
+    setNoteWithout("");
+    setNoteAdd("");
+    resetCustomExtraState();
     setIsOptionsModalOpen(true);
   };
 
@@ -1027,7 +1101,9 @@ function OrderPageContent() {
     setSelectedOfferChoices(choices.length === 1 ? choices : []);
     setSelectedOfferDrinks(drinks.length === 1 ? drinks : []);
     setSelectedProductChoices({});
-    setItemNotes("");
+    setNoteWithout("");
+    setNoteAdd("");
+    resetCustomExtraState();
     setIsOptionsModalOpen(true);
   };
 
@@ -1077,6 +1153,22 @@ function OrderPageContent() {
     });
   };
 
+  const addCustomExtraRow = () => {
+    setCustomExtras((prev) => [...prev, newCustomExtraRow()]);
+  };
+
+  const updateCustomExtraRow = (id, field, value) => {
+    setCustomExtras((prev) =>
+      prev.map((entry) =>
+        entry.id === id ? { ...entry, [field]: value } : entry,
+      ),
+    );
+  };
+
+  const removeCustomExtraRow = (id) => {
+    setCustomExtras((prev) => prev.filter((entry) => entry.id !== id));
+  };
+
   const toggleAddonSubChoice = (addonKey, groupIndex, value) => {
     setAddonQtyById((prev) => {
       const entry = prev[addonKey];
@@ -1113,6 +1205,9 @@ function OrderPageContent() {
     return hasVariants || hasAddons || hasStyles || productHasChoiceOptions(product);
   };
 
+  const resolveLineSeatNumber = () =>
+    hasTableSession ? normalizeCartSeatNumber(activeSeatNumber) : null;
+
   const addToCart = (product) => {
     if (productNeedsOptions(product)) {
       handleOpenOptions(product);
@@ -1142,6 +1237,7 @@ function OrderPageContent() {
             productType: product.productType === "BAR" ? "BAR" : "KITCHEN",
             choiceSelections: [],
             notes: "",
+            seatNumber: resolveLineSeatNumber(),
           },
         ],
         cartIdSeq,
@@ -1163,7 +1259,9 @@ function OrderPageContent() {
     const drinks = cleanOfferList(selection.drinks);
     const extras = buildOfferOptions({ inclusions, choices, drinks });
     const modifier = buildOfferCartModifier({ inclusions, choices, drinks });
-    const notes = String(selection.notes ?? itemNotes ?? "").trim();
+    const notes = String(
+      selection.notes ?? buildModifiedRequestRemark(noteWithout, noteAdd),
+    ).trim();
 
     setCart((prev) =>
       mergeCartLines(
@@ -1189,6 +1287,7 @@ function OrderPageContent() {
             choices,
             drinks,
             notes,
+            seatNumber: resolveLineSeatNumber(),
           },
         ],
         cartIdSeq,
@@ -1214,7 +1313,7 @@ function OrderPageContent() {
         inclusions: selectedOfferInclusions,
         choices: selectedOfferChoices,
         drinks: selectedOfferDrinks,
-        notes: itemNotes,
+        notes: buildModifiedRequestRemark(noteWithout, noteAdd),
       });
       if (added) closeOptionsModal();
       return;
@@ -1225,14 +1324,44 @@ function OrderPageContent() {
     const variantEntries = Object.entries(variantQtyBySize).filter(
       ([, qty]) => qty > 0,
     );
-    if (hasVariants && variantEntries.length === 0) {
-      toast.error("Select at least one variant");
-      return;
-    }
-
     const addonEntries = Object.values(addonQtyById).filter(
       (entry) => entry?.qty > 0 && entry?.addon,
     );
+
+    for (const row of customExtras) {
+      const rawName = String(row?.name || "").trim();
+      const rawPrice = row?.price;
+      const priceEmpty =
+        rawPrice === "" || rawPrice === null || rawPrice === undefined;
+      if (!rawName) {
+        toast.error("Custom item name is required");
+        return;
+      }
+      if (rawName.length > 80) {
+        toast.error("Custom item name is too long (max 80 characters)");
+        return;
+      }
+      if (priceEmpty) {
+        toast.error(`Custom item price is required for: ${rawName}`);
+        return;
+      }
+      const priceNum = Number(rawPrice);
+      if (!Number.isFinite(priceNum) || priceNum < 0) {
+        toast.error(`Enter a valid price for: ${rawName}`);
+        return;
+      }
+    }
+    const customExtraEntries = normalizeCustomExtras(customExtras);
+
+    if (
+      hasVariants &&
+      variantEntries.length === 0 &&
+      addonEntries.length === 0 &&
+      customExtraEntries.length === 0
+    ) {
+      toast.error("Select at least one variant");
+      return;
+    }
 
     const choiceSelections = normalizeChoiceOptions(
       selectedProduct.choiceOptions,
@@ -1243,7 +1372,7 @@ function OrderPageContent() {
       }))
       .filter((group) => group.subChoices.length > 0);
 
-    const notes = String(itemNotes || "").trim();
+    const notes = buildModifiedRequestRemark(noteWithout, noteAdd);
     const newLines = [];
 
     if (hasVariants) {
@@ -1331,12 +1460,50 @@ function OrderPageContent() {
       });
     });
 
+    if (customExtraEntries.length > 0) {
+      const hostIndex = newLines.findIndex(
+        (line) => !/^extra$/i.test(String(line.size || "")),
+      );
+      const customSum = customExtrasUnitTotal(customExtraEntries);
+      if (hostIndex >= 0) {
+        const host = newLines[hostIndex];
+        const basePrice = Number(host.price) || 0;
+        newLines[hostIndex] = {
+          ...host,
+          customExtras: customExtraEntries,
+          tax: calculateItemTax(selectedProduct, basePrice + customSum),
+        };
+      } else {
+        newLines.unshift({
+          id: selectedProduct._id,
+          name: selectedProduct.name,
+          productCode: selectedProduct.productCode || "",
+          category: selectedProduct.category?.name || "ITEMS",
+          price: 0,
+          tax: calculateItemTax(selectedProduct, customSum),
+          serviceCharge: 0,
+          qty: 1,
+          size: "Standard",
+          sizes: [],
+          preparationStyle: selectedPreparationStyle || null,
+          options: selectedPreparationStyle ? [selectedPreparationStyle] : [],
+          productType:
+            selectedProduct.productType === "BAR" ? "BAR" : "KITCHEN",
+          choiceSelections,
+          customExtras: customExtraEntries,
+          notes,
+        });
+      }
+    }
+
     if (newLines.length === 0) {
       toast.error("Select a variant or extra");
       return;
     }
 
-    setCart((prev) => mergeCartLines(prev, newLines, cartIdSeq));
+    const seatNumber = resolveLineSeatNumber();
+    const seatedLines = newLines.map((line) => ({ ...line, seatNumber }));
+    setCart((prev) => mergeCartLines(prev, seatedLines, cartIdSeq));
     closeOptionsModal();
   };
 
@@ -1500,6 +1667,8 @@ function OrderPageContent() {
           }
           setPrintType(isBarTicket ? "bar" : "kot");
           setRedirectAfterPrint(false);
+          setPendingReleaseAfterPrint(false);
+          setPendingLeaveAfterPrint(false);
           setIsPrintModalOpen(true);
         }
       } else {
@@ -1559,7 +1728,7 @@ function OrderPageContent() {
     });
   };
 
-  const subtotal = cart.reduce((sum, item) => sum + item.price * item.qty, 0);
+  const subtotal = cart.reduce((sum, item) => sum + getItemLineTotal(item), 0);
   const rawTotalTax = cart.reduce(
     (sum, item) => sum + (item.tax || 0) * item.qty,
     0,
@@ -1579,7 +1748,11 @@ function OrderPageContent() {
     orderStatus !== "Draft" &&
     kotCartFingerprint === getCartFingerprint(cart);
   const isPaid = orderStatus === "PAID" || activeOrder?.paymentStatus === "PAID";
-  const canPay = hasSentKot && cart.length > 0 && !isPaid;
+  const canPay =
+    hasSentKot &&
+    cart.length > 0 &&
+    !isPaid &&
+    canPayFromCreateOrder(currentUser?.role);
 
   // After KOT, persisted order totals are authoritative (server reprices items).
   const billingSubtotal =
@@ -1599,8 +1772,8 @@ function OrderPageContent() {
   const openPaymentModal = () => {
     if (orderStatus === "PAID" || isPaid) return;
     
-    // Restrict Staff from completing payments
-    if (currentUser?.role === "Staff") {
+    // Only Manager / Master Terminal (and admin) may pay from Create Order
+    if (!canPayFromCreateOrder(currentUser?.role)) {
       toast.error("Payments must be completed at the main counter.");
       return;
     }
@@ -2308,6 +2481,66 @@ function OrderPageContent() {
               </button>
             )}
           </div>
+          {hasTableSession && seatCount > 0 ? (
+            <div className="px-3 py-2 border-b border-zinc-200 bg-white shrink-0">
+              <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-zinc-500">
+                Order for
+              </p>
+              <div className="flex gap-1.5 overflow-x-auto pb-0.5">
+                <button
+                  type="button"
+                  onClick={() => setActiveSeatNumber(null)}
+                  className={`shrink-0 rounded-lg px-3 py-1.5 text-xs font-bold border transition-colors ${
+                    activeSeatNumber == null
+                      ? "bg-zinc-900 text-white border-zinc-900"
+                      : "bg-white text-zinc-700 border-zinc-200 hover:border-zinc-300"
+                  }`}
+                >
+                  Table
+                  {cart.some(
+                    (i) => normalizeCartSeatNumber(i.seatNumber) == null,
+                  ) ? (
+                    <span className="ml-1 opacity-70">
+                      (
+                      {cart
+                        .filter(
+                          (i) => normalizeCartSeatNumber(i.seatNumber) == null,
+                        )
+                        .reduce((s, i) => s + i.qty, 0)}
+                      )
+                    </span>
+                  ) : null}
+                </button>
+                {Array.from({ length: seatCount }, (_, i) => i + 1).map(
+                  (seat) => {
+                    const qty = cart
+                      .filter(
+                        (i) => normalizeCartSeatNumber(i.seatNumber) === seat,
+                      )
+                      .reduce((s, i) => s + i.qty, 0);
+                    const active = activeSeatNumber === seat;
+                    return (
+                      <button
+                        key={seat}
+                        type="button"
+                        onClick={() => setActiveSeatNumber(seat)}
+                        className={`shrink-0 rounded-lg px-3 py-1.5 text-xs font-bold border transition-colors ${
+                          active
+                            ? "bg-orange-500 text-white border-orange-500"
+                            : "bg-white text-zinc-700 border-zinc-200 hover:border-orange-300"
+                        }`}
+                      >
+                        Seat {seat}
+                        {qty > 0 ? (
+                          <span className="ml-1 opacity-80">({qty})</span>
+                        ) : null}
+                      </button>
+                    );
+                  },
+                )}
+              </div>
+            </div>
+          ) : null}
           <div className="flex-1 bg-zinc-50 overflow-y-auto custom-scrollbar">
             <div className="p-4 space-y-4">
               {isStaffOrder && guestName ? (
@@ -2323,18 +2556,37 @@ function OrderPageContent() {
                   </div>
                 </div>
               ) : null}
-              {cart.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-16 text-zinc-400">
-                  <p className="font-bold text-sm text-zinc-900">
-                    No items added
-                  </p>
-                  <p className="text-xs font-semibold mt-1">
-                    Tap a menu item to begin order.
-                  </p>
-                </div>
-              ) : (
+              {(() => {
+                const visibleCart = hasTableSession
+                  ? cart.filter(
+                      (i) =>
+                        normalizeCartSeatNumber(i.seatNumber) ===
+                        normalizeCartSeatNumber(activeSeatNumber),
+                    )
+                  : cart;
+                const activeSeatLabel =
+                  activeSeatNumber == null
+                    ? "Table"
+                    : `Seat ${activeSeatNumber}`;
+                if (visibleCart.length === 0) {
+                  return (
+                    <div className="flex flex-col items-center justify-center py-16 text-zinc-400">
+                      <p className="font-bold text-sm text-zinc-900">
+                        {hasTableSession && cart.length > 0
+                          ? `No items for ${activeSeatLabel}`
+                          : "No items added"}
+                      </p>
+                      <p className="text-xs font-semibold mt-1">
+                        {hasTableSession
+                          ? `Tap a menu item to add to ${activeSeatLabel}.`
+                          : "Tap a menu item to begin order."}
+                      </p>
+                    </div>
+                  );
+                }
+                return (
                 <div className="space-y-2">
-                  {cart.map((item, idx) => {
+                  {visibleCart.map((item, idx) => {
                     return (
                     <div
                       key={item.cartId || `${item.id}-${idx}`}
@@ -2413,9 +2665,27 @@ function OrderPageContent() {
                               )}
                             </div>
                           ) : null}
+                          {!isOfferItem(item) &&
+                          normalizeCustomExtras(item.customExtras).length > 0 ? (
+                            <div className="mt-1.5 space-y-1">
+                              {normalizeCustomExtras(item.customExtras).map(
+                                (extra, extraIdx) => (
+                                  <p
+                                    key={`${extra.name}-${extraIdx}`}
+                                    className="text-[11px] font-semibold text-zinc-600"
+                                  >
+                                    + {extra.name}{" "}
+                                    <span className="text-zinc-500">
+                                      (+${Number(extra.price).toFixed(2)})
+                                    </span>
+                                  </p>
+                                ),
+                              )}
+                            </div>
+                          ) : null}
                         </div>
                         <span className="font-bold text-sm text-zinc-900 shrink-0">
-                          ${(item.price * item.qty).toFixed(2)}
+                          ${getItemLineTotal(item).toFixed(2)}
                         </span>
                       </div>
                       <div className="mt-2">
@@ -2482,7 +2752,8 @@ function OrderPageContent() {
                     );
                   })}
                 </div>
-              )}
+                );
+              })()}
 
               {cart.length > 0 && (
                 <div className="space-y-3 pt-1">
@@ -2815,33 +3086,70 @@ function OrderPageContent() {
             : null
         }
         onPaid={(updatedOrder) => {
+          const paid = updatedOrder || activeOrder;
+          if (!paid) return;
+
           setOrderStatus("PAID");
-          setActiveOrder((prev) => ({ ...(prev || {}), ...updatedOrder }));
+          const receiptOrder = {
+            ...(activeOrder || {}),
+            ...paid,
+            paymentStatus: "PAID",
+            status: "PAID",
+            partyName:
+              guestName || paid?.partyName || paid?.guestName || "",
+            guestName: guestName || paid?.guestName || "",
+            guestCount:
+              sessionData?.guestCount ?? paid?.guestCount ?? null,
+            tableNo: isDirectOrder
+              ? ""
+              : getDisplayTableNo() ||
+                (isLegacyNew ? guestTable : "") ||
+                paid?.tableNo ||
+                "",
+            floorName: sessionData?.floorName || paid?.floorName,
+            source: paid?.source || activeOrder?.source,
+            items: Array.isArray(paid?.items) && paid.items.length
+              ? paid.items
+              : activeOrder?.items || [],
+          };
+          setActiveOrder(receiptOrder);
+          setPrintOrderData(receiptOrder);
+
           if (isDirectOrder) {
             sessionStorage.removeItem(directOrderStorageKey);
           }
-          if (updatedOrder?.discountCode) {
+          if (receiptOrder?.discountCode) {
             setAppliedDiscount({
-              code: updatedOrder.discountCode,
-              value: Number(updatedOrder.discountTotal || 0),
+              code: receiptOrder.discountCode,
+              value: Number(receiptOrder.discountTotal || 0),
               type: "$",
             });
           }
-          const splitCount = Array.isArray(updatedOrder?.paymentSplits)
-            ? updatedOrder.paymentSplits.length
+
+          const splitCount = Array.isArray(receiptOrder?.paymentSplits)
+            ? receiptOrder.paymentSplits.length
             : 0;
           if (splitCount > 1) {
             // Thermal print jobs already queued per payer — skip single full-bill preview
             toast.success(
               `${splitCount} split receipt slips sent to the printer`,
             );
+            setPendingReleaseAfterPrint(false);
+            setPendingLeaveAfterPrint(false);
+            if (hasTableSession) {
+              setIsReleaseModalOpen(true);
+            }
             return;
           }
-          setPrintOrderData(updatedOrder);
+
           setPrintTaxBreakdown(generateTaxBreakdown());
           setPrintType("customer");
           setRedirectAfterPrint(false);
-          setIsPrintModalOpen(true);
+          // Same as Today Orders: show bill receipt after pay, then release/leave on close
+          setPendingReleaseAfterPrint(hasTableSession);
+          setPendingLeaveAfterPrint(isDirectOrder);
+          // Defer open until payment modal closes (see pendingBillAfterPay effect)
+          setPendingBillAfterPay(true);
         }}
       />
 
@@ -3110,32 +3418,34 @@ function OrderPageContent() {
                       <span className="text-[13px] font-bold text-zinc-900 mb-2 block">
                         Preparation Style
                       </span>
-                      <div className="grid gap-2">
-                        {selectedProduct.preparationStyles
-                          .filter(Boolean)
-                          .map((style) => (
-                            <label
-                              key={style}
-                              className={`flex items-center border p-3 rounded-lg cursor-pointer transition-colors ${
-                                selectedPreparationStyle === style
-                                  ? "border-orange-500 bg-orange-50/30"
-                                  : "border-zinc-200 hover:border-orange-300"
-                              }`}
-                            >
-                              <div className="flex-1 flex items-center gap-3 text-[14px] font-bold text-zinc-800">
-                                <input
-                                  type="radio"
-                                  name="preparationStyle"
-                                  checked={selectedPreparationStyle === style}
-                                  onChange={() =>
-                                    setSelectedPreparationStyle(style)
-                                  }
-                                  className="w-4 h-4 accent-orange-500"
-                                />
-                                <span>{style}</span>
-                              </div>
-                            </label>
-                          ))}
+                      <div className="space-y-2">
+                        <div className="grid grid-cols-2 gap-2">
+                          {selectedProduct.preparationStyles
+                            .filter(Boolean)
+                            .map((style) => (
+                              <label
+                                key={style}
+                                className={`flex items-center border p-3 rounded-lg cursor-pointer transition-colors ${
+                                  selectedPreparationStyle === style
+                                    ? "border-orange-500 bg-orange-50/30"
+                                    : "border-zinc-200 hover:border-orange-300"
+                                }`}
+                              >
+                                <div className="flex-1 flex items-center gap-3 text-[14px] font-bold text-zinc-800 min-w-0">
+                                  <input
+                                    type="radio"
+                                    name="preparationStyle"
+                                    checked={selectedPreparationStyle === style}
+                                    onChange={() =>
+                                      setSelectedPreparationStyle(style)
+                                    }
+                                    className="w-4 h-4 accent-orange-500 shrink-0"
+                                  />
+                                  <span className="truncate">{style}</span>
+                                </div>
+                              </label>
+                            ))}
+                        </div>
                         <button
                           type="button"
                           onClick={() => setSelectedPreparationStyle("")}
@@ -3339,25 +3649,158 @@ function OrderPageContent() {
                       </div>
                     </div>
                   )}
+
+                <div className="pt-4 mt-4 border-t border-zinc-100 space-y-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-[13px] font-bold text-zinc-900 block">
+                      Custom items
+                    </span>
+                    <button
+                      type="button"
+                      onClick={addCustomExtraRow}
+                      className="inline-flex items-center gap-1.5 text-sm font-bold text-orange-600 hover:text-orange-700"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Add new items
+                    </button>
+                  </div>
+
+                  {customExtras.length > 0 ? (
+                    <div className="space-y-2">
+                      {customExtras.map((row, rowIndex) => (
+                        <div
+                          key={row.id}
+                          className="rounded-lg border border-zinc-200 bg-zinc-50/60 p-3"
+                        >
+                          <div className="flex items-end gap-2">
+                            <div className="flex-1 min-w-0 space-y-1.5">
+                              <label
+                                htmlFor={`pos-custom-extra-name-${row.id}`}
+                                className="text-[12px] font-bold text-zinc-700 block"
+                              >
+                                Name{rowIndex > 0 ? ` ${rowIndex + 1}` : ""}{" "}
+                                <span className="text-red-500">*</span>
+                              </label>
+                              <Input
+                                id={`pos-custom-extra-name-${row.id}`}
+                                value={row.name}
+                                onChange={(e) =>
+                                  updateCustomExtraRow(
+                                    row.id,
+                                    "name",
+                                    e.target.value,
+                                  )
+                                }
+                                maxLength={80}
+                                required
+                                placeholder="e.g. Extra cheese slice"
+                                className="h-10 bg-white"
+                              />
+                            </div>
+                            <div className="w-28 shrink-0 space-y-1.5">
+                              <label
+                                htmlFor={`pos-custom-extra-price-${row.id}`}
+                                className="text-[12px] font-bold text-zinc-700 block"
+                              >
+                                Price <span className="text-red-500">*</span>
+                              </label>
+                              <Input
+                                id={`pos-custom-extra-price-${row.id}`}
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                value={row.price}
+                                onChange={(e) =>
+                                  updateCustomExtraRow(
+                                    row.id,
+                                    "price",
+                                    e.target.value,
+                                  )
+                                }
+                                required
+                                placeholder="0.00"
+                                className="h-10 bg-white"
+                              />
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => removeCustomExtraRow(row.id)}
+                              className="w-10 h-10 shrink-0 rounded-lg border border-zinc-200 bg-white flex items-center justify-center text-zinc-400 hover:text-red-600 hover:border-red-200"
+                              aria-label="Remove custom item"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={addCustomExtraRow}
+                        className="inline-flex items-center gap-1.5 text-xs font-bold text-orange-600 hover:text-orange-700 px-1"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        Add another
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
                   </>
                 )}
 
-                <div className="space-y-2 pt-2">
-                  <label
-                    htmlFor="pos-item-notes"
-                    className="text-[13px] font-bold text-zinc-900 block"
-                  >
-                    Special request / remark
-                  </label>
-                  <textarea
-                    id="pos-item-notes"
-                    value={itemNotes}
-                    onChange={(e) => setItemNotes(e.target.value)}
-                    rows={2}
-                    maxLength={200}
-                    placeholder="e.g. No onions, extra spicy, sauce on the side…"
-                    className="w-full resize-none rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-800 placeholder:text-zinc-400 focus:border-orange-400 focus:outline-none focus:ring-1 focus:ring-orange-400"
-                  />
+                <div className="space-y-3 pt-2">
+                  <p className="text-[13px] font-bold text-zinc-900">
+                    Modified Request:{" "}
+                    <span className="font-semibold text-zinc-600">
+                      Please prepare the order
+                    </span>
+                  </p>
+                  <div className="space-y-2.5">
+                    <div className="flex items-center gap-3">
+                      <label
+                        htmlFor="pos-note-without"
+                        className="w-16 shrink-0 text-[13px] font-bold text-zinc-800"
+                      >
+                        Without
+                      </label>
+                      <input
+                        id="pos-note-without"
+                        type="text"
+                        value={noteWithout}
+                        onChange={(e) => setNoteWithout(e.target.value)}
+                        maxLength={80}
+                        placeholder="Type Here"
+                        className="h-10 min-w-0 flex-1 rounded-md border border-gray-400 bg-white px-4 text-sm text-zinc-800 placeholder:text-zinc-400 focus:border-orange-400 focus:outline-none focus:ring-1 focus:ring-orange-400"
+                      />
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <label
+                        htmlFor="pos-note-add"
+                        className="w-16 shrink-0 text-[13px] font-bold text-zinc-800"
+                      >
+                        Add
+                      </label>
+                      <input
+                        id="pos-note-add"
+                        type="text"
+                        value={noteAdd}
+                        onChange={(e) => setNoteAdd(e.target.value)}
+                        maxLength={80}
+                        placeholder="Type Here"
+                        className="h-10 min-w-0 flex-1 rounded-md border border-gray-400 bg-white px-4 text-sm text-zinc-800 placeholder:text-zinc-400 focus:border-orange-400 focus:outline-none focus:ring-1 focus:ring-orange-400"
+                      />
+                    </div>
+                  </div>
+                  {(() => {
+                    const preview = buildModifiedRequestRemark(
+                      noteWithout,
+                      noteAdd,
+                    );
+                    return preview ? (
+                      <p className="rounded-xl bg-[#f8e8e4] px-3 py-2.5 text-[12px] font-medium leading-relaxed text-zinc-700">
+                        {preview}
+                      </p>
+                    ) : null;
+                  })()}
                 </div>
               </div>
             </div>
@@ -3455,32 +3898,40 @@ function OrderPageContent() {
         </div>
       )}
 
-      {/* Print Preview Modal */}
+      {/* Print Preview Modal — bill / KOT / bar (same as Today Orders) */}
       <PrintPreviewModal
         isOpen={isPrintModalOpen}
         onClose={() => {
           setIsPrintModalOpen(false);
-          if (printType === "customer" && orderStatus === "PAID") {
-            if (hasTableSession) {
-              setIsReleaseModalOpen(true);
-            } else if (isDirectOrder) {
-              leaveAfterDirectPay();
-            } else {
-              goToFloor();
-            }
+          if (printType === "customer" && pendingReleaseAfterPrint) {
+            setPendingReleaseAfterPrint(false);
+            setPendingLeaveAfterPrint(false);
+            setIsReleaseModalOpen(true);
             return;
           }
+          if (printType === "customer" && pendingLeaveAfterPrint) {
+            setPendingLeaveAfterPrint(false);
+            setPendingReleaseAfterPrint(false);
+            leaveAfterDirectPay();
+            return;
+          }
+          setPendingReleaseAfterPrint(false);
+          setPendingLeaveAfterPrint(false);
           if (redirectAfterPrint) {
             goToFloor();
           }
         }}
         printType={printType}
-        order={printOrderData}
+        order={printOrderData || activeOrder}
         kotItems={printKotItems}
         taxBreakdown={printTaxBreakdown}
         restaurantDetails={restaurantDetails}
         serverName={serverName}
-        guestCount={printOrderData?.guestCount ?? sessionData?.guestCount}
+        guestCount={
+          printOrderData?.guestCount ??
+          activeOrder?.guestCount ??
+          sessionData?.guestCount
+        }
       />
     </div>
   );

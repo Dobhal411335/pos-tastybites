@@ -10,8 +10,9 @@ import {
 } from "@/lib/rateLimit";
 
 /**
- * GET /api/public/restaurants/:slug/orders/:orderNumber
- * Kept for compatibility. Prefer /orders/track/:orderNumber if this path 404s in dev.
+ * GET /api/public/restaurants/:slug/orders/track/:orderNumber
+ * Public online-order tracker (JSON). Prefer this over /orders/:orderNumber —
+ * nested dynamic [orderNumber] under /orders was not always registered by Turbopack.
  */
 export async function GET(request, { params }) {
   try {

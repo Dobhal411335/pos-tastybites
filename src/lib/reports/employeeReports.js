@@ -26,6 +26,7 @@ import {
   isRevenueOrder,
   matchesPaymentMethod,
 } from "@/lib/reports/guestDirectory";
+import { getItemLineTotal } from "@/utils/productChoices";
 
 const MINUTES_PER_HOUR = 60;
 const ORDER_STATUSES = [
@@ -904,7 +905,7 @@ function cancelledItemsFromOrders(orders) {
         orderNumber: order.orderNumber,
         item: item.name || "Item",
         qty: Number(item.qty) || 1,
-        value: r2((Number(item.price) || 0) * (Number(item.qty) || 1)),
+        value: r2(getItemLineTotal(item)),
         status: order.status,
         waiveReason: order.waiveReason || null,
         createdAt: order.createdAt,

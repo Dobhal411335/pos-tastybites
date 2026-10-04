@@ -9,9 +9,14 @@ import { toast } from "sonner";
 import {
   normalizeChoiceOptions,
   cartChoiceSelectionsKey,
+  normalizeAddonChoiceQtyMap,
+  sumAddonChoiceQtyMap,
+  buildAddonChoiceSelectionsFromQtyMaps,
+  validateAddonNestedChoiceQtys,
 } from "@/utils/productChoices";
 import { cn } from "@/lib/utils";
 import IngredientChips from "@/components/menu/IngredientChips";
+import { buildModifiedRequestRemark } from "@/utils/modifiedRequestRemark";
 
 function buildCartKey(parts) {
   return parts
@@ -85,7 +90,8 @@ export default function ProductConfigModal({ isOpen, onClose, product }) {
   const [addonQtyById, setAddonQtyById] = useState({});
   const [choiceSelections, setChoiceSelections] = useState({});
   const [preparationStyle, setPreparationStyle] = useState("");
-  const [itemNotes, setItemNotes] = useState("");
+  const [noteWithout, setNoteWithout] = useState("");
+  const [noteAdd, setNoteAdd] = useState("");
   const [configuredProductId, setConfiguredProductId] = useState(null);
 
   const productId = product?.id || product?._id || null;
@@ -99,7 +105,8 @@ export default function ProductConfigModal({ isOpen, onClose, product }) {
     setAddonQtyById({});
     setChoiceSelections({});
     setPreparationStyle(prepStyles[0] || "");
-    setItemNotes("");
+    setNoteWithout("");
+    setNoteAdd("");
   }
 
   const variantEntries = Object.entries(variantQtyBySize).filter(
@@ -108,6 +115,29 @@ export default function ProductConfigModal({ isOpen, onClose, product }) {
   const addonEntries = Object.entries(addonQtyById).filter(
     ([, entry]) => entry?.qty > 0 && entry?.addon,
   );
+
+  const addonChoiceErrors = useMemo(() => {
+    const errors = [];
+    for (const [, entry] of Object.entries(addonQtyById)) {
+      if (!(entry?.qty > 0) || !entry?.addon) continue;
+      const nested = normalizeChoiceOptions(entry.addon?.choiceOptions);
+      if (!nested.length) continue;
+      const check = validateAddonNestedChoiceQtys(
+        entry.addon,
+        entry.qty,
+        entry.choicesByGroup || {},
+      );
+      if (!check.ok) {
+        errors.push(
+          ...(check.errors || []).map((err) => ({
+            addonName: entry.addon?.name,
+            ...err,
+          })),
+        );
+      }
+    }
+    return errors;
+  }, [addonQtyById]);
 
   const productChoicePayload = choiceOptions
     .map((group) => ({
@@ -132,19 +162,50 @@ export default function ProductConfigModal({ isOpen, onClose, product }) {
 
   if (!product) return null;
 
+  const remarkPreview = buildModifiedRequestRemark(noteWithout, noteAdd);
+
   const setVariantQty = (key, qty) => {
     setVariantQtyBySize((prev) => ({ ...prev, [key]: Math.max(0, qty) }));
   };
 
   const setAddonQty = (key, addon, qty) => {
-    setAddonQtyById((prev) => ({
-      ...prev,
-      [key]: {
-        addon,
-        qty: Math.max(0, qty),
-        choicesByGroup: prev[key]?.choicesByGroup || {},
-      },
-    }));
+    const nextQty = Math.max(0, qty);
+    setAddonQtyById((prev) => {
+      const prevEntry = prev[key] || { addon, qty: 0, choicesByGroup: {} };
+      const nested = normalizeChoiceOptions(addon?.choiceOptions);
+      let choicesByGroup = prevEntry.choicesByGroup || {};
+
+      if (nextQty === 0) {
+        choicesByGroup = {};
+      } else if (nested.length > 0) {
+        // Clamp each nested group so totals never exceed the new addon qty
+        const clamped = {};
+        for (let groupIndex = 0; groupIndex < nested.length; groupIndex += 1) {
+          const map = normalizeAddonChoiceQtyMap(choicesByGroup[groupIndex]);
+          let remaining = nextQty;
+          const nextMap = {};
+          for (const [sub, count] of Object.entries(map)) {
+            if (remaining <= 0) break;
+            const take = Math.min(count, remaining);
+            if (take > 0) {
+              nextMap[sub] = take;
+              remaining -= take;
+            }
+          }
+          clamped[groupIndex] = nextMap;
+        }
+        choicesByGroup = clamped;
+      }
+
+      return {
+        ...prev,
+        [key]: {
+          addon,
+          qty: nextQty,
+          choicesByGroup,
+        },
+      };
+    });
   };
 
   const toggleChoice = (groupName, subChoice, multi) => {
@@ -158,18 +219,26 @@ export default function ProductConfigModal({ isOpen, onClose, product }) {
     });
   };
 
-  const toggleAddonSubChoice = (key, addon, groupIndex, subChoice, multi) => {
+  const setAddonSubChoiceQty = (key, addon, groupIndex, subChoice, nextQty) => {
     setAddonQtyById((prev) => {
       const entry = prev[key] || { addon, qty: 0, choicesByGroup: {} };
-      const current = entry.choicesByGroup?.[groupIndex] || [];
-      let next;
-      if (!multi) {
-        next = current.includes(subChoice) ? [] : [subChoice];
-      } else if (current.includes(subChoice)) {
-        next = current.filter((c) => c !== subChoice);
-      } else {
-        next = [...current, subChoice];
-      }
+      const addonQty = Number(entry.qty) || 0;
+      if (addonQty <= 0) return prev;
+
+      const groupMap = normalizeAddonChoiceQtyMap(
+        entry.choicesByGroup?.[groupIndex],
+      );
+      const current = Number(groupMap[subChoice]) || 0;
+      const others = sumAddonChoiceQtyMap(groupMap) - current;
+      const capped = Math.max(
+        0,
+        Math.min(Math.floor(Number(nextQty) || 0), Math.max(0, addonQty - others)),
+      );
+
+      const nextMap = { ...groupMap };
+      if (capped <= 0) delete nextMap[subChoice];
+      else nextMap[subChoice] = capped;
+
       return {
         ...prev,
         [key]: {
@@ -177,7 +246,7 @@ export default function ProductConfigModal({ isOpen, onClose, product }) {
           addon,
           choicesByGroup: {
             ...(entry.choicesByGroup || {}),
-            [groupIndex]: next,
+            [groupIndex]: nextMap,
           },
         },
       };
@@ -194,9 +263,26 @@ export default function ProductConfigModal({ isOpen, onClose, product }) {
       return;
     }
 
+    for (const [, entry] of addonEntries) {
+      const nested = normalizeChoiceOptions(entry.addon?.choiceOptions);
+      if (!nested.length) continue;
+      const check = validateAddonNestedChoiceQtys(
+        entry.addon,
+        entry.qty,
+        entry.choicesByGroup || {},
+      );
+      if (!check.ok) {
+        toast.error(
+          check.errors[0]?.message ||
+            `Nested choices for ${entry.addon?.name || "addon"} must equal addon quantity.`,
+        );
+        return;
+      }
+    }
+
     const choiceKey = cartChoiceSelectionsKey(productChoicePayload);
     const prep = preparationStyle || "";
-    const notes = String(itemNotes || "").trim();
+    const notes = buildModifiedRequestRemark(noteWithout, noteAdd);
     const noteKey = notes
       ? notes.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 40)
       : "";
@@ -244,15 +330,16 @@ export default function ProductConfigModal({ isOpen, onClose, product }) {
       );
     });
 
-    addonEntries.forEach(([key, entry]) => {
+    addonEntries.forEach(([, entry]) => {
       const addon = entry.addon;
-      const addonChoices = normalizeChoiceOptions(addon.choiceOptions)
-        .map((group, index) => ({
-          name: group.name,
-          subChoices: entry.choicesByGroup?.[index] || [],
-        }))
-        .filter((group) => group.subChoices.length > 0);
+      const addonChoices = buildAddonChoiceSelectionsFromQtyMaps(
+        addon,
+        entry.choicesByGroup || {},
+      );
       const addonChoiceKey = cartChoiceSelectionsKey(addonChoices);
+      const choiceSummary = addonChoices
+        .map((group) => `${group.name}: ${group.subChoices.join(", ")}`)
+        .join(" · ");
       const cartKey = buildCartKey([
         product.id,
         "Extra",
@@ -281,7 +368,9 @@ export default function ProductConfigModal({ isOpen, onClose, product }) {
           category: product.category,
           categoryName: product.categoryName,
           productType: product.productType,
-          modifier: `Addons: ${addon.name}`,
+          modifier: choiceSummary
+            ? `Addons: ${addon.name} · ${choiceSummary}`
+            : `Addons: ${addon.name}`,
           parentProductName: product.name,
         },
         entry.qty,
@@ -494,48 +583,85 @@ export default function ProductConfigModal({ isOpen, onClose, product }) {
 
                       {nested.length > 0 ? (
                         <div className="mt-3 space-y-3 border-t border-zinc-100 pt-3">
+                          {qty <= 0 ? (
+                            <p className="text-[11px] font-semibold text-zinc-400">
+                              Set addon quantity above to choose options
+                            </p>
+                          ) : null}
                           {nested.map((group, groupIndex) => {
-                            const multi = group.subChoices.length > 2;
-                            const selected =
-                              entry?.choicesByGroup?.[groupIndex] || [];
+                            const qtyMap = normalizeAddonChoiceQtyMap(
+                              entry?.choicesByGroup?.[groupIndex],
+                            );
+                            const selectedTotal = sumAddonChoiceQtyMap(qtyMap);
+                            const mismatch =
+                              qty > 0 && selectedTotal !== qty;
+                            const over = selectedTotal > qty;
                             return (
                               <div key={group.name} className="space-y-2">
-                                <p className="text-[11px] font-bold uppercase tracking-wide text-zinc-500">
-                                  {group.name}
-                                </p>
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                  <p className="text-[11px] font-bold uppercase tracking-wide text-zinc-500">
+                                    {group.name}
+                                  </p>
+                                  <p
+                                    className={cn(
+                                      "text-[11px] font-bold tabular-nums",
+                                      mismatch
+                                        ? "text-red-600"
+                                        : selectedTotal === qty && qty > 0
+                                          ? "text-emerald-600"
+                                          : "text-zinc-400",
+                                    )}
+                                  >
+                                    {selectedTotal} / {qty} selected
+                                  </p>
+                                </div>
                                 <div className="grid gap-2 sm:grid-cols-2">
                                   {group.subChoices.map((sub) => {
-                                    const checked = selected.includes(sub);
+                                    const subQty = Number(qtyMap[sub]) || 0;
+                                    const others = selectedTotal - subQty;
+                                    const maxForSub = Math.max(
+                                      0,
+                                      qty - Math.max(0, others),
+                                    );
                                     return (
-                                      <label
+                                      <div
                                         key={sub}
                                         className={cn(
-                                          "flex cursor-pointer items-center gap-2 rounded-md border px-2.5 py-2 text-xs font-semibold",
-                                          checked
-                                            ? "border-primary bg-white text-zinc-900"
-                                            : "border-zinc-200 bg-white text-zinc-700",
+                                          "flex flex-wrap items-center justify-between gap-3 rounded-md border px-2.5 py-2",
+                                          subQty > 0
+                                            ? "border-primary bg-white"
+                                            : "border-zinc-200 bg-white",
+                                          qty <= 0 && "opacity-50",
                                         )}
                                       >
-                                        <input
-                                          type={multi ? "checkbox" : "radio"}
-                                          name={`addon-${key}-${groupIndex}`}
-                                          checked={checked}
-                                          onChange={() =>
-                                            toggleAddonSubChoice(
+                                        <span className="text-xs font-semibold text-zinc-800">
+                                          {sub}
+                                        </span>
+                                        <QtyStepper
+                                          value={subQty}
+                                          min={0}
+                                          max={maxForSub}
+                                          onChange={(next) =>
+                                            setAddonSubChoiceQty(
                                               key,
                                               addon,
                                               groupIndex,
                                               sub,
-                                              multi,
+                                              next,
                                             )
                                           }
-                                          className="h-3.5 w-3.5 accent-orange-600"
                                         />
-                                        {sub}
-                                      </label>
+                                      </div>
                                     );
                                   })}
                                 </div>
+                                {mismatch ? (
+                                  <p className="text-[11px] font-semibold text-red-600">
+                                    {over
+                                      ? `Too many selections (${selectedTotal}). Must equal addon qty (${qty}).`
+                                      : `Select more options (${selectedTotal} of ${qty}). Nested choices must match addon quantity.`}
+                                  </p>
+                                ) : null}
                               </div>
                             );
                           })}
@@ -548,54 +674,97 @@ export default function ProductConfigModal({ isOpen, onClose, product }) {
             </div>
           ) : null}
 
-          <div className="space-y-2">
-            <label
-              htmlFor="product-item-notes"
-              className="mb-1 block text-[13px] font-bold text-zinc-900"
-            >
-              Special request / remark
-            </label>
-            <textarea
-              id="product-item-notes"
-              value={itemNotes}
-              onChange={(e) => setItemNotes(e.target.value)}
-              rows={2}
-              maxLength={200}
-              placeholder="e.g. No onions, extra spicy, sauce on the side…"
-              className="w-full resize-none rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-800 placeholder:text-zinc-400 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-            />
-            <p className="text-[11px] text-zinc-400">
-              Optional — sent to the kitchen with this item
+          <div className="space-y-3">
+            <p className="text-[13px] font-bold text-zinc-900">
+              Modified Request:{" "}
+              <span className="font-semibold text-zinc-600">
+                Please prepare the order
+              </span>
             </p>
+            <div className="space-y-2.5">
+              <div className="flex items-center gap-3">
+                <label
+                  htmlFor="product-note-without"
+                  className="w-16 shrink-0 text-[13px] font-bold text-zinc-800"
+                >
+                  Without
+                </label>
+                <input
+                  id="product-note-without"
+                  type="text"
+                  value={noteWithout}
+                  onChange={(e) => setNoteWithout(e.target.value)}
+                  maxLength={80}
+                  placeholder="Type Here"
+                  className="h-10 min-w-0 flex-1 rounded-md border border-gray-400 bg-white px-4 text-sm text-zinc-800 placeholder:text-zinc-400 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+              </div>
+              <div className="flex items-center gap-3">
+                <label
+                  htmlFor="product-note-add"
+                  className="w-16 shrink-0 text-[13px] font-bold text-zinc-800"
+                >
+                  Add
+                </label>
+                <input
+                  id="product-note-add"
+                  type="text"
+                  value={noteAdd}
+                  onChange={(e) => setNoteAdd(e.target.value)}
+                  maxLength={80}
+                  placeholder="Type Here"
+                  className="h-10 min-w-0 flex-1 rounded-md border border-gray-400 bg-white px-4 text-sm text-zinc-800 placeholder:text-zinc-400 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+              </div>
+            </div>
+            {remarkPreview ? (
+              <p className="rounded-xl bg-[#f8e8e4] px-3 py-2.5 text-[12px] font-medium leading-relaxed text-zinc-700">
+                {remarkPreview}
+              </p>
+            ) : (
+              <p className="text-[11px] text-zinc-400">
+                Optional — sent to the kitchen with this item
+              </p>
+            )}
           </div>
         </div>
 
-        <div className="flex shrink-0 items-center justify-between gap-3 border-t border-zinc-100 bg-zinc-50 px-5 py-4">
-          <div className="flex flex-col">
-            <span className="text-[11px] font-semibold uppercase text-zinc-500">
-              Selected total
-            </span>
-            <span className="text-2xl font-bold tabular-nums text-zinc-900">
-              ${previewTotal.toFixed(2)}
-            </span>
-          </div>
-          <div className="flex gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={onClose}
-              className="h-11 rounded-xl border-zinc-200 px-5 font-bold"
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              onClick={handleAddToCart}
-              disabled={variantEntries.length === 0 && addonEntries.length === 0}
-              className="h-11 rounded-xl bg-primary px-6 font-bold text-white hover:bg-primary-hover"
-            >
-              Add to Cart
-            </Button>
+        <div className="flex shrink-0 flex-col gap-2 border-t border-zinc-100 bg-zinc-50 px-5 py-4">
+          {addonChoiceErrors.length > 0 ? (
+            <p className="text-[12px] font-semibold text-red-600">
+              {addonChoiceErrors[0].message}
+            </p>
+          ) : null}
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex flex-col">
+              <span className="text-[11px] font-semibold uppercase text-zinc-500">
+                Selected total
+              </span>
+              <span className="text-2xl font-bold tabular-nums text-zinc-900">
+                ${previewTotal.toFixed(2)}
+              </span>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={onClose}
+                className="h-11 rounded-xl border-zinc-200 px-5 font-bold"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                onClick={handleAddToCart}
+                disabled={
+                  (variantEntries.length === 0 && addonEntries.length === 0) ||
+                  addonChoiceErrors.length > 0
+                }
+                className="h-11 rounded-xl bg-primary px-6 font-bold text-white hover:bg-primary-hover"
+              >
+                Add to Cart
+              </Button>
+            </div>
           </div>
         </div>
       </DialogContent>

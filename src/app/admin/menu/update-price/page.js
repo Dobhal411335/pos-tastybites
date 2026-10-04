@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   Dialog,
   DialogContent,
@@ -25,13 +26,6 @@ function getCategoryId(product) {
     : String(product.category);
 }
 
-function formatPreviewPrices(product) {
-  const variants = Array.isArray(product?.variants) ? product.variants : [];
-  if (variants.length === 0) return "No sizes priced yet";
-  return variants
-    .map((v) => `${v.size || "Size"}: $${Number(v.price || 0).toFixed(2)}`)
-    .join(" · ");
-}
 
 export default function UpdateProductPricePage() {
   const [loading, setLoading] = useState(true);
@@ -313,24 +307,44 @@ export default function UpdateProductPricePage() {
         {previewProducts.length > 0 && (
           <Card className="border-zinc-200 shadow-none max-w-3xl">
             <CardContent className="pt-6 space-y-3">
-              <h3 className="text-sm font-bold text-zinc-900 uppercase tracking-wide">
+              <h3 className="text-sm font-bold text-zinc-900 uppercase tracking-wide mb-4">
                 Current prices preview
               </h3>
-              <ul className="space-y-2">
-                {previewProducts.slice(0, 8).map((product) => (
-                  <li
-                    key={product._id}
-                    className="text-sm text-zinc-700 flex flex-col sm:flex-row sm:gap-2"
-                  >
-                    <span className="font-semibold min-w-40">{product.name}</span>
-                    <span className="text-zinc-500">
-                      {formatPreviewPrices(product)}
-                    </span>
-                  </li>
-                ))}
-              </ul>
+              <div className="rounded-md border border-zinc-200 overflow-hidden">
+                <Table>
+                  <TableHeader className="bg-zinc-50">
+                    <TableRow>
+                      <TableHead className="font-semibold text-zinc-900 w-1/3">Product Name</TableHead>
+                      <TableHead className="font-semibold text-zinc-900">Sizes & Prices</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {previewProducts.slice(0, 8).map((product) => (
+                      <TableRow key={product._id} className="hover:bg-zinc-50/50">
+                        <TableCell className="font-medium text-zinc-800 align-top">
+                          {product.name}
+                        </TableCell>
+                        <TableCell className="text-zinc-600">
+                          {Array.isArray(product?.variants) && product.variants.length > 0 ? (
+                            <div className="flex flex-wrap gap-x-4 gap-y-1">
+                              {product.variants.map((v, i) => (
+                                <div key={i} className="inline-flex items-center gap-1.5 whitespace-nowrap">
+                                  <span className="text-zinc-500">{v.size || "Size"}:</span>
+                                  <span className="font-medium text-zinc-800">${Number(v.price || 0).toFixed(2)}</span>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="italic text-zinc-400">No sizes priced yet</span>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
               {previewProducts.length > 8 && (
-                <p className="text-xs text-zinc-400">
+                <p className="text-xs text-zinc-400 mt-2">
                   Showing 8 of {previewProducts.length} products.
                 </p>
               )}

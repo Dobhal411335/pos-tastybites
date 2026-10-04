@@ -23,6 +23,7 @@ import {
 } from "@/lib/orders/sessionTables";
 
 import { getSocketServer } from "@/lib/socketServer";
+import { seatsAboveGuestCount } from "@/lib/orders/seatHelpers";
 
 function actorTypeFromRequest(request) {
   const role = request.role || request.user?.role;
@@ -270,10 +271,42 @@ export const PUT = withAuth(async (request) => {
         return sendError(new Error("Invalid"), "guestCount must be a positive number", 400);
       }
 
-      session.guestCount = Math.floor(nextGuests);
+      const flooredGuests = Math.floor(nextGuests);
+
+      // Block decreasing guests if active order has items on seats above new count
+      const activeOrder = await Order.findOne({
+        restaurantId: request.restaurant,
+        isActive: { $ne: false },
+        $or: [
+          { _id: { $in: session.activeOrders || [] } },
+          { tableSession: session._id },
+        ],
+        status: { $in: ["PENDING", "CONFIRMED"] },
+      }).select("items guestCount");
+
+      if (activeOrder?.items?.length) {
+        const blockedSeats = seatsAboveGuestCount(activeOrder.items, flooredGuests);
+        if (blockedSeats.length > 0) {
+          return sendError(
+            new Error("Seat Items Exist"),
+            `Cannot reduce guests to ${flooredGuests}: items exist on ${blockedSeats
+              .map((s) => `Seat ${s}`)
+              .join(", ")}. Move or remove those items first.`,
+            400,
+          );
+        }
+      }
+
+      session.guestCount = flooredGuests;
       if (notes !== undefined) session.notes = notes;
 
       await session.save();
+
+      if (activeOrder) {
+        activeOrder.guestCount = flooredGuests;
+        await activeOrder.save();
+      }
+
       logger.info(`Session ${session.sessionId} updated guests to ${session.guestCount}`);
       
       // Audit Log

@@ -18,11 +18,20 @@ import { repricePosCartItems } from "@/lib/orders/repricePosCartItems";
 import { formatSessionTableLabel, formatTableLocation, joinTableNumbers } from "@/utils/orderDisplay";
 import { freeSessionTables } from "@/lib/orders/sessionTables";
 import { countryCodes } from "@/utils/countryCodes";
-import { cartChoiceSelectionsKey } from "@/utils/productChoices";
+import {
+  cartChoiceSelectionsKey,
+  cartCustomExtrasKey,
+} from "@/utils/productChoices";
 import {
   businessDateBounds,
   todayBusinessDate,
 } from "@/lib/eod/eodHelpers";
+import {
+  normalizeSeatNumber,
+  seatNumbersEqual,
+  seatPrintLabel,
+  validateSeatNumbersForGuestCount,
+} from "@/lib/orders/seatHelpers";
 
 function orderItemsMatch(existingItem, incomingItem) {
   if (existingItem.cartId === incomingItem.cartId) return true;
@@ -30,11 +39,24 @@ function orderItemsMatch(existingItem, incomingItem) {
     existingItem.menuItemId === incomingItem.menuItemId &&
     JSON.stringify(existingItem.options) === JSON.stringify(incomingItem.options) &&
     existingItem.size === incomingItem.size &&
+    seatNumbersEqual(existingItem.seatNumber, incomingItem.seatNumber) &&
+    cartCustomExtrasKey(existingItem.customExtras) ===
+      cartCustomExtrasKey(incomingItem.customExtras) &&
     cartChoiceSelectionsKey(existingItem.choiceSelections) ===
       cartChoiceSelectionsKey(incomingItem.choiceSelections) &&
     cartChoiceSelectionsKey(existingItem.addonChoiceSelections) ===
       cartChoiceSelectionsKey(incomingItem.addonChoiceSelections)
   );
+}
+
+function withSeatPrintFields(item) {
+  const seatNumber = normalizeSeatNumber(item?.seatNumber);
+  const seat = seatPrintLabel(seatNumber, { includeTable: true });
+  return {
+    ...item,
+    seatNumber,
+    ...(seat != null ? { seat } : {}),
+  };
 }
 
 function normalizeProductType(value) {
@@ -553,6 +575,14 @@ export const POST = withAuth(async (request) => {
       return sendError(new Error("Invalid Session"), "Table session is invalid or closed", 400);
     }
 
+    const seatCheck = validateSeatNumbersForGuestCount(
+      formattedItems,
+      session.guestCount,
+    );
+    if (!seatCheck.ok) {
+      return sendError(new Error("Invalid Seat"), seatCheck.message, 400);
+    }
+
     // Check for existing active order in this session
     let order = await Order.findOne({
       tableSession: sessionId,
@@ -571,7 +601,7 @@ export const POST = withAuth(async (request) => {
         const unprintedQty = incomingItem.qty - sentQty;
         
         if (unprintedQty > 0) {
-          kotPayload.push({ ...incomingItem, qty: unprintedQty });
+          kotPayload.push(withSeatPrintFields({ ...incomingItem, qty: unprintedQty }));
         }
         
         return { ...incomingItem, sentQty: incomingItem.qty };
@@ -740,7 +770,7 @@ export const POST = withAuth(async (request) => {
         orderId: newOrder._id
       });
 
-      const kotPayload = formattedItems;
+      const kotPayload = formattedItems.map((item) => withSeatPrintFields(item));
       const { job: printJob, ticketType, restaurantName } = await enqueueOrderTicketPrintJob({
         order: newOrder,
         ticketItems: kotPayload,

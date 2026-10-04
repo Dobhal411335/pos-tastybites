@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useSocket } from "@/components/providers/SocketProvider";
+import { useAuth } from "@/components/providers/AuthProvider";
 import {
   Loader2,
   Users,
@@ -119,8 +120,8 @@ function findSessionForTable(sessions, tableId) {
 export default function SalesFloorPage() {
   const router = useRouter();
   const { socket } = useSocket();
+  const { user: currentUser } = useAuth();
   const [loading, setLoading] = useState(true);
-  const [currentUser, setCurrentUser] = useState(null);
   const [floorData, setFloorData] = useState({
     floors: [],
     tables: [],
@@ -207,16 +208,8 @@ export default function SalesFloorPage() {
       if (!hasLoadedRef.current) setLoading(true);
       else if (!silent) setFloorLoading(true);
 
-      let user = currentUserRef.current;
-      if (!silent || !user) {
-        const userRes = await employeeFetch("/api/auth/me");
-        const userData = await userRes.json();
-        if (userRes.ok && userData.success && userData.data) {
-          user = userData.data.employee || userData.data;
-          setCurrentUser(user);
-          currentUserRef.current = user;
-        }
-      }
+      // Auth user comes from SalesAppShell (/api/auth/me) via AuthProvider — do not refetch here.
+      const user = currentUserRef.current;
 
       const preferredFloor =
         resolveDocumentId(floorIdOverride) ||

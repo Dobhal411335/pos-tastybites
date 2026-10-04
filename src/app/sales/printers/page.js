@@ -31,6 +31,10 @@ import {
 import DeleteDialog from "@/components/common/DeleteDialog";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { employeeFetch } from "@/lib/employeeFetch";
+import {
+  scanSubnetForPrinters,
+  subnetPrefixFromHost,
+} from "@/lib/printing/networkScan";
 import { canManagePrinters } from "@/utils/floorRoles";
 
 const TARGET_LABELS = {
@@ -137,6 +141,10 @@ export default function SalesPrintersPage() {
   const [busyId, setBusyId] = useState(null);
   const [bridgeStatus, setBridgeStatus] = useState("unknown");
   const [bridgePrinters, setBridgePrinters] = useState([]);
+  const [scanPrefix, setScanPrefix] = useState("192.168.1");
+  const [scanningNet, setScanningNet] = useState(false);
+  const [discoveredNet, setDiscoveredNet] = useState([]);
+  const [refreshingUsb, setRefreshingUsb] = useState(false);
 
   const loadPrinters = useCallback(async () => {
     try {
@@ -179,9 +187,11 @@ export default function SalesPrintersPage() {
       } catch {
         setBridgePrinters([]);
       }
+      return "ok";
     } catch {
       setBridgeStatus("down");
       setBridgePrinters([]);
+      return "down";
     }
   }, []);
 
@@ -199,18 +209,91 @@ export default function SalesPrintersPage() {
     );
   }, [printers]);
 
+  const startNetworkScan = useCallback(async () => {
+    const inferred =
+      subnetPrefixFromHost(form.host) ||
+      subnetPrefixFromHost(sorted.find((p) => p.host)?.host) ||
+      scanPrefix;
+    const prefix = (inferred || scanPrefix || "192.168.1")
+      .trim()
+      .replace(/\.$/, "");
+    setScanPrefix(prefix);
+    setScanningNet(true);
+    setDiscoveredNet([]);
+    try {
+      const found = await scanSubnetForPrinters({
+        subnetPrefix: prefix,
+        port: Number(form.port) || 9100,
+        bridgeUrl: PRINT_BRIDGE_URL,
+      });
+      setDiscoveredNet(found);
+      if (!found.length) {
+        toast.message(
+          `No printers found on ${prefix}.x — enter the IP manually if needed.`,
+        );
+      } else {
+        toast.success(`Found ${found.length} printer(s) on ${prefix}.x`);
+      }
+    } catch (err) {
+      toast.error(
+        err?.message ||
+          "LAN scan needs Electron POS or a running local print bridge.",
+      );
+    } finally {
+      setScanningNet(false);
+    }
+  }, [form.host, form.port, scanPrefix, sorted]);
+
+  const refreshUsbList = useCallback(async () => {
+    setRefreshingUsb(true);
+    try {
+      const status = await fetchBridge();
+      if (status === "down") {
+        toast.error(
+          "Print bridge not running — start it to list Windows USB printers.",
+        );
+      } else {
+        toast.success("USB / Windows printer list refreshed");
+      }
+    } finally {
+      setRefreshingUsb(false);
+    }
+  }, [fetchBridge]);
+
+  const selectConnection = (connection) => {
+    setForm((p) => ({
+      ...p,
+      connection,
+      name:
+        connection === "BUILTIN_USB" ? p.name || "Built-in Receipt" : p.name,
+      systemPrinterName:
+        connection === "BUILTIN_USB"
+          ? BUILTIN_SYSTEM_NAME
+          : p.systemPrinterName,
+    }));
+    if (connection === "NETWORK") {
+      void startNetworkScan();
+    } else if (connection === "USB") {
+      void refreshUsbList();
+    }
+  };
+
   const openCreate = () => {
     setEditId(null);
     setForm({ ...EMPTY_FORM });
+    setDiscoveredNet([]);
     setShowForm(true);
+    // Default connection is NETWORK — start LAN discovery like mobile.
+    void startNetworkScan();
   };
 
   const openEdit = (printer) => {
     setEditId(String(printer._id));
+    const connection = formConnectionFromPrinter(printer);
     setForm({
       name: printer.name || "",
       target: printer.target || "RECEIPT",
-      connection: formConnectionFromPrinter(printer),
+      connection,
       host: printer.host || "",
       port: String(printer.port || 9100),
       bluetoothAddress: printer.bluetoothAddress || "",
@@ -222,6 +305,9 @@ export default function SalesPrintersPage() {
           : ["TAKE_AWAY", "DINE_IN", "DELIVERY"],
       enabled: printer.enabled !== false,
     });
+    const prefix = subnetPrefixFromHost(printer.host);
+    if (prefix) setScanPrefix(prefix);
+    setDiscoveredNet([]);
     setShowForm(true);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -767,20 +853,7 @@ export default function SalesPrintersPage() {
               <Label>Connection</Label>
               <Select
                 value={form.connection}
-                onValueChange={(connection) =>
-                  setForm((p) => ({
-                    ...p,
-                    connection,
-                    name:
-                      connection === "BUILTIN_USB"
-                        ? p.name || "Built-in Receipt"
-                        : p.name,
-                    systemPrinterName:
-                      connection === "BUILTIN_USB"
-                        ? BUILTIN_SYSTEM_NAME
-                        : p.systemPrinterName,
-                  }))
-                }
+                onValueChange={(connection) => selectConnection(connection)}
               >
                 <SelectTrigger>
                   <SelectValue />
@@ -798,6 +871,71 @@ export default function SalesPrintersPage() {
 
             {form.connection === "NETWORK" ? (
               <>
+                <div className="space-y-2 sm:col-span-2">
+                  <Label>Subnet (for scan)</Label>
+                  <div className="flex flex-wrap gap-2">
+                    <Input
+                      value={scanPrefix}
+                      onChange={(e) => setScanPrefix(e.target.value)}
+                      placeholder="192.168.1"
+                      className="max-w-[180px]"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={scanningNet}
+                      onClick={() => void startNetworkScan()}
+                    >
+                      {scanningNet ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Scanning…
+                        </>
+                      ) : (
+                        <>
+                          <Wifi className="mr-2 h-4 w-4" />
+                          Scan WIFI/LAN
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                  <p className="text-xs text-stone-500">
+                    Scans{" "}
+                    <span className="font-mono">
+                      {scanPrefix || "192.168.1"}.1–254
+                    </span>{" "}
+                    on port {form.port || 9100}. Needs desktop POS or local
+                    print bridge.
+                  </p>
+                  {discoveredNet.length ? (
+                    <div className="mt-2 max-h-40 space-y-1 overflow-y-auto rounded-lg border border-stone-200 bg-stone-50 p-2">
+                      {discoveredNet.map((d) => (
+                        <button
+                          key={`${d.host}:${d.port}`}
+                          type="button"
+                          onClick={() =>
+                            setForm((p) => ({
+                              ...p,
+                              host: d.host,
+                              port: String(d.port || 9100),
+                              name: p.name || `LAN ${d.host}`,
+                            }))
+                          }
+                          className={`flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm transition ${
+                            form.host === d.host
+                              ? "bg-orange-100 text-orange-900"
+                              : "hover:bg-white"
+                          }`}
+                        >
+                          <span className="font-mono">
+                            {d.host}:{d.port}
+                          </span>
+                          <span className="text-xs text-stone-500">Select</span>
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
                 <div className="space-y-2">
                   <Label>IP address</Label>
                   <Input
@@ -836,15 +974,32 @@ export default function SalesPrintersPage() {
                   className="uppercase"
                 />
                 <p className="text-xs text-stone-500">
-                  Pair the printer on the Android POS tablet, then save the MAC
-                  here. Test from Sales mobile for best results.
+                  Browsers cannot scan Bluetooth. Pair on the Android POS tablet
+                  (Printer settings → Scan Bluetooth), then paste the MAC here,
+                  or configure fully from mobile.
                 </p>
               </div>
             ) : null}
 
             {form.connection === "USB" ? (
               <div className="space-y-2 sm:col-span-2">
-                <Label>Windows system printer name</Label>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <Label>Windows USB / system printers</Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={refreshingUsb}
+                    onClick={() => void refreshUsbList()}
+                  >
+                    {refreshingUsb ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <RefreshCw className="mr-2 h-4 w-4" />
+                    )}
+                    Refresh USB list
+                  </Button>
+                </div>
                 {bridgePrinters.length ? (
                   <Select
                     value={form.systemPrinterName || undefined}
@@ -868,16 +1023,22 @@ export default function SalesPrintersPage() {
                     </SelectContent>
                   </Select>
                 ) : (
-                  <Input
-                    value={form.systemPrinterName}
-                    onChange={(e) =>
-                      setForm((p) => ({
-                        ...p,
-                        systemPrinterName: e.target.value,
-                      }))
-                    }
-                    placeholder="EPSON TM-T88"
-                  />
+                  <>
+                    <Input
+                      value={form.systemPrinterName}
+                      onChange={(e) =>
+                        setForm((p) => ({
+                          ...p,
+                          systemPrinterName: e.target.value,
+                        }))
+                      }
+                      placeholder="EPSON TM-T88"
+                    />
+                    <p className="text-xs text-stone-500">
+                      No printers listed yet. Start the local print bridge, then
+                      tap Refresh USB list — or type the Windows printer name.
+                    </p>
+                  </>
                 )}
               </div>
             ) : null}

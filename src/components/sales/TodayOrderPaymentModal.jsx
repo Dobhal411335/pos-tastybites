@@ -35,6 +35,14 @@ import {
   isActiveServiceTax,
   SERVICE_CHARGE_NO_TIP_MESSAGE,
 } from "@/lib/orders/serviceCharge";
+import {
+  getReceiptModifierLines,
+  getItemLineTotal,
+} from "@/utils/productChoices";
+import {
+  buildSeatSplitRows,
+  groupItemsBySeat,
+} from "@/lib/orders/seatHelpers";
 
 const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 
@@ -68,6 +76,8 @@ export default function TodayOrderPaymentModal({
 }) {
   const [paymentMethod, setPaymentMethod] = useState("Card");
   const [billMode, setBillMode] = useState("full"); // full | split
+  /** custom named payers | by_seat proportional seat buckets */
+  const [splitMode, setSplitMode] = useState("custom");
   const [paymentSplits, setPaymentSplits] = useState([
     { id: "split-1", name: "", amount: "", method: "Card", cardType: "" },
     { id: "split-2", name: "", amount: "", method: "Card", cardType: "" },
@@ -196,6 +206,8 @@ export default function TodayOrderPaymentModal({
     giftCardBalance !== null ? giftCardUsedPreview : 0;
 
   const splitDue = round2(Math.max(0, total - giftUsed));
+  const seatBucketCount = groupItemsBySeat(order?.items || []).length;
+  const canSplitBySeat = seatBucketCount >= 2;
   const splitAllocated = round2(
     paymentSplits.reduce(
       (sum, row) => sum + (parseFloat(row.amount) || 0),
@@ -220,6 +232,30 @@ export default function TodayOrderPaymentModal({
             Boolean(String(row.cardType || "").trim());
           return nameOk && amtOk && methodOk && cardOk;
         })));
+
+  const applySeatSplitRows = (dueAmount) => {
+    const rows = buildSeatSplitRows({
+      items: order?.items || [],
+      totalAmount: dueAmount,
+      taxTotal: totalTax,
+      serviceChargeTotal,
+      discountTotal: discountAmount,
+      giftcardUsedAmount: giftUsed,
+    });
+    if (rows.length < 2) return false;
+    setPaymentSplits(
+      rows.map((row, i) => ({
+        id: `seat-split-${row.seatNumber ?? "table"}-${i}`,
+        name: row.name,
+        amount: Number(row.amount || 0).toFixed(2),
+        method: "Card",
+        cardType: "",
+        seatNumber: row.seatNumber,
+        lockedAmount: true,
+      })),
+    );
+    return true;
+  };
 
   const effectiveCardDue = round2(
     Math.max(0, total - giftUsed - lockedCash),
@@ -355,6 +391,12 @@ export default function TodayOrderPaymentModal({
     if (!open || !order) return;
 
     setPaymentMethod("Card");
+    setBillMode("full");
+    setSplitMode("custom");
+    setPaymentSplits([
+      { id: "split-1", name: "", amount: "", method: "Card", cardType: "" },
+      { id: "split-2", name: "", amount: "", method: "Card", cardType: "" },
+    ]);
     setDiscountCode("");
     setGiftCardCode("");
     setGiftCardBalance(null);
@@ -573,6 +615,10 @@ export default function TodayOrderPaymentModal({
               row.method === "Card"
                 ? String(row.cardType || "").trim() || null
                 : null,
+            seatNumber:
+              row.seatNumber === undefined || row.seatNumber === null
+                ? null
+                : Number(row.seatNumber),
           }));
           resolvedCashAmount = round2(
             splitsPayload
@@ -876,6 +922,124 @@ export default function TodayOrderPaymentModal({
                       </span>
                     )}
                   </div>
+
+                  {Array.isArray(order?.items) && order.items.length > 0 ? (
+                    <div className="mb-4 space-y-2.5 max-h-56 overflow-y-auto custom-scrollbar pr-0.5">
+                      <p className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider">
+                        Items
+                      </p>
+                      {(() => {
+                        const seatGroups = groupItemsBySeat(order.items);
+                        const showSeatHeaders = seatGroups.some(
+                          (g) => g.seatNumber != null,
+                        );
+                        return seatGroups.map((group) => {
+                          const seatSubtotal = group.items.reduce(
+                            (sum, item) => sum + getItemLineTotal(item),
+                            0,
+                          );
+                          const seatQty = group.items.reduce(
+                            (sum, item) => sum + (Number(item.qty) || 0),
+                            0,
+                          );
+                          return (
+                            <div
+                              key={group.label}
+                              className="rounded-xl border border-zinc-200 bg-white shadow-sm overflow-hidden"
+                            >
+                              {showSeatHeaders ? (
+                                <div className="flex items-center justify-between gap-2 px-3 py-2 bg-zinc-50 border-b border-zinc-100">
+                                  <span className="text-[11px] font-black uppercase tracking-wider text-zinc-800">
+                                    {group.label}
+                                  </span>
+                                  <span className="text-[11px] font-bold text-zinc-500 tabular-nums">
+                                    {seatQty} item{seatQty === 1 ? "" : "s"} · $
+                                    {seatSubtotal.toFixed(2)}
+                                  </span>
+                                </div>
+                              ) : null}
+                              <div className="p-3 space-y-2.5">
+                                {group.items.map((item, idx) => {
+                                  const modifierLines =
+                                    getReceiptModifierLines(item);
+                                  return (
+                                    <div
+                                      key={
+                                        item.cartId ||
+                                        `${group.label}-${item.name}-${idx}`
+                                      }
+                                      className="text-sm"
+                                    >
+                                      <div className="flex justify-between gap-2 font-bold text-zinc-900">
+                                        <span className="min-w-0">
+                                          {item.isOffer ? (
+                                            <span className="text-[10px] font-bold text-violet-700 bg-violet-50 border border-violet-100 rounded px-1 py-0.5 mr-1.5 align-middle">
+                                              OFFER
+                                            </span>
+                                          ) : item.productCode ? (
+                                            <span className="text-orange-600 mr-1">
+                                              {item.productCode}
+                                            </span>
+                                          ) : null}
+                                          {item.qty}× {item.name}
+                                          {item.size &&
+                                          item.size !== "Standard"
+                                            ? ` (${item.size})`
+                                            : ""}
+                                        </span>
+                                        <span className="shrink-0 tabular-nums">
+                                          ${getItemLineTotal(item).toFixed(2)}
+                                        </span>
+                                      </div>
+                                      {modifierLines.length > 0 ? (
+                                        <ul className="mt-1 space-y-0.5 pl-4 text-[11px] text-zinc-600">
+                                          {modifierLines.map(
+                                            (line, lineIdx) => (
+                                              <li
+                                                key={`${line.kind}-${lineIdx}`}
+                                                className={
+                                                  line.kind ===
+                                                    "addon-choice-item" ||
+                                                  line.kind === "choice-item"
+                                                    ? "pl-2 font-semibold text-sky-800"
+                                                    : line.kind ===
+                                                        "custom-extra"
+                                                      ? "font-semibold text-zinc-800"
+                                                      : "font-semibold"
+                                                }
+                                              >
+                                                {line.text}
+                                                {line.kind === "custom-extra" &&
+                                                line.price != null ? (
+                                                  <span className="text-zinc-500">
+                                                    {" "}
+                                                    (+$
+                                                    {Number(line.price).toFixed(
+                                                      2,
+                                                    )}
+                                                    )
+                                                  </span>
+                                                ) : null}
+                                              </li>
+                                            ),
+                                          )}
+                                        </ul>
+                                      ) : null}
+                                      {item.notes ? (
+                                        <p className="mt-1 pl-4 text-[11px] font-semibold italic text-amber-800">
+                                          Remark: {item.notes}
+                                        </p>
+                                      ) : null}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          );
+                        });
+                      })()}
+                    </div>
+                  ) : null}
 
                   <div className="space-y-2 mb-4">
                     <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider flex items-center gap-1.5">
@@ -1253,30 +1417,97 @@ export default function TodayOrderPaymentModal({
 
                 {billMode === "split" ? (
                   <div className="space-y-4">
-                    <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
                       <h3 className="text-sm font-black text-zinc-900 uppercase tracking-wide">
                         Split Payment
                       </h3>
                       <div className="flex items-center gap-2">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={() => splitEqually(paymentSplits.length)}
-                          disabled={splitDue < 0.01}
-                          className="h-9 px-3 rounded-lg text-xs font-bold border-zinc-200 shadow-none"
-                        >
-                          Equal split
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={fillRemainingOnLast}
-                          disabled={splitDue < 0.01}
-                          className="h-9 px-3 rounded-lg text-xs font-bold border-zinc-200 shadow-none"
-                        >
-                          Fill remaining
-                        </Button>
+                        {splitMode === "custom" ? (
+                          <>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              onClick={() => splitEqually(paymentSplits.length)}
+                              disabled={splitDue < 0.01}
+                              className="h-9 px-3 rounded-lg text-xs font-bold border-zinc-200 shadow-none"
+                            >
+                              Equal split
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              onClick={fillRemainingOnLast}
+                              disabled={splitDue < 0.01}
+                              className="h-9 px-3 rounded-lg text-xs font-bold border-zinc-200 shadow-none"
+                            >
+                              Fill remaining
+                            </Button>
+                          </>
+                        ) : (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => applySeatSplitRows(splitDue)}
+                            disabled={splitDue < 0.01 || !canSplitBySeat}
+                            className="h-9 px-3 rounded-lg text-xs font-bold border-zinc-200 shadow-none"
+                          >
+                            Recalc seats
+                          </Button>
+                        )}
                       </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 p-1 bg-zinc-100 rounded-xl">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSplitMode("custom");
+                          setPaymentSplits([
+                            {
+                              id: "split-1",
+                              name: "",
+                              amount: "",
+                              method: "Card",
+                              cardType: "",
+                            },
+                            {
+                              id: "split-2",
+                              name: "",
+                              amount: "",
+                              method: "Card",
+                              cardType: "",
+                            },
+                          ]);
+                        }}
+                        className={`h-10 rounded-lg text-xs font-black uppercase tracking-wide ${
+                          splitMode === "custom"
+                            ? "bg-white text-zinc-900 shadow-sm"
+                            : "text-zinc-500"
+                        }`}
+                      >
+                        Custom
+                      </button>
+                      <button
+                        type="button"
+                        disabled={!canSplitBySeat}
+                        onClick={() => {
+                          if (!canSplitBySeat) {
+                            toast.error(
+                              "Need items on at least two seats (or a seat + Table) to split by seat.",
+                            );
+                            return;
+                          }
+                          setSplitMode("by_seat");
+                          applySeatSplitRows(splitDue);
+                        }}
+                        className={`h-10 rounded-lg text-xs font-black uppercase tracking-wide disabled:opacity-40 ${
+                          splitMode === "by_seat"
+                            ? "bg-white text-zinc-900 shadow-sm"
+                            : "text-zinc-500"
+                        }`}
+                      >
+                        By seat
+                      </button>
                     </div>
 
                     <GiftCardField
@@ -1307,7 +1538,8 @@ export default function TodayOrderPaymentModal({
                     )}
 
                     <p className="text-xs font-semibold text-zinc-500">
-                      Same order # · one receipt slip per payer. Cover $
+                      Same order # · one receipt slip per{" "}
+                      {splitMode === "by_seat" ? "seat" : "payer"}. Cover $
                       {splitDue.toFixed(2)}
                       {giftUsed > 0
                         ? ` after $${giftUsed.toFixed(2)} gift card`
@@ -1332,9 +1564,12 @@ export default function TodayOrderPaymentModal({
                             >
                               <div className="flex items-center justify-between gap-2">
                                 <span className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider">
-                                  Payer {idx + 1}
+                                  {splitMode === "by_seat"
+                                    ? row.name || `Seat ${idx + 1}`
+                                    : `Payer ${idx + 1}`}
                                 </span>
-                                {paymentSplits.length > 2 && (
+                                {splitMode === "custom" &&
+                                  paymentSplits.length > 2 && (
                                   <button
                                     type="button"
                                     onClick={() => removeSplitRow(row.id)}
@@ -1351,7 +1586,8 @@ export default function TodayOrderPaymentModal({
                             onChange={(e) =>
                               updateSplitRow(row.id, { name: e.target.value })
                             }
-                            className="h-11 bg-white border-zinc-200 rounded-xl text-sm font-semibold"
+                            readOnly={splitMode === "by_seat"}
+                            className="h-11 bg-white border-zinc-200 rounded-xl text-sm font-semibold read-only:bg-zinc-100"
                           />
                               <div className="flex gap-2">
                                 <div className="relative flex-1">
@@ -1430,6 +1666,7 @@ export default function TodayOrderPaymentModal({
                           ))}
                         </div>
 
+                        {splitMode === "custom" ? (
                         <div className="flex flex-wrap gap-2">
                           <Button
                             type="button"
@@ -1451,6 +1688,7 @@ export default function TodayOrderPaymentModal({
                             +1 equal
                           </Button>
                         </div>
+                        ) : null}
                       </>
                     )}
                   </div>

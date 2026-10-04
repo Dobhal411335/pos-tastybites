@@ -26,6 +26,14 @@ export function cartItemsToRepricePayload(cartItems = []) {
         ? item.selectedAddons.map((a) => (typeof a === "string" ? a : a.name)).filter(Boolean)
         : [];
 
+    // Preserve nested addon choice qty labels (e.g. "Ranch ×3") for quote/order/KOT
+    const choiceSelections = Array.isArray(item.choiceSelections)
+      ? item.choiceSelections
+      : [];
+    const addonChoiceSelections = Array.isArray(item.addonChoiceSelections)
+      ? item.addonChoiceSelections
+      : [];
+
     return {
       id: item.id || item.menuItemId,
       menuItemId: item.id || item.menuItemId,
@@ -34,8 +42,8 @@ export function cartItemsToRepricePayload(cartItems = []) {
       size: isExtra ? "Extra" : sizes.length ? sizes.join(", ") : item.size || "Standard",
       sizes: isExtra ? [] : sizes,
       options,
-      choiceSelections: item.choiceSelections || [],
-      addonChoiceSelections: item.addonChoiceSelections || [],
+      choiceSelections,
+      addonChoiceSelections,
       preparationStyle: item.preparationStyle || null,
       isOffer: Boolean(item.isOffer),
       inclusions: item.inclusions || [],
