@@ -13,7 +13,6 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { useSocket } from "@/components/providers/SocketProvider";
 import PrintPreviewModal from "@/components/receipts/PrintPreviewModal";
-import TodayOrderPaymentModal from "@/components/sales/TodayOrderPaymentModal";
 import {
   getOrderLocationLabel,
   getOrderTypeLabel,
@@ -233,8 +232,6 @@ function TodayOrdersPageContent() {
   const [printType, setPrintType] = useState("kot");
   const [pendingReleaseAfterPrint, setPendingReleaseAfterPrint] =
     useState(false);
-  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
-  const [serviceTax, setServiceTax] = useState(null);
   const [isReleaseModalOpen, setIsReleaseModalOpen] = useState(false);
   const [isReleasingTable, setIsReleasingTable] = useState(false);
   const [releaseOrder, setReleaseOrder] = useState(null);
@@ -321,24 +318,6 @@ function TodayOrdersPageContent() {
       socket.off("payment:completed", onOrderOrTableChange);
     };
   }, [socket, fetchOrders]);
-
-  useEffect(() => {
-    const loadServiceTax = async () => {
-      try {
-        const res = await fetch("/api/tax/servicetax?active=1");
-        const json = await res.json();
-        if (json.success) {
-          const list = Array.isArray(json.data) ? json.data : [];
-          setServiceTax(
-            list.find((t) => t.status === "Active") || list[0] || null,
-          );
-        }
-      } catch {
-        setServiceTax(null);
-      }
-    };
-    loadServiceTax();
-  }, []);
 
   useEffect(() => {
     const onVisibility = () => {
@@ -483,7 +462,6 @@ function TodayOrdersPageContent() {
 
   const closePanel = () => {
     setSelectedOrder(null);
-    setIsPaymentModalOpen(false);
     setIsReleaseModalOpen(false);
     setReleaseOrder(null);
     setPendingReleaseAfterPrint(false);
@@ -773,8 +751,12 @@ function TodayOrdersPageContent() {
     orderStatusUpper !== "WAIVED";
 
   const openPaymentModal = () => {
-    if (!selectedOrder) return;
-    setIsPaymentModalOpen(true);
+    if (!selectedOrder?._id) return;
+    const sessionId = getOrderSessionId(selectedOrder);
+    const q = new URLSearchParams();
+    if (sessionId) q.set("sessionId", String(sessionId));
+    q.set("returnTo", "/sales/today");
+    router.push(`/sales/payment/${selectedOrder._id}?${q.toString()}`);
   };
   const releaseTableLabel =
     releaseOrder?.tableNo ||
@@ -1498,59 +1480,6 @@ function TodayOrdersPageContent() {
         guestCount={selectedOrder?.guestCount}
         specialNote={selectedOrder?.specialNote}
         serverName={getPlacerName(selectedOrder || {})}
-      />
-
-      <TodayOrderPaymentModal
-        key={selectedOrder?._id || "payment"}
-        order={selectedOrder}
-        open={isPaymentModalOpen}
-        onClose={() => setIsPaymentModalOpen(false)}
-        serviceTax={serviceTax}
-        onPaid={async (updatedOrder) => {
-          const paid = updatedOrder || selectedOrder;
-          if (paid) {
-            setSelectedOrder((prev) => ({ ...(prev || {}), ...paid }));
-          }
-          if (
-            paid?._id &&
-            typeof window !== "undefined"
-          ) {
-            const source = String(paid?.source || "").toUpperCase();
-            if (source === "WALK_IN") {
-              const stored = sessionStorage.getItem("direct-order-walk-in");
-              if (stored && String(stored) === String(paid._id)) {
-                sessionStorage.removeItem("direct-order-walk-in");
-              }
-            }
-            if (source === "STAFF") {
-              const stored = sessionStorage.getItem("direct-order-staff");
-              if (stored && String(stored) === String(paid._id)) {
-                sessionStorage.removeItem("direct-order-staff");
-              }
-            }
-          }
-          await fetchOrders({ silent: true });
-
-          const sessionId = getOrderSessionId(paid);
-          setReleaseOrder(sessionId ? paid : null);
-          const splitCount = Array.isArray(paid?.paymentSplits)
-            ? paid.paymentSplits.length
-            : 0;
-          if (splitCount > 1) {
-            toast.success(
-              `${splitCount} split receipt slips sent to the printer`,
-            );
-            setPendingReleaseAfterPrint(false);
-            if (sessionId) {
-              setIsReleaseModalOpen(true);
-            }
-            return;
-          }
-          setPendingReleaseAfterPrint(Boolean(sessionId));
-          setPrintType("customer");
-          setIsPrintModalOpen(true);
-        }}
-        redeemNote="Today Orders Payment"
       />
 
       {isReleaseModalOpen && (

@@ -89,14 +89,14 @@ function navActive(pathname, href) {
     return (
       pathname === "/floor" ||
       (pathname?.startsWith("/sales/orders") &&
-        !pathname?.startsWith("/sales/orders/walk-in") &&
+        !pathname?.startsWith("/sales/orders/takeaway") &&
         !pathname?.startsWith("/sales/orders/staff"))
     );
   }
-  if (href === "/sales/walk-in") {
+  if (href === "/sales/take-away") {
     return (
-      pathname === "/sales/walk-in" ||
-      pathname?.startsWith("/sales/orders/walk-in")
+      pathname === "/sales/take-away" ||
+      pathname?.startsWith("/sales/orders/takeaway")
     );
   }
   if (href === "/sales/staff") {

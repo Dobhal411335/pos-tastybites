@@ -28,6 +28,7 @@ import {
 } from "@/lib/eod/eodHelpers";
 import {
   normalizeSeatNumber,
+  seatKey,
   seatNumbersEqual,
   seatPrintLabel,
   validateSeatNumbersForGuestCount,
@@ -366,7 +367,7 @@ export const POST = withAuth(async (request) => {
 
     const routeToKitchen = cartHasKitchenItem(formattedItems);
 
-    // If no sessionId is provided — direct sale (walk-in, staff, or legacy takeaway)
+    // If no sessionId is provided — direct sale (takeaway, staff, or legacy takeaway)
     if (!sessionId) {
       const orderSource = ["WALK_IN", "STAFF", "POS", "ONLINE"].includes(data.source)
         ? data.source
@@ -377,7 +378,7 @@ export const POST = withAuth(async (request) => {
       let staffOrderReason = data.staffOrderReason?.trim() || null;
 
       if (orderSource === "WALK_IN") {
-        directPartyName = (partyName || guestName || "").trim() || "Walk-in";
+        directPartyName = (partyName || guestName || "").trim() || "Takeaway";
       } else if (orderSource === "STAFF") {
         staffFor = staffMember._id;
         directPartyName = formatPersonName(staffMember);
@@ -591,6 +592,17 @@ export const POST = withAuth(async (request) => {
       status: { $in: ["PENDING", "CONFIRMED"] }
     });
 
+    // After a seat/full pay the check may be PAID while the table session is
+    // still open — continue on that same order when more seats order food.
+    if (!order) {
+      order = await Order.findOne({
+        tableSession: sessionId,
+        restaurantId: request.restaurant,
+        isActive: { $ne: false },
+        status: "PAID",
+      }).sort({ createdAt: -1 });
+    }
+
     if (order) {
       // Calculate KOT Payload for Continue Order
       const kotPayload = [];
@@ -618,6 +630,43 @@ export const POST = withAuth(async (request) => {
       order.discountPercent = discountPercent ?? null;
       order.totalAmount = totalAmount;
       order.specialNote = specialNote;
+      // New kitchen tickets reopen a previously paid check so remaining seats can settle.
+      const reopenedAfterPay =
+        order.status === "PAID" ||
+        String(order.paymentStatus || "").toUpperCase() === "PAID";
+      if (reopenedAfterPay) {
+        order.status = "PENDING";
+        order.paymentStatus = "PARTIAL";
+      }
+      // Re-ordering on a released seat: clear release so Pay shows again.
+      if (
+        Array.isArray(order.releasedSeats) &&
+        order.releasedSeats.length > 0 &&
+        kotPayload.length > 0
+      ) {
+        const kotSeatKeys = new Set(
+          kotPayload.map((item) =>
+            seatKey(normalizeSeatNumber(item?.seatNumber)),
+          ),
+        );
+        order.releasedSeats = order.releasedSeats.filter((raw) => {
+          const key =
+            raw === "table" || raw === null || raw === "" || raw === 0
+              ? "table"
+              : seatKey(normalizeSeatNumber(raw));
+          return !kotSeatKeys.has(key);
+        });
+        if (String(order.paymentStatus || "").toUpperCase() === "PAID") {
+          order.status = "PENDING";
+          order.paymentStatus = "PARTIAL";
+        } else if (
+          String(order.paymentStatus || "").toUpperCase() !== "UNPAID" &&
+          String(order.paymentStatus || "").toUpperCase() !== "PENDING"
+        ) {
+          // Keep PARTIAL (or set it) when new items land on a paid/released seat
+          order.paymentStatus = "PARTIAL";
+        }
+      }
       order.floor = session.floor?._id || session.floor || order.floor;
       order.tableNo = formatSessionTableLabel(session) || order.tableNo;
       if (resolvedPartyName !== null || partyName !== undefined || guestName !== undefined) {
@@ -644,6 +693,11 @@ export const POST = withAuth(async (request) => {
       // Keep original processedBy so a later employee cannot take sales/tip credit.
       if (!order.processedBy) order.processedBy = employeeId;
       await order.save();
+
+      if (reopenedAfterPay && session.status === "PAYMENT_PENDING") {
+        session.status = "ACTIVE";
+        await session.save();
+      }
       
       if (global.io) global.io.to(`floor:${session.floor}`).emit('order:updated', { orderId: order._id, sessionId });
 
@@ -836,7 +890,7 @@ export const GET = withAuth(async (request) => {
     const today = searchParams.get("today");
     
     if (orderId) {
-      // Pay / resume any restaurant order by id (POS, walk-in, staff, online).
+      // Pay / resume any restaurant order by id (POS, takeaway, staff, online).
       // Do not filter by source — online pickup orders must be payable from Mobile.
       let order = await Order.findOne({
         _id: orderId,

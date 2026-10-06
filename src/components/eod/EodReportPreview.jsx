@@ -115,7 +115,7 @@ export default function EodReportPreview({ report }) {
         ) : null}
       </Section>
 
-      <Section title="Orders by Source (includes Walk-in, Staff & Online)">
+      <Section title="Orders by Source (includes Takeaway, Staff & Online)">
         <SimpleTable
           headers={[
             "Source",
@@ -154,7 +154,7 @@ export default function EodReportPreview({ report }) {
           ]}
         />
         <p className="text-xs text-stone-500">
-          POS / Table, Walk-in, Staff, and Online orders are all included in
+          POS / Table, Takeaway, Staff, and Online orders are all included in
           End-of-Day sales when paid.
         </p>
       </Section>

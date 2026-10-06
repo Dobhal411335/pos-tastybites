@@ -859,7 +859,7 @@ function mapOrderRow(order, nameById) {
       ? nameById.get(String(order.processedBy)) || "Unknown"
       : "Unassigned",
     tableNo: order.tableNo || "",
-    guest: order.partyName || order.guestName || "Walk-in",
+    guest: order.partyName || order.guestName || "Takeaway",
     itemCount: items.itemCount,
     itemSummary: items.itemSummary,
     subTotal: r2(order.subTotal),

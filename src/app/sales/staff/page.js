@@ -20,7 +20,6 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { useSocket } from "@/components/providers/SocketProvider";
-import TodayOrderPaymentModal from "@/components/sales/TodayOrderPaymentModal";
 import PrintPreviewModal from "@/components/receipts/PrintPreviewModal";
 import { getOrderTypeBadgeClass } from "@/utils/orderDisplay";
 import { cn } from "@/lib/utils";
@@ -141,8 +140,6 @@ export default function StaffOrderHubPage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState("OPEN");
-  const [payOrder, setPayOrder] = useState(null);
-  const [serviceTax, setServiceTax] = useState(null);
   const [printOrder, setPrintOrder] = useState(null);
   const [isPrintOpen, setIsPrintOpen] = useState(false);
 
@@ -170,10 +167,6 @@ export default function StaffOrderHubPage() {
         (order) => String(order.source || "").toUpperCase() === "STAFF",
       );
       setOrders(staffOrders);
-      setPayOrder((prev) => {
-        if (!prev) return null;
-        return staffOrders.find((o) => o._id === prev._id) || null;
-      });
     } catch {
       toast.error("Failed to load staff orders.");
     } finally {
@@ -185,22 +178,6 @@ export default function StaffOrderHubPage() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
-
-  useEffect(() => {
-    const loadServiceTax = async () => {
-      try {
-        const res = await fetch("/api/tax/servicetax?active=1");
-        const json = await res.json();
-        if (json.success) {
-          const list = Array.isArray(json.data) ? json.data : [];
-          setServiceTax(list[0] || null);
-        }
-      } catch {
-        /* optional */
-      }
-    };
-    loadServiceTax();
-  }, []);
 
   useEffect(() => {
     if (!socket) return undefined;
@@ -586,7 +563,14 @@ export default function StaffOrderHubPage() {
                           </Button>
                           <Button
                             className="h-10 flex-1 gap-1.5 rounded-xl bg-emerald-600 font-bold text-white hover:bg-emerald-700"
-                            onClick={() => setPayOrder(order)}
+                            onClick={() => {
+                              const q = new URLSearchParams({
+                                returnTo: "/sales/staff",
+                              });
+                              router.push(
+                                `/sales/payment/${order._id}?${q.toString()}`,
+                              );
+                            }}
                           >
                             <DollarSign className="h-4 w-4" />
                             Pay
@@ -613,31 +597,6 @@ export default function StaffOrderHubPage() {
           )}
         </main>
       </div>
-
-      <TodayOrderPaymentModal
-        key={payOrder?._id || "staff-pay"}
-        order={payOrder}
-        open={Boolean(payOrder)}
-        onClose={() => setPayOrder(null)}
-        serviceTax={serviceTax}
-        onPaid={async (updatedOrder) => {
-          const paid = updatedOrder || payOrder;
-          if (paid?._id) {
-            const stored = sessionStorage.getItem("direct-order-staff");
-            if (stored && String(stored) === String(paid._id)) {
-              clearStaffResumeKey();
-            }
-          }
-          setPayOrder(null);
-          await fetchData({ silent: true });
-          if (paid) {
-            setPrintOrder(paid);
-            setIsPrintOpen(true);
-          }
-          toast.success("Staff order paid");
-        }}
-        redeemNote="Staff Payment"
-      />
 
       <PrintPreviewModal
         isOpen={isPrintOpen}

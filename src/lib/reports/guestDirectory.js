@@ -15,7 +15,7 @@ import {
 
 const GENERIC_NAMES = new Set([
   "",
-  "walk-in",
+  "takeaway",
   "walkin",
   "walk in",
   "guest",
@@ -156,7 +156,7 @@ export function guestIdentity(order) {
     phone: null,
     countryCode: order.guestCountryCode || null,
     email,
-    name: name || "Walk-in",
+    name: name || "Takeaway",
     identified: false,
   };
 }
@@ -235,7 +235,7 @@ function toHistoryRow(order, identity) {
     orderNumber: order.orderNumber,
     createdAt: order.createdAt,
     guestKey: identity.guestKey,
-    guestName: identity.name || "Walk-in",
+    guestName: identity.name || "Take-Away",
     phone: identity.phone,
     tableNo: order.tableNo || "—",
     guestCount: order.guestCount ?? null,
@@ -260,7 +260,7 @@ function toHistoryRow(order, identity) {
 function emptyGuest(identity) {
   return {
     guestKey: identity.guestKey,
-    name: identity.name || "Walk-in",
+    name: identity.name || "Takeaway",
     phone: identity.phone,
     countryCode: identity.countryCode || null,
     email: identity.email || null,
@@ -474,7 +474,7 @@ function accumulateGuest(guestMap, order, identity) {
     guestMap.set(identity.guestKey, emptyGuest(identity));
   }
   const guest = guestMap.get(identity.guestKey);
-  if (identity.name && identity.name !== "Walk-in") guest.name = identity.name;
+  if (identity.name && identity.name !== "Takeaway") guest.name = identity.name;
   if (identity.phone) guest.phone = identity.phone;
   if (identity.countryCode) guest.countryCode = identity.countryCode;
   if (identity.email) guest.email = identity.email;

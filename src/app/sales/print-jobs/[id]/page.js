@@ -36,6 +36,12 @@ import BarReceipt from "@/components/receipts/BarReceipt";
 import moment from "moment";
 import { joinTableNumbers } from "@/utils/orderDisplay";
 import { getItemLineTotal } from "@/utils/productChoices";
+import {
+  filterItemsBySeat,
+  filterItemsBySeats,
+  proportionalOrderTotalsForItems,
+  resolveSplitReceiptSeatFilter,
+} from "@/lib/orders/seatHelpers";
 
 const STATUS_STYLES = {
   QUEUED: "bg-amber-100 text-amber-800 border-amber-200",
@@ -216,6 +222,35 @@ export default function PrintJobDetailPage() {
   const isReprint = Boolean(job.parentPrintJobId || (job.attemptCount || 0) > 1 || job.metadata?.isReprint);
   const orderNumber = job.metadata?.orderNumber || order?.orderNumber || "—";
   const printer = job.printerId;
+  const seatFilter = resolveSplitReceiptSeatFilter(job.metadata, order);
+  const summaryItems =
+    order && seatFilter.filter
+      ? Array.isArray(seatFilter.seatNumbers) && seatFilter.seatNumbers.length > 1
+        ? filterItemsBySeats(order.items || [], seatFilter.seatNumbers)
+        : filterItemsBySeat(order.items || [], seatFilter.seatNumber)
+      : order?.items;
+  const seatScopedTotals =
+    order && seatFilter.filter && job.metadata?.isSplitReceipt
+      ? proportionalOrderTotalsForItems(order, summaryItems || [])
+      : null;
+  const summaryOrder =
+    order && seatScopedTotals
+      ? {
+          ...order,
+          items: summaryItems,
+          subTotal: seatScopedTotals.subTotal,
+          taxTotal: seatScopedTotals.taxTotal,
+          discountTotal: seatScopedTotals.discountTotal,
+          serviceChargeTotal: seatScopedTotals.serviceChargeTotal,
+          totalAmount:
+            Number(job.metadata?.splitAmount) ||
+            seatScopedTotals.totalAmount ||
+            order.totalAmount,
+          taxBreakdown: seatScopedTotals.taxBreakdown,
+        }
+      : order && seatFilter.filter
+        ? { ...order, items: summaryItems }
+        : order;
 
   return (
     <div className="min-h-[calc(100vh-8rem)] bg-zinc-50 p-4">
@@ -306,14 +341,22 @@ export default function PrintJobDetailPage() {
                   <dd className="font-semibold text-zinc-900">#{orderNumber}</dd>
                 </div>
 
-                {job.metadata?.isSplitReceipt && (
+                {(job.metadata?.isSplitReceipt || seatFilter.filter) && (
                   <div className="flex justify-between items-start gap-3">
                     <dt className="text-zinc-500 shrink-0">Split Slip</dt>
                     <dd className="font-medium text-zinc-900 text-right">
-                      {job.metadata.splitIndex}/{job.metadata.splitTotal}
-                      {job.metadata.splitName
+                      {job.metadata?.isSplitReceipt
+                        ? `${job.metadata.splitIndex}/${job.metadata.splitTotal}`
+                        : seatFilter.seatNumber != null
+                          ? `Seat ${seatFilter.seatNumber}`
+                          : "Table"}
+                      {job.metadata?.splitName
                         ? ` · ${job.metadata.splitName}`
-                        : ""}
+                        : seatFilter.filter && !job.metadata?.splitName
+                          ? seatFilter.seatNumber != null
+                            ? ` · Seat ${seatFilter.seatNumber}`
+                            : " · Table"
+                          : ""}
                       {job.metadata.splitAmount != null && (
                         <span className="block text-[11px] text-zinc-500 font-normal">
                           ${(Number(job.metadata.splitAmount) || 0).toFixed(2)}
@@ -485,9 +528,9 @@ export default function PrintJobDetailPage() {
 
                 {/* Items summary */}
                 <div className="space-y-2 text-xs">
-                  {order.items && order.items.length > 0 ? (
+                  {summaryItems && summaryItems.length > 0 ? (
                     <div className="divide-y divide-zinc-100 max-h-48 overflow-y-auto pr-1">
-                      {order.items.map((item, idx) => (
+                      {summaryItems.map((item, idx) => (
                         <div key={idx} className="py-1.5 flex justify-between items-start gap-2">
                           <div>
                             <span className="font-medium text-zinc-800">
@@ -524,24 +567,26 @@ export default function PrintJobDetailPage() {
                 </div>
 
                 {/* Financial breakdown */}
-                {order.totalAmount != null && (() => {
+                {(summaryOrder?.totalAmount ?? order?.totalAmount) != null &&
+                  (() => {
+                  const fin = summaryOrder || order;
                   const discountPct =
-                    order.discountPercent != null
-                      ? Number(order.discountPercent)
-                      : order.subTotal > 0 && order.discountTotal > 0
+                    fin.discountPercent != null
+                      ? Number(fin.discountPercent)
+                      : fin.subTotal > 0 && fin.discountTotal > 0
                         ? Math.round(
-                            (order.discountTotal / order.subTotal) * 1000,
+                            (fin.discountTotal / fin.subTotal) * 1000,
                           ) / 10
                         : null;
                   const discountLabel =
                     discountPct != null && discountPct > 0
                       ? `Discount (${discountPct}%)`
-                      : order.discountTotal > 0
-                        ? `Discount ($${order.discountTotal.toFixed(2)})`
+                      : fin.discountTotal > 0
+                        ? `Discount ($${fin.discountTotal.toFixed(2)})`
                         : "Discount";
 
                   const totalHstRate = (() => {
-                    const breakdownRatesSum = (order.taxBreakdown || []).reduce(
+                    const breakdownRatesSum = (fin.taxBreakdown || []).reduce(
                       (sum, t) => sum + (Number(t.rate) || 0),
                       0,
                     );
@@ -549,22 +594,22 @@ export default function PrintJobDetailPage() {
                       return Math.round(breakdownRatesSum * 10) / 10;
                     const taxableBase = Math.max(
                       0,
-                      (order.subTotal || 0) - (order.discountTotal || 0),
+                      (fin.subTotal || 0) - (fin.discountTotal || 0),
                     );
-                    if (taxableBase > 0 && (order.taxTotal || 0) > 0) {
+                    if (taxableBase > 0 && (fin.taxTotal || 0) > 0) {
                       return (
                         Math.round(
-                          ((order.taxTotal || 0) / taxableBase) * 1000,
+                          ((fin.taxTotal || 0) / taxableBase) * 1000,
                         ) / 10
                       );
                     }
                     if (
-                      (order.subTotal || 0) > 0 &&
-                      (order.taxTotal || 0) > 0
+                      (fin.subTotal || 0) > 0 &&
+                      (fin.taxTotal || 0) > 0
                     ) {
                       return (
                         Math.round(
-                          ((order.taxTotal || 0) / (order.subTotal || 0)) * 1000,
+                          ((fin.taxTotal || 0) / (fin.subTotal || 0)) * 1000,
                         ) / 10
                       );
                     }
@@ -579,13 +624,13 @@ export default function PrintJobDetailPage() {
                     <div className="border-t border-zinc-100 pt-2 text-xs space-y-1 text-zinc-600">
                       <div className="flex justify-between">
                         <span>Subtotal</span>
-                        <span>${(order.subTotal || 0).toFixed(2)}</span>
+                        <span>${(fin.subTotal || 0).toFixed(2)}</span>
                       </div>
-                      {order.discountTotal > 0 && (
+                      {fin.discountTotal > 0 && (
                         <>
                           <div className="flex justify-between text-emerald-700">
                             <span>{discountLabel}</span>
-                            <span>-${order.discountTotal.toFixed(2)}</span>
+                            <span>-${fin.discountTotal.toFixed(2)}</span>
                           </div>
                           <div className="flex justify-between text-zinc-500">
                             <span>Net Subtotal</span>
@@ -593,42 +638,42 @@ export default function PrintJobDetailPage() {
                               $
                               {Math.max(
                                 0,
-                                (order.subTotal || 0) -
-                                  (order.discountTotal || 0),
+                                (fin.subTotal || 0) -
+                                  (fin.discountTotal || 0),
                               ).toFixed(2)}
                             </span>
                           </div>
                         </>
                       )}
-                      {(order.taxTotal > 0 ||
-                        (order.discountTotal > 0 && totalHstRate > 0)) && (
+                      {(fin.taxTotal > 0 ||
+                        (fin.discountTotal > 0 && totalHstRate > 0)) && (
                         <div className="flex justify-between font-medium text-zinc-700">
                           <span>{hstLabel}</span>
-                          <span>${(order.taxTotal || 0).toFixed(2)}</span>
+                          <span>${(fin.taxTotal || 0).toFixed(2)}</span>
                         </div>
                       )}
-                      {order.serviceChargeTotal > 0 && (
+                      {fin.serviceChargeTotal > 0 && (
                         <div className="flex justify-between">
                           <span>
-                            {order.serviceChargeName || "Service Charge"}
+                            {fin.serviceChargeName || "Service Charge"}
                           </span>
                           <span>
-                            ${Number(order.serviceChargeTotal).toFixed(2)}
+                            ${Number(fin.serviceChargeTotal).toFixed(2)}
                           </span>
                         </div>
                       )}
-                      {order.tipAmount > 0 && (
+                      {fin.tipAmount > 0 && (
                         <>
                           <div className="flex justify-between">
                             <span>Order Total</span>
-                            <span>${(order.totalAmount || 0).toFixed(2)}</span>
+                            <span>${(fin.totalAmount || 0).toFixed(2)}</span>
                           </div>
                           <div className="flex justify-between">
                             <span>
                               Tip{" "}
-                              {order.tipMethod ? `(${order.tipMethod})` : ""}
+                              {fin.tipMethod ? `(${fin.tipMethod})` : ""}
                             </span>
-                            <span>${order.tipAmount.toFixed(2)}</span>
+                            <span>${fin.tipAmount.toFixed(2)}</span>
                           </div>
                         </>
                       )}
@@ -637,7 +682,7 @@ export default function PrintJobDetailPage() {
                         <span>
                           $
                           {(
-                            (order.totalAmount || 0) + (order.tipAmount || 0)
+                            (fin.totalAmount || 0) + (fin.tipAmount || 0)
                           ).toFixed(2)}
                         </span>
                       </div>

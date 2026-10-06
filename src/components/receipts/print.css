@@ -54,3 +54,28 @@
 .receipt-bold {
   font-weight: 700;
 }
+
+/* Seat section: plain rules + label (no inverted banner) */
+.receipt-seat-rule {
+  border-top: 1px dashed #000;
+  margin: 0;
+}
+
+.receipt-seat-label {
+  display: block;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 12px;
+  line-height: 1.3;
+  padding: 4px 0 2px;
+}
+
+.receipt-category-title {
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 10px;
+  margin: 6px 0 4px;
+  padding-bottom: 2px;
+  border-bottom: 1px dashed #000;
+}

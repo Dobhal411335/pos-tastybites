@@ -7,6 +7,12 @@ import {
   getItemLineTotal,
 } from "@/utils/productChoices";
 import { shouldShowTable, formatTableNumbersWithFloor } from "@/utils/orderDisplay";
+import {
+  filterItemsBySeat,
+  filterItemsBySeats,
+  proportionalOrderTotalsForItems,
+  resolveSplitReceiptSeatFilter,
+} from "@/lib/orders/seatHelpers";
 
 const money = (n) => `$${(Number(n) || 0).toFixed(2)}`;
 
@@ -42,10 +48,21 @@ const CustomerReceipt = ({
   const splitAmount = Number(meta.splitAmount) || 0;
   const splitMethod = String(meta.splitMethod || meta.paymentMethod || "").trim();
 
+  const seatFilter = resolveSplitReceiptSeatFilter(meta, order);
+  const allOrderItems = order.items || [];
+  const items = seatFilter.filter
+    ? Array.isArray(seatFilter.seatNumbers) && seatFilter.seatNumbers.length > 1
+      ? filterItemsBySeats(allOrderItems, seatFilter.seatNumbers)
+      : filterItemsBySeat(allOrderItems, seatFilter.seatNumber)
+    : allOrderItems;
+  const seatScopedTotals =
+    seatFilter.filter && isSplitReceipt
+      ? proportionalOrderTotalsForItems(order, items)
+      : null;
+
   const {
     orderNumber,
     invoiceNumber,
-    items = [],
     subTotal = 0,
     taxTotal = 0,
     discountTotal = 0,
@@ -63,6 +80,15 @@ const CustomerReceipt = ({
     tableNo,
     createdAt,
   } = order;
+
+  const resolvedSubTotal = seatScopedTotals?.subTotal ?? subTotal;
+  const resolvedTaxTotal = seatScopedTotals?.taxTotal ?? taxTotal;
+  const resolvedDiscountTotal = seatScopedTotals?.discountTotal ?? discountTotal;
+  const resolvedServiceChargeTotal =
+    seatScopedTotals?.serviceChargeTotal ?? serviceChargeTotal;
+  const resolvedTotalAmount = isSplitReceipt
+    ? Number(meta.splitAmount) || seatScopedTotals?.totalAmount || totalAmount
+    : seatScopedTotals?.totalAmount ?? totalAmount;
   const partyLabel = isSplitReceipt
     ? splitName || order.partyName || guestName
     : order.partyName || guestName;
@@ -79,6 +105,9 @@ const CustomerReceipt = ({
     restaurantDetails?.thankYouMessage || "Thank You! Please Come Again!";
 
   const resolvedTaxBreakdown = (() => {
+    if (seatScopedTotals?.taxBreakdown?.length) {
+      return seatScopedTotals.taxBreakdown;
+    }
     const fromProp = Array.isArray(taxBreakdown) ? taxBreakdown : [];
     const fromOrder = Array.isArray(order.taxBreakdown)
       ? order.taxBreakdown
@@ -94,7 +123,7 @@ const CustomerReceipt = ({
         0,
       );
     }
-    return Number(taxTotal || 0);
+    return Number(resolvedTaxTotal || 0);
   })();
 
   const resolvedGuests =
@@ -104,17 +133,17 @@ const CustomerReceipt = ({
         ? order.guestCount
         : null;
 
-  const tip = Number(tipAmount || 0);
-  const discount = Number(discountTotal || 0);
-  const serviceCharge = Number(serviceChargeTotal || 0);
-  const orderTotal = Number(totalAmount || 0);
+  const tip = Number(isSplitReceipt ? meta.tipAmount ?? 0 : tipAmount || 0);
+  const discount = Number(resolvedDiscountTotal || 0);
+  const serviceCharge = Number(resolvedServiceChargeTotal || 0);
+  const orderTotal = Number(resolvedTotalAmount || 0);
   const grandTotal = orderTotal + tip;
 
   const discountPct = (() => {
     if (order.discountPercent != null && Number(order.discountPercent) > 0) {
       return Number(order.discountPercent);
     }
-    const numSub = Number(subTotal || 0);
+    const numSub = Number(resolvedSubTotal || 0);
     const numDisc = Number(discount || 0);
     if (numSub > 0 && numDisc > 0) {
       return Math.round((numDisc / numSub) * 1000) / 10;
@@ -142,18 +171,19 @@ const CustomerReceipt = ({
     }
     const taxableBase = Math.max(
       0,
-      Number(subTotal || 0) - Number(discount || 0),
+      Number(resolvedSubTotal || 0) - Number(discount || 0),
     );
     if (taxableBase > 0 && hstAmount > 0) {
       return Math.round((hstAmount / taxableBase) * 1000) / 10;
     }
     if (
-      Number(subTotal || 0) > 0 &&
-      (hstAmount > 0 || Number(taxTotal || 0) > 0)
+      Number(resolvedSubTotal || 0) > 0 &&
+      (hstAmount > 0 || Number(resolvedTaxTotal || 0) > 0)
     ) {
       return (
         Math.round(
-          (Number(taxTotal || hstAmount) / Number(subTotal)) * 1000,
+          (Number(resolvedTaxTotal || hstAmount) / Number(resolvedSubTotal)) *
+            1000,
         ) / 10
       );
     }
@@ -226,7 +256,8 @@ const CustomerReceipt = ({
     return null;
   };
 
-  const showSeatHeaders = items.some((it) => normalizeSeat(it) != null);
+  const showSeatHeaders =
+    !seatFilter.filter && items.some((it) => normalizeSeat(it) != null);
   const seatGroups = (() => {
     const map = new Map();
     for (const item of items) {
@@ -361,7 +392,7 @@ const CustomerReceipt = ({
         {(partyLabel || !shouldShowTable(order)) && (
           <div>
             <span className="text-zinc-500">Party:</span>{" "}
-            <span className="receipt-bold">{partyLabel || "Walk-in"}</span>
+            <span className="receipt-bold">{partyLabel || "Talk Away"}</span>
           </div>
         )}
         <div>
@@ -382,10 +413,13 @@ const CustomerReceipt = ({
           const regularItems = group.items.filter((item) => !isOfferItem(item));
           const offerItems = group.items.filter((item) => isOfferItem(item));
           return (
-            <div key={group.label || gIdx} className={gIdx > 0 ? "mt-2" : ""}>
+            <div key={group.label || gIdx} className={gIdx > 0 ? "mt-3" : ""}>
               {showSeatHeaders ? (
-                <div className="receipt-bold uppercase text-[10px] mb-1.5 pb-0.5 border-b border-black">
-                  {group.label}
+                <div className="mb-2">
+                  <div className="receipt-seat-rule" />
+                  <div className="receipt-seat-label" style={{ fontSize: 11 }}>
+                    {group.label}:
+                  </div>
                 </div>
               ) : null}
               {regularItems.map((item, idx) =>
@@ -396,7 +430,7 @@ const CustomerReceipt = ({
                   {regularItems.length > 0 && (
                     <div className="receipt-divider mb-2" />
                   )}
-                  <div className="receipt-bold uppercase text-[10px] mb-1.5 pb-0.5 border-b border-zinc-300">
+                  <div className="receipt-category-title">
                     Offers
                   </div>
                   {offerItems.map((item, idx) =>
@@ -413,7 +447,7 @@ const CustomerReceipt = ({
 
       {/* Totals */}
       <div className="mb-2 space-y-1 text-[11px]">
-        <Row label="Subtotal" value={money(subTotal)} muted />
+        <Row label="Subtotal" value={money(resolvedSubTotal)} muted />
         {discount > 0 && (
           <>
             <Row
@@ -423,7 +457,9 @@ const CustomerReceipt = ({
             />
             <Row
               label="Net Amount"
-              value={money(Math.max(0, Number(subTotal || 0) - discount))}
+              value={money(
+                Math.max(0, Number(resolvedSubTotal || 0) - discount),
+              )}
               muted
             />
           </>

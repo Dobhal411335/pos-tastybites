@@ -10,6 +10,10 @@ import {
   todayRestaurantISO,
 } from "@/lib/restaurantTime";
 import { businessDateBounds } from "@/lib/eod/eodHelpers";
+import {
+  isSeatBasedPaymentSplits,
+  normalizeSeatNumber,
+} from "@/lib/orders/seatHelpers";
 
 /** Roles that may administer the print queue (not plain floor EMPLOYEE). */
 export const SALES_PRINT_ROLES = [
@@ -349,7 +353,7 @@ export async function createSplitReceiptPrintJobs({
   const splits = rawSplits.map((s) =>
     s && typeof s.toObject === "function" ? s.toObject() : s,
   );
-  if (splits.length < 2) {
+  if (splits.length < 1) {
     const result = await createReceiptPrintJob({
       order,
       requestedBy,
@@ -374,8 +378,9 @@ export async function createSplitReceiptPrintJobs({
     serverName: serverName || null,
     restaurantName: restaurantName || null,
     orderNumber: order.orderNumber,
-    tipAmount: order.tipAmount ?? null,
-    tipMethod: order.tipMethod ?? null,
+    // Per-slip tip overrides these; keep order totals for non-split context
+    tipAmount: null,
+    tipMethod: null,
     serviceChargeTotal: order.serviceChargeTotal ?? null,
     serviceChargeName: order.serviceChargeName ?? null,
     discountTotal: order.discountTotal ?? null,
@@ -388,18 +393,53 @@ export async function createSplitReceiptPrintJobs({
     orderCashAmount: order.cashAmount ?? null,
     orderCardAmount: order.cardAmount ?? null,
     orderGiftcardUsedAmount: order.giftcardUsedAmount ?? null,
+    orderTipAmount: order.tipAmount ?? null,
   };
+
+  const filterReceiptBySeat = isSeatBasedPaymentSplits(
+    splits,
+    order.items || [],
+  );
 
   const jobs = [];
   for (let i = 0; i < splits.length; i++) {
     const split = splits[i] || {};
     const methodRaw = String(split.method || "Cash").trim();
-    const isCash = /^cash$/i.test(methodRaw);
     const amount = Number(split.amount) || 0;
+    const tipAmt = Number(split.tipAmount) || 0;
+    const cashAmt =
+      split.cashAmount != null && split.cashAmount !== ""
+        ? Number(split.cashAmount) || 0
+        : /^cash$/i.test(methodRaw) && !/card/i.test(methodRaw)
+          ? amount + tipAmt
+          : 0;
+    const cardAmt =
+      split.cardAmount != null && split.cardAmount !== ""
+        ? Number(split.cardAmount) || 0
+        : /card/i.test(methodRaw) && !/^cash$/i.test(methodRaw)
+          ? amount + tipAmt
+          : /card/i.test(methodRaw) && /cash/i.test(methodRaw)
+            ? Math.max(0, amount + tipAmt - cashAmt)
+            : 0;
     const cardType = split.cardType ? String(split.cardType).trim() : null;
-    const splitMethod =
-      !isCash && cardType ? `Card - ${cardType}` : isCash ? "Cash" : "Card";
+    const hasCash = cashAmt > 0;
+    const hasCard = cardAmt > 0;
+    let splitMethod = methodRaw;
+    if (hasCash && hasCard) {
+      splitMethod = cardType ? `Card - ${cardType} + Cash` : "Cash + Card";
+    } else if (hasCard) {
+      splitMethod = cardType ? `Card - ${cardType}` : "Card";
+    } else {
+      splitMethod = "Cash";
+    }
     const splitName = String(split.name || `Guest ${i + 1}`).trim();
+    const seatNumbers = Array.isArray(split.seatNumbers)
+      ? split.seatNumbers
+          .map((n) => normalizeSeatNumber(n))
+          .filter((n, idx, arr) => arr.indexOf(n) === idx)
+      : split.seatNumber != null
+        ? [normalizeSeatNumber(split.seatNumber)]
+        : [];
     const idempotencyKey = `receipt:${order._id}:split:${i}`;
     const existing = await PrintJob.findOne({
       restaurantId: order.restaurantId,
@@ -432,9 +472,21 @@ export async function createSplitReceiptPrintJobs({
         partyName: splitName,
         // Slip-specific tender (overrides order aggregates for this job)
         paymentMethod: splitMethod,
-        cashAmount: isCash ? amount : 0,
-        cardAmount: isCash ? 0 : amount,
+        cashAmount: cashAmt,
+        cardAmount: cardAmt,
+        tipAmount: tipAmt > 0 ? tipAmt : 0,
+        tipMethod: tipAmt > 0 ? split.tipMethod || null : null,
         giftcardUsedAmount: 0,
+        ...(filterReceiptBySeat
+          ? {
+              filterReceiptBySeat: true,
+              splitSeatNumber:
+                seatNumbers.length === 1
+                  ? seatNumbers[0]
+                  : normalizeSeatNumber(split.seatNumber),
+              splitSeatNumbers: seatNumbers.length ? seatNumbers : undefined,
+            }
+          : {}),
       },
     });
     if (job) jobs.push(job);

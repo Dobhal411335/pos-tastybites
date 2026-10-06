@@ -41,7 +41,7 @@ const KitchenOrderTicket = ({
   );
   const note = specialNote || order.specialNote;
   const partyLabel =
-    partyName || guestName || (isDirectSaleOrder(order) ? "Walk-in" : "");
+    partyName || guestName || (isDirectSaleOrder(order) ? "Take-Away" : "");
   const directSale = isDirectSaleOrder(order);
   const brand = restaurantName || "TASTY BITES";
   const resolvedGuestCount =
@@ -108,7 +108,7 @@ const KitchenOrderTicket = ({
 
         <div className="text-sm receipt-bold mb-1">
           {directSale
-            ? partyLabel || "Walk-in"
+            ? partyLabel || "Take-Away"
             : tableLabel
               ? `${tableLabel}`
               : "Takeaway / No Table"}
@@ -146,15 +146,18 @@ const KitchenOrderTicket = ({
 
       <div className="text-sm">
         {seatGroups.map((seatGroup, seatIdx) => (
-          <div key={seatGroup.label || seatIdx} className="mb-4">
+          <div key={seatGroup.label || seatIdx} className={seatIdx > 0 ? "mt-3" : ""}>
             {showSeatHeaders ? (
-              <div className="receipt-bold uppercase mb-2 pb-1 border-b-2 border-black text-xs tracking-wide">
-                {seatGroup.label}
+              <div className="mb-2">
+                <div className="receipt-seat-rule" />
+                <div className="receipt-seat-label">
+                  {seatGroup.label}:
+                </div>
               </div>
             ) : null}
             {Object.entries(seatGroup.byCategory).map(([group, groupItems], idx) => (
               <div key={`${seatGroup.label}-${group}-${idx}`} className="mb-3">
-                <div className="receipt-bold uppercase mb-2 pb-1 border-b border-black text-xs">
+                <div className="receipt-category-title">
                   {group}
                 </div>
                 <div className="space-y-3 mt-2">

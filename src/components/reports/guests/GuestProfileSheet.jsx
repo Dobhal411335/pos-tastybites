@@ -158,10 +158,10 @@ function TypeBadge({ type }) {
       </span>
     );
   }
-  if (type === "walk-in") {
+  if (type === "takeaway") {
     return (
       <span className="bg-zinc-100 text-zinc-600 font-semibold text-[10px] uppercase tracking-wide px-2 py-0.5 rounded-md w-max">
-        Walk-in
+        Takeaway
       </span>
     );
   }

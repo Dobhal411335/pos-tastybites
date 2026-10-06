@@ -131,7 +131,7 @@ export default function SalesFloorPage() {
   const [activeEmployees, setActiveEmployees] = useState([]);
   const [onlineStaff, setOnlineStaff] = useState({ count: 0, online: [] });
   const [orderAttention, setOrderAttention] = useState({
-    walkInUnpaid: 0,
+    takeAwayUnpaid: 0,
     staffUnpaid: 0,
     onlineOpen: 0,
   });
@@ -183,17 +183,17 @@ export default function SalesFloorPage() {
       const json = await res.json();
       if (!res.ok || !json.success) return;
       const orders = Array.isArray(json.data) ? json.data : [];
-      let walkInUnpaid = 0;
+      let takeAwayUnpaid = 0;
       let staffUnpaid = 0;
       let onlineOpen = 0;
       for (const order of orders) {
         if (!isFloorOrderOpen(order)) continue;
         const source = String(order.source || "").toUpperCase();
-        if (source === "WALK_IN") walkInUnpaid += 1;
+        if (source === "WALK_IN") takeAwayUnpaid += 1;
         else if (source === "STAFF") staffUnpaid += 1;
         else if (source === "ONLINE") onlineOpen += 1;
       }
-      setOrderAttention({ walkInUnpaid, staffUnpaid, onlineOpen });
+      setOrderAttention({ takeAwayUnpaid, staffUnpaid, onlineOpen });
     } catch {
       /* non-blocking */
     }
@@ -1040,9 +1040,9 @@ export default function SalesFloorPage() {
           <div className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain p-3">
             {[
               {
-                href: "/sales/walk-in",
+                href: "/sales/take-away",
                 label: "Take Away",
-                count: orderAttention.walkInUnpaid,
+                count: orderAttention.takeAwayUnpaid,
                 Icon: ShoppingBag,
                 tone: "border-orange-200 bg-orange-50 text-orange-900",
                 badge: "bg-orange-500",
@@ -1089,14 +1089,14 @@ export default function SalesFloorPage() {
               </button>
             ))}
 
-            {orderAttention.walkInUnpaid +
+            {orderAttention.takeAwayUnpaid +
               orderAttention.staffUnpaid +
               orderAttention.onlineOpen ===
             0 ? (
               <div className="flex items-start gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5">
                 <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
                 <p className="text-xs font-semibold text-emerald-800">
-                  All clear — no unpaid walk-in, staff, or open online orders.
+                  All clear — no unpaid takeaway, staff, or open online orders.
                 </p>
               </div>
             ) : null}

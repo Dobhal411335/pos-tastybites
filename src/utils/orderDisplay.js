@@ -28,7 +28,7 @@ export function resolveDocumentId(value) {
 
 export function isDirectSaleOrder(order) {
   const source = order?.source;
-  return source === "WALK_IN" || source === "STAFF";
+  return source === "WALK_IN" || source === "TAKEAWAY" || source === "STAFF";
 }
 
 function stripFloorSuffix(value) {
@@ -127,16 +127,16 @@ export function shouldShowTable(order) {
 }
 
 export function getOrderSourceLabel(source) {
-  if (source === "WALK_IN") return "Walk-in";
+  if (source === "WALK_IN" || source === "TAKEAWAY") return "Takeaway";
   if (source === "STAFF") return "Staff";
   if (source === "ONLINE") return "Online";
   return source || "POS";
 }
 
-/** User-facing order type: Walk-in, Staff, Table Order, Online, Takeaway */
+/** User-facing order type: Takeaway, Staff, Table Order, Online */
 export function getOrderTypeLabel(order) {
   const source = order?.source || "POS";
-  if (source === "WALK_IN") return "Walk-in";
+  if (source === "WALK_IN" || source === "TAKEAWAY") return "Takeaway";
   if (source === "STAFF") return "Staff";
   if (source === "ONLINE") return "Online";
   if (order?.tableSession || order?.tableNo) return "Table Order";
@@ -145,7 +145,7 @@ export function getOrderTypeLabel(order) {
 
 export function getOrderTypeBadgeClass(order) {
   const source = order?.source || "POS";
-  if (source === "WALK_IN") {
+  if (source === "WALK_IN" || source === "TAKEAWAY") {
     return "bg-orange-100 text-orange-800 border-orange-200";
   }
   if (source === "STAFF") {
@@ -164,8 +164,8 @@ export function getOrderLocationLabel(order) {
   if (order?.source === "ONLINE") {
     return "Online Pickup";
   }
-  if (order?.source === "WALK_IN") {
-    return order?.partyName || order?.guestName || "Walk-in";
+  if (order?.source === "WALK_IN" || order?.source === "TAKEAWAY") {
+    return order?.partyName || order?.guestName || "Takeaway";
   }
   if (order?.source === "STAFF") {
     return order?.partyName || order?.guestName || "Staff";
@@ -180,8 +180,13 @@ export function getOrderLocationLabel(order) {
 export function getOrderPartyLabel(order) {
   const party = (order?.partyName || order?.guestName || "").trim();
   if (!party) return null;
-  // Hide only generic placeholders — keep real walk-in / staff names.
-  if (order?.source === "WALK_IN" && /^walk[- ]?in$/i.test(party)) return null;
+  // Hide only generic placeholders — keep real takeaway / staff names.
+  if (
+    (order?.source === "WALK_IN" || order?.source === "TAKEAWAY") &&
+    /^(walk[- ]?in|take[- ]?away)$/i.test(party)
+  ) {
+    return null;
+  }
   if (order?.source === "STAFF" && /^staff$/i.test(party)) return null;
   return party;
 }

@@ -20,7 +20,6 @@ import {
   Trash2,
   Loader2,
   LayoutGrid,
-  List,
   Columns2,
   Columns3,
   Coffee,
@@ -32,6 +31,7 @@ import {
   Sandwich,
   ShoppingCart,
   ChevronDown,
+  ChevronUp,
   Check,
   SlidersHorizontal,
 } from "lucide-react";
@@ -39,7 +39,6 @@ import { toast } from "sonner";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import CreateOrderSkeleton from "@/components/sales/CreateOrderSkeleton";
 import {
   Select,
@@ -54,19 +53,21 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import PrintPreviewModal from "@/components/receipts/PrintPreviewModal";
-import TodayOrderPaymentModal from "@/components/sales/TodayOrderPaymentModal";
 import StaffOrderPartyModal from "@/components/sales/StaffOrderPartyModal";
 import IngredientChips from "@/components/menu/IngredientChips";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { buildStaffDiscountState } from "@/lib/orders/staffDiscount";
 import { formatTableLocation, resolveDocumentId } from "@/utils/orderDisplay";
 import { canPayFromCreateOrder } from "@/utils/floorRoles";
+import {
+  isSeatSettled,
+  isSeatReleased,
+  formatSeatLabel,
+  getUnsettledSeatNumbers,
+} from "@/lib/orders/seatHelpers";
 import { countryCodes } from "@/utils/countryCodes";
 import {
   OFFER_CATEGORY,
@@ -85,6 +86,9 @@ import {
   cartChoiceSelectionsKey,
   cartCustomExtrasKey,
   getItemLineTotal,
+  getVisibleCartModifier,
+  isStandaloneExtraLine,
+  isRedundantStandaloneExtraOption,
 } from "@/utils/productChoices";
 import { buildModifiedRequestRemark } from "@/utils/modifiedRequestRemark";
 
@@ -105,7 +109,7 @@ function formatOrderServerName(order, fallbackUser) {
   return "Server";
 }
 
-/** Resume walk-in/staff only while the order is still open (not paid). */
+/** Resume takeaway/staff only while the order is still open (not paid). */
 function isOpenDirectOrderStatus(order) {
   if (!order) return false;
   const status = String(order.status || "").toUpperCase();
@@ -135,6 +139,26 @@ function normalizeCartSeatNumber(value) {
   const n = Number(value);
   if (!Number.isFinite(n) || n < 1) return null;
   return Math.floor(n);
+}
+
+/** Header styles for Table + Seat accordions (cycles after Seat 4). */
+const SEAT_ACCORDION_STYLES = [
+  { header: "bg-orange-500 text-white", badge: "bg-white/20 text-white" }, // Table
+  { header: "bg-[#9CA36A] text-white", badge: "bg-white/20 text-white" }, // Seat 1
+  { header: "bg-teal-400 text-white", badge: "bg-white/25 text-white" }, // Seat 2
+  { header: "bg-slate-400 text-white", badge: "bg-white/25 text-white" }, // Seat 3
+  { header: "bg-violet-500 text-white", badge: "bg-white/20 text-white" }, // Seat 4+
+];
+
+function getSeatAccordionStyle(seatNumber) {
+  if (seatNumber == null) return SEAT_ACCORDION_STYLES[0];
+  const idx = ((Math.floor(seatNumber) - 1) % 4) + 1;
+  return SEAT_ACCORDION_STYLES[idx] || SEAT_ACCORDION_STYLES[1];
+}
+
+function formatSeatAccordionLabel(seatNumber) {
+  if (seatNumber == null) return "Table";
+  return `Seat ${String(seatNumber).padStart(2, "0")}`;
 }
 
 function getCartFingerprint(items) {
@@ -202,15 +226,24 @@ function buildAddonChoiceSelections(addon, choicesByGroup = {}) {
 function buildCartFromOrderItems(items = []) {
   return items.map((item, idx) => {
     const style = item.preparationStyle || null;
-    const extras = (item.options || []).filter(
-      (o) => !String(o).toLowerCase().startsWith("style:"),
-    );
+    const extras = (item.options || []).filter((o) => {
+      if (String(o).toLowerCase().startsWith("style:")) return false;
+      // Extra lines keep addon name in options for pricing — don't show again
+      if (isRedundantStandaloneExtraOption(item, o)) return false;
+      return true;
+    });
     const offer = isOfferItem(item);
     const inclusions = cleanOfferList(item.inclusions);
     const choices = cleanOfferList(item.choices);
     const drinks = cleanOfferList(item.drinks);
     const parts = [];
-    if (item.size && item.size !== "Standard") parts.push(`Size: ${item.size}`);
+    if (
+      item.size &&
+      item.size !== "Standard" &&
+      !isStandaloneExtraLine(item)
+    ) {
+      parts.push(`Size: ${item.size}`);
+    }
     if (style) parts.push(`${style}`);
     if (offer) {
       const offerModifier = buildOfferCartModifier({
@@ -315,14 +348,15 @@ function OrderPageContent() {
   const router = useRouter();
   const { socket } = useSocket();
   const sessionId = params.sessionId;
-  const isWalkIn = sessionId === "walk-in";
+  const isTakeAway = sessionId === "takeaway";
   const isStaffOrder = sessionId === "staff";
-  const isDirectOrder = isWalkIn || isStaffOrder;
+  const isDirectOrder = isTakeAway || isStaffOrder;
   const isLegacyNew = sessionId === "new";
   const isNoSession = isDirectOrder || isLegacyNew;
   const hasTableSession = !isNoSession;
   const queryOrderId = searchParams.get("orderId");
   const queryStaffId = searchParams.get("staffId") || "";
+  const refreshPay = searchParams.get("refreshPay") === "1";
   const isFreshDirect =
     isDirectOrder && searchParams.get("fresh") === "1";
   const directOrderStorageKey = `direct-order-${sessionId}`;
@@ -339,8 +373,9 @@ function OrderPageContent() {
   const [activeCategory, setActiveCategory] = useState("All");
   const [searchQuery, setSearchQuery] = useState("");
   const [cart, setCart] = useState([]);
-  /** null = shared Table bucket; 1..guestCount = seat */
+  /** null = shared Table bucket; 1..guestCount = seat (accordion open target) */
   const [activeSeatNumber, setActiveSeatNumber] = useState(null);
+  const seatAccordionInitRef = useRef(false);
   const [orderType, setOrderType] = useState("Dine-in");
   const [orderStatus, setOrderStatus] = useState("Draft");
 
@@ -372,7 +407,6 @@ function OrderPageContent() {
   const [appliedDiscount, setAppliedDiscount] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeOrder, setActiveOrder] = useState(null);
-  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const cartIdSeq = useRef(0);
 
   // Print State
@@ -387,19 +421,17 @@ function OrderPageContent() {
   const [redirectAfterPrint, setRedirectAfterPrint] = useState(false);
   const [pendingReleaseAfterPrint, setPendingReleaseAfterPrint] = useState(false);
   const [pendingLeaveAfterPrint, setPendingLeaveAfterPrint] = useState(false);
-  // Open bill only after payment overlay has closed (avoids lost preview).
-  const [pendingBillAfterPay, setPendingBillAfterPay] = useState(false);
   const [serverName, setServerName] = useState("Server");
   const [kotCartFingerprint, setKotCartFingerprint] = useState(null);
   const [isReleaseModalOpen, setIsReleaseModalOpen] = useState(false);
   const [isReleasingTable, setIsReleasingTable] = useState(false);
+  const [seatReleaseTarget, setSeatReleaseTarget] = useState(null); // { seatNumber, label }
+  const [isReleasingSeat, setIsReleasingSeat] = useState(false);
   const sessionFloorIdRef = useRef(null);
 
   // View / layout states (persisted for staff preference)
-  const [panelLayout, setPanelLayout] = useState("4"); // '2' | '3'
-  const [itemStyle, setItemStyle] = useState("list"); // 'tiles' | 'list'
+  const [panelLayout, setPanelLayout] = useState("3"); // '2' | '3'
   const [gridCols, setGridCols] = useState(2); // 2 | 3 | 4
-  const [viewMode, setViewMode] = useState("list"); // 'grid' (heads) | 'list' (categories)
   const [heads, setHeads] = useState([{ _id: "all", name: "All" }]);
   const [productHeads, setProductHeads] = useState([]);
   const [activeHead, setActiveHead] = useState("All");
@@ -409,8 +441,6 @@ function OrderPageContent() {
 
   const useHeadsNav = true; // heads always available in 2 + 3 panel
   const useCategoryNav = panelLayout === "2"; // category dropdown in 2-panel search row
-  // Tiles and list both work in 2 + 3 panel (3-panel defaults to 2 tile columns)
-  const effectiveItemStyle = itemStyle;
   const useCategoryFilter = true; // both panels filter by category
   const useHeadsFilter = true; // both panels filter by head
 
@@ -468,19 +498,17 @@ function OrderPageContent() {
 
   // 3-panel center column is narrower — ramp column counts more gently.
   const productGridClass =
-    effectiveItemStyle === "tiles"
-      ? panelLayout === "3"
-        ? gridCols === 4
-          ? "grid grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 p-3 gap-2.5"
-          : gridCols === 3
-            ? "grid grid-cols-2 xl:grid-cols-3 p-3 gap-2.5"
-            : "grid grid-cols-2 p-3 gap-2.5"
-        : gridCols === 4
-          ? "grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 p-3 gap-2.5"
-          : gridCols === 3
-            ? "grid grid-cols-2 md:grid-cols-3 p-3 gap-2.5"
-            : "grid grid-cols-2 p-3 gap-2.5"
-      : "grid grid-cols-1 xl:grid-cols-2 p-4 gap-3";
+    panelLayout === "3"
+      ? gridCols === 4
+        ? "grid grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 p-3 gap-2.5"
+        : gridCols === 3
+          ? "grid grid-cols-2 xl:grid-cols-3 p-3 gap-2.5"
+          : "grid grid-cols-2 p-3 gap-2.5"
+      : gridCols === 4
+        ? "grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 p-3 gap-2.5"
+        : gridCols === 3
+          ? "grid grid-cols-2 md:grid-cols-3 p-3 gap-2.5"
+          : "grid grid-cols-2 p-3 gap-2.5";
 
   const headIconMap = {
     Breakfast: Coffee,
@@ -512,14 +540,8 @@ function OrderPageContent() {
         if (prefs.panelLayout === "2" || prefs.panelLayout === "3") {
           setPanelLayout(prefs.panelLayout);
         }
-        if (prefs.itemStyle === "tiles" || prefs.itemStyle === "list") {
-          setItemStyle(prefs.itemStyle);
-        }
         if ([2, 3, 4].includes(Number(prefs.gridCols))) {
           setGridCols(Number(prefs.gridCols));
-        }
-        if (prefs.viewMode === "grid" || prefs.viewMode === "list") {
-          setViewMode(prefs.viewMode);
         }
       }
     } catch {
@@ -535,33 +557,19 @@ function OrderPageContent() {
         "sales-order-layout",
         JSON.stringify({
           panelLayout,
-          itemStyle,
           gridCols,
-          viewMode,
         }),
       );
     } catch {
       /* ignore */
     }
-  }, [panelLayout, itemStyle, gridCols, viewMode]);
+  }, [panelLayout, gridCols]);
 
   const setPanelLayoutMode = (mode) => {
     setPanelLayout(mode);
     // Narrower menu column in 3-panel — default to 2 tile columns.
-    if (mode === "3" && itemStyle === "tiles") {
+    if (mode === "3") {
       setGridCols(2);
-    }
-  };
-
-  const setItemStyleMode = (style) => {
-    setItemStyle(style);
-    if (style === "tiles") {
-      setViewMode("grid");
-      if (panelLayout === "3" && gridCols > 3) {
-        setGridCols(2);
-      }
-    } else {
-      setViewMode("list");
     }
   };
 
@@ -740,8 +748,8 @@ function OrderPageContent() {
           if (isFreshDirect) {
             sessionStorage.removeItem(directOrderStorageKey);
             try {
-              if (isWalkIn) {
-                router.replace("/sales/orders/walk-in");
+              if (isTakeAway) {
+                router.replace("/sales/orders/takeaway");
               } else if (isStaffOrder) {
                 const next = queryStaffId
                   ? `/sales/orders/staff?staffId=${encodeURIComponent(queryStaffId)}`
@@ -817,7 +825,7 @@ function OrderPageContent() {
     sessionId,
     isDirectOrder,
     isFreshDirect,
-    isWalkIn,
+    isTakeAway,
     isStaffOrder,
     hasTableSession,
     queryOrderId,
@@ -830,29 +838,26 @@ function OrderPageContent() {
     setServerName(formatOrderServerName(activeOrder, currentUser));
   }, [currentUser, activeOrder]);
 
-  // After Pay Now succeeds, wait until payment modal unmounts, then show bill.
-  useEffect(() => {
-    if (!pendingBillAfterPay) return;
-    if (isPaymentModalOpen) return;
-    if (!printOrderData && !activeOrder) return;
-    setPendingBillAfterPay(false);
-    setIsPrintModalOpen(true);
-  }, [pendingBillAfterPay, isPaymentModalOpen, printOrderData, activeOrder]);
-
   const seatCount = hasTableSession
     ? Math.max(1, Math.floor(Number(sessionData?.guestCount) || 1))
     : 0;
 
   useEffect(() => {
     if (!hasTableSession) {
+      seatAccordionInitRef.current = false;
       setActiveSeatNumber(null);
+      return;
+    }
+    if (!seatAccordionInitRef.current) {
+      seatAccordionInitRef.current = true;
+      setActiveSeatNumber(1);
       return;
     }
     if (
       activeSeatNumber != null &&
       (activeSeatNumber < 1 || activeSeatNumber > seatCount)
     ) {
-      setActiveSeatNumber(null);
+      setActiveSeatNumber(seatCount >= 1 ? 1 : null);
     }
   }, [hasTableSession, seatCount, activeSeatNumber]);
 
@@ -928,6 +933,21 @@ function OrderPageContent() {
       console.error(err);
     }
   }, [sessionId, isNoSession, directOrderStorageKey]);
+
+  useEffect(() => {
+    if (!refreshPay) return;
+    fetchOrderOnly().finally(() => {
+      const params = new URLSearchParams(searchParams.toString());
+      params.delete("refreshPay");
+      const qs = params.toString();
+      router.replace(
+        qs
+          ? `/sales/orders/${sessionId}?${qs}`
+          : `/sales/orders/${sessionId}`,
+        { scroll: false },
+      );
+    });
+  }, [refreshPay, fetchOrderOnly, router, sessionId, searchParams]);
 
   useEffect(() => {
     const handleReconnect = () => {
@@ -1208,6 +1228,171 @@ function OrderPageContent() {
   const resolveLineSeatNumber = () =>
     hasTableSession ? normalizeCartSeatNumber(activeSeatNumber) : null;
 
+  const renderCartItemCard = (item, idx) => {
+    const visibleModifier = getVisibleCartModifier(item);
+    const itemKey = item.cartId || `${item.id}-${idx}`;
+    return (
+      <div
+        key={itemKey}
+        className="bg-white rounded-lg p-3 border border-zinc-200 shadow-sm"
+      >
+        <div className="flex justify-between items-start">
+          <div className="pr-2 min-w-0">
+            <h4 className="font-bold text-zinc-900 text-sm leading-tight">
+              {isOfferItem(item) ? (
+                <span className="text-[10px] font-bold text-violet-700 bg-violet-50 border border-violet-100 rounded px-1 py-0.5 mr-1.5 align-middle">
+                  OFFER
+                </span>
+              ) : item.productCode ? (
+                <span className="text-orange-600 mr-1.5">
+                  {item.productCode}
+                </span>
+              ) : null}
+              {item.name}
+              {item.size && item.size !== "Standard" ? (
+                <span className="text-zinc-500 font-semibold">
+                  {" "}
+                  ({item.size})
+                </span>
+              ) : null}
+            </h4>
+            {visibleModifier ? (
+              <p className="text-[11px] font-semibold text-zinc-500 mt-0.5">
+                {visibleModifier}
+              </p>
+            ) : null}
+            {!isOfferItem(item) &&
+            normalizeChoiceSelections(item.choiceSelections).length > 0 ? (
+              <div className="mt-1.5 space-y-1.5">
+                {normalizeChoiceSelections(item.choiceSelections).map(
+                  (group) => (
+                    <div key={group.name}>
+                      <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-wide">
+                        {group.name}
+                      </p>
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {group.subChoices.map((choice) => (
+                          <span
+                            key={`${group.name}-${choice}`}
+                            className="inline-flex items-center rounded-full border border-orange-100 bg-orange-50 px-2 py-0.5 text-[10px] font-semibold text-orange-800"
+                          >
+                            {choice}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ),
+                )}
+              </div>
+            ) : null}
+            {!isOfferItem(item) &&
+            normalizeChoiceSelections(item.addonChoiceSelections).length >
+              0 ? (
+              <div className="mt-1.5 space-y-1.5">
+                {normalizeChoiceSelections(item.addonChoiceSelections).map(
+                  (group) => (
+                    <div key={`addon-${group.name}`}>
+                      <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-wide">
+                        {group.name}
+                      </p>
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {group.subChoices.map((choice) => (
+                          <span
+                            key={`addon-${group.name}-${choice}`}
+                            className="inline-flex items-center rounded-full border border-blue-100 bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-800"
+                          >
+                            {choice}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ),
+                )}
+              </div>
+            ) : null}
+            {!isOfferItem(item) &&
+            normalizeCustomExtras(item.customExtras).length > 0 ? (
+              <div className="mt-1.5 space-y-1">
+                {normalizeCustomExtras(item.customExtras).map(
+                  (extra, extraIdx) => (
+                    <p
+                      key={`${extra.name}-${extraIdx}`}
+                      className="text-[11px] font-semibold text-zinc-600"
+                    >
+                      + {extra.name}{" "}
+                      <span className="text-zinc-500">
+                        (+${Number(extra.price).toFixed(2)})
+                      </span>
+                    </p>
+                  ),
+                )}
+              </div>
+            ) : null}
+          </div>
+          <span className="font-bold text-sm text-zinc-900 shrink-0">
+            ${getItemLineTotal(item).toFixed(2)}
+          </span>
+        </div>
+        <div className="mt-2">
+          <label
+            htmlFor={`pos-cart-notes-${itemKey}`}
+            className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-zinc-500"
+          >
+            Item remark
+          </label>
+          <textarea
+            id={`pos-cart-notes-${itemKey}`}
+            value={item.notes || ""}
+            onChange={(e) =>
+              updateCartItemNotes(item.cartId || item.id, e.target.value)
+            }
+            onBlur={(e) =>
+              updateCartItemNotes(
+                item.cartId || item.id,
+                String(e.target.value || "").trim(),
+              )
+            }
+            onKeyDown={(e) => e.stopPropagation()}
+            rows={2}
+            maxLength={200}
+            placeholder="Special request for this item…"
+            className="w-full resize-none rounded-lg border border-zinc-200 bg-zinc-50 px-2.5 py-2 text-xs font-medium text-zinc-800 placeholder:text-zinc-400 focus:border-orange-400 focus:bg-white focus:outline-none focus:ring-1 focus:ring-orange-400"
+          />
+        </div>
+        <div className="flex items-center justify-between mt-2">
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => removeFromCart(item.cartId || item.id)}
+              className="p-1.5 text-zinc-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="flex items-center gap-2 bg-zinc-100 rounded-md p-0.5">
+            <button
+              type="button"
+              onClick={() => updateQty(item.cartId || item.id, -1)}
+              className="w-8 h-8 rounded bg-white shadow-sm flex items-center justify-center text-zinc-700 hover:bg-zinc-50"
+            >
+              <Minus className="w-3.5 h-3.5" />
+            </button>
+            <span className="font-bold text-sm w-4 text-center text-zinc-900">
+              {item.qty}
+            </span>
+            <button
+              type="button"
+              onClick={() => updateQty(item.cartId || item.id, 1)}
+              className="w-8 h-8 rounded bg-white shadow-sm flex items-center justify-center text-zinc-700 hover:bg-zinc-50"
+            >
+              <Plus className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const addToCart = (product) => {
     if (productNeedsOptions(product)) {
       handleOpenOptions(product);
@@ -1440,6 +1625,9 @@ function OrderPageContent() {
         addon,
         entry.choicesByGroup || {},
       );
+      const choiceSummary = addonChoiceSelections
+        .map((group) => `${group.name}: ${group.subChoices.join(", ")}`)
+        .join(" · ");
       newLines.push({
         id: selectedProduct._id,
         name: addon.name || selectedProduct.name,
@@ -1452,9 +1640,10 @@ function OrderPageContent() {
         size: "Extra",
         sizes: [],
         preparationStyle: null,
+        // Kept for server-side addon pricing; display filters the duplicate name
         options: [addon.name],
         productType: selectedProduct.productType === "BAR" ? "BAR" : "KITCHEN",
-        modifier: `Addons: ${addon.name}`,
+        modifier: choiceSummary || undefined,
         addonChoiceSelections,
         notes,
       });
@@ -1553,7 +1742,7 @@ function OrderPageContent() {
     if (trimmed) return trimmed;
 
     if (isStaffOrder) return "Staff";
-    if (isWalkIn || isLegacyNew) return "Walk-in";
+    if (isTakeAway || isLegacyNew) return "Takeaway";
 
     const tableNo = getDisplayTableNo();
     const guestCount = sessionData?.guestCount;
@@ -1564,7 +1753,7 @@ function OrderPageContent() {
     if (guestCount != null) {
       return `${guestCount} guest${guestCount === 1 ? "" : "s"}`;
     }
-    return "Walk-in";
+    return "Takeaway";
   };
 
   const submitOrder = async ({
@@ -1572,7 +1761,7 @@ function OrderPageContent() {
     staffForId = null,
     staffReason = null,
   }) => {
-    const orderSource = isWalkIn
+    const orderSource = isTakeAway
       ? "WALK_IN"
       : isStaffOrder
         ? "STAFF"
@@ -1743,16 +1932,38 @@ function OrderPageContent() {
   const totalTax = Math.round(rawTotalTax * taxableRatio * 100) / 100;
   const total = Math.max(0, subtotal - discountAmount + totalTax);
 
+  const cartFingerprintNow = getCartFingerprint(cart);
+  const hasUnsentCartChanges =
+    cart.length > 0 &&
+    (kotCartFingerprint == null ||
+      kotCartFingerprint !== cartFingerprintNow);
+  // KOT is "sent" only when the live cart still matches what was last ticketed.
+  // New seat items must re-enable Kitchen / KOT even if an earlier seat was paid.
   const hasSentKot =
     Boolean(activeOrder) &&
     orderStatus !== "Draft" &&
-    kotCartFingerprint === getCartFingerprint(cart);
-  const isPaid = orderStatus === "PAID" || activeOrder?.paymentStatus === "PAID";
+    !hasUnsentCartChanges;
+  const serverMarkedPaid =
+    orderStatus === "PAID" ||
+    String(activeOrder?.paymentStatus || "").toUpperCase() === "PAID";
+  // Stay "paid" in the UI only while there is nothing new to send to kitchen.
+  const isPaid = serverMarkedPaid && !hasUnsentCartChanges;
+  const isPartialPay =
+    String(activeOrder?.paymentStatus || "").toUpperCase() === "PARTIAL" ||
+    (serverMarkedPaid && hasUnsentCartChanges);
+  const canCollectPayment = canPayFromCreateOrder(currentUser?.role);
   const canPay =
     hasSentKot &&
     cart.length > 0 &&
     !isPaid &&
-    canPayFromCreateOrder(currentUser?.role);
+    canCollectPayment;
+  const unsettledSeatNumbers = getUnsettledSeatNumbers({
+    items: activeOrder?.items || cart,
+    paymentSplits: activeOrder?.paymentSplits,
+  });
+  const hasUnsettledSeatsWithItems = unsettledSeatNumbers.length > 0;
+  /** Pay Now / Pay remaining — any unpaid seat with KOT items (empty seats ignored). */
+  const canPayBill = canPay && hasUnsettledSeatsWithItems;
 
   // After KOT, persisted order totals are authoritative (server reprices items).
   const billingSubtotal =
@@ -1769,28 +1980,117 @@ function OrderPageContent() {
       : discountAmount;
   const billingTotal = billingSubtotal - billingDiscount + billingTaxTotal;
 
+  const buildPaymentReturnTo = () =>
+    hasTableSession
+      ? `/sales/orders/${sessionId}`
+      : `/sales/orders/${sessionId}${
+          queryOrderId ? `?orderId=${queryOrderId}` : ""
+        }`;
+
   const openPaymentModal = () => {
     if (orderStatus === "PAID" || isPaid) return;
-    
+
     // Only Manager / Master Terminal (and admin) may pay from Create Order
     if (!canPayFromCreateOrder(currentUser?.role)) {
       toast.error("Payments must be completed at the main counter.");
       return;
     }
-    
+
     if (!hasSentKot) {
       toast.error("Send the order to kitchen (KOT) before taking payment.");
       return;
     }
-    if (!activeOrder) {
+    if (!activeOrder?._id) {
       toast.error("Send the order to kitchen (KOT) before taking payment.");
       return;
     }
-    setIsPaymentModalOpen(true);
+    if (!hasUnsettledSeatsWithItems) {
+      toast.error("No unpaid seats with ordered items.");
+      return;
+    }
+
+    // One unpaid seat left → open that seat directly; otherwise settle remaining balance.
+    if (isPartialPay && unsettledSeatNumbers.length === 1) {
+      openSeatPayment(unsettledSeatNumbers[0]);
+      return;
+    }
+
+    const q = new URLSearchParams();
+    if (hasTableSession && sessionId) q.set("sessionId", String(sessionId));
+    q.set("returnTo", buildPaymentReturnTo());
+    if (isPartialPay) q.set("remaining", "1");
+    router.push(`/sales/payment/${activeOrder._id}?${q.toString()}`);
   };
 
-  const goToWalkInHub = () => {
-    router.push("/sales/walk-in");
+  const openSeatPayment = (seatNumber) => {
+    if (isPaid) return;
+    if (!canPayFromCreateOrder(currentUser?.role)) {
+      toast.error("Payments must be completed at the main counter.");
+      return;
+    }
+    if (!hasSentKot || !activeOrder?._id) {
+      toast.error("Send the order to kitchen (KOT) before taking payment.");
+      return;
+    }
+    if (isSeatSettled(activeOrder?.paymentSplits, seatNumber, activeOrder)) {
+      toast.error(`${formatSeatLabel(seatNumber)} has already been paid.`);
+      return;
+    }
+    const q = new URLSearchParams();
+    if (hasTableSession && sessionId) q.set("sessionId", String(sessionId));
+    q.set("returnTo", buildPaymentReturnTo());
+    q.set("seat", seatNumber == null ? "table" : String(seatNumber));
+    router.push(`/sales/payment/${activeOrder._id}?${q.toString()}`);
+  };
+
+  const confirmReleaseSeat = async () => {
+    if (!seatReleaseTarget || !activeOrder?._id || !sessionId) return;
+    setIsReleasingSeat(true);
+    try {
+      const res = await fetch("/api/sales/sessions", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sessionId,
+          action: "RELEASE_SEAT",
+          orderId: activeOrder._id,
+          seatNumber:
+            seatReleaseTarget.seatNumber == null
+              ? "table"
+              : seatReleaseTarget.seatNumber,
+        }),
+      });
+      const json = await res.json();
+      if (!json.success) {
+        toast.error(json.message || "Could not release seat");
+        return;
+      }
+      toast.success(`${seatReleaseTarget.label} released`);
+      setActiveOrder((prev) =>
+        prev
+          ? {
+              ...prev,
+              releasedSeats:
+                json.data?.releasedSeats ||
+                [
+                  ...(Array.isArray(prev.releasedSeats)
+                    ? prev.releasedSeats
+                    : []),
+                  seatReleaseTarget.seatNumber,
+                ],
+            }
+          : prev,
+      );
+      setSeatReleaseTarget(null);
+    } catch {
+      toast.error("Could not release seat");
+    } finally {
+      setIsReleasingSeat(false);
+    }
+  };
+
+  const goToTakeAwayHub = () => {
+    router.push("/sales/take-away");
   };
 
   const goToStaffHub = () => {
@@ -1821,8 +2121,8 @@ function OrderPageContent() {
     setActiveOrder(null);
     setOrderStatus("Draft");
     setOrderNote("");
-    if (isWalkIn) {
-      goToWalkInHub();
+    if (isTakeAway) {
+      goToTakeAwayHub();
       return;
     }
     if (isStaffOrder) {
@@ -1893,8 +2193,7 @@ function OrderPageContent() {
 
   const layoutSummaryLabel = (() => {
     const panels = panelLayout === "3" ? "3 panels" : "2 panels";
-    if (itemStyle === "list") return `${panels} · List`;
-    return `${panels} · Tiles ${gridCols}`;
+    return `${panels} · ${gridCols} columns`;
   })();
 
   const renderLayoutControls = () => (
@@ -1914,7 +2213,7 @@ function OrderPageContent() {
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-52 bg-white">
-        <DropdownMenuLabel className="text-[10px] uppercas tracking-wider text-zinc-500">
+        <DropdownMenuLabel className="text-[10px] uppercase tracking-wider text-zinc-500">
           Screens
         </DropdownMenuLabel>
         <DropdownMenuItem
@@ -1938,53 +2237,22 @@ function OrderPageContent() {
           ) : null}
         </DropdownMenuItem>
 
-          <>
-            <DropdownMenuSeparator />
-            <DropdownMenuLabel className="text-[10px] uppercase tracking-wider text-zinc-500">
-              Product view
-            </DropdownMenuLabel>
-            <DropdownMenuSub>
-              <DropdownMenuSubTrigger className="font-semibold">
-                <List className="h-4 w-4" />
-                List
-                {itemStyle === "tiles" ? (
-                  <span className="ml-auto mr-1 text-[10px] font-bold text-black">
-                    {gridCols} columns
-                  </span>
-                ) : itemStyle === "list" ? (
-                  <Check className="ml-auto mr-1 h-4 w-4 text-black" />
-                ) : null}
-              </DropdownMenuSubTrigger>
-              <DropdownMenuSubContent className="w-40 bg-white">
-                <DropdownMenuItem
-                  onClick={() => setItemStyleMode("list")}
-                  className="font-semibold"
-                >
-                  Cards
-                  {itemStyle === "list" ? (
-                    <Check className="ml-auto h-4 w-4 text-black" />
-                  ) : null}
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                {[2, 3, 4].map((n) => (
-                  <DropdownMenuItem
-                    key={n}
-                    onClick={() => {
-                      setItemStyleMode("tiles");
-                      setGridCols(n);
-                    }}
-                    className="font-semibold"
-                  >
-                    {n} columns
-                    {itemStyle === "tiles" && gridCols === n ? (
-                      <Check className="ml-auto h-4 w-4 text-black" />
-                    ) : null}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuSubContent>
-            </DropdownMenuSub>
-          </>
-       
+        <DropdownMenuSeparator />
+        <DropdownMenuLabel className="text-[10px] uppercase tracking-wider text-zinc-500">
+          Product columns
+        </DropdownMenuLabel>
+        {[2, 3, 4].map((n) => (
+          <DropdownMenuItem
+            key={n}
+            onClick={() => setGridCols(n)}
+            className="font-semibold"
+          >
+            {n} columns
+            {gridCols === n ? (
+              <Check className="ml-auto h-4 w-4 text-black" />
+            ) : null}
+          </DropdownMenuItem>
+        ))}
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -2069,109 +2337,55 @@ function OrderPageContent() {
         : basePrice + taxAmount;
     const hasOptions = offerNeedsOptions(offer);
     const imageUrl = offer.image?.url || null;
-
-    if (effectiveItemStyle === "tiles") {
-      const theme = getTileTheme(offer._id || offer.name);
-      return (
-        <button
-          key={offer._id}
-          type="button"
-          onClick={() => addOfferFromList(offer)}
-          className={`relative flex flex-col items-stretch overflow-hidden rounded-xl border-2 text-left shadow-sm transition-colors ${theme.bg}`}
-        >
-          {imageUrl ? (
-            <span className="relative block w-full aspect-[4/3] shrink-0 bg-zinc-100 border-b border-zinc-200/80">
-              <Image
-                src={imageUrl}
-                alt=""
-                fill
-                sizes="(max-width: 768px) 50vw, 25vw"
-                className="object-contain p-1"
-              />
-            </span>
-          ) : null}
-          <span
-            className={`absolute top-2 left-2 z-10 text-[10px] font-black uppercase tracking-wide rounded px-1.5 py-0.5 ${theme.code}`}
-          >
-            Offer
-          </span>
-          <div
-            className={`flex flex-1 flex-col items-center justify-between px-3 py-3 ${
-              imageUrl ? "" : "min-h-[128px] pt-8"
-            }`}
-          >
-            <span className="text-[15px] font-extrabold text-zinc-900 text-center leading-snug line-clamp-2">
-              {offer.name}
-            </span>
-            <div className="mt-2 flex flex-col items-center gap-1.5">
-              <span className="text-lg font-black tabular-nums text-orange-600">
-                ${totalPrice.toFixed(2)}
-              </span>
-              {hasOptions ? (
-                <span className="rounded-md bg-white/90 border border-zinc-200 px-2 py-0.5 text-[11px] font-bold text-zinc-700">
-                  Options
-                </span>
-              ) : (
-                <span className="rounded-md bg-orange-500 px-2 py-0.5 text-[11px] font-bold text-white">
-                  Add
-                </span>
-              )}
-            </div>
-          </div>
-        </button>
-      );
-    }
+    const theme = getTileTheme(offer._id || offer.name);
 
     return (
-      <div
+      <button
         key={offer._id}
-        className="flex flex-col sm:flex-row items-stretch bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden transition-all hover:shadow-md min-h-[96px]"
+        type="button"
+        onClick={() => addOfferFromList(offer)}
+        className={`relative flex flex-col items-stretch overflow-hidden rounded-xl border-2 text-left shadow-sm transition-colors ${theme.bg}`}
       >
         {imageUrl ? (
-          <div className="relative w-full sm:w-32 h-28 sm:h-auto sm:min-h-[96px] shrink-0 bg-zinc-100 border-b sm:border-b-0 sm:border-r border-zinc-200">
+          <span className="relative block w-full aspect-[16/15] shrink-0 bg-zinc-100 border-b border-zinc-200/80">
             <Image
               src={imageUrl}
               alt=""
               fill
-              sizes="128px"
-              className="object-contain p-1.5"
+              sizes="(max-width: 768px) 50vw, 25vw"
+              className="object-contain p-1"
             />
-          </div>
+          </span>
         ) : null}
-        <div className="flex-1 flex flex-col justify-center px-4 py-3 border-b sm:border-b-0 sm:border-r border-zinc-200 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
-            <span className="text-[10px] font-bold text-violet-700 bg-violet-50 border border-violet-100 rounded px-1.5 py-0.5 shrink-0">
-              OFFER
-            </span>
-            <span className="font-bold text-zinc-900 text-xs md:text-sm leading-tight">
-              {offer.name}
-            </span>
-          </div>
-          <div className="flex items-center gap-3">
-            <span className="text-xs font-semibold text-zinc-500">
-              {OFFER_CATEGORY}
-            </span>
-          </div>
-        </div>
-        <div className="flex items-center">
-          <div className="w-20 flex flex-col items-center justify-center px-3 py-2 border-r border-zinc-200 h-full">
-            <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
-              Price
-            </span>
-            <span className="text-sm font-black text-zinc-900">
+        <span
+          className={`absolute top-1.5 left-1.5 z-10 text-[10px] font-black uppercase tracking-wide rounded px-1.5 py-0.5 ${theme.code}`}
+        >
+          Offer
+        </span>
+        <div
+          className={`flex flex-1 flex-col items-center justify-center gap-1.5 px-2.5 py-2 ${
+            imageUrl ? "" : "min-h-[96px] pt-7"
+          }`}
+        >
+          <span className="text-[13px] font-extrabold text-zinc-900 text-center leading-snug line-clamp-2">
+            {offer.name}
+          </span>
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-base font-black tabular-nums text-orange-600">
               ${totalPrice.toFixed(2)}
             </span>
+            {hasOptions ? (
+              <span className="rounded-md bg-orange-500 border border-zinc-200 px-2 py-0.5 text-[10px] font-bold text-white">
+                Options
+              </span>
+            ) : (
+              <span className="rounded-md bg-orange-500 px-2 py-0.5 text-[10px] font-bold text-white">
+                Add
+              </span>
+            )}
           </div>
         </div>
-        <div className="w-full sm:w-32 shrink-0 p-2 flex items-center justify-center">
-          <Button
-            className="w-full h-full min-h-[44px] bg-orange-500 hover:bg-orange-600 text-white font-bold text-sm rounded-lg shadow-sm transition-colors"
-            onClick={() => addOfferFromList(offer)}
-          >
-            {hasOptions ? "Options" : "Add"}
-          </Button>
-        </div>
-      </div>
+      </button>
     );
   };
 
@@ -2185,125 +2399,62 @@ function OrderPageContent() {
     const imageUrl = product.salesImage?.url || null;
     const onAdd = () =>
       hasOptions ? handleOpenOptions(product) : addToCart(product);
-
-    if (effectiveItemStyle === "tiles") {
-      const theme = getTileTheme(product._id || product.name);
-      return (
-        <button
-          key={product._id}
-          type="button"
-          disabled={!isAvailable}
-          onClick={onAdd}
-          className={`relative flex flex-col items-stretch overflow-hidden rounded-xl border-2 text-left shadow-sm transition-colors disabled:opacity-45 disabled:cursor-not-allowed ${theme.bg}`}
-        >
-          {imageUrl ? (
-            <span className="relative block w-full aspect-[4/3] shrink-0 bg-zinc-100 border-b border-zinc-200/80">
-              <Image
-                src={imageUrl}
-                alt=""
-                fill
-                sizes="(max-width: 768px) 50vw, 25vw"
-                className="object-contain p-1"
-              />
-            </span>
-          ) : null}
-          {product.productCode ? (
-            <span
-              className={`absolute top-2 left-2 z-10 text-[10px] font-black rounded px-1.5 py-0.5 ${theme.code}`}
-            >
-              {product.productCode}
-            </span>
-          ) : null}
-          {!isAvailable ? (
-            <span className="absolute top-2 right-2 z-10 text-[10px] font-black bg-red-600 text-white rounded px-1.5 py-0.5">
-              Out
-            </span>
-          ) : null}
-          <div
-            className={`flex flex-1 flex-col items-center justify-between px-3 py-3 ${
-              imageUrl ? "" : "min-h-[128px] pt-8"
-            }`}
-          >
-            <span className="text-[15px] font-extrabold text-zinc-900 text-center leading-snug line-clamp-2">
-              {product.name}
-            </span>
-            <div className="mt-2 flex flex-col items-center gap-1.5">
-              <span className="text-lg font-black tabular-nums text-orange-600">
-                ${Number(basePrice).toFixed(2)}
-              </span>
-              {hasOptions ? (
-                <span className="rounded-md bg-white/90 border border-zinc-200 px-2 py-0.5 text-[11px] font-bold text-zinc-700">
-                  Options
-                </span>
-              ) : (
-                <span className="rounded-md bg-orange-500 px-2 py-0.5 text-[11px] font-bold text-white">
-                  Add
-                </span>
-              )}
-            </div>
-          </div>
-        </button>
-      );
-    }
+    const theme = getTileTheme(product._id || product.name);
+    const code = String(product.productCode || "").trim();
 
     return (
-      <div
+      <button
         key={product._id}
-        className="flex flex-col sm:flex-row items-stretch bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden transition-all hover:shadow-md min-h-[96px]"
+        type="button"
+        disabled={!isAvailable}
+        onClick={onAdd}
+        className={`relative flex flex-col items-stretch overflow-hidden rounded-xl border-2 text-left shadow-sm transition-colors disabled:opacity-45 disabled:cursor-not-allowed ${theme.bg}`}
       >
         {imageUrl ? (
-          <div className="relative w-full sm:w-32 h-28 sm:h-auto sm:min-h-[96px] shrink-0 bg-zinc-100 border-b sm:border-b-0 sm:border-r border-zinc-200">
+          <span className="relative block w-full aspect-[16/10] shrink-0 bg-zinc-100 border-b border-zinc-200/80">
             <Image
               src={imageUrl}
               alt=""
               fill
-              sizes="128px"
-              className="object-contain p-1.5"
+              sizes="(max-width: 768px) 50vw, 25vw"
+              className="object-cover"
             />
-          </div>
+          </span>
         ) : null}
-        <div className="flex-1 flex flex-col justify-center px-4 py-3 border-b sm:border-b-0 sm:border-r border-zinc-200 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
-            {product.productCode ? (
-              <span className="text-[10px] font-bold text-black bg-orange-200 border border-orange-500 rounded px-1.5 py-0.5 shrink-0">
-                {product.productCode}
+        {!isAvailable ? (
+          <span className="absolute top-1.5 right-1.5 z-10 text-[10px] font-black bg-red-600 text-white rounded px-1.5 py-0.5">
+            Out
+          </span>
+        ) : null}
+        <div
+          className={`flex flex-1 flex-col items-start justify-center gap-1.5 px-2.5 py-3 ${
+            imageUrl ? "" : "min-h-[96px]"
+          }`}
+        >
+          <span className="inline-flex items-center gap-1.5 text-[13px] font-extrabold text-zinc-900 text-left leading-snug line-clamp-2 py-1">
+            {code ? (
+              <span className="shrink-0 text-white bg-orange-500 border border-orange-800 rounded-md px-1 py-0.5 text-[11px]">
+                {code}
               </span>
             ) : null}
-            <span className="font-bold text-zinc-900 text-xs xl:text-[15px]">
-              {product.name}
-            </span>
-            {!isAvailable && (
-              <Badge className="bg-red-50 text-red-600 border border-red-200 text-[10px] font-bold uppercase rounded-md px-1.5 py-0.5 shrink-0">
-                Out of Stock
-              </Badge>
-            )}
-          </div>
-          <div className="flex items-center gap-1">
-            <span className="text-[11px] tracking-wider text-wrap font-semibold text-zinc-600">
-              {product.category?.name || "Uncategorized"}
-            </span>
-          </div>
-        </div>
-        <div className="flex items-center">
-          <div className="w-20 flex flex-col items-center justify-center px-3 py-2 border-r border-zinc-200 h-full">
-            <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
-              Price
-            </span>
-            <span className="text-sm font-black text-zinc-900">
+            <span className="min-w-0">{product.name}</span>
+          </span>
+          <div className="flex items-center justify-between gap-2 w-full">
+            <span className="text-base font-black tabular-nums text-orange-600">
               ${Number(basePrice).toFixed(2)}
             </span>
+            {hasOptions ? (
+              <span className="rounded-md bg-orange-500 border border-zinc-200 px-2 py-0.5 text-[10px] font-bold text-white">
+                Options
+              </span>
+            ) : (
+              <span className="rounded-md bg-orange-500 px-2 py-0.5 text-[10px] font-bold text-white">
+                Add
+              </span>
+            )}
           </div>
         </div>
-        <div className="w-full sm:w-32 shrink-0 p-2 flex items-center justify-center">
-          <Button
-            className="w-full h-full min-h-[44px] bg-orange-500 hover:bg-orange-600 text-white font-bold text-sm rounded-lg shadow-sm transition-colors disabled:bg-zinc-200 disabled:text-zinc-400"
-            disabled={!isAvailable}
-            onClick={onAdd}
-          >
-            {hasOptions ? "Options" : "Add"}
-          </Button>
-        </div>
-      </div>
+      </button>
     );
   };
 
@@ -2332,7 +2483,6 @@ function OrderPageContent() {
     return (
       <CreateOrderSkeleton
         panelLayout={panelLayout}
-        itemStyle={effectiveItemStyle}
         gridCols={gridCols}
       />
     );
@@ -2353,12 +2503,12 @@ function OrderPageContent() {
           <div className="flex flex-col gap-2 px-4 py-3 bg-white border-b border-zinc-200 shrink-0">
             <div className="flex items-start justify-between gap-3">
               <div className="flex min-w-0 items-center gap-2">
-                {isWalkIn ? (
+                {isTakeAway ? (
                   <button
                     type="button"
-                    onClick={goToWalkInHub}
+                    onClick={goToTakeAwayHub}
                     className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-zinc-200 text-zinc-700 hover:bg-zinc-50"
-                    aria-label="Back to walk-in orders"
+                    aria-label="Back to takeaway orders"
                   >
                     <ArrowLeft className="h-4 w-4" />
                   </button>
@@ -2378,8 +2528,8 @@ function OrderPageContent() {
                     Create Order
                   </h2>
                   <p className="mt-0.5 truncate text-xs font-semibold text-zinc-800">
-                    {isWalkIn
-                      ? "Walk-in Customer"
+                    {isTakeAway
+                      ? "Takeaway Customer"
                       : isStaffOrder
                         ? guestName
                           ? `Staff · ${guestName}`
@@ -2481,68 +2631,8 @@ function OrderPageContent() {
               </button>
             )}
           </div>
-          {hasTableSession && seatCount > 0 ? (
-            <div className="px-3 py-2 border-b border-zinc-200 bg-white shrink-0">
-              <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-zinc-500">
-                Order for
-              </p>
-              <div className="flex gap-1.5 overflow-x-auto pb-0.5">
-                <button
-                  type="button"
-                  onClick={() => setActiveSeatNumber(null)}
-                  className={`shrink-0 rounded-lg px-3 py-1.5 text-xs font-bold border transition-colors ${
-                    activeSeatNumber == null
-                      ? "bg-zinc-900 text-white border-zinc-900"
-                      : "bg-white text-zinc-700 border-zinc-200 hover:border-zinc-300"
-                  }`}
-                >
-                  Table
-                  {cart.some(
-                    (i) => normalizeCartSeatNumber(i.seatNumber) == null,
-                  ) ? (
-                    <span className="ml-1 opacity-70">
-                      (
-                      {cart
-                        .filter(
-                          (i) => normalizeCartSeatNumber(i.seatNumber) == null,
-                        )
-                        .reduce((s, i) => s + i.qty, 0)}
-                      )
-                    </span>
-                  ) : null}
-                </button>
-                {Array.from({ length: seatCount }, (_, i) => i + 1).map(
-                  (seat) => {
-                    const qty = cart
-                      .filter(
-                        (i) => normalizeCartSeatNumber(i.seatNumber) === seat,
-                      )
-                      .reduce((s, i) => s + i.qty, 0);
-                    const active = activeSeatNumber === seat;
-                    return (
-                      <button
-                        key={seat}
-                        type="button"
-                        onClick={() => setActiveSeatNumber(seat)}
-                        className={`shrink-0 rounded-lg px-3 py-1.5 text-xs font-bold border transition-colors ${
-                          active
-                            ? "bg-orange-500 text-white border-orange-500"
-                            : "bg-white text-zinc-700 border-zinc-200 hover:border-orange-300"
-                        }`}
-                      >
-                        Seat {seat}
-                        {qty > 0 ? (
-                          <span className="ml-1 opacity-80">({qty})</span>
-                        ) : null}
-                      </button>
-                    );
-                  },
-                )}
-              </div>
-            </div>
-          ) : null}
           <div className="flex-1 bg-zinc-50 overflow-y-auto custom-scrollbar">
-            <div className="p-4 space-y-4">
+            <div className="p-3 space-y-3">
               {isStaffOrder && guestName ? (
                 <div className="flex items-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2.5">
                   <User className="h-4 w-4 shrink-0 text-indigo-600" />
@@ -2556,204 +2646,158 @@ function OrderPageContent() {
                   </div>
                 </div>
               ) : null}
-              {(() => {
-                const visibleCart = hasTableSession
-                  ? cart.filter(
+
+              {hasTableSession && seatCount > 0 ? (
+                <div className="space-y-2">
+                  {[
+                    { seatNumber: null, label: formatSeatAccordionLabel(null) },
+                    ...Array.from({ length: seatCount }, (_, i) => ({
+                      seatNumber: i + 1,
+                      label: formatSeatAccordionLabel(i + 1),
+                    })),
+                  ].map((section) => {
+                    const isOpen =
+                      normalizeCartSeatNumber(activeSeatNumber) ===
+                      normalizeCartSeatNumber(section.seatNumber);
+                    const style = getSeatAccordionStyle(section.seatNumber);
+                    const sectionItems = cart.filter(
                       (i) =>
                         normalizeCartSeatNumber(i.seatNumber) ===
-                        normalizeCartSeatNumber(activeSeatNumber),
-                    )
-                  : cart;
-                const activeSeatLabel =
-                  activeSeatNumber == null
-                    ? "Table"
-                    : `Seat ${activeSeatNumber}`;
-                if (visibleCart.length === 0) {
-                  return (
-                    <div className="flex flex-col items-center justify-center py-16 text-zinc-400">
-                      <p className="font-bold text-sm text-zinc-900">
-                        {hasTableSession && cart.length > 0
-                          ? `No items for ${activeSeatLabel}`
-                          : "No items added"}
-                      </p>
-                      <p className="text-xs font-semibold mt-1">
-                        {hasTableSession
-                          ? `Tap a menu item to add to ${activeSeatLabel}.`
-                          : "Tap a menu item to begin order."}
-                      </p>
-                    </div>
-                  );
-                }
-                return (
-                <div className="space-y-2">
-                  {visibleCart.map((item, idx) => {
+                        normalizeCartSeatNumber(section.seatNumber),
+                    );
+                    const sectionQty = sectionItems.reduce(
+                      (s, i) => s + (Number(i.qty) || 0),
+                      0,
+                    );
+                    const seatSettled = isSeatSettled(
+                      activeOrder?.paymentSplits,
+                      section.seatNumber,
+                      activeOrder,
+                    );
+                    const seatReleased = isSeatReleased(
+                      activeOrder?.releasedSeats,
+                      section.seatNumber,
+                    );
+                    // After re-order on a released seat, remaining due reopens Pay.
+                    const showReleasedBadge = seatReleased && seatSettled;
+                    const canPayThisSeat =
+                      canPay && sectionQty > 0 && !seatSettled;
+                    const canReleaseThisSeat =
+                      canCollectPayment &&
+                      hasTableSession &&
+                      seatSettled &&
+                      !seatReleased;
                     return (
-                    <div
-                      key={item.cartId || `${item.id}-${idx}`}
-                      className="bg-white rounded-lg p-3 border border-zinc-200 shadow-sm"
-                    >
-                      <div className="flex justify-between items-start">
-                        <div className="pr-2 min-w-0">
-                          <h4 className="font-bold text-zinc-900 text-sm leading-tight">
-                            {isOfferItem(item) ? (
-                              <span className="text-[10px] font-bold text-violet-700 bg-violet-50 border border-violet-100 rounded px-1 py-0.5 mr-1.5 align-middle">
-                                OFFER
-                              </span>
-                            ) : item.productCode ? (
-                              <span className="text-orange-600 mr-1.5">
-                                {item.productCode}
-                              </span>
-                            ) : null}
-                            {item.name}
-                            {item.size && item.size !== "Standard" ? (
-                              <span className="text-zinc-500 font-semibold">
-                                {" "}
-                                ({item.size})
-                              </span>
-                            ) : null}
-                          </h4>
-                          {item.modifier ? (
-                            <p className="text-[11px] font-semibold text-zinc-500 mt-0.5">
-                              {item.modifier}
-                            </p>
-                          ) : null}
-                          {!isOfferItem(item) &&
-                          normalizeChoiceSelections(item.choiceSelections).length > 0 ? (
-                            <div className="mt-1.5 space-y-1.5">
-                              {normalizeChoiceSelections(item.choiceSelections).map(
-                                (group) => (
-                                  <div key={group.name}>
-                                    <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-wide">
-                                      {group.name}
-                                    </p>
-                                    <div className="flex flex-wrap gap-1 mt-1">
-                                      {group.subChoices.map((choice) => (
-                                        <span
-                                          key={`${group.name}-${choice}`}
-                                          className="inline-flex items-center rounded-full border border-orange-100 bg-orange-50 px-2 py-0.5 text-[10px] font-semibold text-orange-800"
-                                        >
-                                          {choice}
-                                        </span>
-                                      ))}
-                                    </div>
-                                  </div>
-                                ),
-                              )}
-                            </div>
-                          ) : null}
-                          {!isOfferItem(item) &&
-                          normalizeChoiceSelections(item.addonChoiceSelections).length > 0 ? (
-                            <div className="mt-1.5 space-y-1.5">
-                              {normalizeChoiceSelections(item.addonChoiceSelections).map(
-                                (group) => (
-                                  <div key={`addon-${group.name}`}>
-                                    <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-wide">
-                                      {group.name}
-                                    </p>
-                                    <div className="flex flex-wrap gap-1 mt-1">
-                                      {group.subChoices.map((choice) => (
-                                        <span
-                                          key={`addon-${group.name}-${choice}`}
-                                          className="inline-flex items-center rounded-full border border-blue-100 bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-800"
-                                        >
-                                          {choice}
-                                        </span>
-                                      ))}
-                                    </div>
-                                  </div>
-                                ),
-                              )}
-                            </div>
-                          ) : null}
-                          {!isOfferItem(item) &&
-                          normalizeCustomExtras(item.customExtras).length > 0 ? (
-                            <div className="mt-1.5 space-y-1">
-                              {normalizeCustomExtras(item.customExtras).map(
-                                (extra, extraIdx) => (
-                                  <p
-                                    key={`${extra.name}-${extraIdx}`}
-                                    className="text-[11px] font-semibold text-zinc-600"
-                                  >
-                                    + {extra.name}{" "}
-                                    <span className="text-zinc-500">
-                                      (+${Number(extra.price).toFixed(2)})
-                                    </span>
-                                  </p>
-                                ),
-                              )}
-                            </div>
-                          ) : null}
-                        </div>
-                        <span className="font-bold text-sm text-zinc-900 shrink-0">
-                          ${getItemLineTotal(item).toFixed(2)}
-                        </span>
-                      </div>
-                      <div className="mt-2">
-                        <label
-                          htmlFor={`pos-cart-notes-${item.cartId || item.id}-${idx}`}
-                          className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-zinc-500"
+                      <div
+                        key={section.label}
+                        className="rounded-xl overflow-hidden border border-zinc-200/80 shadow-sm"
+                      >
+                        <div
+                          className={`flex items-center justify-between gap-2 px-3.5 py-2.5 ${style.header}`}
                         >
-                          Item remark
-                        </label>
-                        <textarea
-                          id={`pos-cart-notes-${item.cartId || item.id}-${idx}`}
-                          value={item.notes || ""}
-                          onChange={(e) =>
-                            updateCartItemNotes(
-                              item.cartId || item.id,
-                              e.target.value,
-                            )
-                          }
-                          onBlur={(e) =>
-                            updateCartItemNotes(
-                              item.cartId || item.id,
-                              String(e.target.value || "").trim(),
-                            )
-                          }
-                          onKeyDown={(e) => e.stopPropagation()}
-                          rows={2}
-                          maxLength={200}
-                          placeholder="Special request for this item…"
-                          className="w-full resize-none rounded-lg border border-zinc-200 bg-zinc-50 px-2.5 py-2 text-xs font-medium text-zinc-800 placeholder:text-zinc-400 focus:border-orange-400 focus:bg-white focus:outline-none focus:ring-1 focus:ring-orange-400"
-                        />
-                      </div>
-                      <div className="flex items-center justify-between mt-2">
-                        <div className="flex items-center gap-1">
                           <button
+                            type="button"
                             onClick={() =>
-                              removeFromCart(item.cartId || item.id)
+                              setActiveSeatNumber(
+                                normalizeCartSeatNumber(section.seatNumber),
+                              )
                             }
-                            className="p-1.5 text-zinc-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors"
+                            className="min-w-0 flex-1 flex items-center justify-between gap-2 text-left"
                           >
-                            <Trash2 className="w-4 h-4" />
+                            <span className="text-sm font-black tracking-wide">
+                              {section.label}
+                              {showReleasedBadge ? (
+                                <span className="ml-2 text-[10px] font-extrabold uppercase tracking-wider opacity-90">
+                                  Released
+                                </span>
+                              ) : seatSettled ? (
+                                <span className="ml-2 text-[10px] font-extrabold uppercase tracking-wider opacity-90">
+                                  Paid
+                                </span>
+                              ) : null}
+                            </span>
+                            <span className="flex items-center gap-2 shrink-0">
+                              {sectionQty > 0 ? (
+                                <span
+                                  className={`min-w-[22px] h-[22px] px-1.5 rounded-full text-[11px] font-black flex items-center justify-center ${style.badge}`}
+                                >
+                                  {sectionQty}
+                                </span>
+                              ) : null}
+                              {isOpen ? (
+                                <ChevronUp className="w-5 h-5 opacity-90" />
+                              ) : (
+                                <ChevronDown className="w-5 h-5 opacity-90" />
+                              )}
+                            </span>
                           </button>
+                          {canPayThisSeat ? (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openSeatPayment(section.seatNumber);
+                              }}
+                              className="shrink-0 rounded-xl bg-white px-4 py-2.5 text-xs font-black uppercase tracking-wide text-emerald-700 shadow-md hover:bg-emerald-50"
+                            >
+                              Pay
+                            </button>
+                          ) : canReleaseThisSeat ? (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSeatReleaseTarget({
+                                  seatNumber: section.seatNumber,
+                                  label: section.label,
+                                });
+                              }}
+                              className="shrink-0 rounded-xl bg-white px-4 py-2.5 text-xs font-black uppercase tracking-wide text-orange-700 shadow-md hover:bg-orange-50"
+                            >
+                              Release
+                            </button>
+                          ) : null}
                         </div>
-                        <div className="flex items-center gap-2 bg-zinc-100 rounded-md p-0.5">
-                          <button
-                            onClick={() =>
-                              updateQty(item.cartId || item.id, -1)
-                            }
-                            className="w-8 h-8 rounded bg-white shadow-sm flex items-center justify-center text-zinc-700 hover:bg-zinc-50"
-                          >
-                            <Minus className="w-3.5 h-3.5" />
-                          </button>
-                          <span className="font-bold text-sm w-4 text-center text-zinc-900">
-                            {item.qty}
-                          </span>
-                          <button
-                            onClick={() => updateQty(item.cartId || item.id, 1)}
-                            className="w-8 h-8 rounded bg-white shadow-sm flex items-center justify-center text-zinc-700 hover:bg-zinc-50"
-                          >
-                            <Plus className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
+                        {isOpen ? (
+                          <div className="bg-zinc-50/80 p-2.5 space-y-2">
+                            {sectionItems.length === 0 ? (
+                              <div className="flex flex-col items-center justify-center py-8 text-zinc-400 px-3">
+                                <p className="font-bold text-sm text-zinc-900">
+                                  No items added
+                                </p>
+                                <p className="text-xs font-semibold mt-1 text-center">
+                                  Tap a menu item to add to{" "}
+                                  {section.seatNumber == null
+                                    ? "Table"
+                                    : `Seat ${section.seatNumber}`}
+                                  .
+                                </p>
+                              </div>
+                            ) : (
+                              sectionItems.map((item, idx) =>
+                                renderCartItemCard(item, idx),
+                              )
+                            )}
+                          </div>
+                        ) : null}
                       </div>
-                    </div>
                     );
                   })}
                 </div>
-                );
-              })()}
+              ) : cart.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 text-zinc-400">
+                  <p className="font-bold text-sm text-zinc-900">
+                    No items added
+                  </p>
+                  <p className="text-xs font-semibold mt-1">
+                    Tap a menu item to begin order.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {cart.map((item, idx) => renderCartItemCard(item, idx))}
+                </div>
+              )}
 
               {cart.length > 0 && (
                 <div className="space-y-3 pt-1">
@@ -2841,12 +2885,12 @@ function OrderPageContent() {
             <div className="flex gap-2">
               <Button
                 onClick={handleSendToKitchen}
-                disabled={cart.length === 0 || isSubmitting || hasSentKot || isPaid}
+                disabled={cart.length === 0 || isSubmitting || hasSentKot}
                 className="flex-1 h-14 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm rounded-xl shadow-none disabled:opacity-50"
               >
                 {isSubmitting ? (
                   <Loader2 className="w-5 h-5 animate-spin" />
-                ) : hasSentKot || isPaid ? (
+                ) : hasSentKot ? (
                   "KOT Sent"
                 ) : (
                   "Kitchen / KOT"
@@ -2864,13 +2908,24 @@ function OrderPageContent() {
                     "Release Table"
                   )}
                 </Button>
-              ) : (
+              ) : canCollectPayment ? (
                 <Button
                   onClick={openPaymentModal}
-                  disabled={!canPay}
+                  disabled={!canPayBill}
                   className="flex-1 h-14 bg-red-600 hover:bg-red-700 text-white font-bold text-sm rounded-xl shadow-none disabled:opacity-50"
                 >
-                  {isPaid ? "Paid" : "Pay Now"}
+                  {isPaid
+                    ? "Paid"
+                    : isPartialPay
+                      ? "Pay remaining seats"
+                      : "Pay Now"}
+                </Button>
+              ) : (
+                <Button
+                  onClick={() => router.push("/sales/today")}
+                  className="flex-1 h-14 bg-orange-500 hover:bg-orange-600 text-white font-bold text-sm rounded-xl shadow-none"
+                >
+                  Go to Orders
                 </Button>
               )}
             </div>
@@ -2885,11 +2940,11 @@ function OrderPageContent() {
             <div className="p-5 border-b border-zinc-100 flex items-center justify-between">
               <div>
                 <h2 className="text-lg font-bold text-zinc-900">
-                  {isWalkIn ? "Bill under whose name?" : "Party Name"}
+                  {isTakeAway ? "Bill under whose name?" : "Party Name"}
                 </h2>
                 <p className="text-sm font-semibold text-zinc-500 mt-0.5">
-                  {isWalkIn
-                    ? "Optional — leave blank to use Walk-in."
+                  {isTakeAway
+                    ? "Optional — leave blank to use Takeaway."
                     : "Whose bill is this for? Optional — leave blank to use table + guests."}
                 </p>
               </div>
@@ -3043,114 +3098,6 @@ function OrderPageContent() {
         onReasonChange={setStaffOrderReason}
         onConfirm={handleConfirmStaff}
         isSubmitting={isSubmitting}
-      />
-
-      <TodayOrderPaymentModal
-        key={activeOrder?._id || "session-payment"}
-        open={isPaymentModalOpen}
-        onClose={() => setIsPaymentModalOpen(false)}
-        sessionId={hasTableSession ? sessionId : undefined}
-        guestName={guestName}
-        onGuestNameChange={setGuestName}
-        redeemNote="POS Payment"
-        serviceTax={serviceTax}
-        order={
-          activeOrder
-            ? {
-                ...activeOrder,
-                subTotal: billingSubtotal,
-                taxTotal: billingTaxTotal,
-                discountCode:
-                  appliedDiscount?.code || activeOrder.discountCode || null,
-                discountTotal: billingDiscount,
-                partyName:
-                  guestName ||
-                  activeOrder.partyName ||
-                  activeOrder.guestName ||
-                  "",
-                guestName:
-                  guestName || activeOrder.guestName || "",
-                guestCount:
-                  sessionData?.guestCount ?? activeOrder.guestCount ?? null,
-                tableNo:
-                  isDirectOrder
-                    ? ""
-                    : getDisplayTableNo() ||
-                      (isLegacyNew ? guestTable : "") ||
-                      "",
-                floorName: sessionData?.floorName || activeOrder?.floorName,
-                source: activeOrder.source,
-                staffFor: selectedStaffId || activeOrder.staffFor,
-                tableSession: hasTableSession ? sessionId : undefined,
-              }
-            : null
-        }
-        onPaid={(updatedOrder) => {
-          const paid = updatedOrder || activeOrder;
-          if (!paid) return;
-
-          setOrderStatus("PAID");
-          const receiptOrder = {
-            ...(activeOrder || {}),
-            ...paid,
-            paymentStatus: "PAID",
-            status: "PAID",
-            partyName:
-              guestName || paid?.partyName || paid?.guestName || "",
-            guestName: guestName || paid?.guestName || "",
-            guestCount:
-              sessionData?.guestCount ?? paid?.guestCount ?? null,
-            tableNo: isDirectOrder
-              ? ""
-              : getDisplayTableNo() ||
-                (isLegacyNew ? guestTable : "") ||
-                paid?.tableNo ||
-                "",
-            floorName: sessionData?.floorName || paid?.floorName,
-            source: paid?.source || activeOrder?.source,
-            items: Array.isArray(paid?.items) && paid.items.length
-              ? paid.items
-              : activeOrder?.items || [],
-          };
-          setActiveOrder(receiptOrder);
-          setPrintOrderData(receiptOrder);
-
-          if (isDirectOrder) {
-            sessionStorage.removeItem(directOrderStorageKey);
-          }
-          if (receiptOrder?.discountCode) {
-            setAppliedDiscount({
-              code: receiptOrder.discountCode,
-              value: Number(receiptOrder.discountTotal || 0),
-              type: "$",
-            });
-          }
-
-          const splitCount = Array.isArray(receiptOrder?.paymentSplits)
-            ? receiptOrder.paymentSplits.length
-            : 0;
-          if (splitCount > 1) {
-            // Thermal print jobs already queued per payer — skip single full-bill preview
-            toast.success(
-              `${splitCount} split receipt slips sent to the printer`,
-            );
-            setPendingReleaseAfterPrint(false);
-            setPendingLeaveAfterPrint(false);
-            if (hasTableSession) {
-              setIsReleaseModalOpen(true);
-            }
-            return;
-          }
-
-          setPrintTaxBreakdown(generateTaxBreakdown());
-          setPrintType("customer");
-          setRedirectAfterPrint(false);
-          // Same as Today Orders: show bill receipt after pay, then release/leave on close
-          setPendingReleaseAfterPrint(hasTableSession);
-          setPendingLeaveAfterPrint(isDirectOrder);
-          // Defer open until payment modal closes (see pendingBillAfterPay effect)
-          setPendingBillAfterPay(true);
-        }}
       />
 
       {/* OPTIONS MODAL */}
@@ -3851,6 +3798,43 @@ function OrderPageContent() {
                 onClick={handleClearOrder}
               >
                 Clear All
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {seatReleaseTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-900/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl">
+            <div className="p-5 border-b border-zinc-100">
+              <h2 className="text-lg font-bold text-zinc-900">
+                Release {seatReleaseTarget.label}?
+              </h2>
+              <p className="text-sm font-semibold text-zinc-500 mt-1">
+                {seatReleaseTarget.label} is paid. Release only this seat so
+                other guests can keep dining? The table will stay open.
+              </p>
+            </div>
+            <div className="p-5 flex gap-2">
+              <Button
+                variant="outline"
+                disabled={isReleasingSeat}
+                onClick={() => setSeatReleaseTarget(null)}
+                className="flex-1 h-12 rounded-xl font-bold border-zinc-200 text-zinc-700 shadow-none"
+              >
+                Not now
+              </Button>
+              <Button
+                disabled={isReleasingSeat}
+                onClick={confirmReleaseSeat}
+                className="flex-1 h-12 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-none"
+              >
+                {isReleasingSeat ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  `Yes, release ${seatReleaseTarget.label}`
+                )}
               </Button>
             </div>
           </div>

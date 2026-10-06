@@ -360,6 +360,7 @@ export default function ProductConfigModal({ isOpen, onClose, product }) {
           size: "Extra",
           sizes: [],
           selectedAddons: [addon.name],
+          // Kept for pricing; receipt/cart UI filters the duplicate name
           options: [addon.name],
           choiceSelections: [],
           addonChoiceSelections: addonChoices,
@@ -368,9 +369,7 @@ export default function ProductConfigModal({ isOpen, onClose, product }) {
           category: product.category,
           categoryName: product.categoryName,
           productType: product.productType,
-          modifier: choiceSummary
-            ? `Addons: ${addon.name} · ${choiceSummary}`
-            : `Addons: ${addon.name}`,
+          modifier: choiceSummary || undefined,
           parentProductName: product.name,
         },
         entry.qty,

@@ -11,6 +11,13 @@
  * keep both files in sync. USB runtime uses the print-bridge copy.
  */
 
+import {
+  filterItemsBySeat,
+  filterItemsBySeats,
+  proportionalOrderTotalsForItems,
+  resolveSplitReceiptSeatFilter,
+} from "@/lib/orders/seatHelpers";
+
 const ESC = 0x1b;
 const GS = 0x1d;
 const LF = 0x0a;
@@ -268,6 +275,15 @@ function resolveTableNo(job, order) {
   return job?.metadata?.tableNo || order?.tableNo || null;
 }
 
+/** Seat section marker: dashed rule + "SEAT 1:" then items */
+function writeSeatBanner(e, label, { blankBefore = false } = {}) {
+  if (blankBefore) e.line("");
+  e.line(divider("-"));
+  e.bold(true)
+    .line(`${toPrinterText(String(label || "TABLE").toUpperCase())}:`)
+    .bold(false);
+}
+
 function isOfferItem(item) {
   if (!item) return false;
   if (item.isOffer) return true;
@@ -290,6 +306,17 @@ function isStyleOption(opt, preparationStyle) {
     return true;
   }
   return false;
+}
+
+function isStandaloneExtraLine(item) {
+  return /^extra$/i.test(String(item?.size || ""));
+}
+
+function isRedundantStandaloneExtraOption(item, opt) {
+  if (!isStandaloneExtraLine(item)) return false;
+  const itemName = String(item?.name || "").trim().toLowerCase();
+  const label = String(opt || "").trim().toLowerCase();
+  return Boolean(itemName && label && itemName === label);
 }
 
 /** Mirrors getReceiptModifierLines from productChoices.js */
@@ -335,6 +362,7 @@ function getReceiptModifierLines(item, { includeCustomPrices = false } = {}) {
   }
   for (const opt of item?.options || []) {
     if (isStyleOption(opt, item?.preparationStyle)) continue;
+    if (isRedundantStandaloneExtraOption(item, opt)) continue;
     const label = String(opt || "").trim();
     if (label) lines.push(`+ ${label}`);
   }
@@ -552,7 +580,7 @@ function buildKotTicketInner({
     order?.partyName ||
     order?.guestName ||
     job?.metadata?.guestName ||
-    (directSale ? "Walk-in" : "");
+    (directSale ? "Take-Away" : "");
   const note = job?.metadata?.specialNote || order?.specialNote;
   const items = kotItems.length
     ? kotItems
@@ -573,7 +601,7 @@ function buildKotTicketInner({
     .line(
       toPrinterText(
         directSale
-          ? partyLabel || "Walk-in"
+          ? partyLabel || "Take-Away"
           : tableLabel || "Takeaway / No Table",
       ),
     )
@@ -643,10 +671,11 @@ function buildKotTicketInner({
   if (!seatGroups.length) {
     e.line("(no items)");
   } else {
+    let seatPrinted = 0;
     for (const seatGroup of seatGroups) {
       if (showSeatHeaders) {
-        e.bold(true).line(toPrinterText(seatGroup.label)).bold(false);
-        e.line(divider("="));
+        writeSeatBanner(e, seatGroup.label, { blankBefore: seatPrinted > 0 });
+        seatPrinted += 1;
       }
       for (const cat of Object.keys(seatGroup.byCategory)) {
         e.bold(true).line(toPrinterText(String(cat).toUpperCase())).bold(false);
@@ -724,7 +753,7 @@ function buildBarTicketInner({
     order?.partyName ||
     order?.guestName ||
     job?.metadata?.guestName ||
-    (directSale ? "Walk-in" : "");
+    (directSale ? "Take-Away" : "");
   const covers =
     guestCount != null && guestCount !== ""
       ? Number(guestCount)
@@ -865,6 +894,8 @@ function buildReceiptTicketInner({
   const floorName = resolveFloorName(job, order);
   const tableLabel = formatTableNumbersWithFloor(tableNo, floorName);
   const meta = job?.metadata || {};
+  const isSplitReceipt = Boolean(meta.isSplitReceipt);
+  const seatFilter = resolveSplitReceiptSeatFilter(meta, order);
   const partyLabel = isSplitReceipt
     ? String(meta.splitName || meta.partyName || meta.guestName || "").trim() ||
       order?.partyName ||
@@ -894,9 +925,11 @@ function buildReceiptTicketInner({
     "",
   ).trim();
 
-  const tip = Number(rawOrder.tipAmount ?? meta.tipAmount ?? 0);
-  const discount = Number(rawOrder.discountTotal ?? meta.discountTotal ?? 0);
-  const serviceCharge = Number(
+  const tip = Number(
+    isSplitReceipt ? meta.tipAmount ?? 0 : rawOrder.tipAmount ?? meta.tipAmount ?? 0,
+  );
+  let discount = Number(rawOrder.discountTotal ?? meta.discountTotal ?? 0);
+  let serviceCharge = Number(
     rawOrder.serviceChargeTotal ?? meta.serviceChargeTotal ?? 0,
   );
   const giftUsed = Number(
@@ -908,12 +941,20 @@ function buildReceiptTicketInner({
     meta.giftCardUsed ??
     0,
   );
-  const cash = Number(rawOrder.cashAmount ?? meta.cashAmount ?? 0);
-  const card = Number(rawOrder.cardAmount ?? meta.cardAmount ?? 0);
-  const orderTotal = Number(
+  const cash = Number(
+    isSplitReceipt
+      ? meta.cashAmount ?? rawOrder.cashAmount ?? 0
+      : rawOrder.cashAmount ?? meta.cashAmount ?? 0,
+  );
+  const card = Number(
+    isSplitReceipt
+      ? meta.cardAmount ?? rawOrder.cardAmount ?? 0
+      : rawOrder.cardAmount ?? meta.cardAmount ?? 0,
+  );
+  let orderTotal = Number(
     rawOrder.totalAmount ?? meta.totalAmount ?? rawOrder.amount ?? 0,
   );
-  const grandTotal = orderTotal + tip;
+  let grandTotal = orderTotal + tip;
 
   const cardLabelMatch = methodStr.match(/Card\s*-\s*([^+/]+)/i);
   const cardLabel = cardLabelMatch
@@ -939,7 +980,28 @@ function buildReceiptTicketInner({
   const hasPaymentSplit =
     giftUsed > 0 || cash > 0 || card > 0 || Boolean(methodStr);
 
-  const items = order?.items || [];
+  const allItems = order?.items || [];
+  const items = seatFilter.filter
+    ? Array.isArray(seatFilter.seatNumbers) && seatFilter.seatNumbers.length > 1
+      ? filterItemsBySeats(allItems, seatFilter.seatNumbers)
+      : filterItemsBySeat(allItems, seatFilter.seatNumber)
+    : allItems;
+  const seatScopedTotals =
+    seatFilter.filter && isSplitReceipt
+      ? proportionalOrderTotalsForItems(order, items)
+      : null;
+  if (seatScopedTotals) {
+    discount = Number(seatScopedTotals.discountTotal || 0);
+    serviceCharge = Number(seatScopedTotals.serviceChargeTotal || 0);
+    orderTotal = isSplitReceipt
+      ? Number(meta.splitAmount ?? seatScopedTotals.totalAmount ?? 0)
+      : Number(seatScopedTotals.totalAmount || 0);
+    grandTotal = orderTotal + tip;
+  }
+  const receiptSubTotal = seatScopedTotals?.subTotal ?? order?.subTotal;
+  const receiptHstAmount = seatScopedTotals
+    ? Number(seatScopedTotals.taxTotal || 0)
+    : hstAmount;
   const regularItems = items.filter((item) => !isOfferItem(item));
   const offerItems = items.filter((item) => isOfferItem(item));
 
@@ -947,7 +1009,7 @@ function buildReceiptTicketInner({
     if (order?.discountPercent != null && Number(order.discountPercent) > 0) {
       return Number(order.discountPercent);
     }
-    const numSub = Number(order?.subTotal || 0);
+    const numSub = Number(receiptSubTotal ?? order?.subTotal ?? 0);
     const numDisc = Number(discount || 0);
     if (numSub > 0 && numDisc > 0) {
       return Math.round((numDisc / numSub) * 1000) / 10;
@@ -975,18 +1037,20 @@ function buildReceiptTicketInner({
     }
     const taxableBase = Math.max(
       0,
-      Number(order?.subTotal || 0) - Number(discount || 0),
+      Number(receiptSubTotal || 0) - Number(discount || 0),
     );
-    if (taxableBase > 0 && hstAmount > 0) {
-      return Math.round((hstAmount / taxableBase) * 1000) / 10;
+    if (taxableBase > 0 && receiptHstAmount > 0) {
+      return Math.round((receiptHstAmount / taxableBase) * 1000) / 10;
     }
     if (
-      Number(order?.subTotal || 0) > 0 &&
-      (hstAmount > 0 || Number(order?.taxTotal || 0) > 0)
+      Number(receiptSubTotal || 0) > 0 &&
+      (receiptHstAmount > 0 || Number(order?.taxTotal || 0) > 0)
     ) {
       return (
         Math.round(
-          (Number(order?.taxTotal || hstAmount) / Number(order.subTotal)) * 1000,
+          (Number(receiptHstAmount || order?.taxTotal || 0) /
+            Number(receiptSubTotal)) *
+            1000,
         ) / 10
       );
     }
@@ -1005,7 +1069,6 @@ function buildReceiptTicketInner({
   if (reprint) {
     e.align(1).bold(true).line("*** REPRINT ***").bold(false);
   }
-  const isSplitReceipt = Boolean(meta.isSplitReceipt);
   if (isSplitReceipt) {
     const splitIdx = Number(meta.splitIndex) || 1;
     const splitTot = Number(meta.splitTotal) || 1;
@@ -1033,7 +1096,7 @@ function buildReceiptTicketInner({
     e.line(`Table: ${toPrinterText(tableLabel)}`);
   }
   if (partyLabel || !shouldShowTable({ ...order, tableNo })) {
-    e.line(`Party: ${toPrinterText(partyLabel || "Walk-in")}`);
+    e.line(`Party: ${toPrinterText(partyLabel || "Take-Away")}`);
   }
   const resolvedGuests =
     guestCount != null && guestCount !== ""
@@ -1065,9 +1128,9 @@ function buildReceiptTicketInner({
     }
     return null;
   };
-  const showReceiptSeatHeaders = items.some(
-    (it) => normalizeReceiptSeat(it) != null,
-  );
+  const showReceiptSeatHeaders =
+    !seatFilter.filter &&
+    items.some((it) => normalizeReceiptSeat(it) != null);
   if (showReceiptSeatHeaders) {
     const seatMap = new Map();
     for (const item of items) {
@@ -1089,8 +1152,7 @@ function buildReceiptTicketInner({
       ...(seatMap.has("table") ? [seatMap.get("table")] : []),
     ];
     for (const group of ordered) {
-      e.bold(true).line(toPrinterText(group.label)).bold(false);
-      e.line(divider("-"));
+      writeSeatBanner(e, group.label);
       const regs = group.items.filter((it) => !isOfferItem(it));
       const offers = group.items.filter((it) => isOfferItem(it));
       for (const item of regs) writeReceiptItem(e, item);
@@ -1100,6 +1162,7 @@ function buildReceiptTicketInner({
         e.line(divider("-"));
         for (const item of offers) writeReceiptItem(e, item);
       }
+      e.line("");
     }
   } else {
     for (const item of regularItems) writeReceiptItem(e, item);
@@ -1113,7 +1176,7 @@ function buildReceiptTicketInner({
   if (!items.length) e.line("(no items)");
 
   e.line(divider("-"));
-  e.line(formatTwoColumnLine("Subtotal", money(order?.subTotal)));
+  e.line(formatTwoColumnLine("Subtotal", money(receiptSubTotal)));
   if (discount > 0) {
     e.line(
       formatTwoColumnLine(discountLabel, `-${money(discount).slice(1)}`),
@@ -1121,12 +1184,12 @@ function buildReceiptTicketInner({
     e.line(
       formatTwoColumnLine(
         "Net Amount",
-        money(Math.max(0, Number(order?.subTotal || 0) - discount)),
+        money(Math.max(0, Number(receiptSubTotal || 0) - discount)),
       ),
     );
   }
-  if (hstAmount > 0 || (discount > 0 && totalHstRate > 0)) {
-    e.line(formatTwoColumnLine(hstLabel, money(hstAmount)));
+  if (receiptHstAmount > 0 || (discount > 0 && totalHstRate > 0)) {
+    e.line(formatTwoColumnLine(hstLabel, money(receiptHstAmount)));
   }
   if (serviceCharge > 0) {
     e.line(

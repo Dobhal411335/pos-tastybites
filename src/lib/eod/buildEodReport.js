@@ -31,7 +31,7 @@ function normalizeOrderSource(order) {
 }
 
 function sourceSectionName(source) {
-  if (source === "WALK_IN") return "Walk-in";
+  if (source === "TAKEAWAY") return "Takeaway";
   if (source === "STAFF") return "Staff";
   if (source === "ONLINE") return "Online";
   return null;
@@ -212,7 +212,7 @@ export async function buildEodReport({
         source,
         label:
           source === "WALK_IN"
-            ? "Walk-in"
+            ? "Takeaway"
             : source === "STAFF"
               ? "Staff"
               : source === "ONLINE"
@@ -280,7 +280,7 @@ export async function buildEodReport({
     totalNonCash = r2(totalNonCash + tenders.card + tenders.giftCard);
     totalGiftCardPayments = r2(totalGiftCardPayments + tenders.giftCard);
 
-    // Section — walk-in / staff / online get named buckets (not "No Section")
+    // Section — takeaway / staff / online get named buckets (not "No Section")
     const orderSource = normalizeOrderSource(order);
     let sectionName = sourceSectionName(orderSource);
     if (!sectionName) {
@@ -599,11 +599,11 @@ export async function buildEodReport({
       refundedNote: "Refunds are not recorded in the POS yet.",
       bySource: {
         pos: daySourceCounts.POS.count,
-        walkIn: daySourceCounts.WALK_IN.count,
+        takeAway: daySourceCounts.WALK_IN.count,
         staff: daySourceCounts.STAFF.count,
         online: daySourceCounts.ONLINE.count,
         posPaid: daySourceCounts.POS.paidCount,
-        walkInPaid: daySourceCounts.WALK_IN.paidCount,
+        takeAwayPaid: daySourceCounts.WALK_IN.paidCount,
         staffPaid: daySourceCounts.STAFF.paidCount,
         onlinePaid: daySourceCounts.ONLINE.paidCount,
       },

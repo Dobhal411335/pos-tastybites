@@ -39,7 +39,7 @@ export function toYmd(date) {
 }
 
 export function guestType(guest) {
-  if (!guest?.identified) return "walk-in";
+  if (!guest?.identified) return "takeaway";
   return guest.paidOrders >= 2 || guest.visits >= 2 ? "returning" : "new";
 }
 

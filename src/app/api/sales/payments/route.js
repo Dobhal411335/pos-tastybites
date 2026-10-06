@@ -22,6 +22,15 @@ import {
   computeOrderServiceCharge,
   SERVICE_CHARGE_NO_TIP_MESSAGE,
 } from "@/lib/orders/serviceCharge";
+import {
+  formatSeatLabel,
+  getSeatRemainingDue,
+  getOrderRemainingDue,
+  getUnsettledSeatNumbers,
+  isSeatSettled,
+  normalizeSeatNumber,
+  seatKey,
+} from "@/lib/orders/seatHelpers";
 
 const r2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 
@@ -52,7 +61,10 @@ export const POST = withAuth(async (request) => {
       serviceChargeTotal,
       serviceChargeName,
       paymentSplits: paymentSplitsRaw,
+      seatPayment,
+      seatNumber: seatNumberRaw,
     } = data;
+    const isSeatPayment = seatPayment === true;
 
     if (!orderId) {
       return sendError(new Error("Missing ID"), "orderId is required", 400);
@@ -198,6 +210,882 @@ export const POST = withAuth(async (request) => {
 
     // Client `amount` may only confirm the server-computed total — never overwrite it.
     const dueAmount = r2(order.totalAmount);
+
+    // ── Seat-scoped partial payment ─────────────────────────────────────
+    if (isSeatPayment) {
+      if (Array.isArray(paymentSplitsRaw) && paymentSplitsRaw.length > 0) {
+        return sendError(
+          new Error("Invalid Payment"),
+          "Seat payment cannot include multi-payer splits",
+          400,
+        );
+      }
+
+      const seatTarget =
+        seatNumberRaw === "table" ||
+        seatNumberRaw === "" ||
+        seatNumberRaw === undefined
+          ? null
+          : normalizeSeatNumber(seatNumberRaw);
+
+      if (isSeatSettled(order.paymentSplits, seatTarget, order)) {
+        return sendError(
+          new Error("Already Paid"),
+          `${formatSeatLabel(seatTarget)} has already been paid`,
+          409,
+        );
+      }
+
+      const seatInfo = getSeatRemainingDue(
+        {
+          items: order.items,
+          totalAmount: dueAmount,
+          taxTotal: order.taxTotal,
+          serviceChargeTotal: order.serviceChargeTotal,
+          discountTotal: order.discountTotal,
+          giftcardUsedAmount: order.giftcardUsedAmount,
+          paymentSplits: order.paymentSplits,
+        },
+        seatTarget,
+      );
+      if (!seatInfo || !(seatInfo.due > 0.009)) {
+        return sendError(
+          new Error("Invalid Seat"),
+          "No remaining balance for this seat",
+          400,
+        );
+      }
+
+      const seatDue = r2(seatInfo.due);
+      if (amount !== undefined && amount !== null) {
+        if (Math.abs(r2(amount) - seatDue) > 0.02) {
+          return sendError(
+            new Error("Amount Mismatch"),
+            `Seat payment must be $${seatDue.toFixed(2)}`,
+            400,
+          );
+        }
+      }
+
+      let tip = tipAmount != null && tipAmount !== "" ? r2(tipAmount) : 0;
+      if (tip < 0) {
+        return sendError(new Error("Invalid Tip"), "Tip cannot be negative", 400);
+      }
+      if (tip > 0 && workingServiceCharge > 0) {
+        return sendError(
+          new Error("Tip Not Allowed"),
+          SERVICE_CHARGE_NO_TIP_MESSAGE,
+          400,
+        );
+      }
+
+      let giftDebit = 0;
+      if (giftCardCode) {
+        const requested =
+          giftCardUsedAmount != null && giftCardUsedAmount !== ""
+            ? r2(giftCardUsedAmount)
+            : seatDue;
+        giftDebit = r2(Math.min(Math.max(0, requested), seatDue));
+      }
+      const tenderTowardSeat = r2(Math.max(0, seatDue - giftDebit));
+      let cash = cashAmount != null && cashAmount !== "" ? r2(cashAmount) : 0;
+      let card = cardAmount != null && cardAmount !== "" ? r2(cardAmount) : 0;
+      const methodLabel = String(method || "Card");
+      if (cash <= 0 && card <= 0 && tenderTowardSeat > 0) {
+        if (/cash/i.test(methodLabel) && !/card/i.test(methodLabel)) {
+          cash = r2(tenderTowardSeat + tip);
+        } else {
+          card = r2(tenderTowardSeat + tip);
+        }
+      }
+      const tenderSum = r2(cash + card);
+      if (Math.abs(tenderSum - r2(tenderTowardSeat + tip)) > 0.02) {
+        return sendError(
+          new Error("Invalid Tenders"),
+          `Cash+card must equal seat due plus tip ($${r2(tenderTowardSeat + tip).toFixed(2)})`,
+          400,
+        );
+      }
+      if (card > 0 && !cardType) {
+        return sendError(
+          new Error("Invalid Card"),
+          "Card type is required for card payments",
+          400,
+        );
+      }
+
+      const isMixed = cash > 0 && card > 0;
+      const splitMethod = isMixed
+        ? "Cash + Card"
+        : cash > 0
+          ? "Cash"
+          : "Card";
+      const seatName = seatInfo.name || formatSeatLabel(seatTarget);
+      const newSplit = {
+        name: (partyName || guestName || seatName || "").trim() || seatName,
+        amount: seatDue,
+        method: splitMethod,
+        cardType: card > 0 ? String(cardType).trim() : null,
+        tipAmount: tip,
+        tipMethod: tip > 0 ? tipMethod || (cash > 0 && card <= 0 ? "Cash" : "Card") : null,
+        cashAmount: cash,
+        cardAmount: card,
+        paidAt: new Date(),
+        seatNumber: seatTarget,
+        seatNumbers: seatTarget == null ? [null] : [seatTarget],
+      };
+
+      const existingSplits = Array.isArray(order.paymentSplits)
+        ? order.paymentSplits.map((s) =>
+            s && typeof s.toObject === "function" ? s.toObject() : { ...s },
+          )
+        : [];
+      order.paymentSplits = [...existingSplits, newSplit];
+
+      if (giftDebit > 0) {
+        order.giftcardCode = String(giftCardCode).trim().toUpperCase();
+        order.giftcardUsedAmount = r2(
+          (Number(order.giftcardUsedAmount) || 0) + giftDebit,
+        );
+      }
+
+      const remaining = r2(
+        Math.max(
+          0,
+          dueAmount -
+            order.paymentSplits.reduce(
+              (s, row) => s + Number(row.amount || 0),
+              0,
+            ),
+        ),
+      );
+
+      order.cashAmount = r2(
+        (Number(order.cashAmount) || 0) + cash,
+      );
+      order.cardAmount = r2(
+        (Number(order.cardAmount) || 0) + card,
+      );
+      order.tipAmount = r2((Number(order.tipAmount) || 0) + tip);
+      if (tip > 0) {
+        order.tipMethod = newSplit.tipMethod;
+      }
+
+      const methodParts = [
+        ...new Set(
+          order.paymentSplits.map((s) =>
+            s.method === "Card" && s.cardType
+              ? `Card - ${s.cardType}`
+              : s.method,
+          ),
+        ),
+      ];
+      order.paymentMethod =
+        remaining > 0.01
+          ? `Partial · ${methodParts.slice(0, 3).join(" + ")}`
+          : methodParts.length <= 3
+            ? `Split (${order.paymentSplits.length}) · ${methodParts.join(" + ")}`
+            : `Split (${order.paymentSplits.length})`;
+
+      if (partyName !== undefined || guestName !== undefined) {
+        const resolvedPartyName = (partyName || guestName || "").trim() || null;
+        if (resolvedPartyName) {
+          order.partyName = resolvedPartyName;
+          order.guestName = resolvedPartyName;
+        }
+      }
+
+      if (remaining > 0.01) {
+        order.paymentStatus = "PARTIAL";
+        // Keep order.status as-is (PENDING/CONFIRMED) until fully paid
+      } else {
+        order.paymentStatus = "PAID";
+        order.status = "PAID";
+      }
+
+      // Gift card redeem for this seat debit only
+      if (giftDebit > 0 && order.giftcardCode) {
+        const redeem = await redeemGiftCardAtomic({
+          restaurantId: request.restaurant,
+          code: order.giftcardCode,
+          amountToUse: giftDebit,
+          orderId: order._id,
+          note: "Seat payment",
+          sendEmail: true,
+        });
+        if (!redeem.ok) {
+          return sendError(
+            new Error(redeem.error || "Failed to redeem gift card"),
+            redeem.error || "Failed to redeem gift card",
+            redeem.status || 400,
+          );
+        }
+      }
+
+      try {
+        order.taxBreakdown = await buildTaxBreakdownForOrder(
+          order,
+          order.restaurantId || request.restaurant,
+        );
+      } catch (taxErr) {
+        logger.error("Failed to build taxBreakdown at seat payment", taxErr);
+      }
+
+      order.processedBy = order.processedBy || request.user.id;
+      await order.save();
+
+      let receiptGuestCount = order.guestCount ?? null;
+      let session = null;
+      const resolvedSessionId = sessionId
+        ? typeof sessionId === "object"
+          ? sessionId._id || sessionId.id
+          : sessionId
+        : order.tableSession && typeof order.tableSession === "object"
+          ? order.tableSession._id || order.tableSession.id
+          : order.tableSession;
+
+      if (resolvedSessionId && order.paymentStatus === "PAID") {
+        session = await TableSession.findOne({
+          _id: resolvedSessionId,
+          restaurant: request.restaurant,
+        });
+        if (session) {
+          if (
+            !session.activeOrders.some((id) => String(id) === String(order._id))
+          ) {
+            session.activeOrders.push(order._id);
+          }
+          const unpaidCount = await Order.countDocuments({
+            restaurantId: request.restaurant,
+            isActive: { $ne: false },
+            $or: [
+              { _id: { $in: session.activeOrders } },
+              { tableSession: session._id },
+            ],
+            paymentStatus: { $ne: "PAID" },
+            status: { $nin: ["CANCELLED", "WAIVED", "PAID"] },
+          });
+          if (unpaidCount === 0 && session.status !== "RELEASED") {
+            session.status = "PAYMENT_PENDING";
+          }
+          await session.save();
+          if (global.io) {
+            global.io
+              .to(`floor:${session.floor}`)
+              .emit("payment:completed", {
+                orderId: order._id,
+                sessionId: session._id,
+                partial: false,
+              });
+            global.io
+              .to(`floor:${session.floor}`)
+              .emit("table:updated", {
+                sessionId: session._id,
+                status: session.status,
+              });
+          }
+        }
+      } else if (global.io) {
+        global.io
+          .to(`restaurant:${order.restaurantId}`)
+          .emit("payment:completed", {
+            orderId: order._id,
+            partial: order.paymentStatus === "PARTIAL",
+            seat: seatKey(seatTarget),
+          });
+      }
+
+      let printJobId = null;
+      let printJobIds = [];
+      try {
+        const creditEmployeeId = order.processedBy || request.user.id;
+        const [emp, restaurant, floorDoc] = await Promise.all([
+          Employee.findById(creditEmployeeId)
+            .select("firstName lastName name")
+            .lean(),
+          Restaurant.findById(order.restaurantId).select("name").lean(),
+          order.floor
+            ? Floor.findById(order.floor).select("name").lean()
+            : Promise.resolve(null),
+        ]);
+        const processedByName =
+          emp?.name ||
+          [emp?.firstName, emp?.lastName].filter(Boolean).join(" ") ||
+          null;
+        const { jobs } = await createSplitReceiptPrintJobs({
+          order,
+          requestedBy: request.user.id,
+          guestCount: receiptGuestCount,
+          serverName: processedByName,
+          restaurantName: restaurant?.name || null,
+          floorName: order.floorName || floorDoc?.name || null,
+        });
+        printJobIds = (jobs || []).map((j) => j?._id).filter(Boolean);
+        printJobId = printJobIds[0] || null;
+      } catch (printErr) {
+        logger.error(
+          "Failed to create seat RECEIPT PrintJob (payment still succeeded)",
+          printErr,
+        );
+      }
+
+      logger.info(
+        `Seat payment for Order ${order.orderNumber} seat=${seatKey(seatTarget)} status=${order.paymentStatus}`,
+      );
+      return sendSuccess(
+        {
+          ...order.toObject(),
+          printJobId,
+          printJobIds,
+          seatPayment: true,
+          seatRemaining: remaining,
+        },
+        order.paymentStatus === "PAID"
+          ? "Payment completed"
+          : "Seat payment recorded",
+      );
+    }
+
+    if (order.paymentStatus === "PARTIAL") {
+      const unsettledSeats = getUnsettledSeatNumbers(order);
+      if (!unsettledSeats.length) {
+        return sendError(
+          new Error("Nothing Due"),
+          "No unpaid seats with ordered items remain",
+          400,
+        );
+      }
+
+      const remainingDue = getOrderRemainingDue({
+        totalAmount: dueAmount,
+        paymentSplits: order.paymentSplits,
+      });
+      if (!(remainingDue > 0.009)) {
+        return sendError(
+          new Error("Nothing Due"),
+          "No remaining balance on this order",
+          400,
+        );
+      }
+
+      if (amount !== undefined && amount !== null) {
+        if (Math.abs(r2(amount) - remainingDue) > 0.02) {
+          return sendError(
+            new Error("Amount Mismatch"),
+            `Remaining payment must be $${remainingDue.toFixed(2)}`,
+            400,
+          );
+        }
+      }
+
+      const existingSplits = Array.isArray(order.paymentSplits)
+        ? order.paymentSplits.map((s) =>
+            s && typeof s.toObject === "function" ? s.toObject() : { ...s },
+          )
+        : [];
+
+      let giftDebit = 0;
+      if (giftCardCode) {
+        const requested =
+          giftCardUsedAmount != null && giftCardUsedAmount !== ""
+            ? r2(giftCardUsedAmount)
+            : remainingDue;
+        giftDebit = r2(Math.min(Math.max(0, requested), remainingDue));
+      }
+
+      let tip = 0;
+      let cash = 0;
+      let card = 0;
+      let appendedSplits = [];
+
+      // Split remaining seats (each unpaid seat / merged group pays its share)
+      if (Array.isArray(paymentSplitsRaw) && paymentSplitsRaw.length > 0) {
+        // Gift is allocated per split row (giftAmount); don't pre-debit order gift here.
+        giftDebit = 0;
+        const unsettledKeys = new Set(unsettledSeats.map((s) => seatKey(s)));
+        for (let i = 0; i < paymentSplitsRaw.length; i++) {
+          const row = paymentSplitsRaw[i] || {};
+          const name = String(row.name || "").trim();
+          const amt = r2(row.amount);
+          const methodRaw = String(row.method || "").trim();
+          const hasCashWord = /cash/i.test(methodRaw);
+          const hasCardWord =
+            /card/i.test(methodRaw) && !/gift/i.test(methodRaw);
+          let rowCash =
+            row.cashAmount != null && row.cashAmount !== ""
+              ? r2(row.cashAmount)
+              : null;
+          let rowCard =
+            row.cardAmount != null && row.cardAmount !== ""
+              ? r2(row.cardAmount)
+              : null;
+          const rowGift =
+            row.giftAmount != null && row.giftAmount !== ""
+              ? r2(row.giftAmount)
+              : 0;
+          const rowTip =
+            row.tipAmount != null && row.tipAmount !== ""
+              ? r2(row.tipAmount)
+              : 0;
+          if (rowTip < 0) {
+            return sendError(
+              new Error("Invalid Splits"),
+              `Split #${i + 1} tip cannot be negative`,
+              400,
+            );
+          }
+          if (rowGift < 0) {
+            return sendError(
+              new Error("Invalid Splits"),
+              `Split #${i + 1} gift amount cannot be negative`,
+              400,
+            );
+          }
+          if (rowCash == null && rowCard == null) {
+            if (hasCashWord && hasCardWord) {
+              return sendError(
+                new Error("Invalid Splits"),
+                `Split #${i + 1} Cash + Card requires cashAmount and cardAmount`,
+                400,
+              );
+            }
+            if (hasCashWord && !hasCardWord) {
+              rowCash = r2(Math.max(0, amt + rowTip - rowGift));
+              rowCard = 0;
+            } else if (hasCardWord) {
+              rowCard = r2(Math.max(0, amt + rowTip - rowGift));
+              rowCash = 0;
+            } else if (rowGift > 0 || /gift/i.test(methodRaw)) {
+              rowCash = 0;
+              rowCard = 0;
+            } else {
+              return sendError(
+                new Error("Invalid Splits"),
+                `Split #${i + 1} method must be Cash, Card, Cash + Card, or Gift Card`,
+                400,
+              );
+            }
+          } else {
+            rowCash = r2(Math.max(0, rowCash || 0));
+            rowCard = r2(Math.max(0, rowCard || 0));
+          }
+          if (!name) {
+            return sendError(
+              new Error("Invalid Splits"),
+              `Split #${i + 1} requires a payer name`,
+              400,
+            );
+          }
+          if (!(amt > 0)) {
+            return sendError(
+              new Error("Invalid Splits"),
+              `Split #${i + 1} amount must be greater than 0`,
+              400,
+            );
+          }
+          const tenderSum = r2(rowCash + rowCard + rowGift);
+          const expectedTender = r2(amt + rowTip);
+          if (Math.abs(tenderSum - expectedTender) > 0.02) {
+            return sendError(
+              new Error("Invalid Splits"),
+              `Split #${i + 1} cash+card+gift must equal amount+tip`,
+              400,
+            );
+          }
+          const isMixed = rowCash > 0 && rowCard > 0;
+          const isCashOnly = rowCash > 0 && rowCard <= 0;
+          const isGiftOnly = rowGift > 0 && rowCash <= 0 && rowCard <= 0;
+          const rowMethod = isGiftOnly
+            ? rowCash > 0 || rowCard > 0
+              ? "Gift Card"
+              : "Gift Card"
+            : isMixed
+              ? rowGift > 0
+                ? "Cash + Card + Gift Card"
+                : "Cash + Card"
+              : isCashOnly
+                ? rowGift > 0
+                  ? "Cash + Gift Card"
+                  : "Cash"
+                : rowCard > 0
+                  ? rowGift > 0
+                    ? "Card + Gift Card"
+                    : "Card"
+                  : rowGift > 0
+                    ? "Gift Card"
+                    : "Card";
+          const splitCardType =
+            rowCard > 0 && row.cardType ? String(row.cardType).trim() : null;
+          if (rowCard > 0 && !splitCardType) {
+            return sendError(
+              new Error("Invalid Splits"),
+              `Split #${i + 1} requires a card type when paying by card`,
+              400,
+            );
+          }
+
+          const seatNumbers = [];
+          const seenSeats = new Set();
+          const pushSeat = (raw) => {
+            if (raw === undefined || raw === "") return;
+            if (raw === null || raw === "table" || raw === 0) {
+              if (!seenSeats.has("table")) {
+                seenSeats.add("table");
+                seatNumbers.push(null);
+              }
+              return;
+            }
+            const n = Number(raw);
+            if (!Number.isFinite(n) || n < 1) return;
+            const key = String(Math.floor(n));
+            if (seenSeats.has(key)) return;
+            seenSeats.add(key);
+            seatNumbers.push(Math.floor(n));
+          };
+          if (Array.isArray(row.seatNumbers)) {
+            for (const s of row.seatNumbers) pushSeat(s);
+          } else {
+            pushSeat(row.seatNumber);
+          }
+          if (!seatNumbers.length) {
+            return sendError(
+              new Error("Invalid Splits"),
+              `Split #${i + 1} must include at least one remaining seat`,
+              400,
+            );
+          }
+          for (const sn of seatNumbers) {
+            if (!unsettledKeys.has(seatKey(sn))) {
+              return sendError(
+                new Error("Invalid Splits"),
+                `Split #${i + 1} includes a seat that is already paid or empty`,
+                400,
+              );
+            }
+          }
+
+          let tipMethodResolved = null;
+          if (rowTip > 0) {
+            if (row.tipMethod) tipMethodResolved = String(row.tipMethod).trim();
+            else if (isCashOnly) tipMethodResolved = "Cash";
+            else if (rowCard > 0 && rowCash <= 0) tipMethodResolved = "Card";
+            else tipMethodResolved = "Cash";
+          }
+
+          appendedSplits.push({
+            name,
+            amount: amt,
+            method: rowMethod,
+            cardType: splitCardType || null,
+            tipAmount: rowTip,
+            tipMethod: tipMethodResolved,
+            cashAmount: rowCash,
+            cardAmount: rowCard,
+            giftAmount: rowGift,
+            paidAt: new Date(),
+            seatNumber: seatNumbers.find((n) => n != null) ?? seatNumbers[0],
+            seatNumbers,
+          });
+          tip = r2(tip + rowTip);
+          cash = r2(cash + rowCash);
+          card = r2(card + rowCard);
+          giftDebit = r2(giftDebit + rowGift);
+        }
+
+        if (tip > 0 && workingServiceCharge > 0) {
+          return sendError(
+            new Error("Tip Not Allowed"),
+            SERVICE_CHARGE_NO_TIP_MESSAGE,
+            400,
+          );
+        }
+
+        const splitSum = r2(
+          appendedSplits.reduce((s, row) => s + Number(row.amount || 0), 0),
+        );
+        // Seat share amounts must cover the remaining check; gift is tender, not extra due.
+        if (Math.abs(splitSum - remainingDue) > 0.02) {
+          return sendError(
+            new Error("Invalid Splits"),
+            `Split amounts ($${splitSum.toFixed(2)}) must equal remaining due ($${remainingDue.toFixed(2)})`,
+            400,
+          );
+        }
+        const tenderCollected = r2(cash + card + giftDebit);
+        if (Math.abs(tenderCollected - remainingDue) > 0.02) {
+          return sendError(
+            new Error("Invalid Splits"),
+            `Cash+card+gift ($${tenderCollected.toFixed(2)}) must equal remaining due ($${remainingDue.toFixed(2)})`,
+            400,
+          );
+        }
+      } else {
+        tip = tipAmount != null && tipAmount !== "" ? r2(tipAmount) : 0;
+        if (tip < 0) {
+          return sendError(
+            new Error("Invalid Tip"),
+            "Tip cannot be negative",
+            400,
+          );
+        }
+        if (tip > 0 && workingServiceCharge > 0) {
+          return sendError(
+            new Error("Tip Not Allowed"),
+            SERVICE_CHARGE_NO_TIP_MESSAGE,
+            400,
+          );
+        }
+
+        const tenderToward = r2(Math.max(0, remainingDue - giftDebit));
+        cash = cashAmount != null && cashAmount !== "" ? r2(cashAmount) : 0;
+        card = cardAmount != null && cardAmount !== "" ? r2(cardAmount) : 0;
+        const methodLabel = String(method || "Card");
+        if (cash <= 0 && card <= 0 && tenderToward > 0) {
+          if (/cash/i.test(methodLabel) && !/card/i.test(methodLabel)) {
+            cash = r2(tenderToward + tip);
+          } else {
+            card = r2(tenderToward + tip);
+          }
+        }
+        const tenderSum = r2(cash + card);
+        if (Math.abs(tenderSum - r2(tenderToward + tip)) > 0.02) {
+          return sendError(
+            new Error("Invalid Tenders"),
+            `Cash+card must equal remaining due plus tip ($${r2(tenderToward + tip).toFixed(2)})`,
+            400,
+          );
+        }
+        if (card > 0 && !cardType) {
+          return sendError(
+            new Error("Invalid Card"),
+            "Card type is required for card payments",
+            400,
+          );
+        }
+
+        const isMixed = cash > 0 && card > 0;
+        const splitMethod = isMixed
+          ? "Cash + Card"
+          : cash > 0
+            ? "Cash"
+            : "Card";
+        const remainingLabel =
+          unsettledSeats.length === 1
+            ? formatSeatLabel(unsettledSeats[0])
+            : `Remaining (${unsettledSeats
+                .map((s) => formatSeatLabel(s))
+                .join(", ")})`;
+        appendedSplits = [
+          {
+            name:
+              (partyName || guestName || remainingLabel || "").trim() ||
+              remainingLabel,
+            amount: remainingDue,
+            method: splitMethod,
+            cardType: card > 0 ? String(cardType).trim() : null,
+            tipAmount: tip,
+            tipMethod:
+              tip > 0
+                ? tipMethod || (cash > 0 && card <= 0 ? "Cash" : "Card")
+                : null,
+            cashAmount: cash,
+            cardAmount: card,
+            paidAt: new Date(),
+            seatNumber: unsettledSeats[0],
+            seatNumbers: unsettledSeats,
+          },
+        ];
+      }
+
+      order.paymentSplits = [...existingSplits, ...appendedSplits];
+
+      if (giftDebit > 0) {
+        order.giftcardCode = String(giftCardCode).trim().toUpperCase();
+        order.giftcardUsedAmount = r2(
+          (Number(order.giftcardUsedAmount) || 0) + giftDebit,
+        );
+      }
+
+      order.cashAmount = r2((Number(order.cashAmount) || 0) + cash);
+      order.cardAmount = r2((Number(order.cardAmount) || 0) + card);
+      order.tipAmount = r2((Number(order.tipAmount) || 0) + tip);
+      if (tip > 0) {
+        const tipMethods = [
+          ...new Set(
+            appendedSplits
+              .filter((s) => Number(s.tipAmount || 0) > 0)
+              .map((s) => s.tipMethod || "Cash"),
+          ),
+        ];
+        order.tipMethod =
+          tipMethods.length === 1 ? tipMethods[0] : tipMethods.join(" + ");
+      }
+
+      const methodParts = [
+        ...new Set(
+          order.paymentSplits.map((s) =>
+            s.method === "Card" && s.cardType
+              ? `Card - ${s.cardType}`
+              : s.method,
+          ),
+        ),
+      ];
+      order.paymentMethod =
+        methodParts.length <= 3
+          ? `Split (${order.paymentSplits.length}) · ${methodParts.join(" + ")}`
+          : `Split (${order.paymentSplits.length})`;
+
+      if (partyName !== undefined || guestName !== undefined) {
+        const resolvedPartyName = (partyName || guestName || "").trim() || null;
+        if (resolvedPartyName) {
+          order.partyName = resolvedPartyName;
+          order.guestName = resolvedPartyName;
+        }
+      }
+
+      order.paymentStatus = "PAID";
+      order.status = "PAID";
+
+      if (giftDebit > 0 && order.giftcardCode) {
+        const redeem = await redeemGiftCardAtomic({
+          restaurantId: request.restaurant,
+          code: order.giftcardCode,
+          amountToUse: giftDebit,
+          orderId: order._id,
+          note: "Remaining seats payment",
+          sendEmail: true,
+        });
+        if (!redeem.ok) {
+          return sendError(
+            new Error(redeem.error || "Failed to redeem gift card"),
+            redeem.error || "Failed to redeem gift card",
+            redeem.status || 400,
+          );
+        }
+      }
+
+      try {
+        order.taxBreakdown = await buildTaxBreakdownForOrder(
+          order,
+          order.restaurantId || request.restaurant,
+        );
+      } catch (taxErr) {
+        logger.error(
+          "Failed to build taxBreakdown at remaining payment",
+          taxErr,
+        );
+      }
+
+      order.processedBy = order.processedBy || request.user.id;
+      await order.save();
+
+      let session = null;
+      const resolvedSessionId = sessionId
+        ? typeof sessionId === "object"
+          ? sessionId._id || sessionId.id
+          : sessionId
+        : order.tableSession && typeof order.tableSession === "object"
+          ? order.tableSession._id || order.tableSession.id
+          : order.tableSession;
+
+      if (resolvedSessionId) {
+        session = await TableSession.findOne({
+          _id: resolvedSessionId,
+          restaurant: request.restaurant,
+        });
+        if (session) {
+          if (
+            !session.activeOrders.some((id) => String(id) === String(order._id))
+          ) {
+            session.activeOrders.push(order._id);
+          }
+          const unpaidCount = await Order.countDocuments({
+            restaurantId: request.restaurant,
+            isActive: { $ne: false },
+            $or: [
+              { _id: { $in: session.activeOrders } },
+              { tableSession: session._id },
+            ],
+            paymentStatus: { $ne: "PAID" },
+            status: { $nin: ["CANCELLED", "WAIVED", "PAID"] },
+          });
+          if (unpaidCount === 0 && session.status !== "RELEASED") {
+            session.status = "PAYMENT_PENDING";
+          }
+          await session.save();
+          if (global.io) {
+            global.io.to(`floor:${session.floor}`).emit("payment:completed", {
+              orderId: order._id,
+              sessionId: session._id,
+              partial: false,
+            });
+            global.io.to(`floor:${session.floor}`).emit("table:updated", {
+              sessionId: session._id,
+            });
+          }
+        }
+      }
+
+      if (global.io) {
+        global.io
+          .to(`restaurant:${request.restaurant}`)
+          .emit("order:updated", { orderId: order._id });
+        global.io
+          .to(`restaurant:${request.restaurant}`)
+          .emit("payment:completed", {
+            orderId: order._id,
+            sessionId: resolvedSessionId || null,
+          });
+      }
+
+      let printJobId = null;
+      let printJobIds = [];
+      try {
+        const creditEmployeeId = order.processedBy || request.user.id;
+        const [emp, restaurant, floorDoc] = await Promise.all([
+          Employee.findById(creditEmployeeId)
+            .select("firstName lastName name")
+            .lean(),
+          Restaurant.findById(order.restaurantId).select("name").lean(),
+          order.floor
+            ? Floor.findById(order.floor).select("name").lean()
+            : Promise.resolve(null),
+        ]);
+        const processedByName =
+          emp?.name ||
+          [emp?.firstName, emp?.lastName].filter(Boolean).join(" ") ||
+          null;
+        const { jobs } = await createSplitReceiptPrintJobs({
+          order,
+          requestedBy: request.user.id,
+          guestCount: order.guestCount ?? session?.guestCount ?? null,
+          serverName: processedByName,
+          restaurantName: restaurant?.name || null,
+          floorName: order.floorName || floorDoc?.name || null,
+        });
+        printJobIds = (jobs || []).map((j) => j?._id).filter(Boolean);
+        printJobId = printJobIds[0] || null;
+      } catch (printErr) {
+        logger.error(
+          "Failed to create remaining RECEIPT PrintJob (payment still succeeded)",
+          printErr,
+        );
+      }
+
+      logger.info(
+        `Remaining seats payment for Order ${order.orderNumber} seats=${unsettledSeats.map(seatKey).join("+")}`,
+      );
+      return sendSuccess(
+        {
+          ...order.toObject(),
+          printJobId,
+          printJobIds,
+          remainingSeatsPayment: true,
+        },
+        "Payment completed",
+      );
+    }
+
     if (amount !== undefined && amount !== null) {
       const clientAmount = r2(amount);
       if (Math.abs(clientAmount - dueAmount) > 0.02) {
@@ -212,10 +1100,10 @@ export const POST = withAuth(async (request) => {
     // Named multi-payer splits (optional). Gift card stays order-level.
     let normalizedSplits = null;
     if (Array.isArray(paymentSplitsRaw) && paymentSplitsRaw.length > 0) {
-      if (paymentSplitsRaw.length < 2) {
+      if (paymentSplitsRaw.length < 1) {
         return sendError(
           new Error("Invalid Splits"),
-          "Split bill requires at least 2 payers",
+          "Split bill requires at least 1 payer",
           400,
         );
       }
@@ -225,8 +1113,69 @@ export const POST = withAuth(async (request) => {
         const name = String(row.name || "").trim();
         const amt = r2(row.amount);
         const methodRaw = String(row.method || "").trim();
-        const isCash = /^cash$/i.test(methodRaw);
-        const isCard = /^card$/i.test(methodRaw);
+        const hasCashWord = /cash/i.test(methodRaw);
+        const hasCardWord = /card/i.test(methodRaw) && !/gift/i.test(methodRaw);
+        let rowCash =
+          row.cashAmount != null && row.cashAmount !== ""
+            ? r2(row.cashAmount)
+            : null;
+        let rowCard =
+          row.cardAmount != null && row.cardAmount !== ""
+            ? r2(row.cardAmount)
+            : null;
+        const rowGift =
+          row.giftAmount != null && row.giftAmount !== ""
+            ? r2(row.giftAmount)
+            : 0;
+        const rowTip =
+          row.tipAmount != null && row.tipAmount !== ""
+            ? r2(row.tipAmount)
+            : 0;
+        if (rowTip < 0) {
+          return sendError(
+            new Error("Invalid Splits"),
+            `Split #${i + 1} tip cannot be negative`,
+            400,
+          );
+        }
+        if (rowGift < 0) {
+          return sendError(
+            new Error("Invalid Splits"),
+            `Split #${i + 1} gift amount cannot be negative`,
+            400,
+          );
+        }
+
+        // Infer tenders from method when cash/card not sent
+        if (rowCash == null && rowCard == null) {
+          if (hasCashWord && hasCardWord) {
+            return sendError(
+              new Error("Invalid Splits"),
+              `Split #${i + 1} Cash + Card requires cashAmount and cardAmount`,
+              400,
+            );
+          }
+          if (hasCashWord && !hasCardWord) {
+            rowCash = r2(Math.max(0, amt + rowTip - rowGift));
+            rowCard = 0;
+          } else if (hasCardWord) {
+            rowCard = r2(Math.max(0, amt + rowTip - rowGift));
+            rowCash = 0;
+          } else if (rowGift > 0 || /gift/i.test(methodRaw)) {
+            rowCash = 0;
+            rowCard = 0;
+          } else {
+            return sendError(
+              new Error("Invalid Splits"),
+              `Split #${i + 1} method must be Cash, Card, Cash + Card, or Gift Card`,
+              400,
+            );
+          }
+        } else {
+          rowCash = r2(Math.max(0, rowCash || 0));
+          rowCard = r2(Math.max(0, rowCard || 0));
+        }
+
         if (!name) {
           return sendError(
             new Error("Invalid Splits"),
@@ -241,29 +1190,95 @@ export const POST = withAuth(async (request) => {
             400,
           );
         }
-        if (!isCash && !isCard) {
+
+        const tenderSum = r2(rowCash + rowCard + rowGift);
+        const expectedTender = r2(amt + rowTip);
+        if (Math.abs(tenderSum - expectedTender) > 0.02) {
           return sendError(
             new Error("Invalid Splits"),
-            `Split #${i + 1} method must be Cash or Card`,
+            `Split #${i + 1} cash+card+gift ($${tenderSum.toFixed(2)}) must equal amount+tip ($${expectedTender.toFixed(2)})`,
             400,
           );
         }
+
+        const isMixed = rowCash > 0 && rowCard > 0;
+        const isCashOnly = rowCash > 0 && rowCard <= 0;
+        const isGiftOnly = rowGift > 0 && rowCash <= 0 && rowCard <= 0;
+        const method = isGiftOnly
+          ? "Gift Card"
+          : isMixed
+            ? rowGift > 0
+              ? "Cash + Card + Gift Card"
+              : "Cash + Card"
+            : isCashOnly
+              ? rowGift > 0
+                ? "Cash + Gift Card"
+                : "Cash"
+              : rowCard > 0
+                ? rowGift > 0
+                  ? "Card + Gift Card"
+                  : "Card"
+                : rowGift > 0
+                  ? "Gift Card"
+                  : "Card";
         const splitCardType =
-          isCard && row.cardType ? String(row.cardType).trim() : null;
-        const seatRaw = row.seatNumber;
-        let seatNumber = null;
-        if (seatRaw !== undefined && seatRaw !== null && seatRaw !== "") {
-          const n = Number(seatRaw);
-          if (Number.isFinite(n) && n >= 1) seatNumber = Math.floor(n);
+          rowCard > 0 && row.cardType ? String(row.cardType).trim() : null;
+        if (rowCard > 0 && !splitCardType) {
+          return sendError(
+            new Error("Invalid Splits"),
+            `Split #${i + 1} requires a card type when paying by card`,
+            400,
+          );
         }
+
+        // seatNumbers[] (preferred) + legacy seatNumber; null = Table bucket
+        const seatNumbers = [];
+        const seenSeats = new Set();
+        const pushSeat = (raw) => {
+          if (raw === undefined || raw === "") return;
+          if (raw === null || raw === "table" || raw === 0) {
+            if (!seenSeats.has("table")) {
+              seenSeats.add("table");
+              seatNumbers.push(null);
+            }
+            return;
+          }
+          const n = Number(raw);
+          if (!Number.isFinite(n) || n < 1) return;
+          const key = String(Math.floor(n));
+          if (seenSeats.has(key)) return;
+          seenSeats.add(key);
+          seatNumbers.push(Math.floor(n));
+        };
+        if (Array.isArray(row.seatNumbers)) {
+          for (const s of row.seatNumbers) pushSeat(s);
+        } else {
+          pushSeat(row.seatNumber);
+        }
+        const numberedSeats = seatNumbers.filter((n) => n != null);
+        let seatNumber = numberedSeats.length > 0 ? numberedSeats[0] : null;
+
+        let tipMethodResolved = null;
+        if (rowTip > 0) {
+          if (row.tipMethod) tipMethodResolved = String(row.tipMethod).trim();
+          else if (isCashOnly) tipMethodResolved = "Cash";
+          else if (rowCard > 0 && rowCash <= 0) tipMethodResolved = "Card";
+          else tipMethodResolved = "Cash";
+        }
+
         normalizedSplits.push({
           name,
           amount: amt,
-          method: isCash ? "Cash" : "Card",
+          method,
           cardType: splitCardType || null,
-          tipAmount: 0,
+          tipAmount: rowTip,
+          tipMethod: tipMethodResolved,
+          cashAmount: rowCash,
+          cardAmount: rowCard,
+          giftAmount: rowGift,
           paidAt: new Date(),
           seatNumber,
+          seatNumbers: seatNumbers.length ? seatNumbers : undefined,
         });
       }
     }
@@ -354,30 +1369,96 @@ export const POST = withAuth(async (request) => {
       order.giftcardUsedAmount = giftCardDebitAmount;
     }
 
-    // Validate named splits cover the order after gift card (v1: no tip on splits)
+    // Validate named splits cover the order after gift card (tips are extra)
     if (normalizedSplits) {
       const splitSum = r2(
         normalizedSplits.reduce((s, row) => s + Number(row.amount || 0), 0),
       );
-      const covered = r2(splitSum + giftCardDebitAmount);
-      if (Math.abs(covered - dueAmount) > 0.02) {
+      const splitGiftSum = r2(
+        normalizedSplits.reduce((s, row) => s + Number(row.giftAmount || 0), 0),
+      );
+      // Prefer per-row gift totals when present; otherwise order-level gift debit.
+      if (splitGiftSum > 0.009) {
+        giftCardDebitAmount = r2(
+          Math.max(giftCardDebitAmount, splitGiftSum),
+        );
+        if (Math.abs(splitSum - dueAmount) > 0.02) {
+          return sendError(
+            new Error("Invalid Splits"),
+            `Split amounts ($${splitSum.toFixed(2)}) must equal order total ($${dueAmount.toFixed(2)})`,
+            400,
+          );
+        }
+        const tenderCollected = r2(
+          normalizedSplits.reduce(
+            (s, row) =>
+              s +
+              Number(row.cashAmount || 0) +
+              Number(row.cardAmount || 0) +
+              Number(row.giftAmount || 0),
+            0,
+          ),
+        );
+        // Tips are included in cash/card tenders already
+        const tipSum = r2(
+          normalizedSplits.reduce((s, row) => s + Number(row.tipAmount || 0), 0),
+        );
+        if (Math.abs(tenderCollected - r2(dueAmount + tipSum)) > 0.02) {
+          return sendError(
+            new Error("Invalid Splits"),
+            `Cash+card+gift must cover order total plus tips`,
+            400,
+          );
+        }
+        if (giftCardCode) {
+          order.giftcardCode = String(giftCardCode).trim().toUpperCase();
+          order.giftcardUsedAmount = giftCardDebitAmount;
+        }
+      } else {
+        const covered = r2(splitSum + giftCardDebitAmount);
+        if (Math.abs(covered - dueAmount) > 0.02) {
+          return sendError(
+            new Error("Invalid Splits"),
+            `Split amounts ($${splitSum.toFixed(2)}) plus gift card ($${giftCardDebitAmount.toFixed(2)}) must equal order total ($${dueAmount.toFixed(2)})`,
+            400,
+          );
+        }
+      }
+      const splitTips = r2(
+        normalizedSplits.reduce((s, row) => s + Number(row.tipAmount || 0), 0),
+      );
+      if (splitTips > 0 && workingServiceCharge > 0) {
         return sendError(
-          new Error("Invalid Splits"),
-          `Split amounts ($${splitSum.toFixed(2)}) plus gift card ($${giftCardDebitAmount.toFixed(2)}) must equal order total ($${dueAmount.toFixed(2)})`,
+          new Error("Tip Not Allowed"),
+          SERVICE_CHARGE_NO_TIP_MESSAGE,
           400,
         );
       }
-      // Derive tender aggregates from named splits
+      // Derive tender aggregates from named splits (include tips by tender)
       order.cashAmount = r2(
-        normalizedSplits
-          .filter((s) => s.method === "Cash")
-          .reduce((s, row) => s + Number(row.amount || 0), 0),
+        normalizedSplits.reduce(
+          (s, row) => s + Number(row.cashAmount || 0),
+          0,
+        ),
       );
       order.cardAmount = r2(
-        normalizedSplits
-          .filter((s) => s.method === "Card")
-          .reduce((s, row) => s + Number(row.amount || 0), 0),
+        normalizedSplits.reduce(
+          (s, row) => s + Number(row.cardAmount || 0),
+          0,
+        ),
       );
+      if (splitTips > 0) {
+        order.tipAmount = splitTips;
+        const tipMethods = [
+          ...new Set(
+            normalizedSplits
+              .filter((s) => Number(s.tipAmount || 0) > 0)
+              .map((s) => s.tipMethod || "Cash"),
+          ),
+        ];
+        order.tipMethod =
+          tipMethods.length === 1 ? tipMethods[0] : tipMethods.join(" + ");
+      }
     }
 
     // Clean up paymentMethod if gift card was not actually debited
@@ -631,7 +1712,7 @@ export const POST = withAuth(async (request) => {
 
       if (
         Array.isArray(order.paymentSplits) &&
-        order.paymentSplits.length > 1
+        order.paymentSplits.length >= 1
       ) {
         const { jobs } = await createSplitReceiptPrintJobs(printOpts);
         printJobIds = (jobs || []).map((j) => j?._id).filter(Boolean);

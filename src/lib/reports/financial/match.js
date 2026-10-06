@@ -45,7 +45,7 @@ export function escapeRegex(value) {
 /**
  * Paid revenue for a restaurant business-day window: active + paid + not cancelled/waived.
  * Shared by Financial reports and EOD so Overview and Day Closing reconcile.
- * Treats either paymentStatus or status as PAID (covers POS / walk-in / staff / online).
+ * Treats either paymentStatus or status as PAID (covers POS / takeaway / staff / online).
  * Does not filter by source — WALK_IN, STAFF, ONLINE, and POS all count.
  * Uses createdAt OR updatedAt so same-day create/pay always lands on the day.
  */

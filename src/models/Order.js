@@ -85,14 +85,21 @@ const OrderSchema = new mongoose.Schema(
       {
         name: { type: String, required: true },
         amount: { type: Number, required: true },
-        method: { type: String, required: true }, // Cash | Card | Gift Card
+        method: { type: String, required: true }, // Cash | Card | Cash + Card | Gift Card
         cardType: { type: String, default: null },
         tipAmount: { type: Number, default: 0 },
+        tipMethod: { type: String, default: null }, // Cash | Card
+        cashAmount: { type: Number, default: null },
+        cardAmount: { type: Number, default: null },
         paidAt: { type: Date, default: Date.now },
-        /** Set when paying via split-by-seat */
+        /** Set when paying via split-by-seat (first / primary seat) */
         seatNumber: { type: Number, default: null },
+        /** Merged seats under one payer (number = seat; null = Table bucket) */
+        seatNumbers: { type: [mongoose.Schema.Types.Mixed], default: undefined },
       },
     ],
+    /** Seats cleared after pay (numbers; null entry = Table bucket). Table session stays open. */
+    releasedSeats: { type: [mongoose.Schema.Types.Mixed], default: [] },
     taxBreakdown: [
       {
         taxId: { type: mongoose.Schema.Types.ObjectId, ref: 'Tax' },

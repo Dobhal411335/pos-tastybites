@@ -20,7 +20,6 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { useSocket } from "@/components/providers/SocketProvider";
-import TodayOrderPaymentModal from "@/components/sales/TodayOrderPaymentModal";
 import PrintPreviewModal from "@/components/receipts/PrintPreviewModal";
 import {
   getOrderPartyLabel,
@@ -82,9 +81,13 @@ function statusBadgeClass(order) {
   return "bg-zinc-50 text-zinc-700 border-zinc-200";
 }
 
-function clearWalkInResumeKey() {
+const TAKEAWAY_RESUME_KEY = "direct-order-takeaway";
+const LEGACY_WALK_IN_RESUME_KEY = "direct-order-walk-in";
+
+function clearTakeAwayResumeKey() {
   if (typeof window === "undefined") return;
-  sessionStorage.removeItem("direct-order-walk-in");
+  sessionStorage.removeItem(TAKEAWAY_RESUME_KEY);
+  sessionStorage.removeItem(LEGACY_WALK_IN_RESUME_KEY);
 }
 
 const STAT_CARDS = [
@@ -129,7 +132,7 @@ const STAT_CARDS = [
   },
 ];
 
-export default function WalkInHubPage() {
+export default function TakeAwayHubPage() {
   const router = useRouter();
   const { socket } = useSocket();
   const listRef = useRef(null);
@@ -137,8 +140,6 @@ export default function WalkInHubPage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState("OPEN");
-  const [payOrder, setPayOrder] = useState(null);
-  const [serviceTax, setServiceTax] = useState(null);
   const [printOrder, setPrintOrder] = useState(null);
   const [isPrintOpen, setIsPrintOpen] = useState(false);
 
@@ -148,19 +149,15 @@ export default function WalkInHubPage() {
       const res = await fetch("/api/orders/employee?today=true");
       const data = await res.json();
       if (!data.success) {
-        toast.error(data.message || "Failed to load walk-in orders.");
+        toast.error(data.message || "Failed to load takeaway orders.");
         return;
       }
-      const walkIns = (data.data || []).filter(
+      const takeAwayOrders = (data.data || []).filter(
         (order) => String(order.source || "").toUpperCase() === "WALK_IN",
       );
-      setOrders(walkIns);
-      setPayOrder((prev) => {
-        if (!prev) return null;
-        return walkIns.find((o) => o._id === prev._id) || null;
-      });
+      setOrders(takeAwayOrders);
     } catch {
-      toast.error("Failed to load walk-in orders.");
+      toast.error("Failed to load takeaway orders.");
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -170,22 +167,6 @@ export default function WalkInHubPage() {
   useEffect(() => {
     fetchOrders();
   }, [fetchOrders]);
-
-  useEffect(() => {
-    const loadServiceTax = async () => {
-      try {
-        const res = await fetch("/api/tax/servicetax?active=1");
-        const json = await res.json();
-        if (json.success) {
-          const list = Array.isArray(json.data) ? json.data : [];
-          setServiceTax(list[0] || null);
-        }
-      } catch {
-        /* optional */
-      }
-    };
-    loadServiceTax();
-  }, []);
 
   useEffect(() => {
     if (!socket) return undefined;
@@ -245,20 +226,21 @@ export default function WalkInHubPage() {
     });
   };
 
-  const startNewWalkIn = () => {
-    clearWalkInResumeKey();
-    router.push("/sales/orders/walk-in?fresh=1");
+  const startNewTakeAway = () => {
+    clearTakeAwayResumeKey();
+    router.push("/sales/orders/takeaway?fresh=1");
   };
 
   const continueOrder = (order) => {
     const id = order?._id;
     if (!id) return;
     if (!isOrderOpen(order)) {
-      toast.error("Only open walk-in orders can be continued.");
+      toast.error("Only open takeaway orders can be continued.");
       return;
     }
-    sessionStorage.setItem("direct-order-walk-in", String(id));
-    router.push(`/sales/orders/walk-in?orderId=${encodeURIComponent(id)}`);
+    sessionStorage.setItem(TAKEAWAY_RESUME_KEY, String(id));
+    sessionStorage.removeItem(LEGACY_WALK_IN_RESUME_KEY);
+    router.push(`/sales/orders/takeaway?orderId=${encodeURIComponent(id)}`);
   };
 
   return (
@@ -277,10 +259,10 @@ export default function WalkInHubPage() {
             </Button>
             <div className="min-w-0">
               <h1 className="text-xl font-extrabold tracking-tight text-zinc-900 sm:text-2xl">
-                Walk-in Orders
+                Takeaway Orders
               </h1>
               <p className="text-xs font-semibold text-zinc-500 sm:text-sm">
-                Same-day walk-in sales · tap a card to filter
+                Same-day takeaway sales · tap a card to filter
               </p>
             </div>
           </div>
@@ -301,10 +283,10 @@ export default function WalkInHubPage() {
             </Button>
             <Button
               className="h-11 gap-2 rounded-xl bg-orange-500 font-bold text-white hover:bg-orange-600"
-              onClick={startNewWalkIn}
+              onClick={startNewTakeAway}
             >
               <Plus className="h-4 w-4" />
-              New walk-in order
+              New Takeaway Order   
             </Button>
           </div>
         </div>
@@ -404,7 +386,7 @@ export default function WalkInHubPage() {
           {loading ? (
             <div className="flex flex-col items-center justify-center gap-3 py-20 text-zinc-500">
               <Loader2 className="h-8 w-8 animate-spin text-orange-500" />
-              <p className="text-sm font-semibold">Loading walk-in orders…</p>
+              <p className="text-sm font-semibold">Loading Takeaway orders…</p>
             </div>
           ) : filtered.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-4 rounded-2xl border border-dashed border-zinc-300 bg-white px-6 py-16 text-center">
@@ -414,21 +396,21 @@ export default function WalkInHubPage() {
               <div className="space-y-1">
                 <h3 className="text-lg font-extrabold text-zinc-900">
                   {filter === "OPEN"
-                    ? "No unpaid walk-in orders"
+                    ? "No unpaid takeaway orders"
                     : filter === "PAID"
-                      ? "No paid walk-in orders yet today"
-                      : "No walk-in orders today"}
+                      ? "No paid takeaway orders yet today"
+                      : "No takeaway orders today"}
                 </h3>
                 <p className="text-sm font-semibold text-zinc-500">
-                  Start a new walk-in order to take a guest order without a table.
+                  Start a new takeaway order to take a guest order without a table.
                 </p>
               </div>
               <Button
                 className="h-11 gap-2 rounded-xl bg-orange-500 font-bold text-white hover:bg-orange-600"
-                onClick={startNewWalkIn}
+                onClick={startNewTakeAway}
               >
                 <Plus className="h-4 w-4" />
-                New walk-in order
+                New Takeaway Order
               </Button>
             </div>
           ) : (
@@ -436,7 +418,7 @@ export default function WalkInHubPage() {
               {filtered.map((order) => {
                 const open = isOrderOpen(order);
                 const paid = isOrderPaid(order);
-                const party = getOrderPartyLabel(order) || "Walk-in";
+                const party = getOrderPartyLabel(order) || "Takeaway";
                 const total = getOrderGrandTotal(order);
                 const items = getItemCount(order);
                 const statusLabel = paid
@@ -471,7 +453,7 @@ export default function WalkInHubPage() {
                             variant="outline"
                             className={`border text-[10px] font-bold ${getOrderTypeBadgeClass(order)}`}
                           >
-                            Walk-in
+                            Takeaway
                           </Badge>
                         </div>
                         <div className="flex items-center gap-1.5 text-sm font-bold text-zinc-800">
@@ -508,7 +490,14 @@ export default function WalkInHubPage() {
                           </Button>
                           <Button
                             className="h-10 flex-1 gap-1.5 rounded-xl bg-emerald-600 font-bold text-white hover:bg-emerald-700"
-                            onClick={() => setPayOrder(order)}
+                            onClick={() => {
+                              const q = new URLSearchParams({
+                                returnTo: "/sales/take-away",
+                              });
+                              router.push(
+                                `/sales/payment/${order._id}?${q.toString()}`,
+                              );
+                            }}
                           >
                             <DollarSign className="h-4 w-4" />
                             Pay
@@ -535,31 +524,6 @@ export default function WalkInHubPage() {
           )}
         </div>
       </div>
-
-      <TodayOrderPaymentModal
-        key={payOrder?._id || "walk-in-pay"}
-        order={payOrder}
-        open={Boolean(payOrder)}
-        onClose={() => setPayOrder(null)}
-        serviceTax={serviceTax}
-        onPaid={async (updatedOrder) => {
-          const paid = updatedOrder || payOrder;
-          if (paid?._id) {
-            const stored = sessionStorage.getItem("direct-order-walk-in");
-            if (stored && String(stored) === String(paid._id)) {
-              clearWalkInResumeKey();
-            }
-          }
-          setPayOrder(null);
-          await fetchOrders({ silent: true });
-          if (paid) {
-            setPrintOrder(paid);
-            setIsPrintOpen(true);
-          }
-          toast.success("Walk-in order paid");
-        }}
-        redeemNote="Walk-in Payment"
-      />
 
       <PrintPreviewModal
         isOpen={isPrintOpen}

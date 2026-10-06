@@ -39,7 +39,7 @@ const BarReceipt = ({
     order.floorName || order.floor?.name,
   );
   const note = specialNote || order.specialNote;
-  const partyLabel = partyName || guestName || (isDirectSaleOrder(order) ? "Walk-in" : "");
+  const partyLabel = partyName || guestName || (isDirectSaleOrder(order) ? "Take Away" : "");
   const directSale = isDirectSaleOrder(order);
   const covers =
     guestCount != null && guestCount !== ""

@@ -107,7 +107,7 @@ export default function GuestDirectoryReport() {
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState("revenue");
-  const [showWalkIns, setShowWalkIns] = useState(false);
+  const [showTakeAways, setShowTakeAways] = useState(false);
   const [reloadToken, setReloadToken] = useState(0);
 
   const [draftFilters, setDraftFilters] = useState(EMPTY_FILTERS);
@@ -171,7 +171,7 @@ export default function GuestDirectoryReport() {
     setSearchInput("");
     setSearch("");
     setSort("revenue");
-    setShowWalkIns(false);
+    setShowTakeAways(false);
     setDraftFilters(EMPTY_FILTERS);
     setAppliedFilters(EMPTY_FILTERS);
   };
@@ -188,24 +188,24 @@ export default function GuestDirectoryReport() {
   );
 
   const visibleUnidentified = useMemo(() => {
-    if (appliedFilters.type !== "ALL" && appliedFilters.type !== "walk-in") {
+    if (appliedFilters.type !== "ALL" && appliedFilters.type !== "takeaway") {
       return { count: 0, guests: [], orders: 0, totalSpent: 0, lastVisit: null };
     }
-    const walkInFilters = { ...appliedFilters, type: "ALL" };
-    const walkInGuests = (unidentified.guests || []).filter((guest) =>
-      matchesGuestFilters(guest, walkInFilters)
+    const takeAwayFilters = { ...appliedFilters, type: "ALL" };
+    const takeAwayGuests = (unidentified.guests || []).filter((guest) =>
+      matchesGuestFilters(guest, takeAwayFilters)
     );
     return {
       ...unidentified,
-      guests: walkInGuests,
-      count: walkInGuests.length,
-      orders: walkInGuests.reduce((sum, guest) => sum + guest.orders, 0),
-      totalSpent: walkInGuests.reduce((sum, guest) => sum + guest.totalSpent, 0),
+      guests: takeAwayGuests,
+      count: takeAwayGuests.length,
+      orders: takeAwayGuests.reduce((sum, guest) => sum + guest.orders, 0),
+      totalSpent: takeAwayGuests.reduce((sum, guest) => sum + guest.totalSpent, 0),
     };
   }, [unidentified, appliedFilters]);
 
   const hasGuests =
-    (appliedFilters.type === "walk-in" ? 0 : visibleGuests.length) > 0 ||
+    (appliedFilters.type === "takeaway" ? 0 : visibleGuests.length) > 0 ||
     (visibleUnidentified.count || 0) > 0;
 
   const openGuest = async (guestKey) => {
@@ -389,7 +389,7 @@ export default function GuestDirectoryReport() {
             <SelectItem value="ALL">All Types</SelectItem>
             <SelectItem value="returning">Returning</SelectItem>
             <SelectItem value="new">New</SelectItem>
-            <SelectItem value="walk-in">Walk-in</SelectItem>
+            <SelectItem value="takeaway">Takeaway</SelectItem>
           </SelectContent>
         </Select>
         <Input
@@ -446,10 +446,10 @@ export default function GuestDirectoryReport() {
         </div>
       ) : (
         <GuestDirectoryTable
-          guests={appliedFilters.type === "walk-in" ? [] : visibleGuests}
+          guests={appliedFilters.type === "takeaway" ? [] : visibleGuests}
           unidentified={visibleUnidentified}
-          showWalkIns={showWalkIns || Boolean(search) || appliedFilters.type === "walk-in"}
-          onToggleWalkIns={() => setShowWalkIns((open) => !open)}
+          showTakeAways={showTakeAways || Boolean(search) || appliedFilters.type === "takeaway"}
+          onToggleTakeAways={() => setShowTakeAways((open) => !open)}
           onSelect={openGuest}
           selectedGuestKey={selectedGuestKey}
         />

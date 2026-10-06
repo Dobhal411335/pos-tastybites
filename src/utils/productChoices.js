@@ -233,11 +233,55 @@ export function isStyleOption(opt, preparationStyle) {
   return false;
 }
 
+export function isStandaloneExtraLine(item) {
+  return /^extra$/i.test(String(item?.size || ""));
+}
+
+/**
+ * Standalone Extra lines store the addon name in both `name` and `options`
+ * (options are required for pricing). Skip that label on tickets/cart UI.
+ */
+export function isRedundantStandaloneExtraOption(item, opt) {
+  if (!isStandaloneExtraLine(item)) return false;
+  const itemName = String(item?.name || "").trim().toLowerCase();
+  const label = String(opt || "").trim().toLowerCase();
+  return Boolean(itemName && label && itemName === label);
+}
+
 /** Addon / extra labels stored on `item.options`, excluding preparation style. */
 export function getItemExtraOptions(item) {
-  return (item?.options || []).filter(
-    (opt) => !isStyleOption(opt, item?.preparationStyle),
+  return (item?.options || []).filter((opt) => {
+    if (isStyleOption(opt, item?.preparationStyle)) return false;
+    if (isRedundantStandaloneExtraOption(item, opt)) return false;
+    return true;
+  });
+}
+
+/**
+ * Hide cart modifier text that only repeats a standalone Extra line's name
+ * (e.g. "Egg", "Addons: Egg", "Extras: Egg").
+ */
+export function getVisibleCartModifier(item) {
+  const raw = String(item?.modifier || "").trim();
+  if (!raw) return "";
+  if (!isStandaloneExtraLine(item)) return raw;
+
+  const itemName = String(item?.name || "").trim();
+  if (!itemName) return raw;
+
+  const escaped = itemName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const exact = new RegExp(`^(?:addons|extras)\\s*:\\s*${escaped}$`, "i");
+  if (raw.toLowerCase() === itemName.toLowerCase() || exact.test(raw)) {
+    return "";
+  }
+
+  // "Addons: Egg · Cooked: Soft" → keep only the nested choice summary
+  const prefixed = new RegExp(
+    `^(?:addons|extras)\\s*:\\s*${escaped}\\s*[·|]\\s*`,
+    "i",
   );
+  const stripped = raw.replace(prefixed, "").trim();
+  return stripped || raw;
 }
 
 /**

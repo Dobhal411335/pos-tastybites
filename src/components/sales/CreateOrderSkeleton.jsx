@@ -4,11 +4,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 /**
  * Full Create Order shell skeleton for Sales POS (web).
- * Matches panel layout + product list/tiles while menu loads.
+ * Matches panel layout + product tiles while menu loads.
  */
 export default function CreateOrderSkeleton({
   panelLayout = "3",
-  itemStyle = "list",
   gridCols = 2,
 }) {
   const menuPanelWidth =
@@ -17,21 +16,17 @@ export default function CreateOrderSkeleton({
     panelLayout === "3" ? "w-[32%] min-w-[280px] max-w-[420px]" : "w-[35%]";
 
   const productGridClass =
-    itemStyle === "tiles"
-      ? panelLayout === "3"
-        ? gridCols === 4
-          ? "grid grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 p-3 gap-2.5"
-          : gridCols === 3
-            ? "grid grid-cols-2 xl:grid-cols-3 p-3 gap-2.5"
-            : "grid grid-cols-2 p-3 gap-2.5"
-        : gridCols === 4
-          ? "grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 p-3 gap-2.5"
-          : gridCols === 3
-            ? "grid grid-cols-2 md:grid-cols-3 p-3 gap-2.5"
-            : "grid grid-cols-2 p-3 gap-2.5"
-      : "grid grid-cols-1 xl:grid-cols-2 p-4 gap-3";
-
-  const tileCount = itemStyle === "tiles" ? 12 : 8;
+    panelLayout === "3"
+      ? gridCols === 4
+        ? "grid grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 p-3 gap-2.5"
+        : gridCols === 3
+          ? "grid grid-cols-2 xl:grid-cols-3 p-3 gap-2.5"
+          : "grid grid-cols-2 p-3 gap-2.5"
+      : gridCols === 4
+        ? "grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 p-3 gap-2.5"
+        : gridCols === 3
+          ? "grid grid-cols-2 md:grid-cols-3 p-3 gap-2.5"
+          : "grid grid-cols-2 p-3 gap-2.5";
 
   return (
     <div className="flex flex-col h-[calc(100vh-60px)] w-full bg-zinc-50 font-sans overflow-hidden border border-zinc-200 rounded-xl shadow-sm">
@@ -85,39 +80,21 @@ export default function CreateOrderSkeleton({
 
           <div className="flex-1 bg-zinc-50/50 overflow-hidden">
             <div className={productGridClass}>
-              {Array.from({ length: tileCount }).map((_, i) =>
-                itemStyle === "tiles" ? (
-                  <div
-                    key={`prod-${i}`}
-                    className="overflow-hidden rounded-xl border-2 border-zinc-200 bg-white"
-                  >
-                    <Skeleton className="aspect-[4/3] w-full rounded-none bg-zinc-100" />
-                    <div className="flex flex-col items-center gap-2 px-3 py-3">
-                      <Skeleton className="h-4 w-[80%] max-w-[140px] bg-zinc-200" />
-                      <Skeleton className="h-5 w-16 bg-zinc-200" />
+              {Array.from({ length: 12 }).map((_, i) => (
+                <div
+                  key={`prod-${i}`}
+                  className="overflow-hidden rounded-xl border-2 border-zinc-200 bg-white"
+                >
+                  <Skeleton className="aspect-[16/10] w-full rounded-none bg-zinc-100" />
+                  <div className="flex flex-col items-center gap-1.5 px-2.5 py-2">
+                    <Skeleton className="h-3.5 w-[80%] max-w-[140px] bg-zinc-200" />
+                    <div className="flex items-center gap-2">
+                      <Skeleton className="h-4 w-14 bg-zinc-200" />
                       <Skeleton className="h-5 w-12 rounded-md bg-zinc-100" />
                     </div>
                   </div>
-                ) : (
-                  <div
-                    key={`prod-${i}`}
-                    className="flex min-h-[96px] overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm"
-                  >
-                    <Skeleton className="hidden w-32 shrink-0 rounded-none bg-zinc-100 sm:block" />
-                    <div className="flex flex-1 flex-col justify-center gap-2 px-4 py-3">
-                      <Skeleton className="h-3 w-12 bg-zinc-100" />
-                      <Skeleton className="h-4 w-[75%] max-w-[200px] bg-zinc-200" />
-                      <Skeleton className="h-3 w-24 bg-zinc-100" />
-                    </div>
-                    <div className="hidden w-20 shrink-0 items-center justify-center border-l border-zinc-100 sm:flex">
-                      <Skeleton className="h-8 w-12 bg-zinc-100" />
-                    </div>
-                    <div className="flex w-28 shrink-0 items-center justify-center p-2">
-                      <Skeleton className="h-10 w-full rounded-lg bg-zinc-100" />
-                    </div>
-                  </div>
-                ),
-              )}
+                </div>
+              ))}
             </div>
           </div>
         </div>

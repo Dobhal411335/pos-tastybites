@@ -19,10 +19,10 @@ function TypeBadge({ type }) {
       </span>
     );
   }
-  if (type === "walk-in") {
+  if (type === "takeaway") {
     return (
       <span className="bg-orange-500 text-white font-semibold text-[10px] uppercase tracking-wide px-2 py-1.5 rounded-md">
-        Walk-in Guest
+        Takeaway Guest
       </span>
     );
   }
@@ -152,13 +152,13 @@ function GuestRowSkeleton() {
 export default function GuestDirectoryTable({
   guests,
   unidentified,
-  showWalkIns,
-  onToggleWalkIns,
+  showTakeAways,
+  onToggleTakeAways,
   onSelect,
   selectedGuestKey,
   loading = false,
 }) {
-  const walkInCount = unidentified?.count || 0;
+  const takeAwayCount = unidentified?.count || 0;
 
   if (loading) {
     return (
@@ -184,24 +184,24 @@ export default function GuestDirectoryTable({
         </div>
       ))}
 
-      {walkInCount > 0 ? (
+      {takeAwayCount > 0 ? (
         <button
           type="button"
           className="w-full flex items-center px-4 py-3 gap-3 text-left bg-zinc-50 hover:bg-zinc-100 border-t border-zinc-100"
-          onClick={onToggleWalkIns}
+          onClick={onToggleTakeAways}
         >
           <div className="flex-[2] min-w-0 flex items-center gap-2 text-sm font-medium text-zinc-700">
-            {showWalkIns ? (
+            {showTakeAways ? (
               <ChevronDown className="h-3.5 w-3.5 text-zinc-400" />
             ) : (
               <ChevronRight className="h-3.5 w-3.5 text-zinc-400" />
             )}
-            Walk-in / unidentified
+            Takeaway / unidentified
             <Badge
               variant="outline"
               className="text-[10px] font-normal text-zinc-500 border-zinc-200"
             >
-              {walkInCount}
+              {takeAwayCount}
             </Badge>
           </div>
           <div className="flex-[2] min-w-0 text-sm text-zinc-400">—</div>
@@ -216,13 +216,13 @@ export default function GuestDirectoryTable({
             {formatDate(unidentified.lastVisit)}
           </div>
           <div className="flex-1 min-w-0 flex justify-center">
-            <TypeBadge type="walk-in" />
+            <TypeBadge type="takeaway" />
           </div>
           <div className="w-8" />
         </button>
       ) : null}
 
-      {showWalkIns
+      {showTakeAways
         ? (unidentified?.guests || []).map((guest) => (
             <div key={guest.guestKey} className="border-t border-zinc-100">
               <GuestRow
@@ -234,7 +234,7 @@ export default function GuestDirectoryTable({
           ))
         : null}
 
-      {guests.length === 0 && walkInCount === 0 ? (
+      {guests.length === 0 && takeAwayCount === 0 ? (
         <div className="px-4 py-10 text-center text-sm text-zinc-500 border-t border-zinc-100">
           No guests found.
         </div>

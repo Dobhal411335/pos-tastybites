@@ -23,7 +23,13 @@ import {
 } from "@/lib/orders/sessionTables";
 
 import { getSocketServer } from "@/lib/socketServer";
-import { seatsAboveGuestCount } from "@/lib/orders/seatHelpers";
+import {
+  formatSeatLabel,
+  isSeatReleased,
+  isSeatSettled,
+  normalizeSeatNumber,
+  seatsAboveGuestCount,
+} from "@/lib/orders/seatHelpers";
 
 function actorTypeFromRequest(request) {
   const role = request.role || request.user?.role;
@@ -558,7 +564,85 @@ export const PUT = withAuth(async (request) => {
       return sendSuccess(session, "Table reconfigured successfully");
     }
 
-    return sendError(new Error("Invalid Action"), "Valid actions are UPDATE_GUESTS, PAYMENT_PENDING, RELEASE, TRANSFER, RECONFIGURE", 400);
+    if (action === "RELEASE_SEAT") {
+      const orderId = data.orderId;
+      const seatRaw = data.seatNumber;
+      if (!orderId) {
+        return sendError(new Error("Missing ID"), "orderId is required", 400);
+      }
+      const seatTarget =
+        seatRaw === "table" ||
+        seatRaw === "" ||
+        seatRaw === undefined ||
+        seatRaw === null
+          ? null
+          : normalizeSeatNumber(seatRaw);
+
+      const order = await Order.findOne({
+        _id: orderId,
+        restaurantId: request.restaurant,
+        isActive: { $ne: false },
+        $or: [
+          { tableSession: session._id },
+          { _id: { $in: session.activeOrders || [] } },
+        ],
+      });
+      if (!order) {
+        return sendError(
+          new Error("Not Found"),
+          "Order not found for this table session",
+          404,
+        );
+      }
+      if (!isSeatSettled(order.paymentSplits, seatTarget, order)) {
+        return sendError(
+          new Error("Unpaid Seat"),
+          `${formatSeatLabel(seatTarget)} must be paid before it can be released`,
+          400,
+        );
+      }
+      if (isSeatReleased(order.releasedSeats, seatTarget)) {
+        return sendSuccess(
+          { orderId: order._id, seatNumber: seatTarget, alreadyReleased: true },
+          `${formatSeatLabel(seatTarget)} is already released`,
+        );
+      }
+
+      const next = Array.isArray(order.releasedSeats)
+        ? [...order.releasedSeats]
+        : [];
+      next.push(seatTarget);
+      order.releasedSeats = next;
+      await order.save();
+
+      logger.info(
+        `Seat ${seatTarget == null ? "table" : seatTarget} released on order ${order.orderNumber} by ${request.user.id}`,
+      );
+
+      emitFloorTableEvent("table:updated", request.restaurant, session.floor, {
+        sessionId: session._id,
+        orderId: order._id,
+        releasedSeat: seatTarget == null ? "table" : seatTarget,
+      });
+
+      const io = getSocketServer();
+      if (io) {
+        io.to(`restaurant:${request.restaurant}`).emit("order:updated", {
+          orderId: order._id,
+        });
+      }
+
+      return sendSuccess(
+        {
+          orderId: order._id,
+          seatNumber: seatTarget,
+          releasedSeats: order.releasedSeats,
+        },
+        `${formatSeatLabel(seatTarget)} released`,
+      );
+    }
+
+    return sendError(new Error("Invalid Action"), "Valid actions are UPDATE_GUESTS, PAYMENT_PENDING, RELEASE, TRANSFER, RECONFIGURE, RELEASE_SEAT", 400);
   } catch (error) {
     logger.error("Failed to update table session", error);
     return sendError(error, "Failed to update table session", 500);
