@@ -176,34 +176,29 @@ function syncRowTenders(row) {
 
   let cashAmount = lockedCash;
   let cardAmount = lockedCard;
+  const cardTenderEntered = Number.isFinite(parsedCard);
+  const cashTenderEntered = Number.isFinite(parsedCash);
 
   if (pm === "Card") {
-    const cardPortion = Number.isFinite(parsedCard)
-      ? round2(Math.min(cardPay, effectiveCardDue))
-      : round2(effectiveCardDue);
-    const applied =
-      row.cardAmountTendered === "" || row.cardAmountTendered == null
-        ? round2(effectiveCardDue)
-        : cardPortion;
-    cardAmount = round2(lockedCard + applied);
-    if (cashSplitAmount > 0) {
-      // Partial card — remainder not yet assigned
-    } else if (tip > 0) {
-      cardAmount = round2(cardAmount + tip);
+    // Empty input does not count as paid — staff must type Exact or an amount.
+    if (cardTenderEntered) {
+      const applied = round2(Math.min(cardPay, effectiveCardDue));
+      cardAmount = round2(lockedCard + applied);
+      if (cashSplitAmount > 0) {
+        // Partial card — remainder not yet assigned
+      } else if (tip > 0) {
+        cardAmount = round2(cardAmount + tip);
+      }
     }
   } else if (pm === "Cash") {
-    const cashPortion = Number.isFinite(parsedCash)
-      ? round2(Math.min(cashPay, effectiveCashDue))
-      : round2(effectiveCashDue);
-    const applied =
-      row.amountTendered === "" || row.amountTendered == null
-        ? round2(effectiveCashDue)
-        : cashPortion;
-    cashAmount = round2(lockedCash + applied);
-    if (cardSplitFromCash > 0) {
-      // Partial cash — remainder not yet assigned
-    } else if (tip > 0) {
-      cashAmount = round2(cashAmount + tip);
+    if (cashTenderEntered) {
+      const applied = round2(Math.min(cashPay, effectiveCashDue));
+      cashAmount = round2(lockedCash + applied);
+      if (cardSplitFromCash > 0) {
+        // Partial cash — remainder not yet assigned
+      } else if (tip > 0) {
+        cashAmount = round2(cashAmount + tip);
+      }
     }
   } else if (pm === "GiftCard") {
     // Gift covers giftUse; any locked card/cash already counted; tenders optional for remainder
@@ -252,6 +247,36 @@ function isRowReady(row) {
   const amt = parseFloat(synced.amount);
   const amtOk = Number.isFinite(amt) && amt > 0;
   if (!nameOk || !amtOk) return false;
+
+  const pm = row.paymentMethod || "Card";
+  const dueRaw = round2(parseFloat(row.amount) || 0);
+  const giftUse = round2(
+    Math.min(Math.max(0, Number(row.giftUseAmount) || 0), dueRaw),
+  );
+  const due = round2(Math.max(0, dueRaw - giftUse));
+  const lockedCard = round2(Math.max(0, Number(row.lockedCardAmount) || 0));
+  const lockedCash = round2(Math.max(0, Number(row.lockedCashAmount) || 0));
+  const remainingToEnter = round2(
+    Math.max(0, due - lockedCard - lockedCash),
+  );
+  const cardEntered =
+    row.cardAmountTendered !== "" &&
+    row.cardAmountTendered != null &&
+    Number.isFinite(parseFloat(row.cardAmountTendered));
+  const cashEntered =
+    row.amountTendered !== "" &&
+    row.amountTendered != null &&
+    Number.isFinite(parseFloat(row.amountTendered));
+
+  // Require an explicit amount in the active tender input before Ready / Complete.
+  if (remainingToEnter > 0.009) {
+    if (pm === "Card" && !cardEntered) return false;
+    if (pm === "Cash" && !cashEntered) return false;
+    if (pm === "GiftCard" && !cardEntered && !cashEntered && giftUse < dueRaw - 0.009) {
+      return false;
+    }
+  }
+
   if (
     synced._cashSplitAmount > 0 ||
     synced._cardSplitFromCash > 0 ||
@@ -1505,11 +1530,20 @@ export default function OrderPaymentView({
     return afterLocks;
   })();
 
+  const fullPayNeedsExplicitTender =
+    (paymentMethod === "Card" &&
+      effectiveCardDue > 0.009 &&
+      !Number.isFinite(parsedCardAmount)) ||
+    (paymentMethod === "Cash" &&
+      effectiveCashDue > 0.009 &&
+      !Number.isFinite(parsedCashAmount));
+
   const completeDisabled =
     isSubmitting ||
     staffDiscountLoading ||
     (isSeatPayMode
       ? total < 0.01 ||
+        fullPayNeedsExplicitTender ||
         (includeServiceCharge && autoTip > 0) ||
         (paymentMethod === "GiftCard" && giftCardBalance === null) ||
         (paymentMethod === "GiftCard" && remainingAfterGift > 0) ||
@@ -1522,7 +1556,8 @@ export default function OrderPaymentView({
         ? !splitsValid ||
           (includeServiceCharge &&
             syncedSplits.some((r) => (Number(r.tipAmount) || 0) > 0))
-        : (includeServiceCharge && autoTip > 0) ||
+        : fullPayNeedsExplicitTender ||
+          (includeServiceCharge && autoTip > 0) ||
           (paymentMethod === "GiftCard" && giftCardBalance === null) ||
           (paymentMethod === "GiftCard" && remainingAfterGift > 0) ||
           (paymentMethod === "Cash" && cardSplitFromCash > 0) ||
@@ -1610,6 +1645,10 @@ export default function OrderPaymentView({
           ? "Gift Card"
           : paymentMethod);
     const label = formatSeatLabel(seatNum);
+    const seatParty =
+      String(splitRow?.name || "").trim() ||
+      String(guestName || "").trim() ||
+      label;
     const previewOrder = {
       ...order,
       items: order.items || [],
@@ -1626,8 +1665,8 @@ export default function OrderPaymentView({
       cashAmount: cashAmt,
       cardAmount: cardAmt,
       paymentMethod: method,
-      guestName: guestName || order.guestName,
-      partyName: guestName || order.partyName || order.guestName,
+      guestName: seatParty,
+      partyName: seatParty,
       taxBreakdown: totals.taxBreakdown || order.taxBreakdown,
     };
     const jobMetadata = {
@@ -1635,7 +1674,7 @@ export default function OrderPaymentView({
       filterReceiptBySeat: true,
       splitSeatNumber: seatNum,
       splitSeatNumbers: [seatNum],
-      splitName: splitRow?.name || label,
+      splitName: seatParty,
       splitAmount: due,
       splitMethod: method,
       paymentMethod: method,
@@ -1725,6 +1764,24 @@ export default function OrderPaymentView({
         ? `Card - ${selectedCardType}`
         : paymentMethod;
 
+  const currentBillPartyName = (() => {
+    if (billMode === "split" && selectedSplit) {
+      return String(selectedSplit.name || "").trim();
+    }
+    return String(guestName || "").trim();
+  })();
+
+  const currentBillPartyFallback = isSeatPayMode
+    ? seatPayLabel
+    : billMode === "split"
+      ? seatsLabelForRow(selectedSplit) ||
+        String(selectedSplit?.name || "").trim() ||
+        "Selected group"
+      : order.partyName || order.guestName || "";
+
+  const receiptPartyName =
+    currentBillPartyName || currentBillPartyFallback || "";
+
   const receiptPreviewOrder = {
     ...order,
     items: order.items || [],
@@ -1743,8 +1800,8 @@ export default function OrderPaymentView({
     cashAmount: receiptCash,
     cardAmount: receiptCard,
     paymentMethod: previewMethod,
-    guestName: guestName || order.guestName,
-    partyName: guestName || order.partyName || order.guestName,
+    guestName: receiptPartyName || order.guestName,
+    partyName: receiptPartyName || order.partyName || order.guestName,
     taxBreakdown: receiptTotals.taxBreakdown || order.taxBreakdown,
   };
 
@@ -1755,9 +1812,7 @@ export default function OrderPaymentView({
         splitSeatNumber:
           selectedSeatNumbers.length === 1 ? selectedSeatNumbers[0] : null,
         splitSeatNumbers: selectedSeatNumbers,
-        splitName: isSeatPayMode
-          ? seatPayLabel
-          : selectedSplit?.name || seatsLabelForRow(selectedSplit),
+        splitName: receiptPartyName,
         splitAmount: isSeatPayMode
           ? total
           : round2(parseFloat(selectedSplit?.amount) || 0),
@@ -2672,13 +2727,38 @@ export default function OrderPaymentView({
                 <label className="flex items-center gap-1.5 text-[11px] font-extrabold uppercase tracking-widest text-indigo-600">
                   <User className="h-3.5 w-3.5" />
                   Party name
+                  {isSeatPayMode ||
+                  (billMode === "split" && selectedSplit) ? (
+                    <span className="font-bold normal-case tracking-normal text-zinc-400">
+                      · this bill
+                    </span>
+                  ) : null}
                 </label>
                 <Input
-                  placeholder="e.g. John Doe"
-                  value={guestName}
-                  onChange={(e) => setGuestName(e.target.value)}
-                  className="h-10 rounded-xl border-zinc-200 bg-white text-sm font-semibold focus-visible:ring-orange-500"
+                  placeholder="Customer name for this receipt"
+                  value={
+                    billMode === "split" && selectedSplit
+                      ? String(selectedSplit.name || "")
+                      : guestName
+                  }
+                  onChange={(e) => {
+                    const next = e.target.value;
+                    if (billMode === "split" && selectedSplit) {
+                      updateSplitRow(selectedSplit.id, { name: next });
+                    } else {
+                      setGuestName(next);
+                    }
+                  }}
+                  disabled={billMode === "split" && !selectedSplit}
+                  className="h-10 rounded-xl border-zinc-200 bg-white text-sm font-semibold focus-visible:ring-orange-500 disabled:bg-zinc-100 disabled:text-zinc-400"
                 />
+                <p className="text-[11px] font-medium text-zinc-500">
+                  {billMode === "split" && !selectedSplit
+                    ? "Select a seat/group on the left to set its party name."
+                    : isSeatPayMode || billMode === "split"
+                      ? "Prints as Party on this seat/group receipt only."
+                      : "Prints as Party on the customer receipt."}
+                </p>
               </div>
               {showRemainingSeatAccordions ? (
                 <div className="space-y-2">

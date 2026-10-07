@@ -3,6 +3,12 @@
 import React, { useMemo, useState } from "react";
 import { Minus, Plus, X } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
 import { useCart } from "@/context/CartContext";
 import { toast } from "sonner";
@@ -16,7 +22,12 @@ import {
 } from "@/utils/productChoices";
 import { cn } from "@/lib/utils";
 import IngredientChips from "@/components/menu/IngredientChips";
-import { buildModifiedRequestRemark } from "@/utils/modifiedRequestRemark";
+
+const accordionItemClass =
+  "overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-none";
+const accordionTriggerClass =
+  "px-3 py-3 text-[13px] font-bold text-zinc-900 hover:no-underline hover:bg-zinc-50";
+const accordionContentClass = "px-3 pt-3 pb-3";
 
 function buildCartKey(parts) {
   return parts
@@ -90,8 +101,6 @@ export default function ProductConfigModal({ isOpen, onClose, product }) {
   const [addonQtyById, setAddonQtyById] = useState({});
   const [choiceSelections, setChoiceSelections] = useState({});
   const [preparationStyle, setPreparationStyle] = useState("");
-  const [noteWithout, setNoteWithout] = useState("");
-  const [noteAdd, setNoteAdd] = useState("");
   const [configuredProductId, setConfiguredProductId] = useState(null);
 
   const productId = product?.id || product?._id || null;
@@ -105,8 +114,6 @@ export default function ProductConfigModal({ isOpen, onClose, product }) {
     setAddonQtyById({});
     setChoiceSelections({});
     setPreparationStyle(prepStyles[0] || "");
-    setNoteWithout("");
-    setNoteAdd("");
   }
 
   const variantEntries = Object.entries(variantQtyBySize).filter(
@@ -161,8 +168,6 @@ export default function ProductConfigModal({ isOpen, onClose, product }) {
   }, [variantQtyBySize, addonQtyById, variants]);
 
   if (!product) return null;
-
-  const remarkPreview = buildModifiedRequestRemark(noteWithout, noteAdd);
 
   const setVariantQty = (key, qty) => {
     setVariantQtyBySize((prev) => ({ ...prev, [key]: Math.max(0, qty) }));
@@ -282,22 +287,12 @@ export default function ProductConfigModal({ isOpen, onClose, product }) {
 
     const choiceKey = cartChoiceSelectionsKey(productChoicePayload);
     const prep = preparationStyle || "";
-    const notes = buildModifiedRequestRemark(noteWithout, noteAdd);
-    const noteKey = notes
-      ? notes.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 40)
-      : "";
 
     variantEntries.forEach(([key, qty]) => {
       const variant = variants[Number(key)];
       if (!variant) return;
       const sizeName = variant.size || "Standard";
-      const cartKey = buildCartKey([
-        product.id,
-        sizeName,
-        choiceKey,
-        prep,
-        noteKey ? `note-${noteKey}` : "",
-      ]);
+      const cartKey = buildCartKey([product.id, sizeName, choiceKey, prep]);
 
       addToCart(
         {
@@ -315,7 +310,9 @@ export default function ProductConfigModal({ isOpen, onClose, product }) {
           choiceSelections: productChoicePayload,
           addonChoiceSelections: [],
           preparationStyle: prep || null,
-          notes,
+          noteWithout: "",
+          noteAdd: "",
+          notes: "",
           category: product.category,
           categoryName: product.categoryName,
           productType: product.productType,
@@ -345,7 +342,6 @@ export default function ProductConfigModal({ isOpen, onClose, product }) {
         "Extra",
         addon.name,
         addonChoiceKey,
-        noteKey ? `note-${noteKey}` : "",
       ]);
 
       addToCart(
@@ -365,7 +361,9 @@ export default function ProductConfigModal({ isOpen, onClose, product }) {
           choiceSelections: [],
           addonChoiceSelections: addonChoices,
           preparationStyle: null,
-          notes,
+          noteWithout: "",
+          noteAdd: "",
+          notes: "",
           category: product.category,
           categoryName: product.categoryName,
           productType: product.productType,
@@ -412,320 +410,314 @@ export default function ProductConfigModal({ isOpen, onClose, product }) {
           </button>
         </div>
 
-        <div className="flex-1 space-y-6 overflow-y-auto px-5 py-5">
+        <div className="flex-1 space-y-4 overflow-y-auto px-5 py-5">
           {product.description ? (
             <p className="text-sm leading-relaxed text-zinc-600">
               {product.description}
             </p>
           ) : null}
 
-          <div className="hidden gap-1 border-b border-zinc-100 px-1 pb-2 text-[11px] font-bold uppercase tracking-wider text-zinc-400 sm:flex">
-            <div className="min-w-[100px] flex-1">Option</div>
-            <div className="w-28 text-center">Qty</div>
-            <div className="w-20 text-right">Price</div>
-          </div>
+          {(() => {
+            const sectionIds = [
+              ...(variants.length > 0 ? ["variants"] : []),
+              ...choiceOptions.map((group, i) => `choice-${i}-${group.name}`),
+              ...(prepStyles.length > 0 ? ["preparation"] : []),
+              ...(addons.length > 0 ? ["addons"] : []),
+            ];
+            const defaultOpen = sectionIds[0] ? [sectionIds[0]] : [];
 
-          {variants.length > 0 ? (
-            <div className="space-y-2">
-              <span className="mb-1 block text-[13px] font-bold text-zinc-900">
-                Variants
-              </span>
-              <div className="grid gap-2">
-                {variants.map((v, idx) => {
-                  const key = String(idx);
-                  const qty = Number(variantQtyBySize[key]) || 0;
-                  const price = Number(v.price) || 0;
-                  return (
-                    <div
-                      key={key}
-                      className={cn(
-                        "rounded-lg border p-3 transition-colors",
-                        qty > 0
-                          ? "border-primary bg-primary/5"
-                          : "border-zinc-200",
-                      )}
-                    >
-                      <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div className="text-sm font-bold text-zinc-800">
-                          {v.size || "Standard"}
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <QtyStepper
-                            value={qty}
-                            onChange={(next) => setVariantQty(key, next)}
-                          />
-                          <div className="w-16 text-right text-sm font-bold tabular-nums text-zinc-900">
-                            ${price.toFixed(2)}
-                          </div>
-                        </div>
+            return (
+              <Accordion
+                key={productId || "product-config"}
+                type="multiple"
+                defaultValue={defaultOpen}
+                className="space-y-3"
+              >
+                {variants.length > 0 ? (
+                  <AccordionItem value="variants" className={accordionItemClass}>
+                    <AccordionTrigger className={accordionTriggerClass}>
+                      Variants
+                    </AccordionTrigger>
+                    <AccordionContent className={accordionContentClass}>
+                      <div className="hidden gap-1 border-b border-zinc-100 px-1 pb-2 text-[11px] font-bold uppercase tracking-wider text-zinc-400 sm:flex">
+                        <div className="min-w-[100px] flex-1">Option</div>
+                        <div className="w-28 text-center">Qty</div>
+                        <div className="w-20 text-right">Price</div>
                       </div>
-                      <IngredientChips
-                        ingredients={v.ingredients}
-                        label="Includes"
-                      />
-                    </div>
+                      <div className="mt-2 grid gap-2">
+                        {variants.map((v, idx) => {
+                          const key = String(idx);
+                          const qty = Number(variantQtyBySize[key]) || 0;
+                          const price = Number(v.price) || 0;
+                          return (
+                            <div
+                              key={key}
+                              className={cn(
+                                "rounded-lg border p-3 transition-colors",
+                                qty > 0
+                                  ? "border-primary bg-primary/5"
+                                  : "border-zinc-200",
+                              )}
+                            >
+                              <div className="flex flex-wrap items-center justify-between gap-3">
+                                <div className="text-sm font-bold text-zinc-800">
+                                  {v.size || "Standard"}
+                                </div>
+                                <div className="flex items-center gap-3">
+                                  <QtyStepper
+                                    value={qty}
+                                    onChange={(next) => setVariantQty(key, next)}
+                                  />
+                                  <div className="w-16 text-right text-sm font-bold tabular-nums text-zinc-900">
+                                    ${price.toFixed(2)}
+                                  </div>
+                                </div>
+                              </div>
+                              <IngredientChips
+                                ingredients={v.ingredients}
+                                label="Includes"
+                              />
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </AccordionContent>
+                  </AccordionItem>
+                ) : null}
+
+                {choiceOptions.map((group, groupIndex) => {
+                  const multi = (group.subChoices || []).length > 2;
+                  const selected = choiceSelections[group.name] || [];
+                  const value = `choice-${groupIndex}-${group.name}`;
+                  return (
+                    <AccordionItem
+                      key={value}
+                      value={value}
+                      className={accordionItemClass}
+                    >
+                      <AccordionTrigger className={accordionTriggerClass}>
+                        {group.name}
+                      </AccordionTrigger>
+                      <AccordionContent className={accordionContentClass}>
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          {(group.subChoices || []).map((sub) => {
+                            const checked = selected.includes(sub);
+                            return (
+                              <label
+                                key={sub}
+                                className={cn(
+                                  "flex cursor-pointer items-center gap-3 rounded-lg border p-3 text-sm font-semibold",
+                                  checked
+                                    ? "border-primary bg-primary/5"
+                                    : "border-zinc-200",
+                                )}
+                              >
+                                <input
+                                  type={multi ? "checkbox" : "radio"}
+                                  name={`choice-${group.name}`}
+                                  checked={checked}
+                                  onChange={() =>
+                                    toggleChoice(group.name, sub, multi)
+                                  }
+                                  className="h-4 w-4 accent-orange-600"
+                                />
+                                {sub}
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </AccordionContent>
+                    </AccordionItem>
                   );
                 })}
-              </div>
-            </div>
-          ) : null}
 
-          {choiceOptions.map((group) => {
-            const multi = (group.subChoices || []).length > 2;
-            const selected = choiceSelections[group.name] || [];
-            return (
-              <div key={group.name} className="space-y-2">
-                <span className="mb-1 block text-[13px] font-bold text-zinc-900">
-                  {group.name}{" "}
-                </span>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  {(group.subChoices || []).map((sub) => {
-                    const checked = selected.includes(sub);
-                    return (
-                      <label
-                        key={sub}
-                        className={cn(
-                          "flex cursor-pointer items-center gap-3 rounded-lg border p-3 text-sm font-semibold",
-                          checked
-                            ? "border-primary bg-primary/5"
-                            : "border-zinc-200",
-                        )}
-                      >
-                        <input
-                          type={multi ? "checkbox" : "radio"}
-                          name={`choice-${group.name}`}
-                          checked={checked}
-                          onChange={() => toggleChoice(group.name, sub, multi)}
-                          className="h-4 w-4 accent-orange-600"
-                        />
-                        {sub}
-                      </label>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
-
-          {prepStyles.length > 0 ? (
-            <div className="space-y-2">
-              <span className="mb-1 block text-[13px] font-bold text-zinc-900">
-                Preparation
-              </span>
-              <div className="flex flex-wrap gap-2">
-                {prepStyles.map((style) => (
-                  <button
-                    key={style}
-                    type="button"
-                    onClick={() => setPreparationStyle(style)}
-                    className={cn(
-                      "min-h-10 rounded-full border px-4 py-2 text-xs font-bold",
-                      preparationStyle === style
-                        ? "border-primary bg-primary text-white"
-                        : "border-zinc-200 bg-white text-zinc-700",
-                    )}
+                {prepStyles.length > 0 ? (
+                  <AccordionItem
+                    value="preparation"
+                    className={accordionItemClass}
                   >
-                    {style}
-                  </button>
-                ))}
-              </div>
-            </div>
-          ) : null}
-
-          {addons.length > 0 ? (
-            <div className="space-y-2">
-              <span className="mb-1 block text-[13px] font-bold text-zinc-900">
-                Addons
-              </span>
-              <div className="grid gap-2">
-                {addons.map((addon, index) => {
-                  const key = addonKey(addon, index);
-                  const entry = addonQtyById[key];
-                  const qty = Number(entry?.qty) || 0;
-                  const price = Number(addon.price) || 0;
-                  const nested = normalizeChoiceOptions(addon.choiceOptions);
-                  return (
-                    <div
-                      key={key}
-                      className={cn(
-                        "rounded-lg border p-3 transition-colors",
-                        qty > 0
-                          ? "border-primary bg-primary/5"
-                          : "border-zinc-200",
-                      )}
-                    >
-                      <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div className="min-w-0 flex-1">
-                          <div className="text-sm font-bold text-zinc-800">
-                            {addon.name}
-                          </div>
-                          {addon.fromCategory ? (
-                            <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-400">
-                              Linked from category
-                            </p>
-                          ) : null}
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <QtyStepper
-                            value={qty}
-                            onChange={(next) => setAddonQty(key, addon, next)}
-                          />
-                          <div className="w-16 text-right text-sm font-bold tabular-nums text-zinc-900">
-                            +${price.toFixed(2)}
-                          </div>
-                        </div>
+                    <AccordionTrigger className={accordionTriggerClass}>
+                      Preparation
+                    </AccordionTrigger>
+                    <AccordionContent className={accordionContentClass}>
+                      <div className="flex flex-wrap gap-2">
+                        {prepStyles.map((style) => (
+                          <button
+                            key={style}
+                            type="button"
+                            onClick={() => setPreparationStyle(style)}
+                            className={cn(
+                              "min-h-10 rounded-full border px-4 py-2 text-xs font-bold",
+                              preparationStyle === style
+                                ? "border-primary bg-primary text-white"
+                                : "border-zinc-200 bg-white text-zinc-700",
+                            )}
+                          >
+                            {style}
+                          </button>
+                        ))}
                       </div>
-                      <IngredientChips
-                        ingredients={addon.ingredients}
-                        label="Addon includes"
-                      />
+                    </AccordionContent>
+                  </AccordionItem>
+                ) : null}
 
-                      {nested.length > 0 ? (
-                        <div className="mt-3 space-y-3 border-t border-zinc-100 pt-3">
-                          {qty <= 0 ? (
-                            <p className="text-[11px] font-semibold text-zinc-400">
-                              Set addon quantity above to choose options
-                            </p>
-                          ) : null}
-                          {nested.map((group, groupIndex) => {
-                            const qtyMap = normalizeAddonChoiceQtyMap(
-                              entry?.choicesByGroup?.[groupIndex],
-                            );
-                            const selectedTotal = sumAddonChoiceQtyMap(qtyMap);
-                            const mismatch =
-                              qty > 0 && selectedTotal !== qty;
-                            const over = selectedTotal > qty;
-                            return (
-                              <div key={group.name} className="space-y-2">
-                                <div className="flex flex-wrap items-center justify-between gap-2">
-                                  <p className="text-[11px] font-bold uppercase tracking-wide text-zinc-500">
-                                    {group.name}
-                                  </p>
-                                  <p
-                                    className={cn(
-                                      "text-[11px] font-bold tabular-nums",
-                                      mismatch
-                                        ? "text-red-600"
-                                        : selectedTotal === qty && qty > 0
-                                          ? "text-emerald-600"
-                                          : "text-zinc-400",
-                                    )}
-                                  >
-                                    {selectedTotal} / {qty} selected
-                                  </p>
+                {addons.length > 0 ? (
+                  <AccordionItem value="addons" className={accordionItemClass}>
+                    <AccordionTrigger className={accordionTriggerClass}>
+                      Addons
+                    </AccordionTrigger>
+                    <AccordionContent className={accordionContentClass}>
+                      <div className="grid gap-2">
+                        {addons.map((addon, index) => {
+                          const key = addonKey(addon, index);
+                          const entry = addonQtyById[key];
+                          const qty = Number(entry?.qty) || 0;
+                          const price = Number(addon.price) || 0;
+                          const nested = normalizeChoiceOptions(
+                            addon.choiceOptions,
+                          );
+                          return (
+                            <div
+                              key={key}
+                              className={cn(
+                                "rounded-lg border p-3 transition-colors",
+                                qty > 0
+                                  ? "border-primary bg-primary/5"
+                                  : "border-zinc-200",
+                              )}
+                            >
+                              <div className="flex flex-wrap items-center justify-between gap-3">
+                                <div className="min-w-0 flex-1">
+                                  <div className="text-sm font-bold text-zinc-800">
+                                    {addon.name}
+                                  </div>
+                                  {addon.fromCategory ? (
+                                    <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-400">
+                                      Linked from category
+                                    </p>
+                                  ) : null}
                                 </div>
-                                <div className="grid gap-2 sm:grid-cols-2">
-                                  {group.subChoices.map((sub) => {
-                                    const subQty = Number(qtyMap[sub]) || 0;
-                                    const others = selectedTotal - subQty;
-                                    const maxForSub = Math.max(
-                                      0,
-                                      qty - Math.max(0, others),
+                                <div className="flex items-center gap-3">
+                                  <QtyStepper
+                                    value={qty}
+                                    onChange={(next) =>
+                                      setAddonQty(key, addon, next)
+                                    }
+                                  />
+                                  <div className="w-16 text-right text-sm font-bold tabular-nums text-zinc-900">
+                                    +${price.toFixed(2)}
+                                  </div>
+                                </div>
+                              </div>
+                              <IngredientChips
+                                ingredients={addon.ingredients}
+                                label="Addon includes"
+                              />
+
+                              {nested.length > 0 ? (
+                                <div className="mt-3 space-y-3 border-t border-zinc-100 pt-3">
+                                  {qty <= 0 ? (
+                                    <p className="text-[11px] font-semibold text-zinc-400">
+                                      Set addon quantity above to choose options
+                                    </p>
+                                  ) : null}
+                                  {nested.map((group, groupIndex) => {
+                                    const qtyMap = normalizeAddonChoiceQtyMap(
+                                      entry?.choicesByGroup?.[groupIndex],
                                     );
+                                    const selectedTotal =
+                                      sumAddonChoiceQtyMap(qtyMap);
+                                    const mismatch =
+                                      qty > 0 && selectedTotal !== qty;
+                                    const over = selectedTotal > qty;
                                     return (
                                       <div
-                                        key={sub}
-                                        className={cn(
-                                          "flex flex-wrap items-center justify-between gap-3 rounded-md border px-2.5 py-2",
-                                          subQty > 0
-                                            ? "border-primary bg-white"
-                                            : "border-zinc-200 bg-white",
-                                          qty <= 0 && "opacity-50",
-                                        )}
+                                        key={group.name}
+                                        className="space-y-2"
                                       >
-                                        <span className="text-xs font-semibold text-zinc-800">
-                                          {sub}
-                                        </span>
-                                        <QtyStepper
-                                          value={subQty}
-                                          min={0}
-                                          max={maxForSub}
-                                          onChange={(next) =>
-                                            setAddonSubChoiceQty(
-                                              key,
-                                              addon,
-                                              groupIndex,
-                                              sub,
-                                              next,
-                                            )
-                                          }
-                                        />
+                                        <div className="flex flex-wrap items-center justify-between gap-2">
+                                          <p className="text-[11px] font-bold uppercase tracking-wide text-zinc-500">
+                                            {group.name}
+                                          </p>
+                                          <p
+                                            className={cn(
+                                              "text-[11px] font-bold tabular-nums",
+                                              mismatch
+                                                ? "text-red-600"
+                                                : selectedTotal === qty &&
+                                                    qty > 0
+                                                  ? "text-emerald-600"
+                                                  : "text-zinc-400",
+                                            )}
+                                          >
+                                            {selectedTotal} / {qty} selected
+                                          </p>
+                                        </div>
+                                        <div className="grid gap-2 sm:grid-cols-2">
+                                          {group.subChoices.map((sub) => {
+                                            const subQty =
+                                              Number(qtyMap[sub]) || 0;
+                                            const others =
+                                              selectedTotal - subQty;
+                                            const maxForSub = Math.max(
+                                              0,
+                                              qty - Math.max(0, others),
+                                            );
+                                            return (
+                                              <div
+                                                key={sub}
+                                                className={cn(
+                                                  "flex flex-wrap items-center justify-between gap-3 rounded-md border px-2.5 py-2",
+                                                  subQty > 0
+                                                    ? "border-primary bg-white"
+                                                    : "border-zinc-200 bg-white",
+                                                  qty <= 0 && "opacity-50",
+                                                )}
+                                              >
+                                                <span className="text-xs font-semibold text-zinc-800">
+                                                  {sub}
+                                                </span>
+                                                <QtyStepper
+                                                  value={subQty}
+                                                  min={0}
+                                                  max={maxForSub}
+                                                  onChange={(next) =>
+                                                    setAddonSubChoiceQty(
+                                                      key,
+                                                      addon,
+                                                      groupIndex,
+                                                      sub,
+                                                      next,
+                                                    )
+                                                  }
+                                                />
+                                              </div>
+                                            );
+                                          })}
+                                        </div>
+                                        {mismatch ? (
+                                          <p className="text-[11px] font-semibold text-red-600">
+                                            {over
+                                              ? `Too many selections (${selectedTotal}). Must equal addon qty (${qty}).`
+                                              : `Select more options (${selectedTotal} of ${qty}). Nested choices must match addon quantity.`}
+                                          </p>
+                                        ) : null}
                                       </div>
                                     );
                                   })}
                                 </div>
-                                {mismatch ? (
-                                  <p className="text-[11px] font-semibold text-red-600">
-                                    {over
-                                      ? `Too many selections (${selectedTotal}). Must equal addon qty (${qty}).`
-                                      : `Select more options (${selectedTotal} of ${qty}). Nested choices must match addon quantity.`}
-                                  </p>
-                                ) : null}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      ) : null}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          ) : null}
+                              ) : null}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </AccordionContent>
+                  </AccordionItem>
+                ) : null}
 
-          <div className="space-y-3">
-            <p className="text-[13px] font-bold text-zinc-900">
-              Modified Request:{" "}
-              <span className="font-semibold text-zinc-600">
-                Please prepare the order
-              </span>
-            </p>
-            <div className="space-y-2.5">
-              <div className="flex items-center gap-3">
-                <label
-                  htmlFor="product-note-without"
-                  className="w-16 shrink-0 text-[13px] font-bold text-zinc-800"
-                >
-                  Without
-                </label>
-                <input
-                  id="product-note-without"
-                  type="text"
-                  value={noteWithout}
-                  onChange={(e) => setNoteWithout(e.target.value)}
-                  maxLength={80}
-                  placeholder="Type Here"
-                  className="h-10 min-w-0 flex-1 rounded-md border border-gray-400 bg-white px-4 text-sm text-zinc-800 placeholder:text-zinc-400 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-                />
-              </div>
-              <div className="flex items-center gap-3">
-                <label
-                  htmlFor="product-note-add"
-                  className="w-16 shrink-0 text-[13px] font-bold text-zinc-800"
-                >
-                  Add
-                </label>
-                <input
-                  id="product-note-add"
-                  type="text"
-                  value={noteAdd}
-                  onChange={(e) => setNoteAdd(e.target.value)}
-                  maxLength={80}
-                  placeholder="Type Here"
-                  className="h-10 min-w-0 flex-1 rounded-md border border-gray-400 bg-white px-4 text-sm text-zinc-800 placeholder:text-zinc-400 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-                />
-              </div>
-            </div>
-            {remarkPreview ? (
-              <p className="rounded-xl bg-[#f8e8e4] px-3 py-2.5 text-[12px] font-medium leading-relaxed text-zinc-700">
-                {remarkPreview}
-              </p>
-            ) : (
-              <p className="text-[11px] text-zinc-400">
-                Optional — sent to the kitchen with this item
-              </p>
-            )}
-          </div>
+              </Accordion>
+            );
+          })()}
         </div>
 
         <div className="flex shrink-0 flex-col gap-2 border-t border-zinc-100 bg-zinc-50 px-5 py-4">

@@ -1069,14 +1069,6 @@ function buildReceiptTicketInner({
   if (reprint) {
     e.align(1).bold(true).line("*** REPRINT ***").bold(false);
   }
-  if (isSplitReceipt) {
-    const splitIdx = Number(meta.splitIndex) || 1;
-    const splitTot = Number(meta.splitTotal) || 1;
-    e.align(1).bold(true).line(`SPLIT ${splitIdx} of ${splitTot}`).bold(false);
-    if (meta.splitName) {
-      e.align(1).bold(true).line(toPrinterText(String(meta.splitName))).bold(false);
-    }
-  }
   for (const addrLine of String(restAddress).split(/\r?\n/)) {
     e.line(toPrinterText(addrLine));
   }

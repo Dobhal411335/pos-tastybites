@@ -25,6 +25,7 @@ import {
   getProductChoiceDetailLines,
   getAddonChoiceDetailLines,
 } from "@/utils/productChoices";
+import { buildModifiedRequestRemark } from "@/utils/modifiedRequestRemark";
 
 function lineNote(item) {
   if (item.isOffer) {
@@ -215,11 +216,21 @@ export default function CartDrawer({ open = false, onOpenChange, mode = "drawer"
     if (!pendingGuest) return;
     setPlacing(true);
     try {
+      const items = cartItems.map((item) => {
+        const noteWithout = String(item.noteWithout || "").trim();
+        const noteAdd = String(item.noteAdd || "").trim();
+        return {
+          ...item,
+          noteWithout,
+          noteAdd,
+          notes: buildModifiedRequestRemark(noteWithout, noteAdd),
+        };
+      });
       const res = await fetch(`${publicApiBase(slug)}/orders`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          items: cartItems,
+          items,
           fullName: pendingGuest.fullName,
           phone: pendingGuest.phone,
           email: pendingGuest.email,
@@ -351,30 +362,97 @@ export default function CartDrawer({ open = false, onOpenChange, mode = "drawer"
                     </button>
                   </div>
                 </div>
-                <div>
-                  <label
-                    htmlFor={`cart-notes-${item.cartKey}`}
-                    className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-[var(--customer-muted)]"
-                  >
-                    Item remark
-                  </label>
-                  <textarea
-                    id={`cart-notes-${item.cartKey}`}
-                    value={item.notes || ""}
-                    onChange={(e) =>
-                      updateCartItem(item.cartKey, { notes: e.target.value })
-                    }
-                    onBlur={(e) =>
-                      updateCartItem(item.cartKey, {
-                        notes: String(e.target.value || "").trim(),
-                      })
-                    }
-                    onKeyDown={(e) => e.stopPropagation()}
-                    rows={2}
-                    maxLength={200}
-                    placeholder="Special request for this item…"
-                    className="w-full resize-none rounded-lg border border-[var(--border)]/30 bg-white px-2.5 py-2 text-xs text-[var(--customer-ink)] placeholder:text-[var(--customer-muted)] focus:border-primary focus:outline-none"
-                  />
+                <div className="space-y-2">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--customer-muted)]">
+                    Modified request
+                  </p>
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <label
+                        htmlFor={`cart-note-without-${item.cartKey}`}
+                        className="w-14 shrink-0 text-[12px] font-bold text-[var(--customer-ink)]"
+                      >
+                        Without
+                      </label>
+                      <input
+                        id={`cart-note-without-${item.cartKey}`}
+                        type="text"
+                        value={item.noteWithout || ""}
+                        onChange={(e) => {
+                          const noteWithout = e.target.value;
+                          const noteAdd = item.noteAdd || "";
+                          updateCartItem(item.cartKey, {
+                            noteWithout,
+                            notes: buildModifiedRequestRemark(
+                              noteWithout,
+                              noteAdd,
+                            ),
+                          });
+                        }}
+                        onBlur={(e) => {
+                          const noteWithout = String(e.target.value || "").trim();
+                          const noteAdd = String(item.noteAdd || "").trim();
+                          updateCartItem(item.cartKey, {
+                            noteWithout,
+                            noteAdd,
+                            notes: buildModifiedRequestRemark(
+                              noteWithout,
+                              noteAdd,
+                            ),
+                          });
+                        }}
+                        onKeyDown={(e) => e.stopPropagation()}
+                        maxLength={80}
+                        placeholder="Type Here"
+                        className="h-9 min-w-0 flex-1 rounded-lg border border-[var(--border)]/30 bg-white px-2.5 text-xs text-[var(--customer-ink)] placeholder:text-[var(--customer-muted)] focus:border-primary focus:outline-none"
+                      />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <label
+                        htmlFor={`cart-note-add-${item.cartKey}`}
+                        className="w-14 shrink-0 text-[12px] font-bold text-[var(--customer-ink)]"
+                      >
+                        Add
+                      </label>
+                      <input
+                        id={`cart-note-add-${item.cartKey}`}
+                        type="text"
+                        value={item.noteAdd || ""}
+                        onChange={(e) => {
+                          const noteAdd = e.target.value;
+                          const noteWithout = item.noteWithout || "";
+                          updateCartItem(item.cartKey, {
+                            noteAdd,
+                            notes: buildModifiedRequestRemark(
+                              noteWithout,
+                              noteAdd,
+                            ),
+                          });
+                        }}
+                        onBlur={(e) => {
+                          const noteAdd = String(e.target.value || "").trim();
+                          const noteWithout = String(
+                            item.noteWithout || "",
+                          ).trim();
+                          updateCartItem(item.cartKey, {
+                            noteWithout,
+                            noteAdd,
+                            notes: buildModifiedRequestRemark(
+                              noteWithout,
+                              noteAdd,
+                            ),
+                          });
+                        }}
+                        onKeyDown={(e) => e.stopPropagation()}
+                        maxLength={80}
+                        placeholder="Type Here"
+                        className="h-9 min-w-0 flex-1 rounded-lg border border-[var(--border)]/30 bg-white px-2.5 text-xs text-[var(--customer-ink)] placeholder:text-[var(--customer-muted)] focus:border-primary focus:outline-none"
+                      />
+                    </div>
+                  </div>
+                    <p className="text-[11px] text-[var(--customer-muted)]">
+                      Optional — sent to the kitchen with this item
+                    </p>
                 </div>
               </div>
             ))}

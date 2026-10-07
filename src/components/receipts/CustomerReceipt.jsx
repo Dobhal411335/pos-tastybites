@@ -42,8 +42,6 @@ const CustomerReceipt = ({
 
   const meta = jobMetadata && typeof jobMetadata === "object" ? jobMetadata : {};
   const isSplitReceipt = Boolean(meta.isSplitReceipt);
-  const splitIndex = Number(meta.splitIndex) || 0;
-  const splitTotal = Number(meta.splitTotal) || 0;
   const splitName = meta.splitName ? String(meta.splitName) : "";
   const splitAmount = Number(meta.splitAmount) || 0;
   const splitMethod = String(meta.splitMethod || meta.paymentMethod || "").trim();
@@ -89,8 +87,9 @@ const CustomerReceipt = ({
   const resolvedTotalAmount = isSplitReceipt
     ? Number(meta.splitAmount) || seatScopedTotals?.totalAmount || totalAmount
     : seatScopedTotals?.totalAmount ?? totalAmount;
+  // Prefer an explicit customer party name over the seat/group label on split bills.
   const partyLabel = isSplitReceipt
-    ? splitName || order.partyName || guestName
+    ? order.partyName || guestName || splitName
     : order.partyName || guestName;
   const floorName = order.floorName || order.floor?.name;
   const tableLabel = formatTableNumbersWithFloor(tableNo, floorName);
@@ -341,12 +340,6 @@ const CustomerReceipt = ({
         {isReprint && (
           <div className="text-xs receipt-bold tracking-wider text-center mb-1">
             *** REPRINT ***
-          </div>
-        )}
-        {isSplitReceipt && (
-          <div className="text-xs receipt-bold tracking-wider text-center mb-1 text-violet-800">
-            SPLIT {splitIndex} of {splitTotal}
-            {splitName ? ` · ${splitName}` : ""}
           </div>
         )}
         <div className="text-[9px] text-nowrap">{restAddress}</div>

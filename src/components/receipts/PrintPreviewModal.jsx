@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Printer, Loader2, X } from "lucide-react";
 import { toast } from "sonner";
@@ -26,13 +26,26 @@ const PrintPreviewModal = ({
   serverName,
   guestCount,
   specialNote,
+  jobMetadata = null,
+  /** Optional seat/group slips: [{ id, label, order?, jobMetadata?, jobId? }] */
+  slips = null,
 }) => {
   const [reprinting, setReprinting] = useState(false);
   const [isReprint, setIsReprint] = useState(Boolean(order?.isReprint));
+  const [activeSlip, setActiveSlip] = useState(0);
+
+  const slipList = useMemo(() => {
+    if (Array.isArray(slips) && slips.length > 0) return slips;
+    return null;
+  }, [slips]);
 
   useEffect(() => {
     setIsReprint(Boolean(order?.isReprint));
   }, [order?._id, order?.isReprint, printType]);
+
+  useEffect(() => {
+    if (isOpen) setActiveSlip(0);
+  }, [isOpen, order?._id, slipList?.length]);
 
   // Lock body scroll while open (same idea as Dialog, without Radix dismiss races)
   useEffect(() => {
@@ -46,48 +59,95 @@ const PrintPreviewModal = ({
 
   if (!isOpen || !order) return null;
 
+  const currentSlip =
+    slipList && slipList[activeSlip] ? slipList[activeSlip] : null;
+  const previewOrder = currentSlip?.order || order;
+  const previewMeta = currentSlip?.jobMetadata || jobMetadata || null;
+
   const resolvedRestaurantName =
     restaurantName ||
     restaurantDetails?.name ||
+    previewOrder?.restaurantName ||
     order?.restaurantName ||
     "TASTY BITES";
 
   const resolvedKotItems =
     kotItems && kotItems.length > 0
       ? kotItems
-      : Array.isArray(order?.items)
-        ? order.items
-        : [];
+      : Array.isArray(previewOrder?.items)
+        ? previewOrder.items
+        : Array.isArray(order?.items)
+          ? order.items
+          : [];
 
   const resolvedTaxBreakdown =
     taxBreakdown && taxBreakdown.length > 0
       ? taxBreakdown
-      : order?.taxBreakdown || [];
+      : previewOrder?.taxBreakdown || order?.taxBreakdown || [];
 
-  const resolvedGuestCount = guestCount ?? order?.guestCount;
+  const resolvedGuestCount =
+    guestCount ?? previewOrder?.guestCount ?? order?.guestCount;
 
-  const resolvedSpecialNote = specialNote || order?.specialNote;
+  const resolvedSpecialNote =
+    specialNote || previewOrder?.specialNote || order?.specialNote;
 
-  const resolvedServerName = serverName || order?.processedByName;
+  const resolvedServerName =
+    serverName || previewOrder?.processedByName || order?.processedByName;
 
   const handleClose = () => {
     if (reprinting) return;
     onClose?.();
   };
 
+  const postReprint = async (body) => {
+    const res = await fetch("/api/sales/print-jobs/reprint-ticket", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const json = await res.json();
+    if (!res.ok || !json.success) {
+      throw new Error(json.message || "Failed to send print job");
+    }
+    return json;
+  };
+
   const handleReprint = async () => {
     const orderId = order?._id || order?.id;
-    if (!orderId) {
+    if (!orderId && !currentSlip?.jobId) {
       toast.error("No saved order found to reprint.");
       return;
     }
 
     setReprinting(true);
     try {
-      const res = await fetch("/api/sales/print-jobs/reprint-ticket", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      if (currentSlip?.jobId) {
+        await postReprint({
+          jobId: String(currentSlip.jobId),
+          printType,
+        });
+      } else if (slipList && slipList.length > 1) {
+        // Reprint every seat/group slip when browsing multi-bill preview
+        let ok = 0;
+        for (const slip of slipList) {
+          if (slip.jobId) {
+            await postReprint({ jobId: String(slip.jobId), printType });
+            ok += 1;
+          }
+        }
+        if (ok === 0) {
+          await postReprint({
+            orderId: String(orderId),
+            printType,
+            kotItems: resolvedKotItems,
+            guestCount: resolvedGuestCount,
+            serverName: resolvedServerName,
+            specialNote: resolvedSpecialNote,
+            restaurantName: resolvedRestaurantName,
+          });
+        }
+      } else {
+        await postReprint({
           orderId: String(orderId),
           printType,
           kotItems: resolvedKotItems,
@@ -95,16 +155,14 @@ const PrintPreviewModal = ({
           serverName: resolvedServerName,
           specialNote: resolvedSpecialNote,
           restaurantName: resolvedRestaurantName,
-        }),
-      });
-      const json = await res.json();
-      if (!res.ok || !json.success) {
-        throw new Error(json.message || "Failed to send print job");
+        });
       }
       setIsReprint(true);
       toast.success(
         printType === "customer"
-          ? "Receipt queued to printer!"
+          ? slipList && slipList.length > 1
+            ? "Seat receipts queued to printer!"
+            : "Receipt queued to printer!"
           : printType === "bar"
             ? "Bar ticket queued to printer!"
             : "KOT queued to printer!",
@@ -118,10 +176,18 @@ const PrintPreviewModal = ({
 
   const reprintButtonLabel = (() => {
     if (reprinting) return "Sending to Printer...";
-    if (printType === "customer") return "Reprint Receipt";
+    if (printType === "customer") {
+      if (slipList && slipList.length > 1) return "Reprint all slips";
+      return "Reprint Receipt";
+    }
     if (printType === "bar") return "Reprint Bar Ticket";
     return "Reprint KOT";
   })();
+
+  const title =
+    slipList && slipList.length > 1
+      ? "Seat bill preview"
+      : PREVIEW_TITLES[printType] || "Print Preview";
 
   // Plain overlay (not Radix Dialog) so closing the payment modal / residual
   // pointer events cannot auto-dismiss the bill preview.
@@ -130,7 +196,7 @@ const PrintPreviewModal = ({
       className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-zinc-900/50 backdrop-blur-sm"
       role="dialog"
       aria-modal="true"
-      aria-label={PREVIEW_TITLES[printType] || "Print Preview"}
+      aria-label={title}
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) handleClose();
       }}
@@ -139,7 +205,7 @@ const PrintPreviewModal = ({
         <div className="p-4 border-b bg-white shrink-0 flex items-center justify-between gap-3">
           <h2 className="text-xl font-bold flex items-center gap-2 text-zinc-900">
             <Printer className="w-5 h-5 text-orange-500" />
-            {PREVIEW_TITLES[printType] || "Print Preview"}
+            {title}
           </h2>
           <button
             type="button"
@@ -152,6 +218,27 @@ const PrintPreviewModal = ({
           </button>
         </div>
 
+        {slipList && slipList.length > 1 ? (
+          <div className="shrink-0 border-b border-zinc-200 bg-white px-3 py-2">
+            <div className="flex gap-1.5 overflow-x-auto pb-0.5">
+              {slipList.map((slip, idx) => (
+                <button
+                  key={slip.id || idx}
+                  type="button"
+                  onClick={() => setActiveSlip(idx)}
+                  className={`shrink-0 rounded-lg px-3 py-1.5 text-xs font-extrabold uppercase tracking-wide transition-colors ${
+                    activeSlip === idx
+                      ? "bg-orange-500 text-white"
+                      : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"
+                  }`}
+                >
+                  {slip.label || `Slip ${idx + 1}`}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
         <div className="flex-1 overflow-y-auto p-6 flex justify-center items-start bg-zinc-100">
           <div
             className="shadow-lg bg-white rounded-sm overflow-hidden"
@@ -159,19 +246,22 @@ const PrintPreviewModal = ({
           >
             {printType === "customer" && (
               <CustomerReceipt
-                order={order}
-                taxBreakdown={resolvedTaxBreakdown}
+                order={previewOrder}
+                taxBreakdown={
+                  previewOrder?.taxBreakdown || resolvedTaxBreakdown
+                }
                 restaurantDetails={
                   restaurantDetails || { name: resolvedRestaurantName }
                 }
                 serverName={resolvedServerName}
                 guestCount={resolvedGuestCount}
                 isReprint={isReprint}
+                jobMetadata={previewMeta}
               />
             )}
             {printType === "kot" && (
               <KitchenOrderTicket
-                order={order}
+                order={previewOrder}
                 kotItems={resolvedKotItems}
                 restaurantName={resolvedRestaurantName}
                 serverName={resolvedServerName}
@@ -182,7 +272,7 @@ const PrintPreviewModal = ({
             )}
             {printType === "bar" && (
               <BarReceipt
-                order={order}
+                order={previewOrder}
                 barItems={resolvedKotItems}
                 restaurantName={resolvedRestaurantName}
                 serverName={resolvedServerName}

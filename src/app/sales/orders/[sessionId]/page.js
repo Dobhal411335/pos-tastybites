@@ -39,6 +39,12 @@ import { toast } from "sonner";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 import CreateOrderSkeleton from "@/components/sales/CreateOrderSkeleton";
 import {
   Select,
@@ -198,14 +204,6 @@ function isSameCartLine(a, b) {
   );
 }
 
-function newCustomExtraRow() {
-  return {
-    id: `custom-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    name: "",
-    price: "",
-  };
-}
-
 function getVariantKey(_variant, index) {
   return String(index);
 }
@@ -281,6 +279,8 @@ function buildCartFromOrderItems(items = []) {
       addonChoiceSelections: normalizeChoiceSelections(item.addonChoiceSelections),
       customExtras: normalizeCustomExtras(item.customExtras),
       modifier: parts.length > 0 ? parts.join(" | ") : undefined,
+      noteWithout: String(item.noteWithout || "").trim(),
+      noteAdd: String(item.noteAdd || "").trim(),
       notes: String(item.notes || "").trim(),
       cartId: item.cartId || `r-${Date.now()}-${idx}`,
       seatNumber: normalizeCartSeatNumber(item.seatNumber),
@@ -388,9 +388,9 @@ function OrderPageContent() {
   const [selectedOfferDrinks, setSelectedOfferDrinks] = useState([]);
   const [selectedOfferInclusions, setSelectedOfferInclusions] = useState([]);
   const [selectedProductChoices, setSelectedProductChoices] = useState({});
-  const [noteWithout, setNoteWithout] = useState("");
-  const [noteAdd, setNoteAdd] = useState("");
-  const [customExtras, setCustomExtras] = useState([]);
+  const [customExtraModal, setCustomExtraModal] = useState(null);
+  const [customExtraName, setCustomExtraName] = useState("");
+  const [customExtraPrice, setCustomExtraPrice] = useState("");
 
   // New states
   const [isKitchenModalOpen, setIsKitchenModalOpen] = useState(false);
@@ -1074,10 +1074,6 @@ function OrderPageContent() {
     return [{ name: "HST", amount: hstTotal }];
   };
 
-  const resetCustomExtraState = () => {
-    setCustomExtras([]);
-  };
-
   const closeOptionsModal = () => {
     setIsOptionsModalOpen(false);
     setSelectedProduct(null);
@@ -1088,9 +1084,6 @@ function OrderPageContent() {
     setSelectedOfferDrinks([]);
     setSelectedOfferInclusions([]);
     setSelectedProductChoices({});
-    setNoteWithout("");
-    setNoteAdd("");
-    resetCustomExtraState();
   };
 
   const handleOpenOptions = (item) => {
@@ -1103,9 +1096,6 @@ function OrderPageContent() {
     setSelectedOfferDrinks([]);
     setSelectedOfferInclusions([]);
     setSelectedProductChoices({});
-    setNoteWithout("");
-    setNoteAdd("");
-    resetCustomExtraState();
     setIsOptionsModalOpen(true);
   };
 
@@ -1121,10 +1111,53 @@ function OrderPageContent() {
     setSelectedOfferChoices(choices.length === 1 ? choices : []);
     setSelectedOfferDrinks(drinks.length === 1 ? drinks : []);
     setSelectedProductChoices({});
-    setNoteWithout("");
-    setNoteAdd("");
-    resetCustomExtraState();
     setIsOptionsModalOpen(true);
+  };
+
+  const openCustomExtraModal = (item) => {
+    setCustomExtraModal({
+      cartId: item.cartId || item.id,
+      name: item.name || "item",
+    });
+    setCustomExtraName("");
+    setCustomExtraPrice("");
+  };
+
+  const closeCustomExtraModal = () => {
+    setCustomExtraModal(null);
+    setCustomExtraName("");
+    setCustomExtraPrice("");
+  };
+
+  const submitCustomExtraModal = () => {
+    if (!customExtraModal) return;
+    const rawName = String(customExtraName || "").trim();
+    const rawPrice = customExtraPrice;
+    const priceEmpty =
+      rawPrice === "" || rawPrice === null || rawPrice === undefined;
+    if (!rawName) {
+      toast.error("Custom item name is required");
+      return;
+    }
+    if (rawName.length > 80) {
+      toast.error("Custom item name is too long (max 80 characters)");
+      return;
+    }
+    if (priceEmpty) {
+      toast.error("Custom item price is required");
+      return;
+    }
+    const priceNum = Number(rawPrice);
+    if (!Number.isFinite(priceNum) || priceNum < 0) {
+      toast.error("Enter a valid price");
+      return;
+    }
+    addCustomExtraToCartItem(customExtraModal.cartId, {
+      name: rawName,
+      price: priceNum,
+    });
+    closeCustomExtraModal();
+    toast.success(`Added ${rawName}`);
   };
 
   const toggleOfferOption = (setter, item) => {
@@ -1173,22 +1206,6 @@ function OrderPageContent() {
     });
   };
 
-  const addCustomExtraRow = () => {
-    setCustomExtras((prev) => [...prev, newCustomExtraRow()]);
-  };
-
-  const updateCustomExtraRow = (id, field, value) => {
-    setCustomExtras((prev) =>
-      prev.map((entry) =>
-        entry.id === id ? { ...entry, [field]: value } : entry,
-      ),
-    );
-  };
-
-  const removeCustomExtraRow = (id) => {
-    setCustomExtras((prev) => prev.filter((entry) => entry.id !== id));
-  };
-
   const toggleAddonSubChoice = (addonKey, groupIndex, value) => {
     setAddonQtyById((prev) => {
       const entry = prev[addonKey];
@@ -1234,7 +1251,7 @@ function OrderPageContent() {
     return (
       <div
         key={itemKey}
-        className="bg-white rounded-lg p-3 border border-zinc-200 shadow-sm"
+        className="bg-white rounded-lg p-3 border border-zinc-400 shadow-sm"
       >
         <div className="flex justify-between items-start">
           <div className="pr-2 min-w-0">
@@ -1315,15 +1332,30 @@ function OrderPageContent() {
               <div className="mt-1.5 space-y-1">
                 {normalizeCustomExtras(item.customExtras).map(
                   (extra, extraIdx) => (
-                    <p
+                    <div
                       key={`${extra.name}-${extraIdx}`}
-                      className="text-[11px] font-semibold text-zinc-600"
+                      className="flex items-center justify-between gap-2"
                     >
-                      + {extra.name}{" "}
-                      <span className="text-zinc-500">
-                        (+${Number(extra.price).toFixed(2)})
-                      </span>
-                    </p>
+                      <p className="text-[11px] font-semibold text-zinc-600">
+                        + {extra.name}{" "}
+                        <span className="text-zinc-500">
+                          (+${Number(extra.price).toFixed(2)})
+                        </span>
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          removeCustomExtraFromCartItem(
+                            item.cartId || item.id,
+                            extraIdx,
+                          )
+                        }
+                        className="text-[10px] font-bold text-zinc-400 hover:text-red-500"
+                        aria-label={`Remove ${extra.name}`}
+                      >
+                        Remove
+                      </button>
+                    </div>
                   ),
                 )}
               </div>
@@ -1333,31 +1365,80 @@ function OrderPageContent() {
             ${getItemLineTotal(item).toFixed(2)}
           </span>
         </div>
-        <div className="mt-2">
-          <label
-            htmlFor={`pos-cart-notes-${itemKey}`}
-            className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-zinc-500"
-          >
-            Item remark
-          </label>
-          <textarea
-            id={`pos-cart-notes-${itemKey}`}
-            value={item.notes || ""}
-            onChange={(e) =>
-              updateCartItemNotes(item.cartId || item.id, e.target.value)
-            }
-            onBlur={(e) =>
-              updateCartItemNotes(
-                item.cartId || item.id,
-                String(e.target.value || "").trim(),
-              )
-            }
-            onKeyDown={(e) => e.stopPropagation()}
-            rows={2}
-            maxLength={200}
-            placeholder="Special request for this item…"
-            className="w-full resize-none rounded-lg border border-zinc-200 bg-zinc-50 px-2.5 py-2 text-xs font-medium text-zinc-800 placeholder:text-zinc-400 focus:border-orange-400 focus:bg-white focus:outline-none focus:ring-1 focus:ring-orange-400"
-          />
+        <div className="mt-2 space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">
+              Modified request
+            </p>
+            <button
+              type="button"
+              onClick={() => openCustomExtraModal(item)}
+              className="inline-flex items-center gap-1 rounded-md border border-orange-200 bg-orange-50 px-2 py-1 text-[10px] font-bold text-orange-700 hover:bg-orange-100"
+            >
+              <Plus className="w-3 h-3" />
+              Custom item
+            </button>
+          </div>
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-2">
+              <label
+                htmlFor={`pos-cart-note-without-${itemKey}`}
+                className="w-14 shrink-0 text-[12px] font-bold text-zinc-800"
+              >
+                Without
+              </label>
+              <input
+                id={`pos-cart-note-without-${itemKey}`}
+                type="text"
+                value={item.noteWithout || ""}
+                onChange={(e) =>
+                  updateCartItemModifiedRequest(item.cartId || item.id, {
+                    noteWithout: e.target.value,
+                    noteAdd: item.noteAdd || "",
+                  })
+                }
+                onBlur={(e) =>
+                  updateCartItemModifiedRequest(item.cartId || item.id, {
+                    noteWithout: String(e.target.value || "").trim(),
+                    noteAdd: String(item.noteAdd || "").trim(),
+                  })
+                }
+                onKeyDown={(e) => e.stopPropagation()}
+                maxLength={80}
+                placeholder="Type Here"
+                className="h-9 min-w-0 flex-1 rounded-lg border border-zinc-200 bg-zinc-50 px-2.5 text-xs font-medium text-zinc-800 placeholder:text-zinc-400 focus:border-orange-400 focus:bg-white focus:outline-none focus:ring-1 focus:ring-orange-400"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <label
+                htmlFor={`pos-cart-note-add-${itemKey}`}
+                className="w-14 shrink-0 text-[12px] font-bold text-zinc-800"
+              >
+                Add
+              </label>
+              <input
+                id={`pos-cart-note-add-${itemKey}`}
+                type="text"
+                value={item.noteAdd || ""}
+                onChange={(e) =>
+                  updateCartItemModifiedRequest(item.cartId || item.id, {
+                    noteWithout: item.noteWithout || "",
+                    noteAdd: e.target.value,
+                  })
+                }
+                onBlur={(e) =>
+                  updateCartItemModifiedRequest(item.cartId || item.id, {
+                    noteWithout: String(item.noteWithout || "").trim(),
+                    noteAdd: String(e.target.value || "").trim(),
+                  })
+                }
+                onKeyDown={(e) => e.stopPropagation()}
+                maxLength={80}
+                placeholder="Type Here"
+                className="h-9 min-w-0 flex-1 rounded-lg border border-zinc-200 bg-zinc-50 px-2.5 text-xs font-medium text-zinc-800 placeholder:text-zinc-400 focus:border-orange-400 focus:bg-white focus:outline-none focus:ring-1 focus:ring-orange-400"
+              />
+            </div>
+          </div>
         </div>
         <div className="flex items-center justify-between mt-2">
           <div className="flex items-center gap-1">
@@ -1421,6 +1502,8 @@ function OrderPageContent() {
             options: [],
             productType: product.productType === "BAR" ? "BAR" : "KITCHEN",
             choiceSelections: [],
+            noteWithout: "",
+            noteAdd: "",
             notes: "",
             seatNumber: resolveLineSeatNumber(),
           },
@@ -1444,9 +1527,7 @@ function OrderPageContent() {
     const drinks = cleanOfferList(selection.drinks);
     const extras = buildOfferOptions({ inclusions, choices, drinks });
     const modifier = buildOfferCartModifier({ inclusions, choices, drinks });
-    const notes = String(
-      selection.notes ?? buildModifiedRequestRemark(noteWithout, noteAdd),
-    ).trim();
+    const notes = String(selection.notes ?? "").trim();
 
     setCart((prev) =>
       mergeCartLines(
@@ -1466,6 +1547,8 @@ function OrderPageContent() {
             preparationStyle: null,
             options: extras,
             modifier,
+            noteWithout: "",
+            noteAdd: "",
             productType: "KITCHEN",
             isOffer: true,
             inclusions,
@@ -1498,7 +1581,7 @@ function OrderPageContent() {
         inclusions: selectedOfferInclusions,
         choices: selectedOfferChoices,
         drinks: selectedOfferDrinks,
-        notes: buildModifiedRequestRemark(noteWithout, noteAdd),
+        notes: "",
       });
       if (added) closeOptionsModal();
       return;
@@ -1513,36 +1596,10 @@ function OrderPageContent() {
       (entry) => entry?.qty > 0 && entry?.addon,
     );
 
-    for (const row of customExtras) {
-      const rawName = String(row?.name || "").trim();
-      const rawPrice = row?.price;
-      const priceEmpty =
-        rawPrice === "" || rawPrice === null || rawPrice === undefined;
-      if (!rawName) {
-        toast.error("Custom item name is required");
-        return;
-      }
-      if (rawName.length > 80) {
-        toast.error("Custom item name is too long (max 80 characters)");
-        return;
-      }
-      if (priceEmpty) {
-        toast.error(`Custom item price is required for: ${rawName}`);
-        return;
-      }
-      const priceNum = Number(rawPrice);
-      if (!Number.isFinite(priceNum) || priceNum < 0) {
-        toast.error(`Enter a valid price for: ${rawName}`);
-        return;
-      }
-    }
-    const customExtraEntries = normalizeCustomExtras(customExtras);
-
     if (
       hasVariants &&
       variantEntries.length === 0 &&
-      addonEntries.length === 0 &&
-      customExtraEntries.length === 0
+      addonEntries.length === 0
     ) {
       toast.error("Select at least one variant");
       return;
@@ -1557,7 +1614,6 @@ function OrderPageContent() {
       }))
       .filter((group) => group.subChoices.length > 0);
 
-    const notes = buildModifiedRequestRemark(noteWithout, noteAdd);
     const newLines = [];
 
     if (hasVariants) {
@@ -1589,7 +1645,9 @@ function OrderPageContent() {
             selectedProduct.productType === "BAR" ? "BAR" : "KITCHEN",
           modifier: parts.join(" | "),
           choiceSelections,
-          notes,
+          noteWithout: "",
+          noteAdd: "",
+          notes: "",
         });
       });
     } else {
@@ -1613,7 +1671,9 @@ function OrderPageContent() {
         productType: selectedProduct.productType === "BAR" ? "BAR" : "KITCHEN",
         modifier: selectedPreparationStyle || undefined,
         choiceSelections,
-        notes,
+        noteWithout: "",
+        noteAdd: "",
+        notes: "",
       });
     }
 
@@ -1645,45 +1705,11 @@ function OrderPageContent() {
         productType: selectedProduct.productType === "BAR" ? "BAR" : "KITCHEN",
         modifier: choiceSummary || undefined,
         addonChoiceSelections,
-        notes,
+        noteWithout: "",
+        noteAdd: "",
+        notes: "",
       });
     });
-
-    if (customExtraEntries.length > 0) {
-      const hostIndex = newLines.findIndex(
-        (line) => !/^extra$/i.test(String(line.size || "")),
-      );
-      const customSum = customExtrasUnitTotal(customExtraEntries);
-      if (hostIndex >= 0) {
-        const host = newLines[hostIndex];
-        const basePrice = Number(host.price) || 0;
-        newLines[hostIndex] = {
-          ...host,
-          customExtras: customExtraEntries,
-          tax: calculateItemTax(selectedProduct, basePrice + customSum),
-        };
-      } else {
-        newLines.unshift({
-          id: selectedProduct._id,
-          name: selectedProduct.name,
-          productCode: selectedProduct.productCode || "",
-          category: selectedProduct.category?.name || "ITEMS",
-          price: 0,
-          tax: calculateItemTax(selectedProduct, customSum),
-          serviceCharge: 0,
-          qty: 1,
-          size: "Standard",
-          sizes: [],
-          preparationStyle: selectedPreparationStyle || null,
-          options: selectedPreparationStyle ? [selectedPreparationStyle] : [],
-          productType:
-            selectedProduct.productType === "BAR" ? "BAR" : "KITCHEN",
-          choiceSelections,
-          customExtras: customExtraEntries,
-          notes,
-        });
-      }
-    }
 
     if (newLines.length === 0) {
       toast.error("Select a variant or extra");
@@ -1710,13 +1736,56 @@ function OrderPageContent() {
     );
   };
 
-  const updateCartItemNotes = (id, notes) => {
+  const updateCartItemModifiedRequest = (id, { noteWithout, noteAdd }) => {
+    const nextWithout = String(noteWithout ?? "");
+    const nextAdd = String(noteAdd ?? "");
     setCart((prev) =>
       prev.map((item) =>
         item.id === id || item.cartId === id
-          ? { ...item, notes: String(notes ?? "") }
+          ? {
+              ...item,
+              noteWithout: nextWithout,
+              noteAdd: nextAdd,
+              notes: buildModifiedRequestRemark(nextWithout, nextAdd),
+            }
           : item,
       ),
+    );
+  };
+
+  const addCustomExtraToCartItem = (id, extra) => {
+    setCart((prev) =>
+      prev.map((item) => {
+        if (item.id !== id && item.cartId !== id) return item;
+        const nextExtras = normalizeCustomExtras([
+          ...(item.customExtras || []),
+          extra,
+        ]);
+        const basePrice = Number(item.price) || 0;
+        const customSum = customExtrasUnitTotal(nextExtras);
+        return {
+          ...item,
+          customExtras: nextExtras,
+          tax: calculateItemTax(item, basePrice + customSum),
+        };
+      }),
+    );
+  };
+
+  const removeCustomExtraFromCartItem = (id, extraIndex) => {
+    setCart((prev) =>
+      prev.map((item) => {
+        if (item.id !== id && item.cartId !== id) return item;
+        const current = normalizeCustomExtras(item.customExtras);
+        const nextExtras = current.filter((_, index) => index !== extraIndex);
+        const basePrice = Number(item.price) || 0;
+        const customSum = customExtrasUnitTotal(nextExtras);
+        return {
+          ...item,
+          customExtras: nextExtras,
+          tax: calculateItemTax(item, basePrice + customSum),
+        };
+      }),
     );
   };
 
@@ -1771,8 +1840,19 @@ function OrderPageContent() {
 
     try {
       setIsSubmitting(true);
+      const items = cart.map((item) => {
+        const noteWithout = String(item.noteWithout || "").trim();
+        const noteAdd = String(item.noteAdd || "").trim();
+        const builtNotes = buildModifiedRequestRemark(noteWithout, noteAdd);
+        return {
+          ...item,
+          noteWithout,
+          noteAdd,
+          notes: builtNotes || String(item.notes || "").trim(),
+        };
+      });
       const payload = {
-        items: cart,
+        items,
         subTotal: subtotal,
         taxTotal: totalTax,
         serviceChargeTotal: 0,
@@ -3133,623 +3213,609 @@ function OrderPageContent() {
             </div>
 
             <div className="flex-1 p-6 overflow-y-auto custom-scrollbar">
-              <div className="space-y-6">
-                {isOfferItem(selectedProduct) ? (
-                  <>
-                    {cleanOfferList(selectedProduct.inclusions).length > 0 && (
-                      <div className="space-y-2">
-                        <span className="text-[13px] font-bold text-zinc-900 mb-2 block">
-                          Inclusions
-                        </span>
-                        <div className="grid gap-2">
-                          {cleanOfferList(selectedProduct.inclusions).map(
-                            (item) => (
-                              <label
-                                key={item}
-                                className={`flex items-center border p-3 rounded-lg cursor-pointer transition-colors ${
-                                  selectedOfferInclusions.includes(item)
-                                    ? "border-orange-500 bg-orange-50/30"
-                                    : "border-zinc-200 hover:border-orange-300"
-                                }`}
-                              >
-                                <div className="flex-1 flex items-center gap-3 text-[14px] font-bold text-zinc-800">
-                                  <input
-                                    type="checkbox"
-                                    checked={selectedOfferInclusions.includes(
-                                      item,
-                                    )}
-                                    onChange={() =>
-                                      toggleOfferOption(
-                                        setSelectedOfferInclusions,
-                                        item,
-                                      )
-                                    }
-                                    className="w-4 h-4 accent-orange-500"
-                                  />
-                                  <span>{item}</span>
-                                </div>
-                              </label>
-                            ),
-                          )}
-                        </div>
-                      </div>
-                    )}
+              {(() => {
+                const isOffer = isOfferItem(selectedProduct);
+                const offerInclusions = cleanOfferList(
+                  selectedProduct.inclusions,
+                );
+                const offerChoices = cleanOfferList(selectedProduct.choices);
+                const offerDrinks = cleanOfferList(selectedProduct.drinks);
+                const productChoiceGroups = normalizeChoiceOptions(
+                  selectedProduct.choiceOptions,
+                );
+                const hasVariants =
+                  Array.isArray(selectedProduct.variants) &&
+                  selectedProduct.variants.length > 0;
+                const hasPrepStyles =
+                  Array.isArray(selectedProduct.preparationStyles) &&
+                  selectedProduct.preparationStyles.filter(Boolean).length > 0;
+                const hasAddons =
+                  Array.isArray(selectedProduct.addons) &&
+                  selectedProduct.addons.length > 0;
 
-                    {cleanOfferList(selectedProduct.choices).length > 0 && (
-                      <div className="space-y-2">
-                        <span className="text-[13px] font-bold text-zinc-900 mb-2 block">
-                          Choices
-                        </span>
-                        <div className="grid gap-2">
-                          {cleanOfferList(selectedProduct.choices).map(
-                            (choice) => (
-                              <label
-                                key={choice}
-                                className={`flex items-center border p-3 rounded-lg cursor-pointer transition-colors ${
-                                  selectedOfferChoices.includes(choice)
-                                    ? "border-orange-500 bg-orange-50/30"
-                                    : "border-zinc-200 hover:border-orange-300"
-                                }`}
-                              >
-                                <div className="flex-1 flex items-center gap-3 text-[14px] font-bold text-zinc-800">
-                                  <input
-                                    type="checkbox"
-                                    checked={selectedOfferChoices.includes(
-                                      choice,
-                                    )}
-                                    onChange={() =>
-                                      toggleOfferOption(
-                                        setSelectedOfferChoices,
-                                        choice,
-                                      )
-                                    }
-                                    className="w-4 h-4 accent-orange-500"
-                                  />
-                                  <span>{choice}</span>
-                                </div>
-                              </label>
-                            ),
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                    {cleanOfferList(selectedProduct.drinks).length > 0 && (
-                      <div className="space-y-2">
-                        <span className="text-[13px] font-bold text-zinc-900 mb-2 block">
-                          Drinks
-                        </span>
-                        <div className="grid gap-2">
-                          {cleanOfferList(selectedProduct.drinks).map(
-                            (drink) => (
-                              <label
-                                key={drink}
-                                className={`flex items-center border p-3 rounded-lg cursor-pointer transition-colors ${
-                                  selectedOfferDrinks.includes(drink)
-                                    ? "border-orange-500 bg-orange-50/30"
-                                    : "border-zinc-200 hover:border-orange-300"
-                                }`}
-                              >
-                                <div className="flex-1 flex items-center gap-3 text-[14px] font-bold text-zinc-800">
-                                  <input
-                                    type="checkbox"
-                                    checked={selectedOfferDrinks.includes(
-                                      drink,
-                                    )}
-                                    onChange={() =>
-                                      toggleOfferOption(
-                                        setSelectedOfferDrinks,
-                                        drink,
-                                      )
-                                    }
-                                    className="w-4 h-4 accent-orange-500"
-                                  />
-                                  <span>{drink}</span>
-                                </div>
-                              </label>
-                            ),
-                          )}
-                        </div>
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  <>
-                <div className="flex text-[11px] font-bold uppercase tracking-wider text-zinc-400 mb-2 border-b border-zinc-100 pb-2 px-3 gap-1">
-                  <div className="flex-1 min-w-[100px]">Option</div>
-                  <div className="w-20 text-center">Qty</div>
-                  <div className="w-14 text-center">Base</div>
-                  <div className="w-16 text-center">Discount</div>
-                  <div className="w-16 text-center">Tax</div>
-                  <div className="w-20 text-right">Total</div>
-                </div>
-
-                {selectedProduct.variants &&
-                  selectedProduct.variants.length > 0 && (
-                    <div className="space-y-2">
-                      <span className="text-[13px] font-bold text-zinc-900 mb-2 block">
-                        Variants
-                      </span>
-                      <div className="grid gap-2">
-                        {selectedProduct.variants.map((v, idx) => {
-                          const variantKey = getVariantKey(v, idx);
-                          const qty = variantQtyBySize[variantKey] || 0;
-                          const isChecked = qty > 0;
-                          const discountAmount = calculateItemDiscount(
-                            selectedProduct,
-                            v.price,
-                          );
-                          const discountedPrice = Math.max(
-                            0,
-                            v.price - discountAmount,
-                          );
-                          const taxAmount = calculateItemTax(
-                            selectedProduct,
-                            discountedPrice,
-                          );
-                          const unitFinal = discountedPrice + taxAmount;
-                          const lineTax = taxAmount * qty;
-                          const lineTotal = unitFinal * qty;
-
-                          return (
-                            <div
-                              key={variantKey}
-                              className={`border p-3 rounded-lg transition-colors gap-1 ${
-                                isChecked
-                                  ? "border-orange-500 bg-orange-50/30"
-                                  : "border-zinc-200"
-                              }`}
-                            >
-                              <div className="flex items-center gap-1">
-                              <div
-                                className={`flex-1 min-w-[100px] text-[14px] font-bold ${isChecked ? "text-zinc-900" : "text-zinc-700"}`}
-                              >
-                                {v.size}
-                              </div>
-                              <div className="w-20 flex items-center justify-center gap-1">
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    setVariantQty(variantKey, qty - 1)
-                                  }
-                                  className="w-7 h-7 rounded bg-zinc-100 flex items-center justify-center text-zinc-700 hover:bg-zinc-200"
-                                  aria-label={`Decrease ${v.size}`}
-                                >
-                                  <Minus className="w-3.5 h-3.5" />
-                                </button>
-                                <span className="w-5 text-center font-bold text-sm text-zinc-900">
-                                  {qty}
-                                </span>
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    setVariantQty(variantKey, qty + 1)
-                                  }
-                                  className="w-7 h-7 rounded bg-zinc-100 flex items-center justify-center text-zinc-700 hover:bg-zinc-200"
-                                  aria-label={`Increase ${v.size}`}
-                                >
-                                  <Plus className="w-3.5 h-3.5" />
-                                </button>
-                              </div>
-                              <div className="w-14 text-center font-bold text-[12px] text-zinc-900">
-                                ${v.price.toFixed(2)}
-                              </div>
-                              <div className="w-16 text-center text-red-500 font-medium text-[12px]">
-                                {discountAmount > 0
-                                  ? `-$${(discountAmount * Math.max(qty, 1)).toFixed(2)}`
-                                  : "-"}
-                              </div>
-                              <div className="w-16 text-center text-zinc-500 font-medium text-[12px]">
-                                +${(qty > 0 ? lineTax : taxAmount).toFixed(2)}
-                              </div>
-                              <div className="w-20 text-right font-bold text-[13px] text-zinc-900">
-                                $
-                                {(qty > 0 ? lineTotal : unitFinal).toFixed(2)}
-                              </div>
-                              </div>
-                              <IngredientChips
-                                ingredients={v.ingredients}
-                                label="Includes"
-                              />
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-
-                {selectedProduct.preparationStyles &&
-                  selectedProduct.preparationStyles.filter(Boolean).length >
-                    0 && (
-                    <div className="space-y-2">
-                      <span className="text-[13px] font-bold text-zinc-900 mb-2 block">
-                        Preparation Style
-                      </span>
-                      <div className="space-y-2">
-                        <div className="grid grid-cols-2 gap-2">
-                          {selectedProduct.preparationStyles
-                            .filter(Boolean)
-                            .map((style) => (
-                              <label
-                                key={style}
-                                className={`flex items-center border p-3 rounded-lg cursor-pointer transition-colors ${
-                                  selectedPreparationStyle === style
-                                    ? "border-orange-500 bg-orange-50/30"
-                                    : "border-zinc-200 hover:border-orange-300"
-                                }`}
-                              >
-                                <div className="flex-1 flex items-center gap-3 text-[14px] font-bold text-zinc-800 min-w-0">
-                                  <input
-                                    type="radio"
-                                    name="preparationStyle"
-                                    checked={selectedPreparationStyle === style}
-                                    onChange={() =>
-                                      setSelectedPreparationStyle(style)
-                                    }
-                                    className="w-4 h-4 accent-orange-500 shrink-0"
-                                  />
-                                  <span className="truncate">{style}</span>
-                                </div>
-                              </label>
-                            ))}
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => setSelectedPreparationStyle("")}
-                          className="text-left text-xs font-semibold text-zinc-500 hover:text-zinc-800 px-1"
-                        >
-                          Clear style
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                {normalizeChoiceOptions(selectedProduct.choiceOptions).length > 0 && (
-                  <div className="space-y-5">
-                    {normalizeChoiceOptions(selectedProduct.choiceOptions).map(
-                      (group, groupIndex) => (
-                        <div key={`${group.name}-${groupIndex}`} className="space-y-2">
-                          <span className="text-[13px] font-bold text-zinc-900 mb-2 block">
-                            {group.name}
-                          </span>
-                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                            {group.subChoices.map((choice) => {
-                              const selected = (
-                                selectedProductChoices[groupIndex] || []
-                              ).includes(choice);
-                              return (
-                                <label
-                                  key={`${group.name}-${choice}`}
-                                  className={`flex items-center border p-3 rounded-lg cursor-pointer transition-colors ${
-                                    selected
-                                      ? "border-orange-500 bg-orange-50/30"
-                                      : "border-zinc-200 hover:border-orange-300"
-                                  }`}
-                                >
-                                  <div className="flex-1 flex items-center gap-3 text-[14px] font-bold text-zinc-800">
-                                    <input
-                                      type="checkbox"
-                                      checked={selected}
-                                      onChange={() =>
-                                        toggleProductSubChoice(groupIndex, choice)
-                                      }
-                                      className="w-4 h-4 accent-orange-500"
-                                    />
-                                    <span>{choice}</span>
-                                  </div>
-                                </label>
-                              );
-                            })}
-                          </div>
-                        </div>
+                const sectionIds = isOffer
+                  ? [
+                      ...(offerInclusions.length > 0 ? ["inclusions"] : []),
+                      ...(offerChoices.length > 0 ? ["choices"] : []),
+                      ...(offerDrinks.length > 0 ? ["drinks"] : []),
+                    ]
+                  : [
+                      ...(hasVariants ? ["variants"] : []),
+                      ...(hasPrepStyles ? ["preparation"] : []),
+                      ...productChoiceGroups.map(
+                        (group, i) => `choice-${i}-${group.name}`,
                       ),
-                    )}
-                  </div>
-                )}
+                      ...(hasAddons ? ["addons"] : []),
+                    ];
+                const defaultOpen = sectionIds[0] ? [sectionIds[0]] : [];
+                const accordionItemClass =
+                  "overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-none";
+                const accordionTriggerClass =
+                  "px-3 py-3 text-[13px] font-bold text-zinc-900 hover:no-underline hover:bg-zinc-50";
+                const accordionContentClass = "px-3 pt-3 pb-3";
+                const productKey =
+                  selectedProduct._id ||
+                  selectedProduct.id ||
+                  selectedProduct.name ||
+                  "options";
 
-                {selectedProduct.addons &&
-                  selectedProduct.addons.length > 0 && (
-                    <div className="pt-4 mt-4 border-t border-zinc-100 space-y-2">
-                      <span className="text-[13px] font-bold text-zinc-900 mb-2 block">
-                        Addons
-                      </span>
-                      <div className="grid gap-3">
-                        {selectedProduct.addons.map((addon) => {
-                          const addonKey = getAddonKey(addon);
-                          const qty = addonQtyById[addonKey]?.qty || 0;
-                          const choicesByGroup =
-                            addonQtyById[addonKey]?.choicesByGroup || {};
-                          const isChecked = qty > 0;
-                          const discountAmount = calculateItemDiscount(
-                            selectedProduct,
-                            addon.price,
-                          );
-                          const discountedPrice = Math.max(
-                            0,
-                            addon.price - discountAmount,
-                          );
-                          const taxAmount = calculateItemTax(
-                            selectedProduct,
-                            discountedPrice,
-                          );
-                          const unitFinal = discountedPrice + taxAmount;
-                          const lineTax = taxAmount * qty;
-                          const lineTotal = unitFinal * qty;
-                          const addonChoiceGroups = normalizeChoiceOptions(
-                            addon.choiceOptions,
-                          );
-
-                          return (
-                            <div
-                              key={addonKey}
-                              className={`border rounded-lg transition-colors ${
-                                isChecked
-                                  ? "border-orange-500 bg-orange-50/30"
-                                  : "border-zinc-200"
-                              }`}
+                return (
+                  <Accordion
+                    key={productKey}
+                    type="multiple"
+                    defaultValue={defaultOpen}
+                    className="space-y-3"
+                  >
+                    {isOffer ? (
+                      <>
+                        {offerInclusions.length > 0 && (
+                          <AccordionItem
+                            value="inclusions"
+                            className={accordionItemClass}
+                          >
+                            <AccordionTrigger
+                              className={accordionTriggerClass}
                             >
-                              <div className="flex items-center p-3 gap-1">
-                              <div
-                                className={`flex-1 min-w-[100px] text-[14px] font-bold ${isChecked ? "text-zinc-900" : "text-zinc-700"}`}
-                              >
-                                <div>{addon.name}</div>
-                                {addon.fromCategory ? (
-                                  <span className="mt-0.5 block text-[10px] font-semibold uppercase tracking-wide text-zinc-400">
-                                    Linked from category
-                                  </span>
-                                ) : null}
-                              </div>
-                              <div className="w-20 flex items-center justify-center gap-1">
-                                <button
-                                  type="button"
-                                  onClick={() => setAddonQty(addon, qty - 1)}
-                                  className="w-7 h-7 rounded bg-zinc-100 flex items-center justify-center text-zinc-700 hover:bg-zinc-200"
-                                  aria-label={`Decrease ${addon.name}`}
-                                >
-                                  <Minus className="w-3.5 h-3.5" />
-                                </button>
-                                <span className="w-5 text-center font-bold text-sm text-zinc-900">
-                                  {qty}
-                                </span>
-                                <button
-                                  type="button"
-                                  onClick={() => setAddonQty(addon, qty + 1)}
-                                  className="w-7 h-7 rounded bg-zinc-100 flex items-center justify-center text-zinc-700 hover:bg-zinc-200"
-                                  aria-label={`Increase ${addon.name}`}
-                                >
-                                  <Plus className="w-3.5 h-3.5" />
-                                </button>
-                              </div>
-                              <div className="w-14 text-center font-bold text-[12px] text-zinc-900">
-                                +${addon.price.toFixed(2)}
-                              </div>
-                              <div className="w-16 text-center text-red-500 font-medium text-[12px]">
-                                {discountAmount > 0
-                                  ? `-$${(discountAmount * Math.max(qty, 1)).toFixed(2)}`
-                                  : "-"}
-                              </div>
-                              <div className="w-16 text-center text-zinc-500 font-medium text-[12px]">
-                                +${(qty > 0 ? lineTax : taxAmount).toFixed(2)}
-                              </div>
-                              <div className="w-20 text-right font-bold text-[13px] text-zinc-900">
-                                +$
-                                {(qty > 0 ? lineTotal : unitFinal).toFixed(2)}
-                              </div>
-                              </div>
-                              <div className="px-3 pb-2">
-                                <IngredientChips
-                                  ingredients={addon.ingredients}
-                                  label="Addon includes"
-                                  compact
-                                />
-                              </div>
-                              {addonChoiceGroups.length > 0 && (
-                                <div className="px-3 pb-3 pt-1 space-y-4 border-t border-zinc-100/80">
-                                  {addonChoiceGroups.map((group, groupIndex) => (
-                                    <div
-                                      key={`${addonKey}-${group.name}-${groupIndex}`}
-                                      className="space-y-2"
-                                    >
-                                      <span className="text-[12px] font-bold text-zinc-800 block">
-                                        {group.name}
-                                      </span>
-                                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                                        {group.subChoices.map((choice) => {
-                                          const selected = (
-                                            choicesByGroup[groupIndex] || []
-                                          ).includes(choice);
-                                          return (
-                                            <label
-                                              key={`${addonKey}-${group.name}-${choice}`}
-                                              className={`flex items-center border p-2.5 rounded-lg cursor-pointer transition-colors ${
-                                                selected
-                                                  ? "border-orange-500 bg-orange-50/30"
-                                                  : "border-zinc-200 hover:border-orange-300"
-                                              }`}
-                                            >
-                                              <div className="flex-1 flex items-center gap-2 text-[13px] font-bold text-zinc-800">
-                                                <input
-                                                  type="checkbox"
-                                                  checked={selected}
-                                                  onChange={() =>
-                                                    toggleAddonSubChoice(
-                                                      addonKey,
-                                                      groupIndex,
-                                                      choice,
-                                                    )
-                                                  }
-                                                  className="w-4 h-4 accent-orange-500"
-                                                />
-                                                <span>{choice}</span>
-                                              </div>
-                                            </label>
-                                          );
-                                        })}
-                                      </div>
+                              Inclusions
+                            </AccordionTrigger>
+                            <AccordionContent
+                              className={accordionContentClass}
+                            >
+                              <div className="grid gap-2">
+                                {offerInclusions.map((item) => (
+                                  <label
+                                    key={item}
+                                    className={`flex items-center border p-3 rounded-lg cursor-pointer transition-colors ${
+                                      selectedOfferInclusions.includes(item)
+                                        ? "border-orange-500 bg-orange-50/30"
+                                        : "border-zinc-200 hover:border-orange-300"
+                                    }`}
+                                  >
+                                    <div className="flex-1 flex items-center gap-3 text-[14px] font-bold text-zinc-800">
+                                      <input
+                                        type="checkbox"
+                                        checked={selectedOfferInclusions.includes(
+                                          item,
+                                        )}
+                                        onChange={() =>
+                                          toggleOfferOption(
+                                            setSelectedOfferInclusions,
+                                            item,
+                                          )
+                                        }
+                                        className="w-4 h-4 accent-orange-500"
+                                      />
+                                      <span>{item}</span>
                                     </div>
-                                  ))}
+                                  </label>
+                                ))}
+                              </div>
+                            </AccordionContent>
+                          </AccordionItem>
+                        )}
+
+                        {offerChoices.length > 0 && (
+                          <AccordionItem
+                            value="choices"
+                            className={accordionItemClass}
+                          >
+                            <AccordionTrigger
+                              className={accordionTriggerClass}
+                            >
+                              Choices
+                            </AccordionTrigger>
+                            <AccordionContent
+                              className={accordionContentClass}
+                            >
+                              <div className="grid gap-2">
+                                {offerChoices.map((choice) => (
+                                  <label
+                                    key={choice}
+                                    className={`flex items-center border p-3 rounded-lg cursor-pointer transition-colors ${
+                                      selectedOfferChoices.includes(choice)
+                                        ? "border-orange-500 bg-orange-50/30"
+                                        : "border-zinc-200 hover:border-orange-300"
+                                    }`}
+                                  >
+                                    <div className="flex-1 flex items-center gap-3 text-[14px] font-bold text-zinc-800">
+                                      <input
+                                        type="checkbox"
+                                        checked={selectedOfferChoices.includes(
+                                          choice,
+                                        )}
+                                        onChange={() =>
+                                          toggleOfferOption(
+                                            setSelectedOfferChoices,
+                                            choice,
+                                          )
+                                        }
+                                        className="w-4 h-4 accent-orange-500"
+                                      />
+                                      <span>{choice}</span>
+                                    </div>
+                                  </label>
+                                ))}
+                              </div>
+                            </AccordionContent>
+                          </AccordionItem>
+                        )}
+
+                        {offerDrinks.length > 0 && (
+                          <AccordionItem
+                            value="drinks"
+                            className={accordionItemClass}
+                          >
+                            <AccordionTrigger
+                              className={accordionTriggerClass}
+                            >
+                              Drinks
+                            </AccordionTrigger>
+                            <AccordionContent
+                              className={accordionContentClass}
+                            >
+                              <div className="grid gap-2">
+                                {offerDrinks.map((drink) => (
+                                  <label
+                                    key={drink}
+                                    className={`flex items-center border p-3 rounded-lg cursor-pointer transition-colors ${
+                                      selectedOfferDrinks.includes(drink)
+                                        ? "border-orange-500 bg-orange-50/30"
+                                        : "border-zinc-200 hover:border-orange-300"
+                                    }`}
+                                  >
+                                    <div className="flex-1 flex items-center gap-3 text-[14px] font-bold text-zinc-800">
+                                      <input
+                                        type="checkbox"
+                                        checked={selectedOfferDrinks.includes(
+                                          drink,
+                                        )}
+                                        onChange={() =>
+                                          toggleOfferOption(
+                                            setSelectedOfferDrinks,
+                                            drink,
+                                          )
+                                        }
+                                        className="w-4 h-4 accent-orange-500"
+                                      />
+                                      <span>{drink}</span>
+                                    </div>
+                                  </label>
+                                ))}
+                              </div>
+                            </AccordionContent>
+                          </AccordionItem>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        {hasVariants && (
+                          <AccordionItem
+                            value="variants"
+                            className={accordionItemClass}
+                          >
+                            <AccordionTrigger
+                              className={accordionTriggerClass}
+                            >
+                              Variants
+                            </AccordionTrigger>
+                            <AccordionContent
+                              className={accordionContentClass}
+                            >
+                              <div className="flex text-[11px] font-bold uppercase tracking-wider text-zinc-400 mb-2 border-b border-zinc-100 pb-2 px-1 gap-1">
+                                <div className="flex-1 min-w-[100px]">
+                                  Option
                                 </div>
-                              )}
-                            </div>
+                                <div className="w-20 text-center">Qty</div>
+                                <div className="w-14 text-center">Base</div>
+                                <div className="w-16 text-center">Discount</div>
+                                <div className="w-16 text-center">Tax</div>
+                                <div className="w-20 text-right">Total</div>
+                              </div>
+                              <div className="grid gap-2">
+                                {selectedProduct.variants.map((v, idx) => {
+                                  const variantKey = getVariantKey(v, idx);
+                                  const qty = variantQtyBySize[variantKey] || 0;
+                                  const isChecked = qty > 0;
+                                  const discountAmount = calculateItemDiscount(
+                                    selectedProduct,
+                                    v.price,
+                                  );
+                                  const discountedPrice = Math.max(
+                                    0,
+                                    v.price - discountAmount,
+                                  );
+                                  const taxAmount = calculateItemTax(
+                                    selectedProduct,
+                                    discountedPrice,
+                                  );
+                                  const unitFinal =
+                                    discountedPrice + taxAmount;
+                                  const lineTax = taxAmount * qty;
+                                  const lineTotal = unitFinal * qty;
+
+                                  return (
+                                    <div
+                                      key={variantKey}
+                                      className={`border p-3 rounded-lg transition-colors gap-1 ${
+                                        isChecked
+                                          ? "border-orange-500 bg-orange-50/30"
+                                          : "border-zinc-200"
+                                      }`}
+                                    >
+                                      <div className="flex items-center gap-1">
+                                        <div
+                                          className={`flex-1 min-w-[100px] text-[14px] font-bold ${isChecked ? "text-zinc-900" : "text-zinc-700"}`}
+                                        >
+                                          {v.size}
+                                        </div>
+                                        <div className="w-20 flex items-center justify-center gap-1">
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              setVariantQty(variantKey, qty - 1)
+                                            }
+                                            className="w-7 h-7 rounded bg-zinc-100 flex items-center justify-center text-zinc-700 hover:bg-zinc-200"
+                                            aria-label={`Decrease ${v.size}`}
+                                          >
+                                            <Minus className="w-3.5 h-3.5" />
+                                          </button>
+                                          <span className="w-5 text-center font-bold text-sm text-zinc-900">
+                                            {qty}
+                                          </span>
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              setVariantQty(variantKey, qty + 1)
+                                            }
+                                            className="w-7 h-7 rounded bg-zinc-100 flex items-center justify-center text-zinc-700 hover:bg-zinc-200"
+                                            aria-label={`Increase ${v.size}`}
+                                          >
+                                            <Plus className="w-3.5 h-3.5" />
+                                          </button>
+                                        </div>
+                                        <div className="w-14 text-center font-bold text-[12px] text-zinc-900">
+                                          ${v.price.toFixed(2)}
+                                        </div>
+                                        <div className="w-16 text-center text-red-500 font-medium text-[12px]">
+                                          {discountAmount > 0
+                                            ? `-$${(discountAmount * Math.max(qty, 1)).toFixed(2)}`
+                                            : "-"}
+                                        </div>
+                                        <div className="w-16 text-center text-zinc-500 font-medium text-[12px]">
+                                          +${(qty > 0 ? lineTax : taxAmount).toFixed(2)}
+                                        </div>
+                                        <div className="w-20 text-right font-bold text-[13px] text-zinc-900">
+                                          $
+                                          {(qty > 0
+                                            ? lineTotal
+                                            : unitFinal
+                                          ).toFixed(2)}
+                                        </div>
+                                      </div>
+                                      <IngredientChips
+                                        ingredients={v.ingredients}
+                                        label="Includes"
+                                      />
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </AccordionContent>
+                          </AccordionItem>
+                        )}
+
+                        {hasPrepStyles && (
+                          <AccordionItem
+                            value="preparation"
+                            className={accordionItemClass}
+                          >
+                            <AccordionTrigger
+                              className={accordionTriggerClass}
+                            >
+                              Preparation Style
+                            </AccordionTrigger>
+                            <AccordionContent
+                              className={accordionContentClass}
+                            >
+                              <div className="space-y-2">
+                                <div className="grid grid-cols-2 gap-2">
+                                  {selectedProduct.preparationStyles
+                                    .filter(Boolean)
+                                    .map((style) => (
+                                      <label
+                                        key={style}
+                                        className={`flex items-center border p-3 rounded-lg cursor-pointer transition-colors ${
+                                          selectedPreparationStyle === style
+                                            ? "border-orange-500 bg-orange-50/30"
+                                            : "border-zinc-200 hover:border-orange-300"
+                                        }`}
+                                      >
+                                        <div className="flex-1 flex items-center gap-3 text-[14px] font-bold text-zinc-800 min-w-0">
+                                          <input
+                                            type="radio"
+                                            name="preparationStyle"
+                                            checked={
+                                              selectedPreparationStyle === style
+                                            }
+                                            onChange={() =>
+                                              setSelectedPreparationStyle(style)
+                                            }
+                                            className="w-4 h-4 accent-orange-500 shrink-0"
+                                          />
+                                          <span className="truncate">
+                                            {style}
+                                          </span>
+                                        </div>
+                                      </label>
+                                    ))}
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setSelectedPreparationStyle("")
+                                  }
+                                  className="text-left text-xs font-semibold text-zinc-500 hover:text-zinc-800 px-1"
+                                >
+                                  Clear style
+                                </button>
+                              </div>
+                            </AccordionContent>
+                          </AccordionItem>
+                        )}
+
+                        {productChoiceGroups.map((group, groupIndex) => {
+                          const value = `choice-${groupIndex}-${group.name}`;
+                          return (
+                            <AccordionItem
+                              key={value}
+                              value={value}
+                              className={accordionItemClass}
+                            >
+                              <AccordionTrigger
+                                className={accordionTriggerClass}
+                              >
+                                {group.name}
+                              </AccordionTrigger>
+                              <AccordionContent
+                                className={accordionContentClass}
+                              >
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                  {group.subChoices.map((choice) => {
+                                    const selected = (
+                                      selectedProductChoices[groupIndex] || []
+                                    ).includes(choice);
+                                    return (
+                                      <label
+                                        key={`${group.name}-${choice}`}
+                                        className={`flex items-center border p-3 rounded-lg cursor-pointer transition-colors ${
+                                          selected
+                                            ? "border-orange-500 bg-orange-50/30"
+                                            : "border-zinc-200 hover:border-orange-300"
+                                        }`}
+                                      >
+                                        <div className="flex-1 flex items-center gap-3 text-[14px] font-bold text-zinc-800">
+                                          <input
+                                            type="checkbox"
+                                            checked={selected}
+                                            onChange={() =>
+                                              toggleProductSubChoice(
+                                                groupIndex,
+                                                choice,
+                                              )
+                                            }
+                                            className="w-4 h-4 accent-orange-500"
+                                          />
+                                          <span>{choice}</span>
+                                        </div>
+                                      </label>
+                                    );
+                                  })}
+                                </div>
+                              </AccordionContent>
+                            </AccordionItem>
                           );
                         })}
-                      </div>
-                    </div>
-                  )}
 
-                <div className="pt-4 mt-4 border-t border-zinc-100 space-y-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-[13px] font-bold text-zinc-900 block">
-                      Custom items
-                    </span>
-                    <button
-                      type="button"
-                      onClick={addCustomExtraRow}
-                      className="inline-flex items-center gap-1.5 text-sm font-bold text-orange-600 hover:text-orange-700"
-                    >
-                      <Plus className="w-4 h-4" />
-                      Add new items
-                    </button>
-                  </div>
-
-                  {customExtras.length > 0 ? (
-                    <div className="space-y-2">
-                      {customExtras.map((row, rowIndex) => (
-                        <div
-                          key={row.id}
-                          className="rounded-lg border border-zinc-200 bg-zinc-50/60 p-3"
-                        >
-                          <div className="flex items-end gap-2">
-                            <div className="flex-1 min-w-0 space-y-1.5">
-                              <label
-                                htmlFor={`pos-custom-extra-name-${row.id}`}
-                                className="text-[12px] font-bold text-zinc-700 block"
-                              >
-                                Name{rowIndex > 0 ? ` ${rowIndex + 1}` : ""}{" "}
-                                <span className="text-red-500">*</span>
-                              </label>
-                              <Input
-                                id={`pos-custom-extra-name-${row.id}`}
-                                value={row.name}
-                                onChange={(e) =>
-                                  updateCustomExtraRow(
-                                    row.id,
-                                    "name",
-                                    e.target.value,
-                                  )
-                                }
-                                maxLength={80}
-                                required
-                                placeholder="e.g. Extra cheese slice"
-                                className="h-10 bg-white"
-                              />
-                            </div>
-                            <div className="w-28 shrink-0 space-y-1.5">
-                              <label
-                                htmlFor={`pos-custom-extra-price-${row.id}`}
-                                className="text-[12px] font-bold text-zinc-700 block"
-                              >
-                                Price <span className="text-red-500">*</span>
-                              </label>
-                              <Input
-                                id={`pos-custom-extra-price-${row.id}`}
-                                type="number"
-                                min="0"
-                                step="0.01"
-                                value={row.price}
-                                onChange={(e) =>
-                                  updateCustomExtraRow(
-                                    row.id,
-                                    "price",
-                                    e.target.value,
-                                  )
-                                }
-                                required
-                                placeholder="0.00"
-                                className="h-10 bg-white"
-                              />
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => removeCustomExtraRow(row.id)}
-                              className="w-10 h-10 shrink-0 rounded-lg border border-zinc-200 bg-white flex items-center justify-center text-zinc-400 hover:text-red-600 hover:border-red-200"
-                              aria-label="Remove custom item"
+                        {hasAddons && (
+                          <AccordionItem
+                            value="addons"
+                            className={accordionItemClass}
+                          >
+                            <AccordionTrigger
+                              className={accordionTriggerClass}
                             >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                      <button
-                        type="button"
-                        onClick={addCustomExtraRow}
-                        className="inline-flex items-center gap-1.5 text-xs font-bold text-orange-600 hover:text-orange-700 px-1"
-                      >
-                        <Plus className="w-3.5 h-3.5" />
-                        Add another
-                      </button>
-                    </div>
-                  ) : null}
-                </div>
-                  </>
-                )}
+                              Addons
+                            </AccordionTrigger>
+                            <AccordionContent
+                              className={accordionContentClass}
+                            >
+                              <div className="grid gap-3">
+                                {selectedProduct.addons.map((addon) => {
+                                  const addonKey = getAddonKey(addon);
+                                  const qty =
+                                    addonQtyById[addonKey]?.qty || 0;
+                                  const choicesByGroup =
+                                    addonQtyById[addonKey]?.choicesByGroup ||
+                                    {};
+                                  const isChecked = qty > 0;
+                                  const discountAmount =
+                                    calculateItemDiscount(
+                                      selectedProduct,
+                                      addon.price,
+                                    );
+                                  const discountedPrice = Math.max(
+                                    0,
+                                    addon.price - discountAmount,
+                                  );
+                                  const taxAmount = calculateItemTax(
+                                    selectedProduct,
+                                    discountedPrice,
+                                  );
+                                  const unitFinal =
+                                    discountedPrice + taxAmount;
+                                  const lineTax = taxAmount * qty;
+                                  const lineTotal = unitFinal * qty;
+                                  const addonChoiceGroups =
+                                    normalizeChoiceOptions(addon.choiceOptions);
 
-                <div className="space-y-3 pt-2">
-                  <p className="text-[13px] font-bold text-zinc-900">
-                    Modified Request:{" "}
-                    <span className="font-semibold text-zinc-600">
-                      Please prepare the order
-                    </span>
-                  </p>
-                  <div className="space-y-2.5">
-                    <div className="flex items-center gap-3">
-                      <label
-                        htmlFor="pos-note-without"
-                        className="w-16 shrink-0 text-[13px] font-bold text-zinc-800"
-                      >
-                        Without
-                      </label>
-                      <input
-                        id="pos-note-without"
-                        type="text"
-                        value={noteWithout}
-                        onChange={(e) => setNoteWithout(e.target.value)}
-                        maxLength={80}
-                        placeholder="Type Here"
-                        className="h-10 min-w-0 flex-1 rounded-md border border-gray-400 bg-white px-4 text-sm text-zinc-800 placeholder:text-zinc-400 focus:border-orange-400 focus:outline-none focus:ring-1 focus:ring-orange-400"
-                      />
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <label
-                        htmlFor="pos-note-add"
-                        className="w-16 shrink-0 text-[13px] font-bold text-zinc-800"
-                      >
-                        Add
-                      </label>
-                      <input
-                        id="pos-note-add"
-                        type="text"
-                        value={noteAdd}
-                        onChange={(e) => setNoteAdd(e.target.value)}
-                        maxLength={80}
-                        placeholder="Type Here"
-                        className="h-10 min-w-0 flex-1 rounded-md border border-gray-400 bg-white px-4 text-sm text-zinc-800 placeholder:text-zinc-400 focus:border-orange-400 focus:outline-none focus:ring-1 focus:ring-orange-400"
-                      />
-                    </div>
-                  </div>
-                  {(() => {
-                    const preview = buildModifiedRequestRemark(
-                      noteWithout,
-                      noteAdd,
-                    );
-                    return preview ? (
-                      <p className="rounded-xl bg-[#f8e8e4] px-3 py-2.5 text-[12px] font-medium leading-relaxed text-zinc-700">
-                        {preview}
-                      </p>
-                    ) : null;
-                  })()}
-                </div>
-              </div>
+                                  return (
+                                    <div
+                                      key={addonKey}
+                                      className={`border rounded-lg transition-colors ${
+                                        isChecked
+                                          ? "border-orange-500 bg-orange-50/30"
+                                          : "border-zinc-200"
+                                      }`}
+                                    >
+                                      <div className="flex items-center p-3 gap-1">
+                                        <div
+                                          className={`flex-1 min-w-[100px] text-[14px] font-bold ${isChecked ? "text-zinc-900" : "text-zinc-700"}`}
+                                        >
+                                          <div>{addon.name}</div>
+                                          {addon.fromCategory ? (
+                                            <span className="mt-0.5 block text-[10px] font-semibold uppercase tracking-wide text-zinc-400">
+                                              Linked from category
+                                            </span>
+                                          ) : null}
+                                        </div>
+                                        <div className="w-20 flex items-center justify-center gap-1">
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              setAddonQty(addon, qty - 1)
+                                            }
+                                            className="w-7 h-7 rounded bg-zinc-100 flex items-center justify-center text-zinc-700 hover:bg-zinc-200"
+                                            aria-label={`Decrease ${addon.name}`}
+                                          >
+                                            <Minus className="w-3.5 h-3.5" />
+                                          </button>
+                                          <span className="w-5 text-center font-bold text-sm text-zinc-900">
+                                            {qty}
+                                          </span>
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              setAddonQty(addon, qty + 1)
+                                            }
+                                            className="w-7 h-7 rounded bg-zinc-100 flex items-center justify-center text-zinc-700 hover:bg-zinc-200"
+                                            aria-label={`Increase ${addon.name}`}
+                                          >
+                                            <Plus className="w-3.5 h-3.5" />
+                                          </button>
+                                        </div>
+                                        <div className="w-14 text-center font-bold text-[12px] text-zinc-900">
+                                          +${addon.price.toFixed(2)}
+                                        </div>
+                                        <div className="w-16 text-center text-red-500 font-medium text-[12px]">
+                                          {discountAmount > 0
+                                            ? `-$${(discountAmount * Math.max(qty, 1)).toFixed(2)}`
+                                            : "-"}
+                                        </div>
+                                        <div className="w-16 text-center text-zinc-500 font-medium text-[12px]">
+                                          +${(qty > 0 ? lineTax : taxAmount).toFixed(2)}
+                                        </div>
+                                        <div className="w-20 text-right font-bold text-[13px] text-zinc-900">
+                                          +$
+                                          {(qty > 0
+                                            ? lineTotal
+                                            : unitFinal
+                                          ).toFixed(2)}
+                                        </div>
+                                      </div>
+                                      <div className="px-3 pb-2">
+                                        <IngredientChips
+                                          ingredients={addon.ingredients}
+                                          label="Addon includes"
+                                          compact
+                                        />
+                                      </div>
+                                      {addonChoiceGroups.length > 0 && (
+                                        <div className="px-3 pb-3 pt-1 space-y-4 border-t border-zinc-100/80">
+                                          {addonChoiceGroups.map(
+                                            (group, groupIndex) => (
+                                              <div
+                                                key={`${addonKey}-${group.name}-${groupIndex}`}
+                                                className="space-y-2"
+                                              >
+                                                <span className="text-[12px] font-bold text-zinc-800 block">
+                                                  {group.name}
+                                                </span>
+                                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                                  {group.subChoices.map(
+                                                    (choice) => {
+                                                      const selected = (
+                                                        choicesByGroup[
+                                                          groupIndex
+                                                        ] || []
+                                                      ).includes(choice);
+                                                      return (
+                                                        <label
+                                                          key={`${addonKey}-${group.name}-${choice}`}
+                                                          className={`flex items-center border p-2.5 rounded-lg cursor-pointer transition-colors ${
+                                                            selected
+                                                              ? "border-orange-500 bg-orange-50/30"
+                                                              : "border-zinc-200 hover:border-orange-300"
+                                                          }`}
+                                                        >
+                                                          <div className="flex-1 flex items-center gap-2 text-[13px] font-bold text-zinc-800">
+                                                            <input
+                                                              type="checkbox"
+                                                              checked={selected}
+                                                              onChange={() =>
+                                                                toggleAddonSubChoice(
+                                                                  addonKey,
+                                                                  groupIndex,
+                                                                  choice,
+                                                                )
+                                                              }
+                                                              className="w-4 h-4 accent-orange-500"
+                                                            />
+                                                            <span>
+                                                              {choice}
+                                                            </span>
+                                                          </div>
+                                                        </label>
+                                                      );
+                                                    },
+                                                  )}
+                                                </div>
+                                              </div>
+                                            ),
+                                          )}
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </AccordionContent>
+                          </AccordionItem>
+                        )}
+                      </>
+                    )}
+                  </Accordion>
+                );
+              })()}
             </div>
 
             <div className="p-4 bg-zinc-50/50 border-t border-zinc-100 flex gap-3 shrink-0 rounded-b-2xl">
@@ -3765,6 +3831,86 @@ function OrderPageContent() {
                 className="flex-1 h-12 bg-orange-500 hover:bg-orange-600 text-white font-bold shadow-none"
               >
                 Add to Cart
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ADD CUSTOM ITEM MODAL */}
+      {customExtraModal && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-zinc-900/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden">
+            <div className="p-5 border-b border-zinc-100 bg-zinc-50 flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-bold text-zinc-900">
+                  Add custom item
+                </h3>
+                <p className="text-sm font-medium text-zinc-500 mt-0.5">
+                  For {customExtraModal.name}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={closeCustomExtraModal}
+                className="w-8 h-8 rounded-full flex items-center justify-center text-zinc-400 hover:text-zinc-600 hover:bg-zinc-200"
+                aria-label="Close"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div className="space-y-1.5">
+                <label
+                  htmlFor="pos-cart-custom-extra-name"
+                  className="text-[12px] font-bold text-zinc-700 block"
+                >
+                  Name <span className="text-red-500">*</span>
+                </label>
+                <Input
+                  id="pos-cart-custom-extra-name"
+                  value={customExtraName}
+                  onChange={(e) => setCustomExtraName(e.target.value)}
+                  maxLength={80}
+                  placeholder="e.g. Extra cheese slice"
+                  className="h-11 bg-white"
+                  autoFocus
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label
+                  htmlFor="pos-cart-custom-extra-price"
+                  className="text-[12px] font-bold text-zinc-700 block"
+                >
+                  Price <span className="text-red-500">*</span>
+                </label>
+                <Input
+                  id="pos-cart-custom-extra-price"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={customExtraPrice}
+                  onChange={(e) => setCustomExtraPrice(e.target.value)}
+                  placeholder="0.00"
+                  className="h-11 bg-white"
+                />
+              </div>
+            </div>
+            <div className="p-4 bg-zinc-50 border-t border-zinc-100 flex gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={closeCustomExtraModal}
+                className="flex-1 h-11 border-zinc-300 font-bold text-zinc-700 shadow-none"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                onClick={submitCustomExtraModal}
+                className="flex-1 h-11 bg-orange-500 hover:bg-orange-600 text-white font-bold shadow-none"
+              >
+                Add
               </Button>
             </div>
           </div>
