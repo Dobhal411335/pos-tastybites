@@ -10,6 +10,12 @@ import {
   parsePickupFromSpecialNote,
   stripPickupPrefix,
 } from "@/lib/public/pickup";
+import {
+  getTodayRestaurantHours,
+  normalizeRestaurantHours,
+  timeToMinutes,
+} from "@/lib/public/restaurantHours";
+import CompanyBasicInfo from "@/models/Web/CompanyBasicInfo";
 import { logger } from "@/utils/logger";
 import { sendOnlineOrderStatusEmail } from "@/lib/brevo/sendOnlineOrderStatusEmail";
 
@@ -58,7 +64,27 @@ export async function createOnlineOrder({
     throw err;
   }
 
-  if (!isValidSameDayPickup(pickupTime)) {
+  let company = await CompanyBasicInfo.findOne({ restaurant: restaurantId })
+    .sort({ updatedAt: -1 })
+    .lean();
+  if (!company) {
+    company = await CompanyBasicInfo.findOne().sort({ updatedAt: -1 }).lean();
+  }
+  const todayHours = getTodayRestaurantHours(
+    normalizeRestaurantHours(company?.restaurantHours),
+  );
+  if (todayHours.closed) {
+    const err = new Error("Online pickup is closed for today");
+    err.status = 400;
+    throw err;
+  }
+  const pickupOpts = todayHours.is24Hours
+    ? { is24Hours: true, openMinutes: 0, endMinutes: 23 * 60 + 45 }
+    : {
+        openMinutes: timeToMinutes(todayHours.open) ?? undefined,
+        endMinutes: timeToMinutes(todayHours.close) ?? undefined,
+      };
+  if (!isValidSameDayPickup(pickupTime, new Date(), undefined, pickupOpts)) {
     const err = new Error("Please choose a valid same-day pickup time");
     err.status = 400;
     throw err;

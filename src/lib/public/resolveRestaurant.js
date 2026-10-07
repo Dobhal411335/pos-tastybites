@@ -1,6 +1,11 @@
 import connectDB from "@/lib/db";
 import Restaurant from "@/models/Restaurant";
 import CompanyBasicInfo from "@/models/Web/CompanyBasicInfo";
+import {
+  getTodayRestaurantHours,
+  normalizeRestaurantHours,
+} from "@/lib/public/restaurantHours";
+import { DEFAULT_RESTAURANT_TIMEZONE } from "@/lib/restaurantTime";
 
 export function getDefaultRestaurantSlug() {
   return (
@@ -49,11 +54,16 @@ export async function getPublicRestaurantProfile(slug) {
   const restaurant = await resolveRestaurantBySlug(slug);
   if (!restaurant) return null;
 
-  const company = await CompanyBasicInfo.findOne({
-    restaurant: restaurant._id,
+  let company = await CompanyBasicInfo.findOne({
+    restaurantId: restaurant._id,
   })
     .sort({ updatedAt: -1 })
     .lean();
+
+  // Legacy / single-tenant records may not have restaurant set on the doc.
+  if (!company) {
+    company = await CompanyBasicInfo.findOne().sort({ updatedAt: -1 }).lean();
+  }
 
   const phoneFromCompany = company?.contactNumbers?.[0];
   const phoneDigits = phoneFromCompany?.number
@@ -68,6 +78,12 @@ export async function getPublicRestaurantProfile(slug) {
     "";
 
   const displayName = company?.companyName || restaurant.name || "Restaurant";
+  const restaurantHours = normalizeRestaurantHours(company?.restaurantHours);
+  const todayHours = getTodayRestaurantHours(
+    restaurantHours,
+    new Date(),
+    DEFAULT_RESTAURANT_TIMEZONE,
+  );
 
   return {
     id: String(restaurant._id),
@@ -93,6 +109,8 @@ export async function getPublicRestaurantProfile(slug) {
       title: company?.titleTagForMainLandingPage || "",
       keywords: company?.keywords || [],
     },
+    restaurantHours,
+    todayHours,
   };
 }
 

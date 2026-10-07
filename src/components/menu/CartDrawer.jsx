@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   X,
   ShoppingBag,
@@ -59,6 +60,7 @@ function lineNote(item) {
  * - menu: sticky right sidebar on desktop + mobile drawer when `open`
  */
 export default function CartDrawer({ open = false, onOpenChange, mode = "drawer" }) {
+  const router = useRouter();
   const {
     cartItems,
     updateQuantity,
@@ -243,10 +245,29 @@ export default function CartDrawer({ open = false, onOpenChange, mode = "drawer"
       if (!res.ok || !json.success) {
         throw new Error(json.message || "Failed to place order");
       }
-      setPlacedOrder(json.data);
+      const placed = json.data;
+      const orderNumber = placed?.orderNumber;
+      const phone = String(pendingGuest.phone || placed?.contactNumber || "")
+        .replace(/\D/g, "");
+      try {
+        sessionStorage.setItem(
+          `online-thankyou-${String(orderNumber || "").replace(/^#/, "")}`,
+          JSON.stringify(placed),
+        );
+      } catch {
+        /* ignore */
+      }
       clearCart();
-      setFlowStep(3);
+      resetFlow();
+      onOpenChange?.(false);
       toast.success("Order placed! Pay at the restaurant when you pick up.");
+      if (orderNumber) {
+        router.push(
+          `/thank-you/${encodeURIComponent(orderNumber)}${
+            phone ? `?phone=${encodeURIComponent(phone)}` : ""
+          }`,
+        );
+      }
     } catch (err) {
       toast.error(err.message || "Failed to place order");
     } finally {

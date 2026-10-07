@@ -2,6 +2,7 @@ import { sendSuccess } from "@/utils/apiResponse";
 import { sendError } from "@/utils/errorHandler";
 import { getPublicRestaurantProfile } from "@/lib/public/resolveRestaurant";
 import { buildSameDayPickupSlots } from "@/lib/public/pickup";
+import { timeToMinutes } from "@/lib/public/restaurantHours";
 import { DEFAULT_RESTAURANT_TIMEZONE } from "@/lib/restaurantTime";
 import OfferDetails from "@/models/Web/OfferDetails";
 import PopupBanner from "@/models/Web/popupBanner";
@@ -30,11 +31,29 @@ export async function GET(_request, { params }) {
         .lean(),
     ]);
 
+    const todayHours = profile.todayHours || null;
+    const pickupOptions = {};
+    if (todayHours?.is24Hours) {
+      pickupOptions.openMinutes = 0;
+      pickupOptions.endMinutes = 23 * 60 + 45;
+      pickupOptions.is24Hours = true;
+    } else if (todayHours && !todayHours.closed) {
+      const openMin = timeToMinutes(todayHours.open);
+      const closeMin = timeToMinutes(todayHours.close);
+      if (openMin != null) pickupOptions.openMinutes = openMin;
+      if (closeMin != null) pickupOptions.endMinutes = closeMin;
+    } else if (todayHours?.closed) {
+      pickupOptions.forceClosed = true;
+    }
+
     return sendSuccess(
       {
         ...profile,
-        pickupSlots: buildSameDayPickupSlots(),
+        pickupSlots: pickupOptions.forceClosed
+          ? []
+          : buildSameDayPickupSlots(undefined, undefined, pickupOptions),
         timezone: DEFAULT_RESTAURANT_TIMEZONE,
+        todayHours,
         promotions: offerDetails
           ? {
               moreOffers: offerDetails.moreOffers || null,

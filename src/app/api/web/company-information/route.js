@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 import connectDB from '@/lib/db';
 import CompanyBasicInfo from '@/models/Web/CompanyBasicInfo'
-import { withAuth } from '@/utils/auth';
+import { withAuth } from '@/utils/auth'
+import { normalizeRestaurantHours } from '@/lib/public/restaurantHours'
 
 const normalizeArray = (value) => {
   if (!Array.isArray(value)) {
@@ -51,6 +52,7 @@ const normalizePayload = (payload) => ({
   googleTrackingTag: String(payload?.googleTrackingTag || ''),
   titleTagForMainLandingPage: String(payload?.titleTagForMainLandingPage || ''),
   keywords: normalizeArray(payload?.keywords),
+  restaurantHours: normalizeRestaurantHours(payload?.restaurantHours),
 })
 
 export const GET = withAuth(async (request) => {

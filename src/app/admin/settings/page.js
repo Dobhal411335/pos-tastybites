@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import Image from 'next/image'
 import {toast} from 'sonner'
-import { Plus, Trash2, Upload, Save, ImageIcon, Globe, MapPin, Building, Share2 } from 'lucide-react'
+import { Plus, Trash2, Upload, Save, ImageIcon, Globe, MapPin, Building, Share2, Clock } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -11,7 +11,14 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Switch } from '@/components/ui/switch'
 import { countryCodes } from "@/utils/countryCodes"
+import {
+  WEEKDAY_KEYS,
+  WEEKDAY_LABELS,
+  defaultRestaurantHours,
+  normalizeRestaurantHours,
+} from '@/lib/public/restaurantHours'
 
 const logoFields = [
   { key: 'mainLogo', label: 'Main Logo', desc: 'Primary brand logo' },
@@ -36,6 +43,7 @@ const createEmptyFormData = () => ({
   googleTrackingTag: '',
   titleTagForMainLandingPage: '',
   keywords: [''],
+  restaurantHours: defaultRestaurantHours(),
 })
 
 const normalizeArray = (value) => {
@@ -69,6 +77,7 @@ const normalizeCompanyInfo = (record) => ({
   googleTrackingTag: record?.googleTrackingTag || '',
   titleTagForMainLandingPage: record?.titleTagForMainLandingPage || '',
   keywords: normalizeArray(record?.keywords),
+  restaurantHours: normalizeRestaurantHours(record?.restaurantHours),
 })
 
 const CompanyBasicInformation = () => {
@@ -102,6 +111,45 @@ const CompanyBasicInformation = () => {
   const handleScalarChange = (event) => {
     const { name, value } = event.target
     setFormData((prev) => ({ ...prev, [name]: value }))
+  }
+
+  const updateRestaurantHours = (patch) => {
+    setFormData((prev) => ({
+      ...prev,
+      restaurantHours: normalizeRestaurantHours({
+        ...prev.restaurantHours,
+        ...patch,
+      }),
+    }))
+  }
+
+  const updateSameHours = (patch) => {
+    setFormData((prev) => ({
+      ...prev,
+      restaurantHours: normalizeRestaurantHours({
+        ...prev.restaurantHours,
+        sameHours: {
+          ...prev.restaurantHours.sameHours,
+          ...patch,
+        },
+      }),
+    }))
+  }
+
+  const updateWeeklyDay = (dayKey, patch) => {
+    setFormData((prev) => ({
+      ...prev,
+      restaurantHours: normalizeRestaurantHours({
+        ...prev.restaurantHours,
+        weekly: {
+          ...prev.restaurantHours.weekly,
+          [dayKey]: {
+            ...prev.restaurantHours.weekly?.[dayKey],
+            ...patch,
+          },
+        },
+      }),
+    }))
   }
 
   const handleArrayChange = (field, index, value) => {
@@ -409,6 +457,168 @@ const CompanyBasicInformation = () => {
             {/* List Fields */}
             {renderListField({ field: 'emails', label: 'Email Addresses', placeholder: 'contact@acme.com', type: 'email' })}
             {renderListField({ field: 'officeAddresses', label: 'Office Addresses', placeholder: '123 Business St, Suite 100...', isTextarea: true })}
+
+            <Card className="bg-white border border-slate-200/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)] rounded-2xl overflow-hidden">
+              <CardHeader className="border-b border-slate-50 bg-white/50 pb-6">
+                <div className="flex items-center gap-2">
+                  <Clock className="w-5 h-5 text-slate-400" />
+                  <CardTitle className="text-lg font-semibold text-slate-800">Restaurant Hours</CardTitle>
+                </div>
+                <CardDescription className="text-slate-500">
+                  Shown on the online menu and checkout for today&apos;s hours. Also limits pickup slot times.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="p-6 space-y-6">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between rounded-xl border border-slate-100 bg-slate-50/70 px-4 py-3">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-800">Open 24 hours</p>
+                    <p className="text-xs text-slate-500">Restaurant is always open — no open/close times needed.</p>
+                  </div>
+                  <Switch
+                    checked={Boolean(formData.restaurantHours?.is24Hours)}
+                    onCheckedChange={(checked) => updateRestaurantHours({ is24Hours: checked })}
+                    className="h-6 w-11 border-2 border-slate-300 shadow-none data-[state=unchecked]:bg-slate-200 data-[state=checked]:border-slate-900 data-[state=checked]:bg-slate-900 [&>span]:h-5 [&>span]:w-5 [&>span]:border [&>span]:border-slate-300 [&>span]:bg-white [&>span]:shadow-sm data-[state=checked]:[&>span]:translate-x-5 data-[state=checked]:[&>span]:border-white"
+                  />
+                </div>
+
+                {!formData.restaurantHours?.is24Hours ? (
+                  <>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <button
+                        type="button"
+                        onClick={() => updateRestaurantHours({ mode: 'same' })}
+                        className={`rounded-xl border-2 px-4 py-3 text-left transition-all ${
+                          formData.restaurantHours?.mode === 'same'
+                            ? 'border-slate-900 bg-slate-900 text-white'
+                            : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'
+                        }`}
+                      >
+                        <p className="text-sm font-bold">Same for whole week</p>
+                        <p className={`mt-0.5 text-xs ${formData.restaurantHours?.mode === 'same' ? 'text-white/70' : 'text-slate-500'}`}>
+                          One open/close schedule every day
+                        </p>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => updateRestaurantHours({ mode: 'custom' })}
+                        className={`rounded-xl border-2 px-4 py-3 text-left transition-all ${
+                          formData.restaurantHours?.mode === 'custom'
+                            ? 'border-slate-900 bg-slate-900 text-white'
+                            : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'
+                        }`}
+                      >
+                        <p className="text-sm font-bold">Custom by day</p>
+                        <p className={`mt-0.5 text-xs ${formData.restaurantHours?.mode === 'custom' ? 'text-white/70' : 'text-slate-500'}`}>
+                          Set different hours for each weekday
+                        </p>
+                      </button>
+                    </div>
+
+                    {formData.restaurantHours?.mode === 'same' ? (
+                      <div className="space-y-3 rounded-xl border border-slate-100 bg-white p-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <Label className="text-sm font-medium text-slate-700">Weekly schedule</Label>
+                          <label className="flex items-center gap-2 text-xs font-semibold text-slate-600">
+                            <input
+                              type="checkbox"
+                              checked={Boolean(formData.restaurantHours?.sameHours?.closed)}
+                              onChange={(e) => updateSameHours({ closed: e.target.checked })}
+                              className="h-4 w-4 rounded border-slate-300"
+                            />
+                            Closed
+                          </label>
+                        </div>
+                        {!formData.restaurantHours?.sameHours?.closed ? (
+                          <div className="grid gap-3 sm:grid-cols-2">
+                            <div className="space-y-1.5">
+                              <Label className="text-xs text-slate-500">Opens</Label>
+                              <Input
+                                type="time"
+                                value={formData.restaurantHours?.sameHours?.open || '09:00'}
+                                onChange={(e) => updateSameHours({ open: e.target.value })}
+                                className="h-11 rounded-xl border-slate-200 bg-slate-50/50"
+                              />
+                            </div>
+                            <div className="space-y-1.5">
+                              <Label className="text-xs text-slate-500">Closes</Label>
+                              <Input
+                                type="time"
+                                value={formData.restaurantHours?.sameHours?.close || '22:00'}
+                                onChange={(e) => updateSameHours({ close: e.target.value })}
+                                className="h-11 rounded-xl border-slate-200 bg-slate-50/50"
+                              />
+                            </div>
+                          </div>
+                        ) : (
+                          <p className="text-sm font-medium text-amber-700">Marked closed every day.</p>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {WEEKDAY_KEYS.map((dayKey) => {
+                          const day = formData.restaurantHours?.weekly?.[dayKey] || {}
+                          return (
+                            <div
+                              key={dayKey}
+                              className="rounded-xl border border-slate-100 bg-white p-3 sm:p-4"
+                            >
+                              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                <div className="flex items-center justify-between gap-3 sm:min-w-[140px] sm:justify-start">
+                                  <p className="text-sm font-bold text-slate-800">
+                                    {WEEKDAY_LABELS[dayKey]}
+                                  </p>
+                                  <label className="flex items-center gap-2 text-xs font-semibold text-slate-600">
+                                    <input
+                                      type="checkbox"
+                                      checked={Boolean(day.closed)}
+                                      onChange={(e) =>
+                                        updateWeeklyDay(dayKey, { closed: e.target.checked })
+                                      }
+                                      className="h-4 w-4 rounded border-slate-300"
+                                    />
+                                    Closed
+                                  </label>
+                                </div>
+                                {!day.closed ? (
+                                  <div className="grid flex-1 grid-cols-2 gap-2">
+                                    <Input
+                                      type="time"
+                                      value={day.open || '09:00'}
+                                      onChange={(e) =>
+                                        updateWeeklyDay(dayKey, { open: e.target.value })
+                                      }
+                                      className="h-10 rounded-xl border-slate-200 bg-slate-50/50"
+                                      aria-label={`${WEEKDAY_LABELS[dayKey]} open`}
+                                    />
+                                    <Input
+                                      type="time"
+                                      value={day.close || '22:00'}
+                                      onChange={(e) =>
+                                        updateWeeklyDay(dayKey, { close: e.target.value })
+                                      }
+                                      className="h-10 rounded-xl border-slate-200 bg-slate-50/50"
+                                      aria-label={`${WEEKDAY_LABELS[dayKey]} close`}
+                                    />
+                                  </div>
+                                ) : (
+                                  <p className="text-xs font-semibold text-amber-700 sm:text-right">
+                                    Closed
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div className="rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">
+                    Online menu will show “Open 24 hours” every day.
+                  </div>
+                )}
+              </CardContent>
+            </Card>
             
             <Card className="bg-white border border-slate-200/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)] rounded-2xl overflow-hidden">
               <CardHeader className="border-b border-slate-50 bg-white/50 pb-6">

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
-import { Check, Lock, Mail, Store } from "lucide-react";
+import { Check, Clock, Lock, Mail, Store } from "lucide-react";
 import Navbar from "@/components/sections/Navbar";
 import Footer from "@/components/sections/Footer";
 import { Button } from "@/components/ui/button";
@@ -31,6 +31,14 @@ export default function CheckoutPage() {
 
   const slots = restaurant?.pickupSlots || [];
   const brandName = restaurant?.name || "Tasty Bites";
+  const todayHours = restaurant?.todayHours || null;
+  const hoursLabel = todayHours?.is24Hours
+    ? "Open 24 hours"
+    : todayHours?.closed
+      ? "Closed today"
+      : todayHours?.label
+        ? `Today ${todayHours.label}`
+        : null;
 
   useEffect(() => {
     refresh?.();
@@ -156,10 +164,18 @@ export default function CheckoutPage() {
 
       const orderNumber = json.data.orderNumber;
       const phone = String(pendingGuest.phone).replace(/\D/g, "");
+      try {
+        sessionStorage.setItem(
+          `online-thankyou-${String(orderNumber).replace(/^#/, "")}`,
+          JSON.stringify(json.data),
+        );
+      } catch {
+        /* ignore */
+      }
       clearCart();
       toast.success("Order placed! Pay at the restaurant when you pick up.");
       router.push(
-        `/order/${encodeURIComponent(orderNumber)}?phone=${encodeURIComponent(phone)}`
+        `/thank-you/${encodeURIComponent(orderNumber)}?phone=${encodeURIComponent(phone)}`,
       );
     } catch (err) {
       toast.error(err.message || "Failed to place order");
@@ -198,6 +214,21 @@ export default function CheckoutPage() {
           <p className="text-sm text-[var(--customer-muted)]">
             Verify your email, then pay at {brandName} when you pick up.
           </p>
+          {hoursLabel ? (
+            <div
+              className={`inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-bold ${
+                todayHours?.closed
+                  ? "bg-amber-50 text-amber-800"
+                  : "bg-emerald-50 text-emerald-800"
+              }`}
+            >
+              <Clock className="h-4 w-4 shrink-0" />
+              {hoursLabel}
+              {todayHours?.dayLabel ? (
+                <span className="font-semibold opacity-70">· {todayHours.dayLabel}</span>
+              ) : null}
+            </div>
+          ) : null}
         </div>
 
         <form

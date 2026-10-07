@@ -50,6 +50,7 @@ function serializeCompanyBasicInfo(record) {
     keywords: Array.isArray(record.keywords)
       ? record.keywords.filter(Boolean)
       : [],
+    restaurantHours: record.restaurantHours || null,
   };
 }
 

@@ -42,7 +42,15 @@ export default function MenuHero({
 
   const brandName = restaurant?.name || "";
   const slots = restaurant?.pickupSlots || [];
-  const kitchenLive = slots.length > 0;
+  const todayHours = restaurant?.todayHours || null;
+  const kitchenLive = slots.length > 0 && !todayHours?.closed;
+  const hoursLabel = todayHours?.is24Hours
+    ? "Open 24 hours"
+    : todayHours?.closed
+      ? "Closed today"
+      : todayHours?.label
+        ? `Today ${todayHours.label}`
+        : null;
 
   const pushFilters = (next = {}) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -113,10 +121,10 @@ export default function MenuHero({
                 : "— Check back during restaurant hours"}
             </span>
           </div>
-          <div className="flex items-center gap-3 text-xs font-semibold">
-            <span className="flex items-center gap-1">
-              <Clock className="h-4 w-4" />
-              Pickup today
+          <div className="flex flex-wrap items-center gap-2 text-xs font-semibold sm:gap-3">
+            <span className="flex items-center gap-1 rounded bg-black/20 px-2 py-0.5">
+              <Clock className="h-3.5 w-3.5" />
+              {hoursLabel || "Pickup today"}
             </span>
             <span className="rounded bg-black/20 px-2 py-0.5">Pay at restaurant</span>
           </div>
@@ -153,7 +161,9 @@ export default function MenuHero({
                   </span>
                 </div>
                 <span className="text-xs text-[var(--customer-muted)]">
-                  Order online · Pay when you arrive
+                  {hoursLabel
+                    ? hoursLabel
+                    : "Order online · Pay when you arrive"}
                 </span>
               </div>
             </div>
