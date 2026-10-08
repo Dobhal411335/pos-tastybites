@@ -323,6 +323,7 @@ export const POST = withAuth(async (request) => {
 
     const employeeId = request.user.id;
     const actor = await resolveOperationalActor(request);
+    const actorId = actor.actorId || employeeId;
     const orderSource = ["WALK_IN", "STAFF", "POS", "ONLINE"].includes(data.source)
       ? data.source
       : "POS";
@@ -709,7 +710,7 @@ export const POST = withAuth(async (request) => {
       // Audit Log
       await OperationalAuditLog.create({
         restaurantId: request.restaurant,
-        actorId: actor.actorId,
+        actorId,
         actorType: actor.actorType,
         actorName: actor.actorName,
         action: 'ORDER_UPDATED',
@@ -819,7 +820,7 @@ export const POST = withAuth(async (request) => {
       // Audit Log
       await OperationalAuditLog.create({
         restaurantId: request.restaurant,
-        actorId: actor.actorId,
+        actorId,
         actorType: actor.actorType,
         actorName: actor.actorName,
         action: 'ORDER_CREATED',
@@ -999,6 +1000,7 @@ export const PATCH = withAuth(async (request) => {
     const employeeId = request.user.id;
     const restaurantId = request.restaurant;
     const actor = await resolveOperationalActor(request);
+    const actorId = actor.actorId || employeeId;
     const body = await request.json();
     const { orderId, action, reason } = body || {};
 
@@ -1049,7 +1051,7 @@ export const PATCH = withAuth(async (request) => {
       try {
         await OperationalAuditLog.create({
           restaurantId,
-          actorId: actor.actorId,
+          actorId,
           actorType: actor.actorType,
           actorName: actor.actorName,
           action: "ORDER_UPDATED",
@@ -1277,7 +1279,7 @@ export const PATCH = withAuth(async (request) => {
           try {
             await OperationalAuditLog.create({
               restaurantId,
-              actorId: actor.actorId,
+              actorId,
               actorType: actor.actorType,
               actorName: actor.actorName,
               action: "TABLE_RELEASED",
@@ -1327,7 +1329,7 @@ export const PATCH = withAuth(async (request) => {
     try {
       await OperationalAuditLog.create({
         restaurantId,
-        actorId: actor.actorId,
+        actorId,
         actorType: actor.actorType,
         actorName: actor.actorName,
         action: "ORDER_CANCELLED",
