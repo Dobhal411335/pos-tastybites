@@ -363,13 +363,7 @@ export default function CartDrawer({ open = false, onOpenChange, mode = "drawer"
                     </h4>
                     {(() => {
                       const parts = lineNoteParts(item);
-                      if (!parts.length) {
-                        return (
-                          <p className="mt-1 text-xs leading-relaxed text-[var(--customer-muted)]">
-                            Standard
-                          </p>
-                        );
-                      }
+                      if (!parts.length) return null;
                       return (
                         <div className="mt-1 space-y-0.5">
                           {parts.map((part, partIdx) => (
@@ -998,20 +992,22 @@ function CheckoutFlowModal({
                       <div key={item.cartKey} className="flex justify-between gap-2">
                         <div className="min-w-0">
                           <span className="font-bold">{item.quantity}x</span> {item.name}
-                          <div className="space-y-0.5 pl-4">
-                            {(() => {
-                              const parts = lineNoteParts(item);
-                              const lines = parts.length ? parts : ["Standard"];
-                              return lines.map((part, partIdx) => (
-                                <div
-                                  key={`${item.cartKey}-sum-${partIdx}`}
-                                  className="text-xs leading-relaxed text-[var(--customer-muted)]"
-                                >
-                                  {part}
-                                </div>
-                              ));
-                            })()}
-                          </div>
+                          {(() => {
+                            const parts = lineNoteParts(item);
+                            if (!parts.length) return null;
+                            return (
+                              <div className="space-y-0.5 pl-4">
+                                {parts.map((part, partIdx) => (
+                                  <div
+                                    key={`${item.cartKey}-sum-${partIdx}`}
+                                    className="text-xs leading-relaxed text-[var(--customer-muted)]"
+                                  >
+                                    {part}
+                                  </div>
+                                ))}
+                              </div>
+                            );
+                          })()}
                           {item.notes ? (
                             <div className="mt-0.5 pl-4 text-xs font-medium italic text-amber-800">
                               Remark: {item.notes}
