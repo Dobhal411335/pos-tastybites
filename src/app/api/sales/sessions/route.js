@@ -4,6 +4,7 @@ import Table from "@/models/floor/Table";
 import Order from "@/models/Order";
 import Employee from "@/models/employee/Employee";
 import OperationalAuditLog from "@/models/OperationalAuditLog";
+import { resolveOperationalActor } from "@/lib/orders/resolveOperationalActor";
 import { sendSuccess } from "@/utils/apiResponse";
 import { sendError } from "@/utils/errorHandler";
 import { logger } from "@/utils/logger";
@@ -30,11 +31,6 @@ import {
   normalizeSeatNumber,
   seatsAboveGuestCount,
 } from "@/lib/orders/seatHelpers";
-
-function actorTypeFromRequest(request) {
-  const role = request.role || request.user?.role;
-  return isSalesAdminRole(role) || role === "Manager" ? "Admin" : "Employee";
-}
 
 /** Emit to floor room and restaurant room (same pattern as print jobs). */
 function emitFloorTableEvent(eventName, restaurantId, floorId, payload) {
@@ -196,11 +192,12 @@ export const POST = withAuth(async (request) => {
       .lean();
 
     // Audit Log
+    const actor = await resolveOperationalActor(request);
     await OperationalAuditLog.create({
       restaurantId: request.restaurant,
-      actorId: request.user.id,
-      actorType: actorTypeFromRequest(request),
-      actorName: request.user.name || request.user.firstName,
+      actorId: actor.actorId,
+      actorType: actor.actorType,
+      actorName: actor.actorName,
       action: 'TABLE_ASSIGNED',
       floorId: table.floor,
       tableId: table._id,
@@ -268,6 +265,8 @@ export const PUT = withAuth(async (request) => {
       return sendError(new Error("Not Found"), "Session not found", 404);
     }
 
+    const actor = await resolveOperationalActor(request);
+
     if (action === "UPDATE_GUESTS") {
       if (guestCount === undefined || guestCount === null || guestCount === "") {
         return sendError(new Error("Missing field"), "guestCount is required", 400);
@@ -318,9 +317,9 @@ export const PUT = withAuth(async (request) => {
       // Audit Log
       await OperationalAuditLog.create({
         restaurantId: request.restaurant,
-        actorId: request.user.id,
-        actorType: actorTypeFromRequest(request),
-        actorName: request.user.name || request.user.firstName,
+        actorId: actor.actorId,
+        actorType: actor.actorType,
+        actorName: actor.actorName,
         action: 'GUEST_COUNT_CHANGED',
         floorId: session.floor,
         tableId: session.primaryTable,
@@ -374,9 +373,9 @@ export const PUT = withAuth(async (request) => {
       // Audit Log for Release
       await OperationalAuditLog.create({
         restaurantId: request.restaurant,
-        actorId: request.user.id,
-        actorType: actorTypeFromRequest(request),
-        actorName: request.user.name || request.user.firstName,
+        actorId: actor.actorId,
+        actorType: actor.actorType,
+        actorName: actor.actorName,
         action: 'TABLE_RELEASED',
         floorId: session.floor,
         tableId: session.primaryTable,
@@ -387,9 +386,9 @@ export const PUT = withAuth(async (request) => {
       if (adminOverride && unpaidOrdersCount > 0) {
         await OperationalAuditLog.create({
           restaurantId: request.restaurant,
-          actorId: request.user.id,
+          actorId: actor.actorId,
           actorType: 'Admin',
-          actorName: request.user.name || request.user.firstName,
+          actorName: actor.actorName,
           action: 'ADMIN_OVERRIDE',
           floorId: session.floor,
           tableId: session.primaryTable,
@@ -465,9 +464,9 @@ export const PUT = withAuth(async (request) => {
       // Audit Log
       await OperationalAuditLog.create({
         restaurantId: request.restaurant,
-        actorId: request.user.id,
-        actorType: actorTypeFromRequest(request),
-        actorName: request.user.name || request.user.firstName,
+        actorId: actor.actorId,
+        actorType: actor.actorType,
+        actorName: actor.actorName,
         action: 'TABLE_TRANSFERRED',
         floorId: session.floor,
         tableId: session.primaryTable,
@@ -542,9 +541,9 @@ export const PUT = withAuth(async (request) => {
 
       await OperationalAuditLog.create({
         restaurantId: request.restaurant,
-        actorId: request.user.id,
-        actorType: actorTypeFromRequest(request),
-        actorName: request.user.name || request.user.firstName,
+        actorId: actor.actorId,
+        actorType: actor.actorType,
+        actorName: actor.actorName,
         action: 'TABLE_RECONFIGURED',
         floorId: session.floor,
         tableId: session.primaryTable,

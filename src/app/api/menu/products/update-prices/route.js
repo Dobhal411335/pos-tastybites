@@ -120,7 +120,6 @@ export const POST = withAuth(async (request) => {
               updatedAt: now,
             },
           },
-          timestamps: true,
         },
       });
     }

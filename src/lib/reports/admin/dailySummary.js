@@ -3,6 +3,10 @@ import PrintJob from "@/models/PrintJob";
 import EodReport from "@/models/EodReport";
 import OperationalAuditLog from "@/models/OperationalAuditLog";
 import EmployeeSession from "@/models/employee/EmployeeSession";
+import {
+  displayActorName,
+  resolveActorNamesByIds,
+} from "@/lib/orders/resolveOperationalActor";
 import { r2 } from "@/lib/eod/eodHelpers";
 import { DEFAULT_RESTAURANT_TIMEZONE } from "@/lib/restaurantTime";
 import {
@@ -284,7 +288,7 @@ export async function buildAdminDailySummary({ restaurantId, ...filters }) {
     })
       .sort({ timestamp: -1 })
       .limit(ACTIVITY_PREVIEW)
-      .select("actorName action timestamp orderId tableId reason newValue")
+      .select("actorId actorName action timestamp orderId tableId reason newValue")
       .lean(),
   ]);
 
@@ -381,11 +385,19 @@ export async function buildAdminDailySummary({ restaurantId, ...filters }) {
     });
   }
 
+  const actorNameById = await resolveActorNamesByIds(
+    (recentActivity || [])
+      .filter((doc) => !String(doc.actorName || "").trim() && doc.actorId)
+      .map((doc) => doc.actorId)
+  );
   const activityPeek = (recentActivity || []).map((doc) => ({
     id: String(doc._id),
     time: formatRestaurantTime(doc.timestamp, tz),
     date: formatRestaurantDate(doc.timestamp, tz),
-    actor: doc.actorName || "Unknown",
+    actor: displayActorName(
+      doc.actorName ||
+        (doc.actorId ? actorNameById.get(String(doc.actorId)) : null)
+    ),
     action: doc.action,
     reason: doc.reason || null,
   }));

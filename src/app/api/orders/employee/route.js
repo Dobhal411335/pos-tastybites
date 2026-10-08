@@ -8,6 +8,7 @@ import { sendError } from "@/utils/errorHandler";
 import { logger } from "@/utils/logger";
 import { getNextOrderNumber, getNextInvoiceNumber } from "@/utils/generateOrderNumber"; 
 import OperationalAuditLog from "@/models/OperationalAuditLog";
+import { resolveOperationalActor } from "@/lib/orders/resolveOperationalActor";
 import { createKotPrintJob, createBarReceiptPrintJob } from "@/lib/printing/printJobService";
 import { createNotification } from "@/lib/notifications/notificationService";
 import { getSocketServer } from "@/lib/socketServer";
@@ -705,11 +706,12 @@ export const POST = withAuth(async (request) => {
       if (global.io) global.io.to(`floor:${session.floor}`).emit('order:updated', { orderId: order._id, sessionId });
 
       // Audit Log
+      const actor = await resolveOperationalActor(request);
       await OperationalAuditLog.create({
         restaurantId: request.restaurant,
-        actorId: request.user.id,
-        actorType: request.user.role === 'Admin' || request.user.role === 'Super Admin' || request.user.role === 'Manager' ? 'Admin' : 'Employee',
-        actorName: request.user.name || request.user.firstName,
+        actorId: actor.actorId,
+        actorType: actor.actorType,
+        actorName: actor.actorName,
         action: 'ORDER_UPDATED',
         floorId: session.floor,
         tableId: session.primaryTable._id,
@@ -815,11 +817,12 @@ export const POST = withAuth(async (request) => {
       if (global.io) global.io.to(`floor:${session.floor}`).emit('order:created', { orderId: newOrder._id, sessionId });
 
       // Audit Log
+      const actor = await resolveOperationalActor(request);
       await OperationalAuditLog.create({
         restaurantId: request.restaurant,
-        actorId: request.user.id,
-        actorType: request.user.role === 'Admin' || request.user.role === 'Super Admin' || request.user.role === 'Manager' ? 'Admin' : 'Employee',
-        actorName: request.user.name || request.user.firstName,
+        actorId: actor.actorId,
+        actorType: actor.actorType,
+        actorName: actor.actorName,
         action: 'ORDER_CREATED',
         floorId: session.floor,
         tableId: session.primaryTable._id,
@@ -1044,11 +1047,12 @@ export const PATCH = withAuth(async (request) => {
       }
 
       try {
+        const actor = await resolveOperationalActor(request);
         await OperationalAuditLog.create({
           restaurantId,
-          actorId: employeeId,
-          actorType: "Employee",
-          actorName: request.user.name || request.user.firstName,
+          actorId: actor.actorId || employeeId,
+          actorType: actor.actorType,
+          actorName: actor.actorName,
           action: "ORDER_UPDATED",
           newValue: {
             status: "CONFIRMED",
@@ -1272,11 +1276,12 @@ export const PATCH = withAuth(async (request) => {
           sessionReleased = true;
 
           try {
+            const releaseActor = await resolveOperationalActor(request);
             await OperationalAuditLog.create({
               restaurantId,
-              actorId: employeeId,
-              actorType: "Employee",
-              actorName: request.user.name || request.user.firstName,
+              actorId: releaseActor.actorId || employeeId,
+              actorType: releaseActor.actorType,
+              actorName: releaseActor.actorName,
               action: "TABLE_RELEASED",
               floorId: session.floor,
               tableId: session.primaryTable,
@@ -1322,11 +1327,12 @@ export const PATCH = withAuth(async (request) => {
     }
 
     try {
+      const cancelActor = await resolveOperationalActor(request);
       await OperationalAuditLog.create({
         restaurantId,
-        actorId: employeeId,
-        actorType: "Employee",
-        actorName: request.user.name || request.user.firstName,
+        actorId: cancelActor.actorId || employeeId,
+        actorType: cancelActor.actorType,
+        actorName: cancelActor.actorName,
         action: "ORDER_CANCELLED",
         floorId: order.floor,
         tableId: order.table,

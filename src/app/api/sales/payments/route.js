@@ -5,6 +5,7 @@ import Employee from "@/models/employee/Employee";
 import Restaurant from "@/models/Restaurant";
 import Floor from "@/models/floor/Floor";
 import OperationalAuditLog from "@/models/OperationalAuditLog";
+import { resolveOperationalActor } from "@/lib/orders/resolveOperationalActor";
 import { sendSuccess } from "@/utils/apiResponse";
 import { sendError } from "@/utils/errorHandler";
 import { logger } from "@/utils/logger";
@@ -1664,11 +1665,12 @@ export const POST = withAuth(async (request) => {
         }
 
         // Audit Log
+        const actor = await resolveOperationalActor(request);
         await OperationalAuditLog.create({
           restaurantId: request.restaurant,
-          actorId: request.user.id,
-          actorType: request.user.role === "Admin" || request.user.role === "Super Admin" || request.user.role === "Manager" ? "Admin" : "Employee",
-          actorName: request.user.name || request.user.firstName,
+          actorId: actor.actorId,
+          actorType: actor.actorType,
+          actorName: actor.actorName,
           action: "PAYMENT_COMPLETED",
           floorId: session.floor,
           tableId: session.primaryTable,

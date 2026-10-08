@@ -1,5 +1,9 @@
 import OperationalAuditLog from "@/models/OperationalAuditLog";
 import {
+  displayActorName,
+  resolveActorNamesByIds,
+} from "@/lib/orders/resolveOperationalActor";
+import {
   dateRangeBounds,
   toObjectId,
 } from "@/lib/reports/financial/match";
@@ -119,12 +123,23 @@ export async function buildAdminActivity({ restaurantId, ...filters }) {
     actionCounts[row._id] = row.count;
   }
 
-  const rows = (facet?.rows || []).map((doc) => ({
+  const facetRows = facet?.rows || [];
+  const actorNameById = await resolveActorNamesByIds(
+    facetRows
+      .filter((doc) => !String(doc.actorName || "").trim() && doc.actorId)
+      .map((doc) => doc.actorId)
+  );
+
+  const rows = facetRows.map((doc) => ({
     id: String(doc._id),
     date: formatRestaurantDate(doc.timestamp, tz),
     time: formatRestaurantTime(doc.timestamp, tz),
     timestamp: doc.timestamp,
-    admin: doc.actorName?.trim() || "Name not recorded",
+    admin: displayActorName(
+      doc.actorName ||
+        (doc.actorId ? actorNameById.get(String(doc.actorId)) : null),
+      "Name not recorded"
+    ),
     actorType: doc.actorType || "—",
     action: doc.action,
     module: moduleForAction(doc.action),

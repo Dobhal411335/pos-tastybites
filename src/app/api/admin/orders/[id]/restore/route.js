@@ -1,29 +1,12 @@
 import { withAuth } from "@/utils/auth";
-import Employee from "@/models/employee/Employee";
 import { sendSuccess } from "@/utils/apiResponse";
 import { sendError } from "@/utils/errorHandler";
 import { logger } from "@/utils/logger";
 import { restoreOrder } from "@/lib/orders/orderLifecycle";
+import { resolveOperationalActor } from "@/lib/orders/resolveOperationalActor";
 
 async function resolveActor(request) {
-  const actorId = request.user?.id || request.employeeId;
-  let actorName = request.user?.name || request.user?.firstName || null;
-  if (!actorName && actorId) {
-    const emp = await Employee.findById(actorId)
-      .select("firstName lastName name")
-      .lean();
-    if (emp) {
-      actorName =
-        emp.name ||
-        [emp.firstName, emp.lastName].filter(Boolean).join(" ") ||
-        null;
-    }
-  }
-  return {
-    actorId,
-    actorType: "Admin",
-    actorName,
-  };
+  return resolveOperationalActor(request, { actorType: "Admin" });
 }
 
 export const POST = withAuth(async (request, { params }) => {
