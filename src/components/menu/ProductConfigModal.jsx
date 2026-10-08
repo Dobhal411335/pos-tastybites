@@ -245,15 +245,13 @@ export default function ProductConfigModal({ isOpen, onClose, product }) {
     });
   };
 
-  const toggleCustomDataChoice = (groupName, optionName, choice, multi) => {
+  const toggleCustomDataChoice = (groupName, optionName, choice) => {
     setCustomDataSelections((prev) => {
       const group = prev[groupName] || {};
       const current = group[optionName] || [];
-      const next = !multi
-        ? [choice]
-        : current.includes(choice)
-          ? current.filter((value) => value !== choice)
-          : [...current, choice];
+      const next = current.includes(choice)
+        ? current.filter((value) => value !== choice)
+        : [...current, choice];
       return {
         ...prev,
         [groupName]: { ...group, [optionName]: next },
@@ -548,7 +546,6 @@ export default function ProductConfigModal({ isOpen, onClose, product }) {
                       <AccordionContent className={accordionContentClass}>
                         <div className="space-y-4">
                           {group.subChoices.map((option) => {
-                            const multi = (option.choices || []).length > 2;
                             const selected =
                               customDataSelections[group.name]?.[option.name] ||
                               [];
@@ -560,34 +557,34 @@ export default function ProductConfigModal({ isOpen, onClose, product }) {
                                 <p className="text-[12px] font-bold uppercase tracking-wide text-zinc-500">
                                   {option.name}
                                 </p>
-                                <div className="grid gap-2 sm:grid-cols-2">
+                                <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                                   {(option.choices || []).map((choice) => {
                                     const checked = selected.includes(choice);
                                     return (
                                       <label
                                         key={`${group.name}-${option.name}-${choice}`}
                                         className={cn(
-                                          "flex cursor-pointer items-center gap-3 rounded-lg border p-3 text-sm font-semibold",
+                                          "flex cursor-pointer items-center rounded-lg border p-3 transition-colors",
                                           checked
-                                            ? "border-violet-500 bg-violet-50/40"
-                                            : "border-zinc-200",
+                                            ? "border-violet-500 bg-violet-50/30"
+                                            : "border-zinc-200 hover:border-violet-300",
                                         )}
                                       >
-                                        <input
-                                          type={multi ? "checkbox" : "radio"}
-                                          name={`custom-${group.name}-${option.name}`}
-                                          checked={checked}
-                                          onChange={() =>
-                                            toggleCustomDataChoice(
-                                              group.name,
-                                              option.name,
-                                              choice,
-                                              multi,
-                                            )
-                                          }
-                                          className="h-4 w-4 accent-violet-600"
-                                        />
-                                        {choice}
+                                        <div className="flex flex-1 items-center gap-3 text-[14px] font-bold text-zinc-800">
+                                          <input
+                                            type="checkbox"
+                                            checked={checked}
+                                            onChange={() =>
+                                              toggleCustomDataChoice(
+                                                group.name,
+                                                option.name,
+                                                choice,
+                                              )
+                                            }
+                                            className="h-4 w-4 accent-violet-500"
+                                          />
+                                          <span>{choice}</span>
+                                        </div>
                                       </label>
                                     );
                                   })}

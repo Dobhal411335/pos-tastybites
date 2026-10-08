@@ -29,20 +29,21 @@ import {
 } from "@/utils/productChoices";
 import { buildModifiedRequestRemark } from "@/utils/modifiedRequestRemark";
 
-function lineNote(item) {
+function lineNoteParts(item) {
   if (item.isOffer) {
-    return (
+    const offer =
       item.modifier ||
       [item.inclusions, item.choices, item.drinks].flat().filter(Boolean).join(", ") ||
-      "Offer"
-    );
+      "Offer";
+    return [offer];
   }
   const parts = [];
   if (item.size === "Extra" || item.selectedSize === "Extra") {
     if (item.parentProductName) parts.push(`Extra for ${item.parentProductName}`);
     else parts.push("Extra");
   } else if (item.selectedSize || item.size) {
-    parts.push(item.selectedSize || item.size);
+    const size = item.selectedSize || item.size;
+    if (!/^standard$/i.test(size)) parts.push(size);
   }
   if (item.selectedAddons?.length) parts.push(item.selectedAddons.join(", "));
   if (item.preparationStyle) parts.push(item.preparationStyle);
@@ -55,7 +56,7 @@ function lineNote(item) {
   for (const line of getAddonChoiceDetailLines(item)) {
     parts.push(`${line.label}: ${line.value}`);
   }
-  return parts.join(" · ") || "Standard";
+  return parts;
 }
 
 /**
@@ -360,9 +361,28 @@ export default function CartDrawer({ open = false, onOpenChange, mode = "drawer"
                     <h4 className="text-sm font-bold leading-snug text-[var(--customer-ink)]">
                       {item.name}
                     </h4>
-                    <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-[var(--customer-muted)]">
-                      {lineNote(item)}
-                    </p>
+                    {(() => {
+                      const parts = lineNoteParts(item);
+                      if (!parts.length) {
+                        return (
+                          <p className="mt-1 text-xs leading-relaxed text-[var(--customer-muted)]">
+                            Standard
+                          </p>
+                        );
+                      }
+                      return (
+                        <div className="mt-1 space-y-0.5">
+                          {parts.map((part, partIdx) => (
+                            <p
+                              key={`${item.cartKey}-note-${partIdx}`}
+                              className="text-xs leading-relaxed text-[var(--customer-muted)]"
+                            >
+                              {part}
+                            </p>
+                          ))}
+                        </div>
+                      );
+                    })()}
                     <span className="mt-1.5 inline-block text-xs font-bold tabular-nums text-primary">
                       ${(item.price * item.quantity).toFixed(2)}
                     </span>
@@ -978,8 +998,15 @@ function CheckoutFlowModal({
                       <div key={item.cartKey} className="flex justify-between gap-2">
                         <div className="min-w-0">
                           <span className="font-bold">{item.quantity}x</span> {item.name}
-                          <div className="line-clamp-2 pl-4 text-xs leading-relaxed text-[var(--customer-muted)]">
-                            {lineNote(item)}
+                          <div className="space-y-0.5 pl-4">
+                            {lineNoteParts(item).map((part, partIdx) => (
+                              <div
+                                key={`${item.cartKey}-sum-${partIdx}`}
+                                className="text-xs leading-relaxed text-[var(--customer-muted)]"
+                              >
+                                {part}
+                              </div>
+                            ))}
                           </div>
                           {item.notes ? (
                             <div className="mt-0.5 pl-4 text-xs font-medium italic text-amber-800">

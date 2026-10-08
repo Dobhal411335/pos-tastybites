@@ -323,7 +323,14 @@ export const POST = withAuth(async (request) => {
 
     const employeeId = request.user.id;
     const actor = await resolveOperationalActor(request);
-    const actorId = actor.actorId || employeeId;
+    const actorId = actor.actorId;
+    if (!actorId) {
+      return sendError(
+        new Error("Unauthorized"),
+        "Unable to resolve employee identity for audit logging",
+        401,
+      );
+    }
     const orderSource = ["WALK_IN", "STAFF", "POS", "ONLINE"].includes(data.source)
       ? data.source
       : "POS";
@@ -1000,7 +1007,14 @@ export const PATCH = withAuth(async (request) => {
     const employeeId = request.user.id;
     const restaurantId = request.restaurant;
     const actor = await resolveOperationalActor(request);
-    const actorId = actor.actorId || employeeId;
+    const actorId = actor.actorId;
+    if (!actorId) {
+      return sendError(
+        new Error("Unauthorized"),
+        "Unable to resolve employee identity for audit logging",
+        401,
+      );
+    }
     const body = await request.json();
     const { orderId, action, reason } = body || {};
 

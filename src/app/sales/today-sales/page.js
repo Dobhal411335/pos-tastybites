@@ -34,7 +34,10 @@ import {
   getOrderPartyLabel,
   shouldShowTable,
 } from "@/utils/orderDisplay";
-import { getItemLineTotal, normalizeCustomExtras } from "@/utils/productChoices";
+import {
+  getItemLineTotal,
+  getReceiptModifierLines,
+} from "@/utils/productChoices";
 import {
   formatMergedSeatLabel,
   formatSeatLabel,
@@ -1378,7 +1381,9 @@ export default function EmployeeSalesPage() {
                   Order Items ({selectedOrder.items?.length || 0})
                 </h3>
                 <div className="space-y-3.5">
-                  {selectedOrder.items?.map((item, idx) => (
+                  {selectedOrder.items?.map((item, idx) => {
+                    const modifierLines = getReceiptModifierLines(item);
+                    return (
                     <div key={idx} className="flex justify-between items-start text-sm">
                       <div className="flex gap-2.5 min-w-0">
                         <span className="text-sm font-black text-zinc-900 shrink-0">{item.qty}x</span>
@@ -1387,34 +1392,34 @@ export default function EmployeeSalesPage() {
                           {item.size && item.size !== "Standard" && (
                             <span className="text-xs text-zinc-600 font-semibold block">Variant: {item.size}</span>
                           )}
-                          {item.preparationStyle && (
-                            <span className="text-xs text-zinc-600 font-semibold italic block">
-                              {item.preparationStyle}
-                            </span>
-                          )}
-                          {item.options
-                            ?.filter((opt) => {
-                              const value = String(opt || "");
-                              if (value.toLowerCase().startsWith("style:")) return false;
-                              if (
-                                item.preparationStyle &&
-                                value.toLowerCase() === String(item.preparationStyle).toLowerCase()
-                              ) {
-                                return false;
-                              }
-                              return true;
-                            })
-                            .map((opt, i) => (
-                              <span key={i} className="text-xs text-zinc-500 font-medium block italic">
-                                + {opt}
-                              </span>
-                            ))}
-                          {normalizeCustomExtras(item.customExtras).map((extra, i) => (
+                          {modifierLines.map((line, lineIdx) => (
                             <span
-                              key={`custom-${extra.name}-${i}`}
-                              className="text-xs text-zinc-500 font-medium block italic"
+                              key={`${line.kind}-${lineIdx}`}
+                              className={`text-xs mt-0.5 font-semibold block ${
+                                line.kind === "addon-choice-item" ||
+                                line.kind === "choice-item" ||
+                                line.kind === "custom-data-item"
+                                  ? "pl-3 text-sky-800"
+                                  : line.kind === "custom-data-option"
+                                    ? "pl-2 text-violet-800"
+                                    : line.kind === "custom-data"
+                                      ? "text-violet-900"
+                                      : line.kind === "addon-choice" ||
+                                          line.kind === "choice"
+                                        ? "text-sky-900"
+                                        : line.kind === "custom-extra"
+                                          ? "text-zinc-700"
+                                          : "text-zinc-600 italic"
+                              }`}
                             >
-                              + {extra.name} (+${Number(extra.price).toFixed(2)})
+                              {line.text}
+                              {line.kind === "custom-extra" &&
+                              line.price != null ? (
+                                <span className="text-zinc-500 font-bold">
+                                  {" "}
+                                  (+${Number(line.price).toFixed(2)})
+                                </span>
+                              ) : null}
                             </span>
                           ))}
                           {item.notes ? (
@@ -1428,7 +1433,8 @@ export default function EmployeeSalesPage() {
                         ${getItemLineTotal(item).toFixed(2)}
                       </span>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
 
