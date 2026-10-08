@@ -999,14 +999,18 @@ function CheckoutFlowModal({
                         <div className="min-w-0">
                           <span className="font-bold">{item.quantity}x</span> {item.name}
                           <div className="space-y-0.5 pl-4">
-                            {lineNoteParts(item).map((part, partIdx) => (
-                              <div
-                                key={`${item.cartKey}-sum-${partIdx}`}
-                                className="text-xs leading-relaxed text-[var(--customer-muted)]"
-                              >
-                                {part}
-                              </div>
-                            ))}
+                            {(() => {
+                              const parts = lineNoteParts(item);
+                              const lines = parts.length ? parts : ["Standard"];
+                              return lines.map((part, partIdx) => (
+                                <div
+                                  key={`${item.cartKey}-sum-${partIdx}`}
+                                  className="text-xs leading-relaxed text-[var(--customer-muted)]"
+                                >
+                                  {part}
+                                </div>
+                              ));
+                            })()}
                           </div>
                           {item.notes ? (
                             <div className="mt-0.5 pl-4 text-xs font-medium italic text-amber-800">
