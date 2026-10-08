@@ -994,7 +994,8 @@ function CheckoutFlowModal({
                           <span className="font-bold">{item.quantity}x</span> {item.name}
                           {(() => {
                             const parts = lineNoteParts(item);
-                            if (!parts.length) return null;
+                            const notes = String(item.notes || "").trim();
+                            if (!parts.length && !notes) return null;
                             return (
                               <div className="space-y-0.5 pl-4">
                                 {parts.map((part, partIdx) => (
@@ -1005,14 +1006,14 @@ function CheckoutFlowModal({
                                     {part}
                                   </div>
                                 ))}
+                                {notes ? (
+                                  <div className="mt-0.5 text-xs font-medium italic text-amber-800">
+                                    Remark: {notes}
+                                  </div>
+                                ) : null}
                               </div>
                             );
                           })()}
-                          {item.notes ? (
-                            <div className="mt-0.5 pl-4 text-xs font-medium italic text-amber-800">
-                              Remark: {item.notes}
-                            </div>
-                          ) : null}
                         </div>
                         <span className="shrink-0 font-semibold tabular-nums">
                           ${(item.price * item.quantity).toFixed(2)}
