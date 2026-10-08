@@ -13,6 +13,7 @@ import { computeOrderServiceCharge } from "@/lib/orders/serviceCharge";
 import { filterOfferSelections } from "@/utils/offerDetails";
 import {
   filterProductChoiceSelections,
+  filterCustomDataSelections,
   normalizeChoiceOptions,
   normalizeCustomExtras,
   customExtrasUnitTotal,
@@ -216,6 +217,7 @@ export async function repricePosCartItems({
     let choices = [];
     let drinks = [];
     let choiceSelections = [];
+    let customDataSelections = [];
     let addonChoiceSelections = [];
     let customExtras = [];
 
@@ -307,6 +309,10 @@ export async function repricePosCartItems({
           item.choiceSelections,
           product.choiceOptions,
         );
+        customDataSelections = filterCustomDataSelections(
+          item.customDataSelections,
+          product.customData,
+        );
         customExtras = normalizeCustomExtras(item.customExtras);
         // Reject incomplete client rows (name without price / invalid)
         if (Array.isArray(item.customExtras)) {
@@ -369,6 +375,7 @@ export async function repricePosCartItems({
       inclusions,
       choices,
       choiceSelections,
+      customDataSelections,
       addonChoiceSelections,
       drinks,
       notes: String(item.notes || "").trim(),

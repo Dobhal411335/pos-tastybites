@@ -16,8 +16,15 @@ function productNeedsConfig(product) {
   const variants = product.variants || [];
   const addons = product.addons || [];
   const choices = product.choiceOptions || [];
+  const customData = product.customData || [];
   const prep = product.preparationStyles || [];
-  return variants.length > 1 || addons.length > 0 || choices.length > 0 || prep.length > 0;
+  return (
+    variants.length > 1 ||
+    addons.length > 0 ||
+    choices.length > 0 ||
+    customData.length > 0 ||
+    prep.length > 0
+  );
 }
 
 export default function ProductCard({ product }) {
@@ -51,6 +58,7 @@ export default function ProductCard({ product }) {
         selectedAddons: [],
         options: [],
         choiceSelections: [],
+        customDataSelections: [],
         category: product.category,
         categoryName: product.categoryName,
         productType: product.productType,

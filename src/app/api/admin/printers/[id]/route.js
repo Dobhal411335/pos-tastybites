@@ -1,6 +1,7 @@
 import { withAuth } from "@/utils/auth";
 import PrinterConfig from "@/models/PrinterConfig";
 import { normalizePrinterPayload } from "@/lib/printing/printerConfigNormalize";
+import { cancelQueuedJobsForPrinter } from "@/lib/printing/printJobService";
 import { sendSuccess } from "@/utils/apiResponse";
 import { sendError } from "@/utils/errorHandler";
 import { logger } from "@/utils/logger";
@@ -35,6 +36,13 @@ export const PATCH = withAuth(async (request, { params }) => {
       return sendError(new Error("Validation"), normalized.error, 400);
     }
 
+    const before = await PrinterConfig.findOne({
+      _id: id,
+      restaurant: request.restaurant,
+    })
+      .select("enabled")
+      .lean();
+
     const printer = await PrinterConfig.findOneAndUpdate(
       { _id: id, restaurant: request.restaurant },
       normalized.data,
@@ -43,6 +51,21 @@ export const PATCH = withAuth(async (request, { params }) => {
 
     if (!printer) {
       return sendError(new Error("Not Found"), "Printer not found", 404);
+    }
+
+    const wasEnabled = before?.enabled !== false;
+    const nowDisabled = printer.enabled === false;
+    if (wasEnabled && nowDisabled) {
+      try {
+        await cancelQueuedJobsForPrinter(printer._id, {
+          restaurantId: request.restaurant,
+        });
+      } catch (cancelErr) {
+        logger.error(
+          "Failed to cancel queued jobs after disabling printer",
+          cancelErr,
+        );
+      }
     }
 
     return sendSuccess(printer, "Printer updated");
@@ -69,6 +92,17 @@ export const DELETE = withAuth(async (request, { params }) => {
 
     if (!printer) {
       return sendError(new Error("Not Found"), "Printer not found", 404);
+    }
+
+    try {
+      await cancelQueuedJobsForPrinter(printer._id, {
+        restaurantId: request.restaurant,
+      });
+    } catch (cancelErr) {
+      logger.error(
+        "Failed to cancel queued jobs after deleting printer",
+        cancelErr,
+      );
     }
 
     return sendSuccess(printer, "Printer deleted");

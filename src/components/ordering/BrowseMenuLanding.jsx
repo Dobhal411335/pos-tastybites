@@ -18,7 +18,13 @@ function productNeedsConfig(product) {
   const variants = product.variants || [];
   const addons = product.addons || [];
   const choices = product.choiceOptions || [];
-  return variants.length > 1 || addons.length > 0 || choices.length > 0;
+  const customData = product.customData || [];
+  return (
+    variants.length > 1 ||
+    addons.length > 0 ||
+    choices.length > 0 ||
+    customData.length > 0
+  );
 }
 
 export default function BrowseMenuLanding() {
@@ -59,6 +65,7 @@ export default function BrowseMenuLanding() {
           selectedAddons: [],
           options: [],
           choiceSelections: [],
+          customDataSelections: [],
           category: product.category,
           categoryName: product.categoryName,
           productType: product.productType,

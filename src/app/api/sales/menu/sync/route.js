@@ -4,6 +4,10 @@ import { sendError } from '@/utils/errorHandler';
 import { logger } from '@/utils/logger';
 import { buildMenuSyncPayload } from '@/lib/menu/menuSync';
 
+/** Never cache menu sync — prices must always be fresh for POS tablets. */
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 /**
  * GET /api/sales/menu/sync
  * Single restaurant-scoped menu payload for Sales POS (full or incremental).
@@ -27,7 +31,12 @@ export const GET = withAuth(async (request) => {
 
     return sendSuccess(
       payload,
-      payload.fullSync ? 'Full menu sync' : 'Incremental menu sync'
+      payload.fullSync ? 'Full menu sync' : 'Incremental menu sync',
+      200,
+      {
+        'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+        Pragma: 'no-cache',
+      },
     );
   } catch (error) {
     logger.error('Menu sync failed', error);

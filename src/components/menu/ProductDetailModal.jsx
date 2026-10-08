@@ -71,6 +71,7 @@ export default function ProductDetailModal({ isOpen, onClose, product, onAdd }) 
               </p>
 
               {(product.addons?.length > 0 ||
+                product.customData?.length > 0 ||
                 product.choiceOptions?.length > 0 ||
                 product.preparationStyles?.length > 0) && (
                 <div className="space-y-2 rounded-xl bg-[var(--customer-surface-low)] p-4">
@@ -83,6 +84,9 @@ export default function ProductDetailModal({ isOpen, onClose, product, onAdd }) 
                     ) : null}
                     {product.addons?.length > 0 ? (
                       <div>• {product.addons.length} add-on(s)</div>
+                    ) : null}
+                    {product.customData?.length > 0 ? (
+                      <div>• Custom data options</div>
                     ) : null}
                     {product.choiceOptions?.length > 0 ? (
                       <div>• Choice options</div>

@@ -26,6 +26,8 @@ import {
 } from "@/components/ui/table";
 import { ReportPager } from "@/components/reports/inventory/reportUi";
 import OrderDetailBody, {
+  OrderSourceBadge,
+  PAYMENT_STATUS_BADGE,
   STATUS_BADGE,
 } from "@/components/reports/OrderDetailBody";
 import {
@@ -37,6 +39,24 @@ import {
   TH_CLASS,
 } from "./adminReportUi";
 import { money } from "./useAdminReport";
+
+function PaymentBadge({ label }) {
+  const tone =
+    label === "Cash"
+      ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+      : label === "Card"
+        ? "border-sky-200 bg-sky-50 text-sky-800"
+        : label === "Gift Card"
+          ? "border-violet-200 bg-violet-50 text-violet-800"
+          : label === "Split"
+            ? "border-amber-200 bg-amber-50 text-amber-900"
+            : "border-zinc-200 bg-zinc-50 text-zinc-700";
+  return (
+    <Badge variant="outline" className={`text-[12px] font-medium ${tone}`}>
+      {label || "—"}
+    </Badge>
+  );
+}
 
 export default function TodayOrderSection({ data, loading, onPage }) {
   const [orderId, setOrderId] = useState(null);
@@ -108,7 +128,7 @@ export default function TodayOrderSection({ data, loading, onPage }) {
                 <TableHead className={TH_CLASS}>Time</TableHead>
                 <TableHead className={TH_CLASS}>Table</TableHead>
                 <TableHead className={TH_CLASS}>Server</TableHead>
-                <TableHead className={TH_CLASS}>Source</TableHead>
+                <TableHead className={TH_CLASS}>Type</TableHead>
                 <TableHead className={`${TH_CLASS} text-right`}>Total</TableHead>
                 <TableHead className={TH_CLASS}>Payment</TableHead>
                 <TableHead className={TH_CLASS}>Status</TableHead>
@@ -136,14 +156,40 @@ export default function TodayOrderSection({ data, loading, onPage }) {
                   </TableCell>
                   <TableCell className={TD_CLASS}>{row.table}</TableCell>
                   <TableCell className={TD_CLASS}>{row.employee}</TableCell>
-                  <TableCell className={TD_CLASS}>{row.source || "—"}</TableCell>
+                  <TableCell className={TD_CLASS}>
+                    <OrderSourceBadge
+                      source={row.source}
+                      order={{
+                        source: row.source,
+                        sourceLabel: row.sourceLabel,
+                        orderTypeLabel: row.orderTypeLabel,
+                      }}
+                    />
+                  </TableCell>
                   <TableCell
                     className={`${TD_CLASS} text-right tabular-nums font-medium`}
                   >
                     {money(row.total)}
                   </TableCell>
                   <TableCell className={TD_CLASS}>
-                    {row.paymentStatus || "—"}
+                    <div className="flex flex-col items-start gap-1">
+                      <PaymentBadge
+                        label={row.paymentLabel || row.paymentMethod}
+                      />
+                      {row.paymentStatus && row.paymentStatus !== "PAID" ? (
+                        <Badge
+                          variant="outline"
+                          className={`text-[10px] font-medium ${
+                            PAYMENT_STATUS_BADGE[row.paymentStatus] || ""
+                          }`}
+                        >
+                          {row.paymentStatus === "PARTIAL" &&
+                          row.remainingDue > 0
+                            ? `PARTIAL · ${money(row.remainingDue)} due`
+                            : row.paymentStatus}
+                        </Badge>
+                      ) : null}
+                    </div>
                   </TableCell>
                   <TableCell className={TD_CLASS}>
                     <Badge

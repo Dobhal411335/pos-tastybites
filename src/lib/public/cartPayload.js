@@ -30,6 +30,9 @@ export function cartItemsToRepricePayload(cartItems = []) {
     const choiceSelections = Array.isArray(item.choiceSelections)
       ? item.choiceSelections
       : [];
+    const customDataSelections = Array.isArray(item.customDataSelections)
+      ? item.customDataSelections
+      : [];
     const addonChoiceSelections = Array.isArray(item.addonChoiceSelections)
       ? item.addonChoiceSelections
       : [];
@@ -43,6 +46,7 @@ export function cartItemsToRepricePayload(cartItems = []) {
       sizes: isExtra ? [] : sizes,
       options,
       choiceSelections,
+      customDataSelections,
       addonChoiceSelections,
       preparationStyle: item.preparationStyle || null,
       isOffer: Boolean(item.isOffer),

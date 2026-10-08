@@ -42,8 +42,12 @@ import {
 } from "@/components/ui/table";
 import { ReportPager } from "@/components/reports/inventory/reportUi";
 import OrderDetailBody, {
+  OrderSourceBadge,
+  PAYMENT_STATUS_BADGE,
   STATUS_BADGE,
+  formatDateTime,
 } from "@/components/reports/OrderDetailBody";
+import { CASH_ONLY_DELETE_ERROR } from "@/lib/orders/orderDeleteEligibility";
 import AdminReportFilters from "./AdminReportFilters";
 import {
   AdminEmptyState,
@@ -370,6 +374,7 @@ export default function OrderManagementSection() {
                     <TableHead className={TH_CLASS}>Date</TableHead>
                     <TableHead className={TH_CLASS}>Table</TableHead>
                     <TableHead className={TH_CLASS}>Server</TableHead>
+                    <TableHead className={TH_CLASS}>Type</TableHead>
                     <TableHead className={`${TH_CLASS} text-right`}>
                       Total
                     </TableHead>
@@ -433,13 +438,46 @@ export default function OrderManagementSection() {
                         {row.server}
                       </TableCell>
                       <TableCell
+                        className={`${TD_CLASS} cursor-pointer`}
+                        onClick={() => openOrder(row.id)}
+                      >
+                        <OrderSourceBadge
+                          source={row.source}
+                          order={{
+                            source: row.source,
+                            sourceLabel: row.sourceLabel,
+                            orderTypeLabel: row.orderTypeLabel,
+                          }}
+                        />
+                      </TableCell>
+                      <TableCell
                         className={`${TD_CLASS} text-right tabular-nums font-medium cursor-pointer`}
                         onClick={() => openOrder(row.id)}
                       >
                         {money(row.total)}
                       </TableCell>
                       <TableCell className={TD_CLASS}>
-                        <PaymentBadge label={row.paymentLabel} />
+                        <div className="flex flex-col items-start gap-1">
+                          <PaymentBadge label={row.paymentLabel} />
+                          {row.paymentStatus === "PARTIAL" ? (
+                            <Badge
+                              variant="outline"
+                              className={`text-[10px] font-medium ${
+                                PAYMENT_STATUS_BADGE.PARTIAL || ""
+                              }`}
+                            >
+                              PARTIAL
+                              {row.remainingDue > 0
+                                ? ` · ${money(row.remainingDue)} due`
+                                : ""}
+                            </Badge>
+                          ) : null}
+                          {row.hasSplits && row.splitCount > 1 ? (
+                            <span className="text-[10px] text-zinc-500">
+                              {row.splitCount} payers
+                            </span>
+                          ) : null}
+                        </div>
                       </TableCell>
                       {isDeletedView ? (
                         <>
@@ -485,15 +523,15 @@ export default function OrderManagementSection() {
                               )}
                               title={
                                 row.canDelete
-                                  ? "Delete cash-only order"
-                                  : "Only cash-only orders can be deleted"
+                                  ? row.hasSplits
+                                    ? "Delete cash-only split order"
+                                    : "Delete cash-only order"
+                                  : "Only cash-only orders (incl. cash splits) can be deleted"
                               }
                               onClick={(e) => {
                                 e.stopPropagation();
                                 if (!row.canDelete) {
-                                  setActionError(
-                                    "Orders paid by Card, Gift Card, or split tenders that include Card/Gift Card cannot be deleted. Only cash-only orders can be deleted."
-                                  );
+                                  setActionError(CASH_ONLY_DELETE_ERROR);
                                   return;
                                 }
                                 setConfirm({ type: "soft-delete", row });
@@ -582,22 +620,21 @@ export default function OrderManagementSection() {
             </div>
           ) : orderDetail ? (
             <div className="space-y-4 mt-2">
-              {orderDetail.paymentMethod || orderDetail.cashAmount != null ? (
-                <div className="rounded-lg border border-orange-100 bg-orange-50/60 p-3 text-sm">
-                  <div className="font-medium text-zinc-800 mb-1">
-                    Payment breakdown
-                  </div>
-                  <div className="text-zinc-600 space-y-0.5">
-                    <div>Method: {orderDetail.paymentMethod || "—"}</div>
-                    {orderDetail.cashAmount != null ? (
-                      <div>Cash: {money(orderDetail.cashAmount)}</div>
+              {orderDetail.isActive === false ? (
+                <div className="rounded-lg border border-zinc-300 bg-zinc-50 px-3 py-3 text-sm">
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-zinc-600">
+                    Soft-deleted
+                  </p>
+                  <div className="mt-1.5 space-y-0.5 text-zinc-700">
+                    {orderDetail.deletedAt ? (
+                      <div>Deleted at: {formatDateTime(orderDetail.deletedAt)}</div>
                     ) : null}
-                    {orderDetail.cardAmount != null ? (
-                      <div>Card: {money(orderDetail.cardAmount)}</div>
+                    {orderDetail.deletionReason ? (
+                      <div>Reason: {orderDetail.deletionReason}</div>
                     ) : null}
-                    {orderDetail.giftcardUsedAmount ? (
+                    {orderDetail.restoredAt ? (
                       <div>
-                        Gift Card: {money(orderDetail.giftcardUsedAmount)}
+                        Previously restored: {formatDateTime(orderDetail.restoredAt)}
                       </div>
                     ) : null}
                   </div>

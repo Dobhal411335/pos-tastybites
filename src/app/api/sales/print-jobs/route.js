@@ -23,13 +23,14 @@ import { businessDateBounds, isValidBusinessDate } from "@/lib/eod/eodHelpers";
  *   - printType: ALL | RECEIPT | KOT | BAR_RECEIPT
  *   - printerTarget: ALL | RECEIPT | KITCHEN | COUNTER
  *   - printerId: string (id of specific PrinterConfig)
+ *   - orderId: Mongo ObjectId — jobs for one order (defaults date to "all")
  *   - search / orderNumber: string (matches orderNumber)
  *   - date: YYYY-MM-DD (restaurant-local calendar day) | "all"
  *   - startDate, endDate: ISO / YYYY-MM-DD (used when date is omitted)
  *   - page: number (default 1)
  *   - limit: number (default 50, max 100)
  *
- * Default: restaurant-local today when no date / startDate / endDate is sent.
+ * Default: restaurant-local today when no date / startDate / endDate / orderId is sent.
  */
 export const GET = withAuth(async (request) => {
   try {
@@ -44,6 +45,7 @@ export const GET = withAuth(async (request) => {
     const printType = searchParams.get("printType");
     const printerTarget = searchParams.get("printerTarget");
     const printerId = searchParams.get("printerId");
+    const orderIdParam = searchParams.get("orderId");
     const search = searchParams.get("search") || searchParams.get("orderNumber");
     const isReprint = searchParams.get("reprint");
     const dateParam = searchParams.get("date");
@@ -62,8 +64,16 @@ export const GET = withAuth(async (request) => {
     if (printerTarget && printerTarget !== "ALL") query.printerTarget = printerTarget;
     if (printerId && printerId !== "ALL") query.printerId = printerId;
 
+    let orderIdFilter = null;
+    if (orderIdParam && mongoose.Types.ObjectId.isValid(String(orderIdParam))) {
+      orderIdFilter = new mongoose.Types.ObjectId(String(orderIdParam));
+      query.orderId = orderIdFilter;
+    }
+
     let resolvedDate = null;
     const tz = DEFAULT_RESTAURANT_TIMEZONE;
+    const hasExplicitDate =
+      Boolean(dateParam) || Boolean(startDate) || Boolean(endDate);
 
     if (dateParam && String(dateParam).toLowerCase() === "all") {
       // No createdAt filter — all days
@@ -97,6 +107,9 @@ export const GET = withAuth(async (request) => {
       }
       if (!Object.keys(query.createdAt).length) delete query.createdAt;
       resolvedDate = startDate || endDate || null;
+    } else if (orderIdFilter && !hasExplicitDate) {
+      // Order history: all days for that order
+      resolvedDate = "all";
     } else {
       // Default: restaurant-local today
       const today = todayRestaurantISO(tz);

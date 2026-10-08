@@ -52,6 +52,7 @@ import {
   formatHoursLabel,
   formatTimeTz,
   money,
+  OrderSourceBadge,
   timelinePercents,
 } from "./employeeFormat";
 
@@ -614,6 +615,11 @@ function CancelledItemsTable({ rows, onSelectOrder, timezone, emptyLabel, maxOrd
                     <div className="text-xs text-zinc-900">
                       {order.items[0].item}
                       {order.items[0].qty > 1 ? ` ×${order.items[0].qty}` : ""}
+                      {order.items[0].seatLabel ? (
+                        <span className="ml-1.5 text-[10px] font-semibold uppercase tracking-wide text-violet-700">
+                          {order.items[0].seatLabel}
+                        </span>
+                      ) : null}
                     </div>
                   ) : (
                     <div className="space-y-1">
@@ -625,6 +631,11 @@ function CancelledItemsTable({ rows, onSelectOrder, timezone, emptyLabel, maxOrd
                           <span className="leading-snug">
                             {it.item}
                             {it.qty > 1 ? ` ×${it.qty}` : ""}
+                            {it.seatLabel ? (
+                              <span className="ml-1.5 text-[10px] font-semibold uppercase tracking-wide text-violet-700">
+                                {it.seatLabel}
+                              </span>
+                            ) : null}
                           </span>
                           <span className="text-zinc-500 tabular-nums text-[11px] shrink-0 font-medium">
                             -{money(it.value)}
@@ -1129,7 +1140,7 @@ function DayDetailBody({
 
       <div>
         <h4 className="text-[12px] font-semibold uppercase tracking-wider text-black mb-2">
-          Orders
+          # Orders
         </h4>
         {orders.length === 0 ? (
           <p className="text-sm text-zinc-500 bg-zinc-50 rounded-xl px-3 py-4 text-center">
@@ -1145,22 +1156,28 @@ function DayDetailBody({
                 className="w-full px-3 py-2.5 flex flex-col gap-1 bg-white border-b border-zinc-300 last:border-b-0 text-left hover:bg-orange-200 hover:cursor-pointer"
               >
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-sm font-medium text-zinc-900">{row.orderNumber}</span>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-sm font-medium text-zinc-900">
+                     # {row.orderNumber}
+                    </span>
+                    <OrderSourceBadge order={row} />
+                  </div>
                   <span
-                    className={`text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded ${
+                    className={`text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded shrink-0 ${
                       STATUS_BADGE[row.status] || "bg-zinc-100 text-zinc-600"
                     }`}
                   >
                     {row.status}
                   </span>
                 </div>
-                <div className="flex items-center justify-between text-zinc-500">
-                  <span className="text-xs">
+                <div className="flex items-center justify-between text-zinc-500 gap-2">
+                  <span className="text-xs min-w-0 truncate">
                     {formatTimeTz(row.createdAt, timezone)}
                     {row.tableNo && row.tableNo !== "—" ? ` · Table ${row.tableNo}` : ""}
+                    {row.seatsLabel ? ` · ${row.seatsLabel}` : ""}
+                    {row.isSplit ? " · Split" : ""}
                   </span>
-                  
-                  <span className="text-sm font-medium tabular-nums text-zinc-900">
+                  <span className="text-sm font-medium tabular-nums text-zinc-900 shrink-0">
                     {money(row.totalAmount)}
                   </span>
                 </div>

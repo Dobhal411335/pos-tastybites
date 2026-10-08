@@ -173,7 +173,7 @@ export default function CheckoutPage() {
         /* ignore */
       }
       clearCart();
-      toast.success("Order placed! Pay at the restaurant when you pick up.");
+      // toast.success("Order placed! Pay at the restaurant when you pick up.");
       router.push(
         `/thank-you/${encodeURIComponent(orderNumber)}?phone=${encodeURIComponent(phone)}`,
       );

@@ -53,6 +53,25 @@ function normalizeChoiceOptions(raw) {
     .filter((g) => g.name);
 }
 
+function normalizeCustomData(raw) {
+  if (!Array.isArray(raw)) return undefined;
+  return raw
+    .map((group) => ({
+      name: String(group?.name ?? '').trim(),
+      subChoices: Array.isArray(group?.subChoices)
+        ? group.subChoices
+            .map((option) => ({
+              name: String(option?.name ?? '').trim(),
+              choices: Array.isArray(option?.choices)
+                ? option.choices.map((s) => String(s)).filter(Boolean)
+                : [],
+            }))
+            .filter((option) => option.name && option.choices.length > 0)
+        : [],
+    }))
+    .filter((g) => g.name && g.subChoices.length > 0);
+}
+
 function normalizeAddon(raw) {
   return {
     id: toId(raw._id ?? raw.id),
@@ -116,6 +135,7 @@ function normalizeProduct(raw) {
     price,
     variants,
     addons,
+    customData: normalizeCustomData(raw.customData),
     choiceOptions: normalizeChoiceOptions(raw.choiceOptions),
     preparationStyles: Array.isArray(raw.preparationStyles)
       ? raw.preparationStyles.map((s) => String(s))
@@ -246,8 +266,6 @@ function mapDeletions(rows) {
  * @param {string|null} sinceIso - ISO timestamp of last successful sync
  */
 export async function buildMenuSyncPayload(restaurantId, sinceIso) {
-  const serverTime = new Date();
-  const version = serverTime.toISOString();
   const sinceDate = sinceIso ? new Date(sinceIso) : null;
   const sinceValid =
     sinceDate instanceof Date && !Number.isNaN(sinceDate.getTime());
@@ -263,7 +281,7 @@ export async function buildMenuSyncPayload(restaurantId, sinceIso) {
           .lean(),
         Product.find({ ...restaurantFilter, status: 'Active' })
           .select(
-            'name productCode productType status category price taxes taxData salesImage variants addons choiceOptions preparationStyles updatedAt'
+            'name productCode productType status category price taxes taxData salesImage variants addons customData choiceOptions preparationStyles updatedAt'
           )
           .populate('category', 'name status')
           .populate('taxes', 'name type value status')
@@ -291,6 +309,8 @@ export async function buildMenuSyncPayload(restaurantId, sinceIso) {
 
     // Offers may use boolean status
     const activeOffers = offers.filter((o) => isActiveStatus(o.status));
+    // Watermark AFTER queries so concurrent admin edits aren't skipped next sync
+    const version = new Date().toISOString();
 
     return {
       version,
@@ -306,9 +326,11 @@ export async function buildMenuSyncPayload(restaurantId, sinceIso) {
     };
   }
 
+  // Overlap the watermark slightly so same-ms / in-flight price edits aren't missed
+  const sinceWithSkew = new Date(sinceDate.getTime() - 2000);
   const updatedFilter = {
     ...restaurantFilter,
-    updatedAt: { $gt: sinceDate },
+    updatedAt: { $gt: sinceWithSkew },
   };
 
   const [
@@ -333,11 +355,13 @@ export async function buildMenuSyncPayload(restaurantId, sinceIso) {
     Tax.find(updatedFilter).lean(),
     MenuDeletion.find({
       restaurant: restaurantId,
-      deletedAt: { $gt: sinceDate },
+      deletedAt: { $gt: sinceWithSkew },
     })
       .select('entityType entityId')
       .lean(),
   ]);
+
+  const version = new Date().toISOString();
 
   return {
     version,

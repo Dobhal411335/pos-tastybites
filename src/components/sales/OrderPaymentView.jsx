@@ -3052,8 +3052,7 @@ function SplitGroupEditor({
         placeholder="Payer name (prints as Party)"
         value={row.name}
         onChange={(e) => onUpdate({ name: e.target.value })}
-        readOnly={splitMode === "by_seat" && !row.mergedFrom}
-        className="h-11 rounded-xl border-zinc-200 bg-white text-sm font-semibold read-only:bg-zinc-100"
+        className="h-11 rounded-xl border-zinc-200 bg-white text-sm font-semibold"
       />
 
       <div className="relative">

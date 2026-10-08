@@ -18,7 +18,9 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import OrderDetailBody from "@/components/reports/OrderDetailBody";
+import OrderDetailBody, {
+  OrderSourceBadge,
+} from "@/components/reports/OrderDetailBody";
 import { PALETTE } from "@/utils/paletteeColor";
 import {
   dash,
@@ -30,6 +32,17 @@ import {
   money,
   STATUS_BADGE,
 } from "./guestFormat";
+
+function paymentMixLabel(row) {
+  const parts = [];
+  if (Number(row.cash) > 0) parts.push(`Cash ${money(row.cash)}`);
+  if (Number(row.card) > 0) parts.push(`Card ${money(row.card)}`);
+  if (Number(row.giftCard) > 0 || Number(row.giftcardUsedAmount) > 0) {
+    parts.push(`Gift ${money(row.giftCard || row.giftcardUsedAmount)}`);
+  }
+  if (parts.length) return parts.join(" · ");
+  return row.paymentLabel || row.paymentMethod || "—";
+}
 
 function GuestProfileSkeleton() {
   return (
@@ -306,26 +319,52 @@ function GuestProfileBody({
               <button
                 key={row.orderId}
                 type="button"
-                onClick={() => onSelectOrder(row.orderId)}
-                className="w-full px-3 py-2.5 flex flex-col gap-1 bg-white border-b border-zinc-100 text-left hover:bg-orange-200 hover:cursor-pointer"
+                onClick={() => onSelectOrder(row.orderId, row)}
+                className="w-full px-3 py-2.5 flex flex-col gap-1.5 bg-white border-b border-zinc-100 text-left hover:bg-orange-200 hover:cursor-pointer"
               >
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-sm font-medium text-zinc-900">{row.orderNumber}</span>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-sm font-medium text-zinc-900 shrink-0">
+                      {row.orderNumber}
+                    </span>
+                    <OrderSourceBadge order={row} />
+                  </div>
                   <span
-                    className={`text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded ${
+                    className={`text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded shrink-0 ${
                       STATUS_BADGE[row.status] || "bg-zinc-100 text-zinc-600"
                     }`}
                   >
                     {row.status}
                   </span>
                 </div>
-                <div className="flex items-center justify-between text-zinc-500">
-                  <span className="text-xs">
+                <div className="flex items-center justify-between text-zinc-500 gap-2">
+                  <span className="text-xs truncate">
                     {formatDateTime(row.createdAt)}
                     {row.tableNo && row.tableNo !== "—" ? ` • Table ${row.tableNo}` : ""}
+                    {row.paymentStatus ? ` • ${row.paymentStatus}` : ""}
                   </span>
-                  <span className="text-sm font-medium tabular-nums text-zinc-900">
+                  <span className="text-sm font-medium tabular-nums text-zinc-900 shrink-0">
                     {money(row.totalAmount)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between gap-2 text-[11px] text-zinc-500">
+                  <span className="truncate">{paymentMixLabel(row)}</span>
+                  <span className="shrink-0 tabular-nums">
+                    {[
+                      Number(row.tipAmount) > 0
+                        ? `Tip ${money(row.tipAmount)}${
+                            row.tipMethod ? ` (${row.tipMethod})` : ""
+                          }`
+                        : null,
+                      Number(row.discountTotal) > 0
+                        ? `Disc ${money(row.discountTotal)}`
+                        : null,
+                      Number(row.serviceChargeTotal) > 0
+                        ? row.serviceChargeName || "Svc"
+                        : null,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ") || `${row.itemCount || 0} items`}
                   </span>
                 </div>
               </button>
@@ -372,10 +411,15 @@ export default function GuestProfileSheet({
                 Back
               </Button>
               <div>
-                <SheetTitle className="text-base">
-                  {orderDetail?.orderNumber || "Order"}
-                </SheetTitle>
-                <SheetDescription>Order details</SheetDescription>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <SheetTitle className="text-base truncate">
+                      {orderDetail?.orderNumber || "Order"}
+                    </SheetTitle>
+                    {orderDetail ? <OrderSourceBadge order={orderDetail} /> : null}
+                  </div>
+                  <SheetDescription>Order details</SheetDescription>
+                </div>
               </div>
             </div>
           ) : (

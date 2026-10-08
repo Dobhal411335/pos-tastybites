@@ -12,6 +12,17 @@ const ChoiceOptionSchema = new mongoose.Schema({
   subChoices: [{ type: String, trim: true }],
 });
 
+/** Nested custom fields: group → option → many inner choice names */
+const CustomDataSubChoiceSchema = new mongoose.Schema({
+  name: { type: String, required: true, trim: true },
+  choices: [{ type: String, trim: true }],
+});
+
+const CustomDataSchema = new mongoose.Schema({
+  name: { type: String, required: true, trim: true },
+  subChoices: { type: [CustomDataSubChoiceSchema], default: [] },
+});
+
 const AddonSchema = new mongoose.Schema({
   name: { type: String, required: true },
   price: { type: Number, required: true },
@@ -49,6 +60,7 @@ const ProductSchema = new mongoose.Schema(
     salesImage: { url: { type: String }, key: { type: String } },
     variants: [VariantSchema],
     addons: [AddonSchema],
+    customData: [CustomDataSchema],
     choiceOptions: [ChoiceOptionSchema],
     preparationStyles: [{ type: String }],
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee' },

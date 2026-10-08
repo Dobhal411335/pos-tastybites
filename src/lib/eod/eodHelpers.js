@@ -111,8 +111,263 @@ export function normalizePaymentTypeLabel(method, giftcardUsedAmount = 0) {
 }
 
 /**
- * Resolve cash / card / gift tender amounts for a paid order.
+ * Classify tip tender as Cash | Card | Gift Card | Other.
+ * Prefers order.tipMethod, then split tipMethods, then paymentMethod / tenders.
  */
+export function tipPaymentBucket(order) {
+  const tip = Number(order?.tipAmount) || 0;
+  if (tip <= 0) return null;
+
+  const raw = String(order?.tipMethod || "").trim().toLowerCase();
+  if (raw.includes("cash") && !raw.includes("card") && !raw.includes("gift")) {
+    return "Cash";
+  }
+  if (raw.includes("gift")) return "Gift Card";
+  if (raw.includes("card") && !raw.includes("cash")) return "Card";
+  // Mixed tip methods (e.g. "Cash + Card") → non-cash unless purely cash
+  if (raw.includes("cash") && (raw.includes("card") || raw.includes("gift"))) {
+    return "Other";
+  }
+
+  const splits = Array.isArray(order?.paymentSplits) ? order.paymentSplits : [];
+  if (splits.length > 0) {
+    let cashTips = 0;
+    let nonCashTips = 0;
+    for (const split of splits) {
+      const splitTip = r2(split?.tipAmount);
+      if (splitTip <= 0) continue;
+      const sm = String(split?.tipMethod || "").trim().toLowerCase();
+      if (sm.includes("cash") && !sm.includes("card") && !sm.includes("gift")) {
+        cashTips = r2(cashTips + splitTip);
+      } else if (sm) {
+        nonCashTips = r2(nonCashTips + splitTip);
+      } else if (isCashPaymentMethod(split?.method)) {
+        cashTips = r2(cashTips + splitTip);
+      } else {
+        nonCashTips = r2(nonCashTips + splitTip);
+      }
+    }
+    const attributed = r2(cashTips + nonCashTips);
+    if (attributed > 0) {
+      if (nonCashTips <= 0) return "Cash";
+      if (cashTips <= 0) return "Card";
+      return "Other";
+    }
+  }
+
+  const method = String(order?.paymentMethod || "").toLowerCase();
+  if (method.includes("gift")) return "Gift Card";
+  if (/\bcash\b/.test(method) && !method.includes("card")) return "Cash";
+  if (method.includes("card") && !/^split\b/i.test(method)) return "Card";
+
+  try {
+    const tenders = resolveTenders(order);
+    if (tenders.cash > 0 && tenders.card <= 0 && tenders.giftCard <= 0) {
+      return "Cash";
+    }
+    if (tenders.card > 0 && tenders.cash <= 0) return "Card";
+    if (tenders.giftCard > 0 && tenders.cash <= 0 && tenders.card <= 0) {
+      return "Gift Card";
+    }
+  } catch {
+    /* ignore */
+  }
+  return "Other";
+}
+
+/**
+ * Cash tip amount for an order (remainder is non-cash).
+ * When splits have per-row tipMethod, sum cash tip rows; otherwise all-or-nothing via tipPaymentBucket.
+ */
+export function resolveCashTipAmount(order) {
+  const tip = r2(order?.tipAmount);
+  if (tip <= 0) return 0;
+
+  const splits = Array.isArray(order?.paymentSplits) ? order.paymentSplits : [];
+  if (splits.length > 0) {
+    let cashFromSplits = 0;
+    let attributed = 0;
+    for (const split of splits) {
+      const splitTip = r2(split?.tipAmount);
+      if (splitTip <= 0) continue;
+      attributed = r2(attributed + splitTip);
+      const sm = String(split?.tipMethod || "").trim().toLowerCase();
+      if (sm.includes("cash") && !sm.includes("card") && !sm.includes("gift")) {
+        cashFromSplits = r2(cashFromSplits + splitTip);
+      } else if (!sm && isCashPaymentMethod(split?.method)) {
+        cashFromSplits = r2(cashFromSplits + splitTip);
+      }
+    }
+    if (attributed > 0) {
+      // Scale if split tips don't sum to order tipAmount
+      if (Math.abs(attributed - tip) > 0.02 && attributed > 0) {
+        return r2((cashFromSplits / attributed) * tip);
+      }
+      return cashFromSplits;
+    }
+  }
+
+  return tipPaymentBucket(order) === "Cash" ? tip : 0;
+}
+
+/**
+ * Resolve cash/card/gift for a single paymentSplits row.
+ */
+export function resolveSplitTenders(split) {
+  const amount = r2(split?.amount);
+  const tip = r2(split?.tipAmount);
+  const method = String(split?.method || "").trim();
+  const gift =
+    split?.giftAmount != null
+      ? r2(split.giftAmount)
+      : split?.giftcardUsedAmount != null
+        ? r2(split.giftcardUsedAmount)
+        : 0;
+
+  let cash = split?.cashAmount != null ? r2(split.cashAmount) : null;
+  let card = split?.cardAmount != null ? r2(split.cardAmount) : null;
+
+  if (cash == null && card == null) {
+    const hasCash = /cash/i.test(method);
+    const hasCard = /card/i.test(method) && !/gift/i.test(method);
+    const duePlusTip = r2(amount + tip);
+    if (hasCash && hasCard) {
+      cash = 0;
+      card = r2(Math.max(0, duePlusTip - gift));
+    } else if (hasCash && !hasCard) {
+      cash = r2(Math.max(0, duePlusTip - gift));
+      card = 0;
+    } else if (gift > 0 || /gift/i.test(method)) {
+      cash = 0;
+      card = 0;
+    } else {
+      card = r2(Math.max(0, duePlusTip - gift));
+      cash = 0;
+    }
+  } else {
+    cash = cash ?? 0;
+    card = card ?? 0;
+  }
+
+  return { cash: r2(cash), card: r2(card), giftCard: r2(gift), tip };
+}
+
+/**
+ * Payment-by-type rows for one order. Uses paymentSplits when present.
+ * Returns [{ paymentType, paymentCount, tips, paymentTotal }].
+ */
+export function paymentTypeContributions(order) {
+  const splits = Array.isArray(order?.paymentSplits) ? order.paymentSplits : [];
+  if (splits.length > 0) {
+    const byType = new Map();
+    for (const split of splits) {
+      const tenders = resolveSplitTenders(split);
+      const methodLabel =
+        split.cardType && /card/i.test(String(split.method || ""))
+          ? `Card - ${split.cardType}`
+          : split.method || "";
+      const giftForLabel =
+        tenders.giftCard > 0 && tenders.cash <= 0 && tenders.card <= 0
+          ? tenders.giftCard
+          : 0;
+      const typeLabel = normalizePaymentTypeLabel(methodLabel, giftForLabel);
+
+      // Mixed cash+card on one split → attribute each tender separately
+      if (tenders.cash > 0 && tenders.card > 0) {
+        const cashLabel = "Cash";
+        const cardLabel = normalizePaymentTypeLabel(
+          split.cardType ? `Card - ${split.cardType}` : "Card",
+          0
+        );
+        const cashTip =
+          String(split.tipMethod || "")
+            .toLowerCase()
+            .includes("cash") &&
+          !String(split.tipMethod || "")
+            .toLowerCase()
+            .includes("card")
+            ? tenders.tip
+            : 0;
+        const cardTip = r2(tenders.tip - cashTip);
+
+        for (const [label, total, tipAmt] of [
+          [cashLabel, tenders.cash, cashTip],
+          [cardLabel, tenders.card, cardTip],
+        ]) {
+          if (!byType.has(label)) {
+            byType.set(label, {
+              paymentType: label,
+              paymentCount: 0,
+              tips: 0,
+              paymentTotal: 0,
+            });
+          }
+          const row = byType.get(label);
+          row.paymentCount += 1;
+          row.tips = r2(row.tips + tipAmt);
+          row.paymentTotal = r2(row.paymentTotal + total);
+        }
+        if (tenders.giftCard > 0) {
+          const giftLabel = "Gift Card";
+          if (!byType.has(giftLabel)) {
+            byType.set(giftLabel, {
+              paymentType: giftLabel,
+              paymentCount: 0,
+              tips: 0,
+              paymentTotal: 0,
+            });
+          }
+          const row = byType.get(giftLabel);
+          row.paymentCount += 1;
+          row.paymentTotal = r2(row.paymentTotal + tenders.giftCard);
+        }
+        continue;
+      }
+
+      const paymentTotal = r2(
+        tenders.cash + tenders.card + tenders.giftCard
+      );
+      if (!byType.has(typeLabel)) {
+        byType.set(typeLabel, {
+          paymentType: typeLabel,
+          paymentCount: 0,
+          tips: 0,
+          paymentTotal: 0,
+        });
+      }
+      const row = byType.get(typeLabel);
+      row.paymentCount += 1;
+      row.tips = r2(row.tips + tenders.tip);
+      row.paymentTotal = r2(
+        row.paymentTotal +
+          (paymentTotal > 0 ? paymentTotal : r2(amount + tenders.tip))
+      );
+    }
+    return [...byType.values()];
+  }
+
+  const tenders = resolveTenders(order);
+  const tip = tenders.tip;
+  const typeLabel = normalizePaymentTypeLabel(
+    order.paymentMethod,
+    tenders.giftCard
+  );
+  const paymentTotalForOrder = r2(
+    tenders.cash + tenders.card + tenders.giftCard
+  );
+  return [
+    {
+      paymentType: typeLabel,
+      paymentCount: 1,
+      tips: tip,
+      paymentTotal:
+        paymentTotalForOrder > 0
+          ? paymentTotalForOrder
+          : r2((Number(order.totalAmount) || 0) + tip),
+    },
+  ];
+}
+
 /**
  * Resolve cash/card/gift tenders from an Order document.
  * Aggregation mirror: TENDER_STAGES in @/lib/reports/financial/metrics — keep both in sync.

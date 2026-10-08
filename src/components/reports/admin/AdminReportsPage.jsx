@@ -43,7 +43,7 @@ export const ADMIN_SECTIONS = [
     label: "Order Management",
     icon: FolderKanban,
     subtitle:
-      "Filter, review, soft-delete cash-only orders, and restore deleted orders.",
+      "Filter, review, soft-delete cash-only orders (including cash splits), and restore deleted orders.",
     href: "/admin/reports/admin/order-management",
   },
   {

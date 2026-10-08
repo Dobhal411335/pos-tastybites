@@ -95,6 +95,7 @@ export const POST = withAuth(async (request) => {
 
     const ops = [];
     let skippedCount = 0;
+    const now = new Date();
 
     for (const product of products) {
       const variants = Array.isArray(product.variants) ? product.variants : [];
@@ -115,15 +116,18 @@ export const POST = withAuth(async (request) => {
             $set: {
               variants: nextVariants,
               updatedBy: request.user.id,
+              // Explicit watermark so POS incremental sync (`updatedAt > since`) picks this up
+              updatedAt: now,
             },
           },
+          timestamps: true,
         },
       });
     }
 
     let updatedCount = 0;
     if (ops.length > 0) {
-      const result = await Product.bulkWrite(ops);
+      const result = await Product.bulkWrite(ops, { timestamps: true });
       updatedCount = result.modifiedCount ?? ops.length;
     }
 

@@ -6,7 +6,11 @@ import {
   getReceiptModifierLines,
   getItemLineTotal,
 } from "@/utils/productChoices";
-import { shouldShowTable, formatTableNumbersWithFloor } from "@/utils/orderDisplay";
+import {
+  shouldShowTable,
+  formatTableNumbersWithFloor,
+  getOrderTypeLabel,
+} from "@/utils/orderDisplay";
 import {
   filterItemsBySeat,
   filterItemsBySeats,
@@ -302,11 +306,14 @@ const CustomerReceipt = ({
                 key={`${line.kind}-${lineIdx}`}
                 className={
                   line.kind === "addon-choice-item" ||
-                  line.kind === "choice-item"
+                  line.kind === "choice-item" ||
+                  line.kind === "custom-data-item"
                     ? "pl-2 font-semibold"
-                    : line.kind === "custom-extra"
-                      ? "flex justify-between gap-2"
-                      : ""
+                    : line.kind === "custom-data-option"
+                      ? "pl-1 font-semibold"
+                      : line.kind === "custom-extra"
+                        ? "flex justify-between gap-2"
+                        : ""
                 }
               >
                 <span>{line.text}</span>
@@ -362,6 +369,10 @@ const CustomerReceipt = ({
             <span className="receipt-bold">{invoiceNumber || "—"}</span>
           </span>
         </div>
+        <div>
+          <span className="text-zinc-500">Order type:</span>{" "}
+          <span className="receipt-bold">{getOrderTypeLabel(order)}</span>
+        </div>
         <div className="flex justify-between gap-2">
           <span>
             <span className="text-zinc-500">Server:</span>{" "}
@@ -385,7 +396,9 @@ const CustomerReceipt = ({
         {(partyLabel || !shouldShowTable(order)) && (
           <div>
             <span className="text-zinc-500">Party:</span>{" "}
-            <span className="receipt-bold">{partyLabel || "Talk Away"}</span>
+            <span className="receipt-bold">
+              {partyLabel || getOrderTypeLabel(order)}
+            </span>
           </div>
         )}
         <div>

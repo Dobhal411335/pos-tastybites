@@ -39,9 +39,39 @@ import { getItemLineTotal } from "@/utils/productChoices";
 import {
   filterItemsBySeat,
   filterItemsBySeats,
+  formatMergedSeatLabel,
+  formatSeatLabel,
   proportionalOrderTotalsForItems,
   resolveSplitReceiptSeatFilter,
 } from "@/lib/orders/seatHelpers";
+
+function printJobSeatLabel(metadata, seatFilter) {
+  if (seatFilter?.filter) {
+    if (
+      Array.isArray(seatFilter.seatNumbers) &&
+      seatFilter.seatNumbers.length > 1
+    ) {
+      return formatMergedSeatLabel(seatFilter.seatNumbers);
+    }
+    // Shared table-bucket slips already show the table number — skip "Table" seat.
+    if (seatFilter.seatNumber == null) return null;
+    return formatSeatLabel(seatFilter.seatNumber);
+  }
+  if (metadata?.filterReceiptBySeat || metadata?.splitSeatNumber != null) {
+    if (
+      Array.isArray(metadata.splitSeatNumbers) &&
+      metadata.splitSeatNumbers.length > 1
+    ) {
+      return formatMergedSeatLabel(metadata.splitSeatNumbers);
+    }
+    if (metadata.splitSeatNumber == null && metadata.filterReceiptBySeat) {
+      return null;
+    }
+    if (metadata.splitSeatNumber == null) return null;
+    return formatSeatLabel(metadata.splitSeatNumber);
+  }
+  return null;
+}
 
 const STATUS_STYLES = {
   QUEUED: "bg-amber-100 text-amber-800 border-amber-200",
@@ -223,6 +253,12 @@ export default function PrintJobDetailPage() {
   const orderNumber = job.metadata?.orderNumber || order?.orderNumber || "—";
   const printer = job.printerId;
   const seatFilter = resolveSplitReceiptSeatFilter(job.metadata, order);
+  const seatLabel = printJobSeatLabel(job.metadata, seatFilter);
+  const tableNoDisplay = job.metadata?.tableNo
+    ? joinTableNumbers([job.metadata.tableNo])
+    : order?.tableNo
+      ? joinTableNumbers([order.tableNo])
+      : null;
   const summaryItems =
     order && seatFilter.filter
       ? Array.isArray(seatFilter.seatNumbers) && seatFilter.seatNumbers.length > 1
@@ -463,12 +499,26 @@ export default function PrintJobDetailPage() {
                   </dd>
                 </div>
 
-                {job.metadata?.tableNo && (
-                  <div className="flex justify-between items-center">
-                    <dt className="text-zinc-500">Table</dt>
-                    <dd className="text-zinc-800">
-                      Table {joinTableNumbers([job.metadata.tableNo])}
-                      {job.metadata?.floorName && ` (${job.metadata.floorName})`}
+                {(tableNoDisplay || seatLabel) && (
+                  <div className="flex justify-between items-center gap-3">
+                    <dt className="text-zinc-500 shrink-0">
+                      {seatLabel ? "Table / Seat" : "Table"}
+                    </dt>
+                    <dd className="text-right">
+                      <span className="inline-flex max-w-full flex-wrap items-center justify-end gap-1 rounded-md border border-sky-200 bg-sky-50 px-2 py-0.5 text-xs font-bold text-sky-900">
+                        {tableNoDisplay ? (
+                          <span>Table {tableNoDisplay}</span>
+                        ) : null}
+                        {tableNoDisplay && seatLabel ? (
+                          <span className="font-semibold text-sky-400">·</span>
+                        ) : null}
+                        {seatLabel ? <span>{seatLabel}</span> : null}
+                      </span>
+                      {job.metadata?.floorName ? (
+                        <span className="mt-0.5 block text-[11px] font-normal text-zinc-500">
+                          {job.metadata.floorName}
+                        </span>
+                      ) : null}
                     </dd>
                   </div>
                 )}

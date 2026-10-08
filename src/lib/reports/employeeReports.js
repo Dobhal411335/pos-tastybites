@@ -20,12 +20,26 @@ import {
   normalizePaymentTypeLabel,
   r2,
   resolveTenders,
+  tipPaymentBucket,
   todayBusinessDate,
 } from "@/lib/eod/eodHelpers";
+import { ACTIVE_ORDER_FILTER } from "@/lib/orders/activeOrderFilter";
+import {
+  formatMergedSeatLabel,
+  formatSeatLabel,
+  getOrderPaidAmount,
+  getOrderRemainingDue,
+  groupItemsBySeat,
+  normalizeSeatNumbersList,
+} from "@/lib/orders/seatHelpers";
 import {
   isRevenueOrder,
   matchesPaymentMethod,
 } from "@/lib/reports/guestDirectory";
+import {
+  getOrderSourceLabel,
+  getOrderTypeLabel,
+} from "@/utils/orderDisplay";
 import { getItemLineTotal } from "@/utils/productChoices";
 
 const MINUTES_PER_HOUR = 60;
@@ -70,21 +84,37 @@ const ORDER_SELECT = [
   "createdAt",
   "partyName",
   "guestName",
+  "guestCount",
   "tableNo",
+  "source",
+  "staffOrderReason",
+  "specialNote",
   "items.name",
   "items.qty",
   "items.price",
+  "items.size",
+  "items.productCode",
+  "items.customExtras",
+  "items.seatNumber",
+  "items.notes",
+  "items.isOffer",
   "subTotal",
   "discountTotal",
+  "discountCode",
+  "discountPercent",
   "taxTotal",
   "serviceChargeTotal",
+  "serviceChargeName",
   "tipAmount",
   "tipMethod",
   "totalAmount",
   "paymentMethod",
   "cashAmount",
   "cardAmount",
+  "giftcardCode",
   "giftcardUsedAmount",
+  "paymentSplits",
+  "releasedSeats",
   "status",
   "paymentStatus",
   "processedBy",
@@ -102,6 +132,7 @@ const SUMMARY_ORDER_SELECT = [
   "cashAmount",
   "cardAmount",
   "giftcardUsedAmount",
+  "paymentSplits",
   "subTotal",
   "discountTotal",
   "taxTotal",
@@ -110,6 +141,7 @@ const SUMMARY_ORDER_SELECT = [
   "tipMethod",
   "totalAmount",
   "tableNo",
+  "source",
 ].join(" ");
 
 function toObjectId(value) {
@@ -335,28 +367,84 @@ function tipShare(poolTips, tipPercent) {
   return r2((Number(poolTips) || 0) * ((Number(tipPercent) || 0) / 100));
 }
 
-function tipPaymentBucket(order) {
-  const tip = Number(order.tipAmount) || 0;
-  if (tip <= 0) return null;
-  const raw = String(order.tipMethod || "").trim().toLowerCase();
-  if (raw.includes("cash")) return "Cash";
-  if (raw.includes("gift")) return "Gift Card";
-  if (raw.includes("card")) return "Card";
+function employeeOrderTypeLabel(order) {
+  const source = String(order?.source || "POS").toUpperCase();
+  return (
+    getOrderTypeLabel({ ...order, source }) ||
+    getOrderSourceLabel(source) ||
+    source
+  );
+}
 
-  const method = String(order.paymentMethod || "").toLowerCase();
-  if (method.includes("gift")) return "Gift Card";
-  if (/\bcash\b/.test(method) && !method.includes("card")) return "Cash";
-  if (method.includes("card")) return "Card";
+function shapePaymentSplits(splits) {
+  return (Array.isArray(splits) ? splits : []).map((split) => {
+    const seatNumbers = normalizeSeatNumbersList(split);
+    const giftAmount =
+      split?.giftAmount != null
+        ? r2(split.giftAmount)
+        : split?.giftcardUsedAmount != null
+          ? r2(split.giftcardUsedAmount)
+          : null;
+    const seatsLabel = seatLabelForSplit(split);
+    return {
+      name: split?.name || "Payer",
+      amount: r2(split?.amount),
+      method: split?.method || null,
+      cardType: split?.cardType || null,
+      tipAmount: r2(split?.tipAmount),
+      tipMethod: split?.tipMethod || null,
+      cashAmount: split?.cashAmount != null ? r2(split.cashAmount) : null,
+      cardAmount: split?.cardAmount != null ? r2(split.cardAmount) : null,
+      giftAmount,
+      seatNumber: split?.seatNumber ?? null,
+      seatNumbers: seatNumbers.length ? seatNumbers : null,
+      seatLabel: seatsLabel,
+      seatsLabel,
+      paidAt: split?.paidAt || null,
+    };
+  });
+}
 
-  try {
-    const tenders = resolveTenders(order);
-    if (tenders.cash > 0 && tenders.card <= 0 && tenders.giftCard <= 0) return "Cash";
-    if (tenders.card > 0 && tenders.cash <= 0) return "Card";
-    if (tenders.giftCard > 0 && tenders.cash <= 0 && tenders.card <= 0) return "Gift Card";
-  } catch {
-    /* ignore */
+function seatLabelForSplit(split) {
+  const seats = normalizeSeatNumbersList(split);
+  if (seats.length > 0) return formatMergedSeatLabel(seats);
+  if (split?.seatNumber != null) return formatMergedSeatLabel([split.seatNumber]);
+  return null;
+}
+
+function seatSummaryFromOrder(order) {
+  const groups = groupItemsBySeat(order?.items || []);
+  if (groups.length > 0 && groups.some((g) => g.seatNumber != null)) {
+    return {
+      seatsLabel: formatMergedSeatLabel(groups.map((g) => g.seatNumber)),
+      seatCount: groups.length,
+      hasSeatOrders: true,
+    };
   }
-  return "Other";
+
+  const splitSeatLabels = [];
+  for (const split of Array.isArray(order?.paymentSplits) ? order.paymentSplits : []) {
+    const label = seatLabelForSplit(split);
+    if (label) splitSeatLabels.push(label);
+  }
+  if (splitSeatLabels.length > 0) {
+    return {
+      seatsLabel: [...new Set(splitSeatLabels)].join(" · "),
+      seatCount: splitSeatLabels.length,
+      hasSeatOrders: true,
+    };
+  }
+
+  const released = Array.isArray(order?.releasedSeats) ? order.releasedSeats : [];
+  if (released.length > 0) {
+    return {
+      seatsLabel: formatMergedSeatLabel(released),
+      seatCount: released.length,
+      hasSeatOrders: true,
+    };
+  }
+
+  return { seatsLabel: null, seatCount: 0, hasSeatOrders: false };
 }
 
 function resolveReceiveOwnTips(id, hours, emp, filterEmployees) {
@@ -491,7 +579,7 @@ function orderDateMatch(rid, dateFrom, dateTo) {
   const { end } = businessDateBounds(dateTo);
   return {
     restaurantId: rid,
-    isActive: { $ne: false },
+    ...ACTIVE_ORDER_FILTER,
     createdAt: { $gte: start, $lt: end },
   };
 }
@@ -849,6 +937,17 @@ function mapSession(session) {
 
 function mapOrderRow(order, nameById) {
   const items = itemSummary(order.items);
+  const paymentSplits = shapePaymentSplits(order.paymentSplits);
+  const seats = seatSummaryFromOrder(order);
+  const source = String(order.source || "POS").toUpperCase();
+  const orderTypeLabel = employeeOrderTypeLabel(order);
+  let tenders = { cash: 0, card: 0, giftCard: 0, tip: 0 };
+  try {
+    tenders = resolveTenders(order);
+  } catch {
+    /* ignore */
+  }
+
   return {
     orderId: String(order._id),
     orderNumber: order.orderNumber,
@@ -860,20 +959,50 @@ function mapOrderRow(order, nameById) {
       : "Unassigned",
     tableNo: order.tableNo || "",
     guest: order.partyName || order.guestName || "Takeaway",
+    guestCount: order.guestCount ?? null,
+    source,
+    sourceLabel: getOrderSourceLabel(source),
+    orderTypeLabel,
     itemCount: items.itemCount,
     itemSummary: items.itemSummary,
     subTotal: r2(order.subTotal),
     discountTotal: r2(order.discountTotal),
+    discountCode: order.discountCode || null,
+    discountPercent: order.discountPercent ?? null,
     taxTotal: r2(order.taxTotal),
     serviceChargeTotal: r2(order.serviceChargeTotal),
+    serviceChargeName: order.serviceChargeName || null,
     tipAmount: r2(order.tipAmount),
     tipMethod: order.tipMethod || null,
     tipPaymentMethod: tipPaymentBucket(order),
     totalAmount: r2(order.totalAmount),
     paymentMethod: order.paymentMethod || null,
     paymentLabel: paymentLabel(order),
+    cashAmount: order.cashAmount != null ? r2(order.cashAmount) : null,
+    cardAmount: order.cardAmount != null ? r2(order.cardAmount) : null,
+    giftcardCode: order.giftcardCode || null,
+    giftcardUsedAmount: r2(order.giftcardUsedAmount),
+    cash: tenders.cash,
+    card: tenders.card,
+    giftCard: tenders.giftCard,
+    paymentSplits,
+    isSplit: paymentSplits.length > 0,
+    splitCount: paymentSplits.length,
+    splitLabel:
+      paymentSplits.length > 0
+        ? paymentSplits.map((split) => split.name).filter(Boolean).join(", ") ||
+          `${paymentSplits.length} payers`
+        : null,
+    seatsLabel: seats.seatsLabel,
+    seatCount: seats.seatCount,
+    hasSeatOrders: seats.hasSeatOrders,
+    releasedSeats: Array.isArray(order.releasedSeats) ? order.releasedSeats : [],
+    paidAmount: getOrderPaidAmount(order.paymentSplits),
+    remainingDue: getOrderRemainingDue(order),
     status: order.status,
     paymentStatus: order.paymentStatus,
+    staffOrderReason: order.staffOrderReason || null,
+    specialNote: order.specialNote || null,
     waiveReason: order.waiveReason || null,
     waivedBy: order.waivedBy ? String(order.waivedBy) : null,
     waivedAt: order.waivedAt || null,
@@ -900,12 +1029,15 @@ function cancelledItemsFromOrders(orders) {
       continue;
     }
     for (const item of items) {
+      const seatNumber = item.seatNumber ?? null;
       rows.push({
         orderId: String(order._id),
         orderNumber: order.orderNumber,
         item: item.name || "Item",
         qty: Number(item.qty) || 1,
         value: r2(getItemLineTotal(item)),
+        seatNumber,
+        seatLabel: seatNumber != null ? formatSeatLabel(seatNumber) : null,
         status: order.status,
         waiveReason: order.waiveReason || null,
         createdAt: order.createdAt,

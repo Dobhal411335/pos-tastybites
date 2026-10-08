@@ -46,6 +46,22 @@ function mapChoiceOptions(choiceOptions = []) {
   }));
 }
 
+function mapCustomData(customData = []) {
+  return (Array.isArray(customData) ? customData : [])
+    .map((group) => ({
+      name: String(group?.name || "").trim(),
+      subChoices: (Array.isArray(group?.subChoices) ? group.subChoices : [])
+        .map((option) => ({
+          name: String(option?.name || "").trim(),
+          choices: (Array.isArray(option?.choices) ? option.choices : [])
+            .map((value) => String(value || "").trim())
+            .filter(Boolean),
+        }))
+        .filter((option) => option.name && option.choices.length > 0),
+    }))
+    .filter((group) => group.name && group.subChoices.length > 0);
+}
+
 export function displayBasePrice(product) {
   const variants = activeVariants(product.variants);
   if (variants.length === 0) return 0;
@@ -66,6 +82,7 @@ export function mapProductForPublic(product, categoryMap = new Map()) {
   const variants = activeVariants(product.variants);
   const addons = activeAddons(product.addons);
   const choiceOptions = mapChoiceOptions(product.choiceOptions);
+  const customData = mapCustomData(product.customData);
   const imageUrl = product.image?.url || "";
 
   return {
@@ -98,11 +115,13 @@ export function mapProductForPublic(product, categoryMap = new Map()) {
       choiceOptions: a.choiceOptions,
       ingredients: a.ingredients || [],
     })),
+    customData,
     choiceOptions,
     preparationStyles: product.preparationStyles || [],
     hasModifiers:
       variants.length > 1 ||
       addons.length > 0 ||
+      customData.length > 0 ||
       choiceOptions.length > 0 ||
       (product.preparationStyles || []).length > 0,
   };

@@ -715,10 +715,31 @@ export async function retryPrintJob(jobId, { runNow = false, simulateFailure = f
     floorId
   );
 
-  // Notify hardware agents (print-bridge / Electron) — same event as create
-  const printerConfig = job.printerId
-    ? await PrinterConfig.findById(job.printerId).lean()
-    : await resolvePrinterConfig(job.restaurantId, job.printerTarget);
+  // Re-resolve only enabled printers — never re-emit a disabled config's
+  // systemPrinterName / connection fields (agents previously printed anyway).
+  let printerConfig = null;
+  if (job.printerId) {
+    printerConfig = await PrinterConfig.findOne({
+      _id: job.printerId,
+      restaurant: job.restaurantId,
+      enabled: true,
+    }).lean();
+  }
+  if (!printerConfig) {
+    printerConfig = await resolvePrinterConfig(
+      job.restaurantId,
+      job.printerTarget,
+    );
+  }
+  if (printerConfig && String(job.printerId || "") !== String(printerConfig._id)) {
+    job.printerId = printerConfig._id;
+    await job.save();
+  }
+  if (!printerConfig) {
+    logger.info(
+      `PrintJob retry ${jobId}: no enabled printer — requeued without printer payload`,
+    );
+  }
   emitPrintEvent(
     "NEW_PRINT_JOB",
     job.restaurantId,
@@ -731,6 +752,52 @@ export async function retryPrintJob(jobId, { runNow = false, simulateFailure = f
   }
 
   return { job, result: { success: true, message: "Requeued" } };
+}
+
+/**
+ * Cancel all QUEUED jobs bound to a printer (e.g. when it is disabled).
+ * Returns the number of jobs cancelled.
+ */
+export async function cancelQueuedJobsForPrinter(
+  printerId,
+  { restaurantId } = {},
+) {
+  if (!printerId) return 0;
+  const filter = {
+    printerId,
+    status: "QUEUED",
+    isActive: { $ne: false },
+  };
+  if (restaurantId) {
+    filter.restaurantId = restaurantId;
+  }
+  const jobs = await PrintJob.find(filter);
+  let cancelled = 0;
+  for (const job of jobs) {
+    let floorId = null;
+    try {
+      const order = await Order.findById(job.orderId).select("floor").lean();
+      if (order?.floor) floorId = order.floor;
+    } catch {
+      // best-effort floor for socket emit
+    }
+    await persistStatus(
+      job,
+      {
+        status: "CANCELLED",
+        errorMessage: "Printer disabled",
+        failedAt: new Date(),
+      },
+      floorId,
+    );
+    cancelled += 1;
+  }
+  if (cancelled > 0) {
+    logger.info(
+      `Cancelled ${cancelled} queued print job(s) for disabled printer ${printerId}`,
+    );
+  }
+  return cancelled;
 }
 
 /**
@@ -856,7 +923,8 @@ export async function reprintPrintJob(
       orderId: original.orderId,
       printType: original.printType,
       printerTarget: original.printerTarget,
-      printerId: printerConfig?._id || original.printerId || null,
+      // Never keep a disabled original.printerId on the reprint
+      printerId: printerConfig?._id || null,
       status: "QUEUED",
       attemptCount: 0,
       requestedBy: requestedBy || null,

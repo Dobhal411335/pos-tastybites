@@ -1,28 +1,86 @@
 import {
   isCashPaymentMethod,
   resolveTenders,
+  resolveSplitTenders,
   r2,
 } from "@/lib/eod/eodHelpers";
 
 export const CASH_ONLY_DELETE_ERROR =
-  "Orders paid by Card, Gift Card, or split tenders that include Card/Gift Card cannot be deleted. Only cash-only orders can be deleted.";
+  "Orders paid by Card, Gift Card, or split tenders that include Card/Gift Card cannot be deleted. Only cash-only orders (including multi-payer / seat cash splits) can be deleted.";
+
+/**
+ * Aggregate cash/card/gift from named paymentSplits (authoritative for split orders).
+ */
+function resolveSplitAggregate(order) {
+  const splits = Array.isArray(order?.paymentSplits) ? order.paymentSplits : [];
+  let cash = 0;
+  let card = 0;
+  let giftCard = 0;
+  for (const split of splits) {
+    const t = resolveSplitTenders(split);
+    cash = r2(cash + t.cash);
+    card = r2(card + t.card);
+    giftCard = r2(giftCard + t.giftCard);
+  }
+  return { cash, card, giftCard, splitCount: splits.length };
+}
+
+function splitsImplyNonCash(order) {
+  const splits = Array.isArray(order?.paymentSplits) ? order.paymentSplits : [];
+  for (const split of splits) {
+    const method = String(split?.method || "").trim();
+    if (!method) continue;
+    if (/gift/i.test(method)) return true;
+    if (/card/i.test(method) && !isCashPaymentMethod(method)) return true;
+  }
+  return false;
+}
 
 /**
  * Pure cash (or unpaid with no card/gift trail) orders may be soft-deleted.
- * Card, Gift Card, and any split involving those are blocked.
+ * Multi-payer / seat cash splits are allowed. Card, Gift Card, and any split
+ * involving those are blocked.
  */
 export function isCashOnlyDeletable(order) {
   if (!order) return false;
   if (order.isActive === false) return false;
+  if (order.permanentlyDeletedAt) return false;
+  if (String(order.paymentStatus || "").toUpperCase() === "REFUNDED") {
+    return false;
+  }
+
+  const giftUsed = r2(order.giftcardUsedAmount);
+  if (giftUsed > 0) return false;
+
+  const splits = Array.isArray(order.paymentSplits) ? order.paymentSplits : [];
+
+  // Named splits: use per-split tenders (not the order-level paymentMethod string,
+  // which often looks like "Split (2) · Cash" / "Split (2) · Cash + Card").
+  if (splits.length > 0) {
+    const agg = resolveSplitAggregate(order);
+    if (agg.giftCard > 0 || agg.card > 0) return false;
+    if (splitsImplyNonCash(order)) return false;
+
+    // Cash collected on splits, or cash-only settlement with no card/gift trail.
+    if (agg.cash > 0) return true;
+
+    // Unpaid / partial with cash-only split rows that have not recorded amounts yet.
+    const unpaidLike =
+      order.paymentStatus === "UNPAID" ||
+      order.paymentStatus === "PARTIAL" ||
+      !["PAID", "COMPLETED"].includes(String(order.status || "").toUpperCase());
+    if (unpaidLike) return true;
+
+    // Paid but zero tender amounts: allow only when every split method is cash.
+    return splits.every((s) => isCashPaymentMethod(s.method));
+  }
 
   const method = String(order.paymentMethod || "").trim();
-  const giftUsed = r2(order.giftcardUsedAmount);
   const explicitCard =
     order.cardAmount != null ? r2(order.cardAmount) : null;
   const explicitCash =
     order.cashAmount != null ? r2(order.cashAmount) : null;
 
-  if (giftUsed > 0) return false;
   if (explicitCard != null && explicitCard > 0) return false;
 
   if (/gift\s*card/i.test(method)) return false;
@@ -36,9 +94,6 @@ export function isCashOnlyDeletable(order) {
     order.status === "COMPLETED";
 
   if (!paid) {
-    // Unpaid / open ticket: allow only when no card/gift amounts are recorded.
-    if (giftUsed > 0) return false;
-    if (explicitCard != null && explicitCard > 0) return false;
     if (method && !isCashPaymentMethod(method) && /card|gift/i.test(method)) {
       return false;
     }
@@ -69,6 +124,21 @@ export function assertCashOnlyDeletable(order) {
 
 /** Display label for payment column: Cash | Card | Gift Card | Split */
 export function paymentDisplayLabel(order) {
+  const splits = Array.isArray(order?.paymentSplits) ? order.paymentSplits : [];
+
+  if (splits.length > 0) {
+    const agg = resolveSplitAggregate(order);
+    const parts = [];
+    if (agg.cash > 0) parts.push("Cash");
+    if (agg.card > 0) parts.push("Card");
+    if (agg.giftCard > 0) parts.push("Gift Card");
+    // Multi-payer / seat splits always surface as Split (incl. all-cash).
+    if (splits.length > 1 || parts.length > 1) return "Split";
+    if (parts.length === 1) return parts[0];
+    if (splits.every((s) => isCashPaymentMethod(s.method))) return "Cash";
+    return "Split";
+  }
+
   const tenders = resolveTenders(order);
   const parts = [];
   if (tenders.cash > 0) parts.push("Cash");

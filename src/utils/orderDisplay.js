@@ -133,13 +133,13 @@ export function getOrderSourceLabel(source) {
   return source || "POS";
 }
 
-/** User-facing order type: Takeaway, Staff, Table Order, Online */
+/** User-facing order type: Takeaway, Staff, Dine-in, Online */
 export function getOrderTypeLabel(order) {
   const source = order?.source || "POS";
   if (source === "WALK_IN" || source === "TAKEAWAY") return "Takeaway";
   if (source === "STAFF") return "Staff";
   if (source === "ONLINE") return "Online";
-  if (order?.tableSession || order?.tableNo) return "Table Order";
+  if (order?.tableSession || order?.tableNo) return "Dine-in";
   return "Takeaway";
 }
 

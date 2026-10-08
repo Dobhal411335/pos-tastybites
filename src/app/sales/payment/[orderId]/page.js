@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import OrderPaymentView from "@/components/sales/OrderPaymentView";
+import NetworkErrorPanel from "@/components/common/NetworkErrorPanel";
 import { isActiveServiceTax } from "@/lib/orders/serviceCharge";
 import { normalizeSeatNumber } from "@/lib/orders/seatHelpers";
 
@@ -28,6 +29,7 @@ export default function SalesPaymentPage() {
   const [guestName, setGuestName] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [reloadKey, setReloadKey] = useState(0);
 
   const resolvedSessionId = useMemo(() => {
     if (sessionIdParam) return sessionIdParam;
@@ -121,7 +123,7 @@ export default function SalesPaymentPage() {
     return () => {
       cancelled = true;
     };
-  }, [orderId]);
+  }, [orderId, reloadKey]);
 
   const handlePaid = (updatedOrder) => {
     const paid = updatedOrder || order;
@@ -200,7 +202,11 @@ export default function SalesPaymentPage() {
   if (error && !order) {
     return (
       <div className="flex h-full min-h-0 flex-col items-center justify-center gap-4 bg-zinc-50 px-4">
-        <p className="text-sm font-bold text-zinc-700">{error}</p>
+        <NetworkErrorPanel
+          title="Unable to load payment"
+          message={error}
+          onRetry={() => setReloadKey((n) => n + 1)}
+        />
         <button
           type="button"
           onClick={() => goBack()}

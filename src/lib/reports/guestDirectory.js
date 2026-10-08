@@ -12,6 +12,14 @@ import {
   r2,
   resolveTenders,
 } from "@/lib/eod/eodHelpers";
+import { ACTIVE_ORDER_FILTER } from "@/lib/orders/activeOrderFilter";
+import { getItemLineTotal } from "@/utils/productChoices";
+import { getOrderSourceLabel } from "@/utils/orderDisplay";
+
+/** Guest Directory order-type labels: POS / Takeaway / Staff / Online */
+function guestOrderTypeLabel(source) {
+  return getOrderSourceLabel(String(source || "POS").toUpperCase());
+}
 
 const GENERIC_NAMES = new Set([
   "",
@@ -48,7 +56,11 @@ const LIST_SELECT = [
   "tableNo",
   "subTotal",
   "discountTotal",
+  "discountCode",
+  "discountPercent",
   "taxTotal",
+  "serviceChargeTotal",
+  "serviceChargeName",
   "totalAmount",
   "paymentMethod",
   "cashAmount",
@@ -56,13 +68,43 @@ const LIST_SELECT = [
   "giftcardCode",
   "giftcardUsedAmount",
   "tipAmount",
+  "tipMethod",
+  "paymentSplits",
   "status",
   "paymentStatus",
   "guestCount",
   "source",
+  "staffOrderReason",
+  "waiveReason",
+  "specialNote",
 ].join(" ");
 
-const DETAIL_SELECT = `${LIST_SELECT} items.name items.qty`;
+const DETAIL_SELECT = [
+  LIST_SELECT,
+  "taxBreakdown",
+  "items.name",
+  "items.productCode",
+  "items.category",
+  "items.size",
+  "items.qty",
+  "items.price",
+  "items.tax",
+  "items.serviceCharge",
+  "items.customExtras",
+  "items.choices",
+  "items.choiceSelections",
+  "items.customDataSelections",
+  "items.addonChoiceSelections",
+  "items.inclusions",
+  "items.options",
+  "items.drinks",
+  "items.notes",
+  "items.productType",
+  "items.isOffer",
+  "items.seatNumber",
+  "items.cartId",
+  "items.preparationStyle",
+].join(" ");
 
 function escapeRegex(value) {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -210,6 +252,64 @@ function itemSummary(items) {
   };
 }
 
+function shapeOrderItems(items) {
+  return (Array.isArray(items) ? items : []).map((item) => {
+    const customExtras = Array.isArray(item?.customExtras)
+      ? item.customExtras.map((extra) => ({
+          name: extra?.name || "",
+          price: r2(extra?.price),
+        }))
+      : [];
+    return {
+      cartId: item?.cartId || null,
+      name: item?.name || "Item",
+      productCode: item?.productCode || "",
+      category: item?.category || null,
+      size: item?.size || "Standard",
+      qty: Number(item?.qty) || 0,
+      price: r2(item?.price),
+      tax: r2(item?.tax),
+      serviceCharge: r2(item?.serviceCharge),
+      customExtras,
+      lineTotal: r2(getItemLineTotal(item)),
+      choices: Array.isArray(item?.choices) ? item.choices : [],
+      choiceSelections: Array.isArray(item?.choiceSelections)
+        ? item.choiceSelections
+        : [],
+      customDataSelections: Array.isArray(item?.customDataSelections)
+        ? item.customDataSelections
+        : [],
+      addonChoiceSelections: Array.isArray(item?.addonChoiceSelections)
+        ? item.addonChoiceSelections
+        : [],
+      inclusions: Array.isArray(item?.inclusions) ? item.inclusions : [],
+      options: Array.isArray(item?.options) ? item.options : [],
+      drinks: Array.isArray(item?.drinks) ? item.drinks : [],
+      notes: item?.notes || "",
+      productType: item?.productType || null,
+      isOffer: Boolean(item?.isOffer),
+      seatNumber: item?.seatNumber ?? null,
+      preparationStyle: item?.preparationStyle || null,
+    };
+  });
+}
+
+function shapePaymentSplits(splits) {
+  return (Array.isArray(splits) ? splits : []).map((split) => ({
+    name: split?.name || "Payer",
+    amount: r2(split?.amount),
+    method: split?.method || null,
+    cardType: split?.cardType || null,
+    tipAmount: r2(split?.tipAmount),
+    tipMethod: split?.tipMethod || null,
+    cashAmount: split?.cashAmount != null ? r2(split.cashAmount) : null,
+    cardAmount: split?.cardAmount != null ? r2(split.cardAmount) : null,
+    seatNumber: split?.seatNumber ?? null,
+    seatNumbers: Array.isArray(split?.seatNumbers) ? split.seatNumbers : null,
+    paidAt: split?.paidAt || null,
+  }));
+}
+
 function paymentLabel(order) {
   if (order.paymentStatus !== "PAID") {
     return order.paymentMethod || "—";
@@ -228,31 +328,60 @@ function orderTenders(order) {
 }
 
 function toHistoryRow(order, identity) {
-  const items = itemSummary(order.items);
+  const summary = itemSummary(order.items);
   const tenders = orderTenders(order);
+  const items = shapeOrderItems(order.items);
+  const paymentSplits = shapePaymentSplits(order.paymentSplits);
+  const source = String(order.source || "POS").toUpperCase();
+
   return {
     orderId: String(order._id),
     orderNumber: order.orderNumber,
     createdAt: order.createdAt,
     guestKey: identity.guestKey,
     guestName: identity.name || "Take-Away",
+    partyName: order.partyName || order.guestName || identity.name || null,
     phone: identity.phone,
+    email: identity.email || order.guestEmail || null,
+    countryCode: identity.countryCode || order.guestCountryCode || null,
+    contactNumber: order.contactNumber || null,
+    guestCountryCode: order.guestCountryCode || null,
+    guestEmail: order.guestEmail || null,
     tableNo: order.tableNo || "—",
     guestCount: order.guestCount ?? null,
-    itemCount: items.itemCount,
-    itemSummary: items.itemSummary,
+    source,
+    sourceLabel: guestOrderTypeLabel(source),
+    orderTypeLabel: guestOrderTypeLabel(source),
+    itemCount: summary.itemCount,
+    itemSummary: summary.itemSummary,
+    items,
     subTotal: r2(order.subTotal),
     discountTotal: r2(order.discountTotal),
+    discountCode: order.discountCode || null,
+    discountPercent: order.discountPercent ?? null,
     taxTotal: r2(order.taxTotal),
+    taxBreakdown: Array.isArray(order.taxBreakdown) ? order.taxBreakdown : [],
+    serviceChargeTotal: r2(order.serviceChargeTotal),
+    serviceChargeName: order.serviceChargeName || null,
+    tipAmount: r2(order.tipAmount),
+    tipMethod: order.tipMethod || null,
     totalAmount: r2(order.totalAmount),
     paymentMethod: order.paymentMethod || null,
     paymentLabel: paymentLabel(order),
     cash: tenders.cash,
     card: tenders.card,
     giftCard: tenders.giftCard,
+    tip: tenders.tip,
+    cashAmount: order.cashAmount != null ? r2(order.cashAmount) : null,
+    cardAmount: order.cardAmount != null ? r2(order.cardAmount) : null,
     giftcardCode: order.giftcardCode || null,
+    giftcardUsedAmount: r2(order.giftcardUsedAmount),
+    paymentSplits,
     status: order.status,
     paymentStatus: order.paymentStatus,
+    staffOrderReason: order.staffOrderReason || null,
+    waiveReason: order.waiveReason || null,
+    specialNote: order.specialNote || null,
     countsTowardRevenue: isRevenueOrder(order),
   };
 }
@@ -414,7 +543,7 @@ function guestKeyMongoFilter(parsed, restaurantId) {
   const match = {
     restaurantId,
     source: { $ne: "STAFF" },
-    isActive: { $ne: false },
+    ...ACTIVE_ORDER_FILTER,
   };
   if (parsed.type === "order" && mongoose.Types.ObjectId.isValid(parsed.value)) {
     match._id = new mongoose.Types.ObjectId(parsed.value);
@@ -531,7 +660,7 @@ export async function buildGuestDirectoryReport({
   let match = {
     restaurantId: rid,
     source: { $ne: "STAFF" },
-    isActive: { $ne: false },
+    ...ACTIVE_ORDER_FILTER,
   };
 
   if (parsedKey) {
@@ -669,13 +798,21 @@ function buildMostOrderedItems(orders, limit = 5) {
     for (const item of order.items || []) {
       const name = String(item?.name || "").trim();
       if (!name) continue;
-      counts.set(name, (counts.get(name) || 0) + (Number(item.qty) || 0));
+      const prev = counts.get(name) || { qty: 0, revenue: 0 };
+      prev.qty += Number(item.qty) || 0;
+      prev.revenue = r2(prev.revenue + getItemLineTotal(item));
+      counts.set(name, prev);
     }
   }
   return [...counts.entries()]
-    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .sort(
+      (a, b) =>
+        b[1].qty - a[1].qty ||
+        b[1].revenue - a[1].revenue ||
+        a[0].localeCompare(b[0])
+    )
     .slice(0, limit)
-    .map(([name, qty]) => ({ name, qty }));
+    .map(([name, row]) => ({ name, qty: row.qty, revenue: row.revenue }));
 }
 
 function emptyPayload(dateFrom, dateTo) {

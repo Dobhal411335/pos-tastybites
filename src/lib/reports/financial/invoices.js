@@ -13,6 +13,7 @@ import {
   KPI_GROUP,
   roundKpis,
 } from "./metrics.js";
+import { shapeFinancialListMeta } from "./orderDetail.js";
 import { reportMeta } from "./query.js";
 
 const LIST_PROJECT = {
@@ -25,17 +26,26 @@ const LIST_PROJECT = {
   partyName: 1,
   guestName: 1,
   contactNumber: 1,
+  guestCount: 1,
   tableNo: 1,
+  source: 1,
   subTotal: 1,
   discountTotal: 1,
+  discountCode: 1,
+  discountPercent: 1,
   taxTotal: 1,
   tipAmount: 1,
+  tipMethod: 1,
   serviceChargeTotal: 1,
+  serviceChargeName: 1,
   totalAmount: 1,
   paymentMethod: 1,
   paymentStatus: 1,
   status: 1,
+  giftcardCode: 1,
   giftcardUsedAmount: 1,
+  paymentSplits: 1,
+  items: 1,
   tenderCash: 1,
   tenderCard: 1,
   tenderGift: 1,
@@ -74,6 +84,7 @@ export async function buildFinancialInvoices({ restaurantId, ...filters }) {
   const rows = (facet?.rows || []).map((order) => {
     const invoiceNumber = order.invoiceNumber || null;
     const originalInvoiceNumber = order.originalInvoiceNumber || null;
+    const meta = shapeFinancialListMeta(order);
     return {
       id: String(order._id),
       invoiceNumber,
@@ -89,11 +100,17 @@ export async function buildFinancialInvoices({ restaurantId, ...filters }) {
       employee: order.employeeName || "Unknown",
       guest: order.partyName || order.guestName || "—",
       table: order.tableNo || "—",
+      guestCount: meta.guestCount,
+      source: meta.source,
+      sourceLabel: meta.sourceLabel,
+      orderTypeLabel: meta.orderTypeLabel,
       subTotal: r2(order.subTotal),
       discount: r2(order.discountTotal),
       tax: r2(order.taxTotal),
       tips: r2(order.tipAmount),
+      tipMethod: meta.tipMethod,
       serviceCharge: r2(order.serviceChargeTotal),
+      serviceChargeName: meta.serviceChargeName,
       total: r2(order.totalAmount),
       collected: r2(order.tenderCollected),
       paymentMethod: order.paymentMethod || "—",
@@ -103,6 +120,10 @@ export async function buildFinancialInvoices({ restaurantId, ...filters }) {
       ),
       paymentStatus: order.paymentStatus,
       status: order.status,
+      splitCount: meta.splitCount,
+      hasSplits: meta.hasSplits,
+      hasSeatItems: meta.hasSeatItems,
+      seatBasedPayments: meta.seatBasedPayments,
       tenders: {
         cash: r2(order.tenderCash),
         card: r2(order.tenderCard),

@@ -1,7 +1,12 @@
 import { format } from "date-fns";
 import { DEFAULT_RESTAURANT_TIMEZONE } from "@/lib/restaurantTime";
 
-export { STATUS_BADGE, money } from "@/components/reports/OrderDetailBody";
+export {
+  STATUS_BADGE,
+  PAYMENT_STATUS_BADGE,
+  money,
+  OrderSourceBadge,
+} from "@/components/reports/OrderDetailBody";
 
 export const ATTENDANCE_BADGE = {
   Present: "bg-emerald-50 text-emerald-700",

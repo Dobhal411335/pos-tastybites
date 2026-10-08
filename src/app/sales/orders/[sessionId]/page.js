@@ -85,11 +85,15 @@ import {
 } from "@/utils/offerDetails";
 import {
   productHasChoiceOptions,
+  productHasCustomData,
   normalizeChoiceOptions,
   normalizeChoiceSelections,
+  normalizeCustomData,
+  normalizeCustomDataSelections,
   normalizeCustomExtras,
   customExtrasUnitTotal,
   cartChoiceSelectionsKey,
+  cartCustomDataSelectionsKey,
   cartCustomExtrasKey,
   getItemLineTotal,
   getVisibleCartModifier,
@@ -199,6 +203,8 @@ function isSameCartLine(a, b) {
     cartCustomExtrasKey(a.customExtras) === cartCustomExtrasKey(b.customExtras) &&
     cartChoiceSelectionsKey(a.choiceSelections) ===
       cartChoiceSelectionsKey(b.choiceSelections) &&
+    cartCustomDataSelectionsKey(a.customDataSelections) ===
+      cartCustomDataSelectionsKey(b.customDataSelections) &&
     cartChoiceSelectionsKey(a.addonChoiceSelections) ===
       cartChoiceSelectionsKey(b.addonChoiceSelections)
   );
@@ -276,6 +282,9 @@ function buildCartFromOrderItems(items = []) {
       choices,
       drinks,
       choiceSelections: normalizeChoiceSelections(item.choiceSelections),
+      customDataSelections: normalizeCustomDataSelections(
+        item.customDataSelections,
+      ),
       addonChoiceSelections: normalizeChoiceSelections(item.addonChoiceSelections),
       customExtras: normalizeCustomExtras(item.customExtras),
       modifier: parts.length > 0 ? parts.join(" | ") : undefined,
@@ -388,9 +397,14 @@ function OrderPageContent() {
   const [selectedOfferDrinks, setSelectedOfferDrinks] = useState([]);
   const [selectedOfferInclusions, setSelectedOfferInclusions] = useState([]);
   const [selectedProductChoices, setSelectedProductChoices] = useState({});
+  /** { [groupIndex]: { [optionIndex]: string[] } } */
+  const [selectedCustomData, setSelectedCustomData] = useState({});
   const [customExtraModal, setCustomExtraModal] = useState(null);
   const [customExtraName, setCustomExtraName] = useState("");
   const [customExtraPrice, setCustomExtraPrice] = useState("");
+  /** Cart line keys with Modified request inputs expanded */
+  const [expandedModifiedRequestKeys, setExpandedModifiedRequestKeys] =
+    useState(() => new Set());
 
   // New states
   const [isKitchenModalOpen, setIsKitchenModalOpen] = useState(false);
@@ -431,7 +445,7 @@ function OrderPageContent() {
 
   // View / layout states (persisted for staff preference)
   const [panelLayout, setPanelLayout] = useState("3"); // '2' | '3'
-  const [gridCols, setGridCols] = useState(2); // 2 | 3 | 4
+  const [gridCols, setGridCols] = useState(4); // 2 | 3 | 4
   const [heads, setHeads] = useState([{ _id: "all", name: "All" }]);
   const [productHeads, setProductHeads] = useState([]);
   const [activeHead, setActiveHead] = useState("All");
@@ -1084,6 +1098,7 @@ function OrderPageContent() {
     setSelectedOfferDrinks([]);
     setSelectedOfferInclusions([]);
     setSelectedProductChoices({});
+    setSelectedCustomData({});
   };
 
   const handleOpenOptions = (item) => {
@@ -1096,6 +1111,7 @@ function OrderPageContent() {
     setSelectedOfferDrinks([]);
     setSelectedOfferInclusions([]);
     setSelectedProductChoices({});
+    setSelectedCustomData({});
     setIsOptionsModalOpen(true);
   };
 
@@ -1111,6 +1127,7 @@ function OrderPageContent() {
     setSelectedOfferChoices(choices.length === 1 ? choices : []);
     setSelectedOfferDrinks(drinks.length === 1 ? drinks : []);
     setSelectedProductChoices({});
+    setSelectedCustomData({});
     setIsOptionsModalOpen(true);
   };
 
@@ -1178,6 +1195,20 @@ function OrderPageContent() {
     });
   };
 
+  const toggleCustomDataChoice = (groupIndex, optionIndex, value) => {
+    setSelectedCustomData((prev) => {
+      const group = prev[groupIndex] || {};
+      const current = group[optionIndex] || [];
+      const next = current.includes(value)
+        ? current.filter((item) => item !== value)
+        : [...current, value];
+      return {
+        ...prev,
+        [groupIndex]: { ...group, [optionIndex]: next },
+      };
+    });
+  };
+
   const setVariantQty = (variantKey, qty) => {
     const next = Math.max(0, Math.floor(Number(qty) || 0));
     setVariantQtyBySize((prev) => {
@@ -1239,15 +1270,31 @@ function OrderPageContent() {
     const hasStyles =
       product.preparationStyles &&
       product.preparationStyles.filter(Boolean).length > 0;
-    return hasVariants || hasAddons || hasStyles || productHasChoiceOptions(product);
+    return (
+      hasVariants ||
+      hasAddons ||
+      hasStyles ||
+      productHasChoiceOptions(product) ||
+      productHasCustomData(product)
+    );
   };
 
   const resolveLineSeatNumber = () =>
     hasTableSession ? normalizeCartSeatNumber(activeSeatNumber) : null;
 
+  const toggleModifiedRequest = (itemKey) => {
+    setExpandedModifiedRequestKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(itemKey)) next.delete(itemKey);
+      else next.add(itemKey);
+      return next;
+    });
+  };
+
   const renderCartItemCard = (item, idx) => {
     const visibleModifier = getVisibleCartModifier(item);
     const itemKey = item.cartId || `${item.id}-${idx}`;
+    const isModifiedRequestOpen = expandedModifiedRequestKeys.has(itemKey);
     return (
       <div
         key={itemKey}
@@ -1277,6 +1324,38 @@ function OrderPageContent() {
               <p className="text-[11px] font-semibold text-zinc-500 mt-0.5">
                 {visibleModifier}
               </p>
+            ) : null}
+            {!isOfferItem(item) &&
+            normalizeCustomDataSelections(item.customDataSelections).length >
+              0 ? (
+              <div className="mt-1.5 space-y-1.5">
+                {normalizeCustomDataSelections(item.customDataSelections).map(
+                  (group) => (
+                    <div key={`custom-${group.name}`} className="space-y-1.5">
+                      <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-wide">
+                        {group.name}
+                      </p>
+                      {group.subChoices.map((option) => (
+                        <div key={`${group.name}-${option.name}`} className="pl-0.5">
+                          <p className="text-[10px] font-semibold text-zinc-600">
+                            {option.name}
+                          </p>
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {option.choices.map((choice) => (
+                              <span
+                                key={`${group.name}-${option.name}-${choice}`}
+                                className="inline-flex items-center rounded-full border border-violet-100 bg-violet-50 px-2 py-0.5 text-[10px] font-semibold text-violet-800"
+                              >
+                                {choice}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ),
+                )}
+              </div>
             ) : null}
             {!isOfferItem(item) &&
             normalizeChoiceSelections(item.choiceSelections).length > 0 ? (
@@ -1365,11 +1444,30 @@ function OrderPageContent() {
             ${getItemLineTotal(item).toFixed(2)}
           </span>
         </div>
-        <div className="mt-2 space-y-2">
+        <div className="mt-5 space-y-2">
           <div className="flex items-center justify-between gap-2">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">
+            <button
+              type="button"
+              onClick={() => toggleModifiedRequest(itemKey)}
+              className="inline-flex items-center border border-zinc-300 bg-zinc-50 px-2 py-1 rounded-md gap-1 text-[10px] font-bold uppercase tracking-wider text-zinc-800 hover:text-zinc-800"
+              aria-expanded={isModifiedRequestOpen}
+              aria-controls={`pos-cart-modified-${itemKey}`}
+            >
               Modified request
-            </p>
+              <span
+                className={`inline-flex h-4 w-4 items-center justify-center rounded border ${
+                  isModifiedRequestOpen
+                    ? "border-orange-300 bg-orange-50 text-orange-700"
+                    : "border-zinc-300 bg-white text-zinc-600"
+                }`}
+              >
+                {isModifiedRequestOpen ? (
+                  <Minus className="w-3 h-3" />
+                ) : (
+                  <Plus className="w-3 h-3" />
+                )}
+              </span>
+            </button>
             <button
               type="button"
               onClick={() => openCustomExtraModal(item)}
@@ -1379,66 +1477,68 @@ function OrderPageContent() {
               Custom item
             </button>
           </div>
-          <div className="space-y-1.5">
-            <div className="flex items-center gap-2">
-              <label
-                htmlFor={`pos-cart-note-without-${itemKey}`}
-                className="w-14 shrink-0 text-[12px] font-bold text-zinc-800"
-              >
-                Without
-              </label>
-              <input
-                id={`pos-cart-note-without-${itemKey}`}
-                type="text"
-                value={item.noteWithout || ""}
-                onChange={(e) =>
-                  updateCartItemModifiedRequest(item.cartId || item.id, {
-                    noteWithout: e.target.value,
-                    noteAdd: item.noteAdd || "",
-                  })
-                }
-                onBlur={(e) =>
-                  updateCartItemModifiedRequest(item.cartId || item.id, {
-                    noteWithout: String(e.target.value || "").trim(),
-                    noteAdd: String(item.noteAdd || "").trim(),
-                  })
-                }
-                onKeyDown={(e) => e.stopPropagation()}
-                maxLength={80}
-                placeholder="Type Here"
-                className="h-9 min-w-0 flex-1 rounded-lg border border-zinc-200 bg-zinc-50 px-2.5 text-xs font-medium text-zinc-800 placeholder:text-zinc-400 focus:border-orange-400 focus:bg-white focus:outline-none focus:ring-1 focus:ring-orange-400"
-              />
+          {isModifiedRequestOpen ? (
+            <div id={`pos-cart-modified-${itemKey}`} className="space-y-1.5">
+              <div className="flex items-center gap-2">
+                <label
+                  htmlFor={`pos-cart-note-without-${itemKey}`}
+                  className="w-14 shrink-0 text-[12px] font-bold text-zinc-800"
+                >
+                  Without
+                </label>
+                <input
+                  id={`pos-cart-note-without-${itemKey}`}
+                  type="text"
+                  value={item.noteWithout || ""}
+                  onChange={(e) =>
+                    updateCartItemModifiedRequest(item.cartId || item.id, {
+                      noteWithout: e.target.value,
+                      noteAdd: item.noteAdd || "",
+                    })
+                  }
+                  onBlur={(e) =>
+                    updateCartItemModifiedRequest(item.cartId || item.id, {
+                      noteWithout: String(e.target.value || "").trim(),
+                      noteAdd: String(item.noteAdd || "").trim(),
+                    })
+                  }
+                  onKeyDown={(e) => e.stopPropagation()}
+                  maxLength={80}
+                  placeholder="Type Here"
+                  className="h-9 min-w-0 flex-1 rounded-lg border border-zinc-200 bg-zinc-50 px-2.5 text-xs font-medium text-zinc-800 placeholder:text-zinc-400 focus:border-orange-400 focus:bg-white focus:outline-none focus:ring-1 focus:ring-orange-400"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <label
+                  htmlFor={`pos-cart-note-add-${itemKey}`}
+                  className="w-14 shrink-0 text-[12px] font-bold text-zinc-800"
+                >
+                  Add
+                </label>
+                <input
+                  id={`pos-cart-note-add-${itemKey}`}
+                  type="text"
+                  value={item.noteAdd || ""}
+                  onChange={(e) =>
+                    updateCartItemModifiedRequest(item.cartId || item.id, {
+                      noteWithout: item.noteWithout || "",
+                      noteAdd: e.target.value,
+                    })
+                  }
+                  onBlur={(e) =>
+                    updateCartItemModifiedRequest(item.cartId || item.id, {
+                      noteWithout: String(item.noteWithout || "").trim(),
+                      noteAdd: String(e.target.value || "").trim(),
+                    })
+                  }
+                  onKeyDown={(e) => e.stopPropagation()}
+                  maxLength={80}
+                  placeholder="Type Here"
+                  className="h-9 min-w-0 flex-1 rounded-lg border border-zinc-200 bg-zinc-50 px-2.5 text-xs font-medium text-zinc-800 placeholder:text-zinc-400 focus:border-orange-400 focus:bg-white focus:outline-none focus:ring-1 focus:ring-orange-400"
+                />
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <label
-                htmlFor={`pos-cart-note-add-${itemKey}`}
-                className="w-14 shrink-0 text-[12px] font-bold text-zinc-800"
-              >
-                Add
-              </label>
-              <input
-                id={`pos-cart-note-add-${itemKey}`}
-                type="text"
-                value={item.noteAdd || ""}
-                onChange={(e) =>
-                  updateCartItemModifiedRequest(item.cartId || item.id, {
-                    noteWithout: item.noteWithout || "",
-                    noteAdd: e.target.value,
-                  })
-                }
-                onBlur={(e) =>
-                  updateCartItemModifiedRequest(item.cartId || item.id, {
-                    noteWithout: String(item.noteWithout || "").trim(),
-                    noteAdd: String(e.target.value || "").trim(),
-                  })
-                }
-                onKeyDown={(e) => e.stopPropagation()}
-                maxLength={80}
-                placeholder="Type Here"
-                className="h-9 min-w-0 flex-1 rounded-lg border border-zinc-200 bg-zinc-50 px-2.5 text-xs font-medium text-zinc-800 placeholder:text-zinc-400 focus:border-orange-400 focus:bg-white focus:outline-none focus:ring-1 focus:ring-orange-400"
-              />
-            </div>
-          </div>
+          ) : null}
         </div>
         <div className="flex items-center justify-between mt-2">
           <div className="flex items-center gap-1">
@@ -1502,6 +1602,7 @@ function OrderPageContent() {
             options: [],
             productType: product.productType === "BAR" ? "BAR" : "KITCHEN",
             choiceSelections: [],
+            customDataSelections: [],
             noteWithout: "",
             noteAdd: "",
             notes: "",
@@ -1614,6 +1715,18 @@ function OrderPageContent() {
       }))
       .filter((group) => group.subChoices.length > 0);
 
+    const customDataSelections = normalizeCustomData(selectedProduct.customData)
+      .map((group, groupIndex) => ({
+        name: group.name,
+        subChoices: group.subChoices
+          .map((option, optionIndex) => ({
+            name: option.name,
+            choices: selectedCustomData[groupIndex]?.[optionIndex] || [],
+          }))
+          .filter((option) => option.choices.length > 0),
+      }))
+      .filter((group) => group.subChoices.length > 0);
+
     const newLines = [];
 
     if (hasVariants) {
@@ -1645,6 +1758,7 @@ function OrderPageContent() {
             selectedProduct.productType === "BAR" ? "BAR" : "KITCHEN",
           modifier: parts.join(" | "),
           choiceSelections,
+          customDataSelections,
           noteWithout: "",
           noteAdd: "",
           notes: "",
@@ -1671,6 +1785,7 @@ function OrderPageContent() {
         productType: selectedProduct.productType === "BAR" ? "BAR" : "KITCHEN",
         modifier: selectedPreparationStyle || undefined,
         choiceSelections,
+        customDataSelections,
         noteWithout: "",
         noteAdd: "",
         notes: "",
@@ -3220,6 +3335,9 @@ function OrderPageContent() {
                 );
                 const offerChoices = cleanOfferList(selectedProduct.choices);
                 const offerDrinks = cleanOfferList(selectedProduct.drinks);
+                const productCustomDataGroups = normalizeCustomData(
+                  selectedProduct.customData,
+                );
                 const productChoiceGroups = normalizeChoiceOptions(
                   selectedProduct.choiceOptions,
                 );
@@ -3242,6 +3360,9 @@ function OrderPageContent() {
                   : [
                       ...(hasVariants ? ["variants"] : []),
                       ...(hasPrepStyles ? ["preparation"] : []),
+                      ...productCustomDataGroups.map(
+                        (group, i) => `custom-${i}-${group.name}`,
+                      ),
                       ...productChoiceGroups.map(
                         (group, i) => `choice-${i}-${group.name}`,
                       ),
@@ -3582,6 +3703,74 @@ function OrderPageContent() {
                             </AccordionContent>
                           </AccordionItem>
                         )}
+
+                        {productCustomDataGroups.map((group, groupIndex) => {
+                          const value = `custom-${groupIndex}-${group.name}`;
+                          return (
+                            <AccordionItem
+                              key={value}
+                              value={value}
+                              className={accordionItemClass}
+                            >
+                              <AccordionTrigger
+                                className={accordionTriggerClass}
+                              >
+                                {group.name}
+                              </AccordionTrigger>
+                              <AccordionContent
+                                className={accordionContentClass}
+                              >
+                                <div className="space-y-4">
+                                  {group.subChoices.map((option, optionIndex) => (
+                                    <div
+                                      key={`${group.name}-${option.name}`}
+                                      className="space-y-2"
+                                    >
+                                      <p className="text-[12px] font-bold uppercase tracking-wide text-zinc-500">
+                                        {option.name}
+                                      </p>
+                                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                        {option.choices.map((choice) => {
+                                          const selected = (
+                                            selectedCustomData[groupIndex]?.[
+                                              optionIndex
+                                            ] || []
+                                          ).includes(choice);
+                                          return (
+                                            <label
+                                              key={`${group.name}-${option.name}-${choice}`}
+                                              className={`flex items-center border p-3 rounded-lg cursor-pointer transition-colors ${
+                                                selected
+                                                  ? "border-violet-500 bg-violet-50/30"
+                                                  : "border-zinc-200 hover:border-violet-300"
+                                              }`}
+                                            >
+                                              <div className="flex-1 flex items-center gap-3 text-[14px] font-bold text-zinc-800">
+                                                <input
+                                                  type="checkbox"
+                                                  checked={selected}
+                                                  onChange={() =>
+                                                    toggleCustomDataChoice(
+                                                      groupIndex,
+                                                      optionIndex,
+                                                      choice,
+                                                    )
+                                                  }
+                                                  className="w-4 h-4 accent-violet-500"
+                                                />
+                                                <span>{choice}</span>
+                                              </div>
+                                            </label>
+                                          );
+                                        })}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </AccordionContent>
+                            </AccordionItem>
+                          );
+                        })}
 
                         {productChoiceGroups.map((group, groupIndex) => {
                           const value = `choice-${groupIndex}-${group.name}`;

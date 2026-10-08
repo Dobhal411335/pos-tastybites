@@ -27,7 +27,14 @@ import {
   ReportEmpty,
   TableSkeleton,
 } from "../EmployeeReportUi";
-import { formatDateTz, formatTimeTz, money, STATUS_BADGE } from "../employeeFormat";
+import {
+  formatDateTz,
+  formatTimeTz,
+  money,
+  OrderSourceBadge,
+  PAYMENT_STATUS_BADGE,
+  STATUS_BADGE,
+} from "../employeeFormat";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 
@@ -98,13 +105,14 @@ export default function EmployeeOrdersReport() {
                 {loading ? (
                   <div className="p-4"><TableSkeleton cols={8} /></div>
                 ) : (
-                  <Table className="min-w-[1480px] table-fixed">
+                  <Table className="min-w-[1680px] table-fixed">
                     <TableHeader>
                       <TableRow className="bg-zinc-50">
                         <TableHead className="w-[88px]">Order</TableHead>
                         <TableHead className="w-[120px]">Date/Time</TableHead>
                         <TableHead className="w-[140px]">Employee</TableHead>
-                        <TableHead className="w-[200px]">Table</TableHead>
+                        <TableHead className="w-[88px]">Type</TableHead>
+                        <TableHead className="w-[160px]">Table / Seats</TableHead>
                         <TableHead className="w-[180px]">Items</TableHead>
                         <TableHead className="w-[96px] text-right">Subtotal</TableHead>
                         <TableHead className="w-[88px] text-right">Discount</TableHead>
@@ -112,7 +120,7 @@ export default function EmployeeOrdersReport() {
                         <TableHead className="w-[80px] text-right">Svc</TableHead>
                         <TableHead className="w-[80px] text-right">Tip</TableHead>
                         <TableHead className="w-[96px] text-right">Total</TableHead>
-                        <TableHead className="w-[100px]">Payment</TableHead>
+                        <TableHead className="w-[120px]">Payment</TableHead>
                         <TableHead className="w-[100px]">Status</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -151,8 +159,16 @@ export default function EmployeeOrdersReport() {
                               </p>
                             </button>
                           </TableCell>
+                          <TableCell className="whitespace-nowrap">
+                            <OrderSourceBadge order={row} />
+                          </TableCell>
                           <TableCell className="text-sm whitespace-nowrap">
-                            {row.tableNo || "—"}
+                            <div>{row.tableNo || "—"}</div>
+                            {row.seatsLabel ? (
+                              <div className="text-[10px] text-violet-700 font-medium">
+                                {row.seatsLabel}
+                              </div>
+                            ) : null}
                           </TableCell>
                           <TableCell className="text-xs text-zinc-600 truncate">
                             {row.itemSummary || `${row.itemCount || 0} items`}
@@ -170,13 +186,39 @@ export default function EmployeeOrdersReport() {
                             {money(row.serviceChargeTotal)}
                           </TableCell>
                           <TableCell className="text-right tabular-nums text-sm whitespace-nowrap">
-                            {money(row.tipAmount)}
+                            <div>{money(row.tipAmount)}</div>
+                            {row.tipMethod || row.tipPaymentMethod ? (
+                              <div className="text-[10px] font-normal text-zinc-500">
+                                {row.tipMethod || row.tipPaymentMethod}
+                              </div>
+                            ) : null}
                           </TableCell>
                           <TableCell className="text-right tabular-nums text-sm font-semibold whitespace-nowrap">
                             {money(row.totalAmount)}
                           </TableCell>
                           <TableCell className="text-xs whitespace-nowrap">
-                            {row.paymentLabel || "—"}
+                            <div>{row.paymentLabel || "—"}</div>
+                            {row.isSplit ? (
+                              <div className="text-[10px] text-violet-700 font-medium truncate max-w-[110px]">
+                                Split · {row.splitLabel || `${row.splitCount} payers`}
+                              </div>
+                            ) : null}
+                            {row.paymentStatus && row.paymentStatus !== "PAID" ? (
+                              <div className="mt-0.5">
+                                <Badge
+                                  variant="outline"
+                                  className={`text-[10px] ${
+                                    PAYMENT_STATUS_BADGE[row.paymentStatus] ||
+                                    "bg-zinc-50 text-zinc-600"
+                                  }`}
+                                >
+                                  {row.paymentStatus === "PARTIAL" &&
+                                  Number(row.remainingDue) > 0
+                                    ? `PARTIAL · ${money(row.remainingDue)} due`
+                                    : row.paymentStatus}
+                                </Badge>
+                              </div>
+                            ) : null}
                           </TableCell>
                           <TableCell className="whitespace-nowrap">
                             <Badge

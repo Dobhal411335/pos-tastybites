@@ -46,8 +46,70 @@ export function normalizeChoiceSelections(list) {
     .filter((group) => group.name && group.subChoices.length > 0);
 }
 
+/** Product catalog: group → option (subChoice) → many inner choice names */
+export function normalizeCustomData(list) {
+  if (!Array.isArray(list)) return [];
+  return list
+    .map((group) => ({
+      name: String(group?.name || "").trim(),
+      subChoices: (Array.isArray(group?.subChoices) ? group.subChoices : [])
+        .map((option) => ({
+          name: String(option?.name || "").trim(),
+          choices: cleanChoiceList(option?.choices),
+        }))
+        .filter((option) => option.name && option.choices.length > 0),
+    }))
+    .filter((group) => group.name && group.subChoices.length > 0);
+}
+
+/** Cart / order selections matching normalizeCustomData shape */
+export function normalizeCustomDataSelections(list) {
+  return normalizeCustomData(list);
+}
+
 export function productHasChoiceOptions(product) {
   return normalizeChoiceOptions(product?.choiceOptions).length > 0;
+}
+
+export function productHasCustomData(product) {
+  return normalizeCustomData(product?.customData).length > 0;
+}
+
+/**
+ * Keep only allowed custom-data selections against product catalog.
+ */
+export function filterCustomDataSelections(selected, allowed) {
+  const allowedGroups = normalizeCustomData(allowed);
+  return normalizeCustomDataSelections(selected)
+    .map((sel) => {
+      const match = allowedGroups.find(
+        (group) => group.name.toLowerCase() === sel.name.toLowerCase(),
+      );
+      if (!match) return null;
+
+      const optionByLower = new Map(
+        match.subChoices.map((option) => [option.name.toLowerCase(), option]),
+      );
+
+      const subChoices = sel.subChoices
+        .map((option) => {
+          const allowedOption = optionByLower.get(option.name.toLowerCase());
+          if (!allowedOption) return null;
+          const allowByLower = new Map(
+            allowedOption.choices.map((value) => [value.toLowerCase(), value]),
+          );
+          const choices = option.choices
+            .map((value) => allowByLower.get(String(value || "").trim().toLowerCase()))
+            .filter(Boolean);
+          if (!choices.length) return null;
+          return { name: allowedOption.name, choices: [...new Set(choices)] };
+        })
+        .filter(Boolean);
+
+      if (!subChoices.length) return null;
+      return { name: match.name, subChoices };
+    })
+    .filter(Boolean);
 }
 
 /**
@@ -93,6 +155,16 @@ export function getProductChoiceDetailLines(item) {
     label: group.name,
     value: group.subChoices.join(", "),
   }));
+}
+
+export function getCustomDataDetailLines(item) {
+  return normalizeCustomDataSelections(item?.customDataSelections).flatMap(
+    (group) =>
+      group.subChoices.map((option) => ({
+        label: `${group.name} · ${option.name}`,
+        value: option.choices.join(", "),
+      })),
+  );
 }
 
 export function getAddonChoiceDetailLines(item) {
@@ -303,6 +375,16 @@ export function getReceiptModifierLines(item) {
     return lines;
   }
 
+  for (const group of normalizeCustomDataSelections(item?.customDataSelections)) {
+    lines.push({ kind: "custom-data", text: `${group.name}:` });
+    for (const option of group.subChoices) {
+      lines.push({ kind: "custom-data-option", text: `${option.name}:` });
+      for (const choice of option.choices) {
+        lines.push({ kind: "custom-data-item", text: `• ${choice}` });
+      }
+    }
+  }
+
   for (const group of normalizeChoiceSelections(item?.choiceSelections)) {
     lines.push({ kind: "choice", text: `${group.name}:` });
     for (const sub of group.subChoices) {
@@ -338,6 +420,18 @@ export function cartChoiceSelectionsKey(selections) {
     normalizeChoiceSelections(selections).map((group) => ({
       name: group.name,
       subChoices: [...group.subChoices].sort(),
+    })),
+  );
+}
+
+export function cartCustomDataSelectionsKey(selections) {
+  return JSON.stringify(
+    normalizeCustomDataSelections(selections).map((group) => ({
+      name: group.name,
+      subChoices: group.subChoices.map((option) => ({
+        name: option.name,
+        choices: [...option.choices].sort(),
+      })),
     })),
   );
 }

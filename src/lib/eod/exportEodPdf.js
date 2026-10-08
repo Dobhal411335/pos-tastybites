@@ -264,6 +264,33 @@ export async function exportEodPdf(report) {
         { label: "Total Refund Amount", value: money(dss.totalRefundAmount) },
       ]);
 
+      const sbs = report.salesBySource || {};
+      sectionTitle(doc, "ORDERS BY SOURCE");
+      dataTable(
+        doc,
+        ["Source", "Orders", "Paid", "Net Sales", "Gross Sales", "Tips"],
+        [
+          ...(sbs.rows || []).map((r) => [
+            r.label,
+            r.orderCount ?? 0,
+            r.paidCount ?? 0,
+            money(r.netSales),
+            money(r.grossSales),
+            money(r.tips),
+          ]),
+          sbs.total
+            ? [
+                "TOTAL",
+                sbs.total.orderCount ?? 0,
+                sbs.total.paidCount ?? 0,
+                money(sbs.total.netSales),
+                money(sbs.total.grossSales),
+                money(sbs.total.tips),
+              ]
+            : [],
+        ].filter((row) => row.length > 0)
+      );
+
       const dls = report.detailedLaborSummary || {};
       sectionTitle(doc, "DETAILED LABOR SUMMARY");
       metricGrid(doc, [

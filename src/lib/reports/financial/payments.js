@@ -1,7 +1,15 @@
 import Order from "@/models/Order";
 import Giftcard from "@/models/menu/Giftcard";
-import { r2, normalizePaymentTypeLabel } from "@/lib/eod/eodHelpers";
+import {
+  r2,
+  normalizePaymentTypeLabel,
+  resolveSplitTenders,
+} from "@/lib/eod/eodHelpers";
 import { DEFAULT_RESTAURANT_TIMEZONE } from "@/lib/restaurantTime";
+import {
+  formatMergedSeatLabel,
+  normalizeSeatNumbersList,
+} from "@/lib/orders/seatHelpers";
 import {
   formatRestaurantDate,
   formatRestaurantTime,
@@ -14,6 +22,7 @@ import {
   KPI_GROUP,
   roundKpis,
 } from "./metrics.js";
+import { shapeFinancialListMeta } from "./orderDetail.js";
 import { reportMeta } from "./query.js";
 
 async function giftCardsIssued({ restaurantId, dateFrom, dateTo }) {
@@ -73,9 +82,18 @@ export async function buildFinancialPayments({ restaurantId, ...filters }) {
                 paymentMethod: 1,
                 paymentStatus: 1,
                 status: 1,
+                source: 1,
+                tableNo: 1,
+                partyName: 1,
+                guestName: 1,
+                guestCount: 1,
                 totalAmount: 1,
                 tipAmount: 1,
+                tipMethod: 1,
+                giftcardCode: 1,
                 giftcardUsedAmount: 1,
+                paymentSplits: 1,
+                items: 1,
                 tenderCash: 1,
                 tenderCard: 1,
                 tenderGift: 1,
@@ -106,24 +124,69 @@ export async function buildFinancialPayments({ restaurantId, ...filters }) {
     percent: collected > 0 ? r2((row.amount / collected) * 100) : 0,
   }));
 
-  const rows = (facet?.rows || []).map((order) => ({
-    id: String(order._id),
-    orderNumber: order.orderNumber,
-    date: formatRestaurantDate(order.updatedAt, tz),
-    time: formatRestaurantTime(order.updatedAt, tz),
-    updatedAt: order.updatedAt,
-    employee: order.employeeName || "Unknown",
-    paymentMethod: order.paymentMethod || "—",
-    paymentLabel: normalizePaymentTypeLabel(
-      order.paymentMethod,
-      order.giftcardUsedAmount
-    ),
-    amount: r2(order.tenderCollected),
-    cash: r2(order.tenderCash),
-    card: r2(order.tenderCard),
-    giftCard: r2(order.tenderGift),
-    status: order.paymentStatus || order.status,
-  }));
+  const rows = (facet?.rows || []).map((order) => {
+    const meta = shapeFinancialListMeta(order);
+    const splits = (Array.isArray(order.paymentSplits) ? order.paymentSplits : []).map(
+      (split, index) => {
+        const tenders = resolveSplitTenders(split);
+        const seatNumbers = normalizeSeatNumbersList(split);
+        return {
+          index,
+          name: split?.name || "Payer",
+          amount: r2(split?.amount),
+          method: split?.method || null,
+          methodLabel:
+            split?.cardType && /card/i.test(String(split?.method || ""))
+              ? `Card - ${split.cardType}`
+              : split?.method || null,
+          cardType: split?.cardType || null,
+          tipAmount: r2(split?.tipAmount),
+          tipMethod: split?.tipMethod || null,
+          cash: tenders.cash,
+          card: tenders.card,
+          giftCard: tenders.giftCard,
+          seatNumber: split?.seatNumber ?? null,
+          seatNumbers: seatNumbers.length ? seatNumbers : null,
+          seatLabel: seatNumbers.length
+            ? formatMergedSeatLabel(seatNumbers)
+            : null,
+          paidAt: split?.paidAt || null,
+        };
+      }
+    );
+
+    return {
+      id: String(order._id),
+      orderNumber: order.orderNumber,
+      date: formatRestaurantDate(order.updatedAt, tz),
+      time: formatRestaurantTime(order.updatedAt, tz),
+      updatedAt: order.updatedAt,
+      employee: order.employeeName || "Unknown",
+      guest: order.partyName || order.guestName || "—",
+      table: order.tableNo || "—",
+      source: meta.source,
+      sourceLabel: meta.sourceLabel,
+      orderTypeLabel: meta.orderTypeLabel,
+      paymentMethod: order.paymentMethod || "—",
+      paymentLabel: normalizePaymentTypeLabel(
+        order.paymentMethod,
+        order.giftcardUsedAmount
+      ),
+      amount: r2(order.tenderCollected),
+      cash: r2(order.tenderCash),
+      card: r2(order.tenderCard),
+      giftCard: r2(order.tenderGift),
+      tipAmount: r2(order.tipAmount),
+      tipMethod: meta.tipMethod,
+      status: order.paymentStatus || order.status,
+      paymentStatus: order.paymentStatus,
+      splitCount: meta.splitCount,
+      hasSplits: meta.hasSplits,
+      hasSeatItems: meta.hasSeatItems,
+      seatBasedPayments: meta.seatBasedPayments,
+      splits,
+    };
+  });
 
   return {
     meta: reportMeta(filters),

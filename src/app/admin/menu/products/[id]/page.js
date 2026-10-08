@@ -43,6 +43,7 @@ export default function ProductDetailsConfigPage() {
   const [serviceTax, setServiceTax] = useState(null);
   const [preparationStyles, setPreparationStyles] = useState([""]);
   const [productType, setProductType] = useState("");
+  const [customData, setCustomData] = useState([]);
   const [choiceOptions, setChoiceOptions] = useState([]);
 
   // Custom selection lists
@@ -82,6 +83,21 @@ export default function ProductDetailsConfigPage() {
           })),
         );
         setPreparationStyles(p.preparationStyles?.length ? p.preparationStyles : [""]);
+        setCustomData(
+          p.customData?.length
+            ? p.customData.map((group) => ({
+                name: group.name || "",
+                subChoices: group.subChoices?.length
+                  ? group.subChoices.map((option) => ({
+                      name: option.name || "",
+                      choices: option.choices?.length
+                        ? [...option.choices]
+                        : ["", ""],
+                    }))
+                  : [{ name: "", choices: ["", ""] }],
+              }))
+            : []
+        );
         setChoiceOptions(
           p.choiceOptions?.length
             ? p.choiceOptions.map((group) => ({
@@ -356,6 +372,19 @@ export default function ProductDetailsConfigPage() {
             choiceOptions: serializeAddonChoiceOptions(a.choiceOptions),
           })),
           preparationStyles: preparationStyles.filter(s => s.trim() !== ""),
+          customData: customData
+            .map((group) => ({
+              name: (group.name || "").trim(),
+              subChoices: (group.subChoices || [])
+                .map((option) => ({
+                  name: (option.name || "").trim(),
+                  choices: (option.choices || [])
+                    .map((value) => String(value || "").trim())
+                    .filter(Boolean),
+                }))
+                .filter((option) => option.name && option.choices.length > 0),
+            }))
+            .filter((group) => group.name && group.subChoices.length > 0),
           choiceOptions: choiceOptions
             .map((group) => ({
               name: (group.name || "").trim(),
@@ -596,6 +625,221 @@ export default function ProductDetailsConfigPage() {
                           )}
                         </div>
                       ))}
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="shadow-sm border-zinc-200 bg-white overflow-hidden">
+                  <CardHeader className="bg-zinc-50/50 border-b border-zinc-100 pb-4">
+                    <CardTitle className="text-[18px] font-bold text-zinc-900">Custom Data</CardTitle>
+                    <CardDescription className="text-[14px]">
+                      Add a named group, options under it, and inner choices for each option.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="p-6 space-y-6">
+                    {customData.length === 0 && (
+                      <p className="text-[13px] text-zinc-500">
+                        No custom data groups. Add one for nested name → option → choices.
+                      </p>
+                    )}
+                    {customData.map((group, groupIndex) => (
+                      <div
+                        key={`custom-data-group-${groupIndex}`}
+                        className="space-y-4 border border-zinc-200 rounded-xl p-4 bg-white"
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <label className="text-[14px] font-semibold text-zinc-900">
+                            Custom Data
+                          </label>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => {
+                              setCustomData(
+                                customData.filter((_, i) => i !== groupIndex),
+                              );
+                            }}
+                            className="h-9 px-3 shrink-0 text-red-500 hover:text-red-700 hover:bg-red-50"
+                            aria-label="Delete custom data group"
+                          >
+                            <Trash2 className="w-4 h-4 mr-1.5" />
+                            Delete
+                          </Button>
+                        </div>
+                        <Input
+                          type="text"
+                          placeholder="Enter Your Custom Data Name"
+                          value={group.name}
+                          onChange={(e) => {
+                            const next = [...customData];
+                            next[groupIndex] = { ...next[groupIndex], name: e.target.value };
+                            setCustomData(next);
+                          }}
+                          className="h-11 text-[15px] bg-white rounded-full px-5"
+                        />
+                        <div className="space-y-4">
+                          <label className="text-[14px] font-semibold text-zinc-900">
+                            Options
+                          </label>
+                          {(group.subChoices || []).map((option, optionIndex) => (
+                            <div
+                              key={`custom-option-${groupIndex}-${optionIndex}`}
+                              className="space-y-3 rounded-xl border border-zinc-100 bg-zinc-50/60 p-3"
+                            >
+                              <div className="flex items-center gap-2">
+                                <Input
+                                  type="text"
+                                  placeholder="Option name (e.g. Protein)"
+                                  value={option.name}
+                                  onChange={(e) => {
+                                    const next = [...customData];
+                                    const subChoices = [...next[groupIndex].subChoices];
+                                    subChoices[optionIndex] = {
+                                      ...subChoices[optionIndex],
+                                      name: e.target.value,
+                                    };
+                                    next[groupIndex] = { ...next[groupIndex], subChoices };
+                                    setCustomData(next);
+                                  }}
+                                  className="h-10 text-[14px] bg-white rounded-full px-4"
+                                />
+                                {(group.subChoices || []).length > 1 && (
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={() => {
+                                      const next = [...customData];
+                                      const subChoices = [...next[groupIndex].subChoices];
+                                      subChoices.splice(optionIndex, 1);
+                                      next[groupIndex] = { ...next[groupIndex], subChoices };
+                                      setCustomData(next);
+                                    }}
+                                    className="h-10 w-10 p-0 shrink-0 text-red-500 hover:text-red-700 hover:bg-red-50"
+                                    aria-label="Delete option"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </Button>
+                                )}
+                              </div>
+                              <label className="text-[13px] font-semibold text-zinc-700">
+                                Inner choices
+                              </label>
+                              <div className="grid grid-cols-2 gap-3">
+                                {(option.choices || []).map((choice, choiceIndex) => (
+                                  <div
+                                    key={`custom-choice-${groupIndex}-${optionIndex}-${choiceIndex}`}
+                                    className="flex items-center gap-1.5"
+                                  >
+                                    <Input
+                                      type="text"
+                                      placeholder="Choice name"
+                                      value={choice}
+                                      onChange={(e) => {
+                                        const next = [...customData];
+                                        const subChoices = [...next[groupIndex].subChoices];
+                                        const choices = [...(subChoices[optionIndex].choices || [])];
+                                        choices[choiceIndex] = e.target.value;
+                                        subChoices[optionIndex] = {
+                                          ...subChoices[optionIndex],
+                                          choices,
+                                        };
+                                        next[groupIndex] = { ...next[groupIndex], subChoices };
+                                        setCustomData(next);
+                                      }}
+                                      className="h-10 text-[14px] bg-white rounded-full px-4"
+                                    />
+                                    {(option.choices || []).length > 1 && (
+                                      <Button
+                                        type="button"
+                                        variant="outline"
+                                        onClick={() => {
+                                          const next = [...customData];
+                                          const subChoices = [...next[groupIndex].subChoices];
+                                          const choices = [...(subChoices[optionIndex].choices || [])];
+                                          choices.splice(choiceIndex, 1);
+                                          subChoices[optionIndex] = {
+                                            ...subChoices[optionIndex],
+                                            choices,
+                                          };
+                                          next[groupIndex] = { ...next[groupIndex], subChoices };
+                                          setCustomData(next);
+                                        }}
+                                        className="h-10 w-10 p-0 shrink-0 text-red-500 hover:text-red-700 hover:bg-red-50"
+                                        aria-label="Delete inner choice"
+                                      >
+                                        <Trash2 className="w-4 h-4" />
+                                      </Button>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                              <div className="flex items-center justify-end gap-3">
+                                <span className="text-[13px] font-medium text-zinc-600">
+                                  Add inner choice
+                                </span>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  onClick={() => {
+                                    const next = [...customData];
+                                    const subChoices = [...next[groupIndex].subChoices];
+                                    subChoices[optionIndex] = {
+                                      ...subChoices[optionIndex],
+                                      choices: [...(subChoices[optionIndex].choices || []), ""],
+                                    };
+                                    next[groupIndex] = { ...next[groupIndex], subChoices };
+                                    setCustomData(next);
+                                  }}
+                                  className="h-10 w-10 p-0 shrink-0 text-zinc-700"
+                                >
+                                  <Plus className="w-5 h-5" />
+                                </Button>
+                              </div>
+                            </div>
+                          ))}
+                          <div className="flex items-center justify-end gap-3 pt-1">
+                            <span className="text-[13px] font-medium text-zinc-600">
+                              Need more option
+                            </span>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              onClick={() => {
+                                const next = [...customData];
+                                next[groupIndex] = {
+                                  ...next[groupIndex],
+                                  subChoices: [
+                                    ...(next[groupIndex].subChoices || []),
+                                    { name: "", choices: ["", ""] },
+                                  ],
+                                };
+                                setCustomData(next);
+                              }}
+                              className="h-10 w-10 p-0 shrink-0 text-zinc-700"
+                            >
+                              <Plus className="w-5 h-5" />
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    <div className="flex justify-end">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() =>
+                          setCustomData([
+                            ...customData,
+                            {
+                              name: "",
+                              subChoices: [{ name: "", choices: ["", ""] }],
+                            },
+                          ])
+                        }
+                        className="h-9 px-4 font-semibold text-zinc-700"
+                      >
+                        <Plus className="w-4 h-4 mr-2" /> Add Custom Data
+                      </Button>
                     </div>
                   </CardContent>
                 </Card>

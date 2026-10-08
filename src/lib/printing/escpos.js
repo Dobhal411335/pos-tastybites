@@ -196,11 +196,21 @@ function formatSentAt(dateLike) {
 
 function isDirectSaleOrder(order) {
   const source = order?.source;
-  return source === "WALK_IN" || source === "STAFF";
+  return source === "WALK_IN" || source === "TAKEAWAY" || source === "STAFF";
 }
 
 function shouldShowTable(order) {
   return Boolean(order?.tableNo) && !isDirectSaleOrder(order);
+}
+
+/** Mirrors getOrderTypeLabel from orderDisplay.js */
+function getOrderTypeLabel(order) {
+  const source = order?.source || "POS";
+  if (source === "WALK_IN" || source === "TAKEAWAY") return "Takeaway";
+  if (source === "STAFF") return "Staff";
+  if (source === "ONLINE") return "Online";
+  if (order?.tableSession || order?.tableNo) return "Dine-in";
+  return "Takeaway";
 }
 
 function stripFloorSuffix(value) {
@@ -341,6 +351,21 @@ function getReceiptModifierLines(item, { includeCustomPrices = false } = {}) {
     return lines;
   }
 
+  if (Array.isArray(item?.customDataSelections)) {
+    for (const group of item.customDataSelections) {
+      const name = String(group?.name || "").trim();
+      const options = Array.isArray(group?.subChoices) ? group.subChoices : [];
+      if (!name || !options.length) continue;
+      lines.push(`${name}:`);
+      for (const option of options) {
+        const optionName = String(option?.name || "").trim();
+        const choices = cleanList(option?.choices);
+        if (!optionName || !choices.length) continue;
+        lines.push(`  ${optionName}:`);
+        for (const choice of choices) lines.push(`    • ${choice}`);
+      }
+    }
+  }
   if (Array.isArray(item?.choiceSelections)) {
     for (const group of item.choiceSelections) {
       const name = String(group?.name || "").trim();
@@ -574,13 +599,14 @@ function buildKotTicketInner({
   const tableNo = resolveTableNo(job, order);
   const floorName = resolveFloorName(job, order);
   const tableLabel = formatTableLocation(tableNo, floorName);
+  const orderTypeLabel = getOrderTypeLabel(order);
   const directSale = isDirectSaleOrder(order);
   const partyLabel =
     job?.metadata?.partyName ||
     order?.partyName ||
     order?.guestName ||
     job?.metadata?.guestName ||
-    (directSale ? "Take-Away" : "");
+    (directSale ? orderTypeLabel : "");
   const note = job?.metadata?.specialNote || order?.specialNote;
   const items = kotItems.length
     ? kotItems
@@ -601,15 +627,20 @@ function buildKotTicketInner({
     .line(
       toPrinterText(
         directSale
-          ? partyLabel || "Take-Away"
-          : tableLabel || "Takeaway / No Table",
+          ? partyLabel || orderTypeLabel
+          : tableLabel || orderTypeLabel,
       ),
     )
+    .bold(false);
+  e.align(1)
+    .bold(true)
+    .line(toPrinterText(String(orderTypeLabel).toUpperCase()))
     .bold(false);
   e.resetStyle();
   e.line(divider("="));
 
   e.line(`Order #: ${orderNumber}`);
+  e.line(`Order type: ${orderTypeLabel}`);
   e.line(`Sent: ${formatSentAt(order?.createdAt || job?.createdAt)}`);
   if (serverName) e.line(`Server: ${toPrinterText(serverName)}`);
   if (partyLabel) e.line(`Party: ${toPrinterText(partyLabel)}`);
@@ -747,13 +778,14 @@ function buildBarTicketInner({
   const tableNo = resolveTableNo(job, order);
   const floorName = resolveFloorName(job, order);
   const tableLabel = formatTableNumbersWithFloor(tableNo, floorName);
+  const orderTypeLabel = getOrderTypeLabel(order);
   const directSale = isDirectSaleOrder(order);
   const partyLabel =
     job?.metadata?.partyName ||
     order?.partyName ||
     order?.guestName ||
     job?.metadata?.guestName ||
-    (directSale ? "Take-Away" : "");
+    (directSale ? orderTypeLabel : "");
   const covers =
     guestCount != null && guestCount !== ""
       ? Number(guestCount)
@@ -775,6 +807,10 @@ function buildBarTicketInner({
   if (reprint) {
     e.align(1).bold(true).line("*** REPRINT ***").bold(false);
   }
+  e.align(1)
+    .bold(true)
+    .line(toPrinterText(String(orderTypeLabel).toUpperCase()))
+    .bold(false);
   e.resetStyle();
 
   if (partyLabel || covers != null) {
@@ -786,7 +822,9 @@ function buildBarTicketInner({
   }
   if (!directSale) {
     e.bold(true)
-      .line(toPrinterText(`Table: ${tableLabel || "Takeaway"}`.toUpperCase()))
+      .line(
+        toPrinterText(`Table: ${tableLabel || orderTypeLabel}`.toUpperCase()),
+      )
       .bold(false);
   }
 
@@ -801,6 +839,7 @@ function buildBarTicketInner({
     e.line(toPrinterText(`Table: ${tableLabel}${coverBit}`));
   }
   e.line(`Order: ${orderNumber}`);
+  e.line(`Order type: ${orderTypeLabel}`);
   if (partyLabel) e.line(`Party Name: ${toPrinterText(partyLabel)}`);
   if (serverName) e.line(`Server: ${toPrinterText(serverName)}`);
 
@@ -1083,12 +1122,14 @@ function buildReceiptTicketInner({
       `Invoice No: ${invoiceNumber}`,
     ),
   );
+  const orderTypeLabel = getOrderTypeLabel(order);
+  e.line(`Order type: ${orderTypeLabel}`);
   e.line(`Server: ${toPrinterText(serverName || "Server")}`);
   if (shouldShowTable({ ...order, tableNo })) {
     e.line(`Table: ${toPrinterText(tableLabel)}`);
   }
   if (partyLabel || !shouldShowTable({ ...order, tableNo })) {
-    e.line(`Party: ${toPrinterText(partyLabel || "Take-Away")}`);
+    e.line(`Party: ${toPrinterText(partyLabel || orderTypeLabel)}`);
   }
   const resolvedGuests =
     guestCount != null && guestCount !== ""

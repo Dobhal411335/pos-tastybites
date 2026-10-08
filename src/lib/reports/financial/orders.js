@@ -7,6 +7,7 @@ import {
 } from "./format.js";
 import { baseOrderMatch, ORDER_STATUSES } from "./match.js";
 import { EMPLOYEE_LOOKUP, financialPipeline } from "./metrics.js";
+import { shapeFinancialListMeta } from "./orderDetail.js";
 import { reportMeta } from "./query.js";
 
 const LIST_PROJECT = {
@@ -22,10 +23,15 @@ const LIST_PROJECT = {
   partyName: 1,
   guestName: 1,
   contactNumber: 1,
+  guestCount: 1,
+  source: 1,
   subTotal: 1,
   discountTotal: 1,
+  discountCode: 1,
+  discountPercent: 1,
   taxTotal: 1,
   tipAmount: 1,
+  tipMethod: 1,
   serviceChargeTotal: 1,
   serviceChargeName: 1,
   totalAmount: 1,
@@ -34,7 +40,10 @@ const LIST_PROJECT = {
   status: 1,
   cashAmount: 1,
   cardAmount: 1,
+  giftcardCode: 1,
   giftcardUsedAmount: 1,
+  paymentSplits: 1,
+  items: 1,
   tenderCash: 1,
   tenderCard: 1,
   tenderGift: 1,
@@ -83,37 +92,53 @@ export async function buildFinancialOrders({ restaurantId, ...filters }) {
   }
 
   const total = facet?.total?.[0]?.count || 0;
-  const rows = (facet?.rows || []).map((order) => ({
-    id: String(order._id),
-    orderNumber: order.orderNumber,
-    invoiceNumber: order.invoiceNumber || null,
-    originalInvoiceNumber: order.originalInvoiceNumber || null,
-    date: formatRestaurantDate(order.updatedAt, tz),
-    time: formatRestaurantTime(order.updatedAt, tz),
-    createdAt: order.createdAt,
-    updatedAt: order.updatedAt,
-    employee: order.employeeName || "Unknown",
-    table: order.tableNo || "—",
-    guest: order.partyName || order.guestName || "—",
-    subTotal: r2(order.subTotal),
-    discount: r2(order.discountTotal),
-    tax: r2(order.taxTotal),
-    tips: r2(order.tipAmount),
-    serviceCharge: r2(order.serviceChargeTotal),
-    total: r2(order.totalAmount),
-    paymentMethod: order.paymentMethod || "—",
-    paymentLabel: normalizePaymentTypeLabel(
-      order.paymentMethod,
-      order.giftcardUsedAmount
-    ),
-    paymentStatus: order.paymentStatus,
-    status: order.status,
-    tenders: {
-      cash: r2(order.tenderCash),
-      card: r2(order.tenderCard),
-      giftCard: r2(order.tenderGift),
-    },
-  }));
+  const rows = (facet?.rows || []).map((order) => {
+    const meta = shapeFinancialListMeta(order);
+    return {
+      id: String(order._id),
+      orderNumber: order.orderNumber,
+      invoiceNumber: order.invoiceNumber || null,
+      originalInvoiceNumber: order.originalInvoiceNumber || null,
+      date: formatRestaurantDate(order.updatedAt, tz),
+      time: formatRestaurantTime(order.updatedAt, tz),
+      createdAt: order.createdAt,
+      updatedAt: order.updatedAt,
+      employee: order.employeeName || "Unknown",
+      table: order.tableNo || "—",
+      guest: order.partyName || order.guestName || "—",
+      guestCount: meta.guestCount,
+      source: meta.source,
+      sourceLabel: meta.sourceLabel,
+      orderTypeLabel: meta.orderTypeLabel,
+      subTotal: r2(order.subTotal),
+      discount: r2(order.discountTotal),
+      discountCode: meta.discountCode,
+      tax: r2(order.taxTotal),
+      tips: r2(order.tipAmount),
+      tipMethod: meta.tipMethod,
+      serviceCharge: r2(order.serviceChargeTotal),
+      serviceChargeName: meta.serviceChargeName,
+      total: r2(order.totalAmount),
+      paymentMethod: order.paymentMethod || "—",
+      paymentLabel: normalizePaymentTypeLabel(
+        order.paymentMethod,
+        order.giftcardUsedAmount
+      ),
+      paymentStatus: order.paymentStatus,
+      status: order.status,
+      splitCount: meta.splitCount,
+      hasSplits: meta.hasSplits,
+      hasSeatItems: meta.hasSeatItems,
+      seatBasedPayments: meta.seatBasedPayments,
+      paidAmount: meta.paidAmount,
+      remainingDue: meta.remainingDue,
+      tenders: {
+        cash: r2(order.tenderCash),
+        card: r2(order.tenderCard),
+        giftCard: r2(order.tenderGift),
+      },
+    };
+  });
 
   return {
     meta: reportMeta(filters),

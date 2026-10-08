@@ -14,7 +14,9 @@ import { useCart } from "@/context/CartContext";
 import { toast } from "sonner";
 import {
   normalizeChoiceOptions,
+  normalizeCustomData,
   cartChoiceSelectionsKey,
+  cartCustomDataSelectionsKey,
   normalizeAddonChoiceQtyMap,
   sumAddonChoiceQtyMap,
   buildAddonChoiceSelectionsFromQtyMaps,
@@ -88,6 +90,10 @@ export default function ProductConfigModal({ isOpen, onClose, product }) {
     () => (Array.isArray(product?.addons) ? product.addons : []),
     [product],
   );
+  const customDataGroups = useMemo(
+    () => normalizeCustomData(product?.customData),
+    [product],
+  );
   const choiceOptions = useMemo(
     () => normalizeChoiceOptions(product?.choiceOptions),
     [product],
@@ -99,6 +105,8 @@ export default function ProductConfigModal({ isOpen, onClose, product }) {
 
   const [variantQtyBySize, setVariantQtyBySize] = useState({});
   const [addonQtyById, setAddonQtyById] = useState({});
+  /** { [groupName]: { [optionName]: string[] } } */
+  const [customDataSelections, setCustomDataSelections] = useState({});
   const [choiceSelections, setChoiceSelections] = useState({});
   const [preparationStyle, setPreparationStyle] = useState("");
   const [configuredProductId, setConfiguredProductId] = useState(null);
@@ -112,6 +120,7 @@ export default function ProductConfigModal({ isOpen, onClose, product }) {
     setConfiguredProductId(productId);
     setVariantQtyBySize(initialVariantQty);
     setAddonQtyById({});
+    setCustomDataSelections({});
     setChoiceSelections({});
     setPreparationStyle(prepStyles[0] || "");
   }
@@ -145,6 +154,18 @@ export default function ProductConfigModal({ isOpen, onClose, product }) {
     }
     return errors;
   }, [addonQtyById]);
+
+  const productCustomDataPayload = customDataGroups
+    .map((group) => ({
+      name: group.name,
+      subChoices: group.subChoices
+        .map((option) => ({
+          name: option.name,
+          choices: customDataSelections[group.name]?.[option.name] || [],
+        }))
+        .filter((option) => option.choices.length > 0),
+    }))
+    .filter((group) => group.subChoices.length > 0);
 
   const productChoicePayload = choiceOptions
     .map((group) => ({
@@ -224,6 +245,22 @@ export default function ProductConfigModal({ isOpen, onClose, product }) {
     });
   };
 
+  const toggleCustomDataChoice = (groupName, optionName, choice, multi) => {
+    setCustomDataSelections((prev) => {
+      const group = prev[groupName] || {};
+      const current = group[optionName] || [];
+      const next = !multi
+        ? [choice]
+        : current.includes(choice)
+          ? current.filter((value) => value !== choice)
+          : [...current, choice];
+      return {
+        ...prev,
+        [groupName]: { ...group, [optionName]: next },
+      };
+    });
+  };
+
   const setAddonSubChoiceQty = (key, addon, groupIndex, subChoice, nextQty) => {
     setAddonQtyById((prev) => {
       const entry = prev[key] || { addon, qty: 0, choicesByGroup: {} };
@@ -286,13 +323,20 @@ export default function ProductConfigModal({ isOpen, onClose, product }) {
     }
 
     const choiceKey = cartChoiceSelectionsKey(productChoicePayload);
+    const customDataKey = cartCustomDataSelectionsKey(productCustomDataPayload);
     const prep = preparationStyle || "";
 
     variantEntries.forEach(([key, qty]) => {
       const variant = variants[Number(key)];
       if (!variant) return;
       const sizeName = variant.size || "Standard";
-      const cartKey = buildCartKey([product.id, sizeName, choiceKey, prep]);
+      const cartKey = buildCartKey([
+        product.id,
+        sizeName,
+        choiceKey,
+        customDataKey,
+        prep,
+      ]);
 
       addToCart(
         {
@@ -308,6 +352,7 @@ export default function ProductConfigModal({ isOpen, onClose, product }) {
           selectedAddons: [],
           options: prep ? [prep] : [],
           choiceSelections: productChoicePayload,
+          customDataSelections: productCustomDataPayload,
           addonChoiceSelections: [],
           preparationStyle: prep || null,
           noteWithout: "",
@@ -359,6 +404,7 @@ export default function ProductConfigModal({ isOpen, onClose, product }) {
           // Kept for pricing; receipt/cart UI filters the duplicate name
           options: [addon.name],
           choiceSelections: [],
+          customDataSelections: [],
           addonChoiceSelections: addonChoices,
           preparationStyle: null,
           noteWithout: "",
@@ -420,6 +466,9 @@ export default function ProductConfigModal({ isOpen, onClose, product }) {
           {(() => {
             const sectionIds = [
               ...(variants.length > 0 ? ["variants"] : []),
+              ...customDataGroups.map(
+                (group, i) => `custom-${i}-${group.name}`,
+              ),
               ...choiceOptions.map((group, i) => `choice-${i}-${group.name}`),
               ...(prepStyles.length > 0 ? ["preparation"] : []),
               ...(addons.length > 0 ? ["addons"] : []),
@@ -484,6 +533,73 @@ export default function ProductConfigModal({ isOpen, onClose, product }) {
                     </AccordionContent>
                   </AccordionItem>
                 ) : null}
+
+                {customDataGroups.map((group, groupIndex) => {
+                  const value = `custom-${groupIndex}-${group.name}`;
+                  return (
+                    <AccordionItem
+                      key={value}
+                      value={value}
+                      className={accordionItemClass}
+                    >
+                      <AccordionTrigger className={accordionTriggerClass}>
+                        {group.name}
+                      </AccordionTrigger>
+                      <AccordionContent className={accordionContentClass}>
+                        <div className="space-y-4">
+                          {group.subChoices.map((option) => {
+                            const multi = (option.choices || []).length > 2;
+                            const selected =
+                              customDataSelections[group.name]?.[option.name] ||
+                              [];
+                            return (
+                              <div
+                                key={`${group.name}-${option.name}`}
+                                className="space-y-2"
+                              >
+                                <p className="text-[12px] font-bold uppercase tracking-wide text-zinc-500">
+                                  {option.name}
+                                </p>
+                                <div className="grid gap-2 sm:grid-cols-2">
+                                  {(option.choices || []).map((choice) => {
+                                    const checked = selected.includes(choice);
+                                    return (
+                                      <label
+                                        key={`${group.name}-${option.name}-${choice}`}
+                                        className={cn(
+                                          "flex cursor-pointer items-center gap-3 rounded-lg border p-3 text-sm font-semibold",
+                                          checked
+                                            ? "border-violet-500 bg-violet-50/40"
+                                            : "border-zinc-200",
+                                        )}
+                                      >
+                                        <input
+                                          type={multi ? "checkbox" : "radio"}
+                                          name={`custom-${group.name}-${option.name}`}
+                                          checked={checked}
+                                          onChange={() =>
+                                            toggleCustomDataChoice(
+                                              group.name,
+                                              option.name,
+                                              choice,
+                                              multi,
+                                            )
+                                          }
+                                          className="h-4 w-4 accent-violet-600"
+                                        />
+                                        {choice}
+                                      </label>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </AccordionContent>
+                    </AccordionItem>
+                  );
+                })}
 
                 {choiceOptions.map((group, groupIndex) => {
                   const multi = (group.subChoices || []).length > 2;

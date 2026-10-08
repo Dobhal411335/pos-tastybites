@@ -206,6 +206,7 @@ export function serializePublicOrder(order) {
       size: item.size,
       options: item.options || [],
       choiceSelections: item.choiceSelections || [],
+      customDataSelections: item.customDataSelections || [],
       addonChoiceSelections: item.addonChoiceSelections || [],
       notes: item.notes || "",
       tax: item.tax || 0,

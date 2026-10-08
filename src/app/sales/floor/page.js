@@ -46,6 +46,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import NetworkErrorPanel from "@/components/common/NetworkErrorPanel";
 import { employeeFetch } from "@/lib/employeeFetch";
 import { isSalesAdminRole } from "@/utils/roles";
 import { resolveDocumentId, sessionOwnsTable, formatTableLocation } from "@/utils/orderDisplay";
@@ -122,6 +123,7 @@ export default function SalesFloorPage() {
   const { socket } = useSocket();
   const { user: currentUser } = useAuth();
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
   const [floorData, setFloorData] = useState({
     floors: [],
     tables: [],
@@ -224,6 +226,7 @@ export default function SalesFloorPage() {
       const floorRes = await employeeFetch(`/api/sales/floor${floorQuery}`);
       const floorJson = await floorRes.json();
       if (floorRes.ok && floorJson.success && floorJson.data) {
+        setLoadError(null);
         setFloorData(floorJson.data);
         if (floorJson.data.activeFloorId) {
           const nextId = String(floorJson.data.activeFloorId);
@@ -232,7 +235,9 @@ export default function SalesFloorPage() {
           storeFloorId(nextId);
         }
       } else if (!silent) {
-        toast.error(floorJson.message || "Failed to load floor data");
+        const msg = floorJson.message || "Failed to load floor data";
+        setLoadError(msg);
+        toast.error(msg);
         return;
       }
 
@@ -248,6 +253,7 @@ export default function SalesFloorPage() {
       }
     } catch (err) {
       if (!silent) {
+        setLoadError("Failed to load floor data");
         toast.error("Failed to load floor data");
       }
     } finally {
@@ -717,8 +723,34 @@ export default function SalesFloorPage() {
     );
   }
 
+  if (loadError && floorData.tables.length === 0 && !loading) {
+    return (
+      <div className="flex h-full items-center justify-center px-4">
+        <NetworkErrorPanel
+          title="Unable to load floor"
+          message={loadError}
+          onRetry={() => {
+            void loadData(undefined, { silent: false });
+          }}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-full max-h-full min-h-0 flex-col overflow-hidden">
+      {loadError ? (
+        <div className="shrink-0 border-b border-red-200 bg-red-50 px-4 py-2">
+          <NetworkErrorPanel
+            className="border-0 bg-transparent py-2"
+            title="Floor sync issue"
+            message={loadError}
+            onRetry={() => {
+              void loadData(undefined, { silent: false });
+            }}
+          />
+        </div>
+      ) : null}
       <header className="shrink-0 border-b border-zinc-200 bg-white px-4 sm:px-5 py-2.5 sm:py-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
@@ -960,43 +992,44 @@ export default function SalesFloorPage() {
                     boxSizing: "border-box",
                   }}
                 >
+                  <div className="flex flex-col items-center justify-center">
                   <span
-                    className={`text-lg md:text-[14px] font-bold tracking-tight leading-tight ${textClass}`}
+                    className={`w-full truncate text-center text-lg md:text-[14px] font-bold tracking-tight leading-tight ${textClass}`}
                   >
                     {table.tableNumber}
                   </span>
 
                   <span
-                    className={`mt-1.5 text-[10px] md:text-md font-bold uppercase tracking-wide leading-none ${statusClass}`}
+                    className={`mt-1 w-full truncate text-center text-[10px] md:text-md font-bold uppercase tracking-wide leading-none ${statusClass}`}
                   >
                     {statusLabel}
                   </span>
+                  </div>
 
                   {session ? (
-                    <div className="mt-2 flex flex-col items-center gap-0.5 min-w-0 px-0.5">
-                      <div className="flex items-center gap-1">
-                        {employeeFirst && (
-                          <span
-                            className={`text-xs font-bold truncate max-w-full ${textClass}`}
-                          >
-                            {employeeFirst}
-                          </span>
-                        )}
-                        <Users className={`h-4 w-4 ${statusClass}`} />
+                    <div className="mt-1.5 flex w-full min-w-0 flex-col items-center gap-0.5">
+                      {employeeFirst && (
                         <span
-                          className={`text-sm font-semibold ${statusClass}`}
+                          className={`w-full truncate text-center text-[10px] font-bold leading-tight ${textClass}`}
+                          title={employeeFirst}
                         >
-                          {session.guestCount}
+                          {employeeFirst}
+                        </span>
+                      )}
+                      <div className="flex shrink-0 items-center gap-0.5">
+                        <Users className={`h-3.5 w-3.5 shrink-0 ${statusClass}`} />
+                        <span className={`text-[11px] font-semibold ${statusClass}`}>
+                          {table.seats} seats
                         </span>
                       </div>
-                      <span className={`text-[10px] font-semibold ${statusClass}`}>
+                    </div>
+                  ) : (
+                    <div className="mt-1.5 flex shrink-0 items-center gap-0.5 text-zinc-500">
+                      <Users className="h-3.5 w-3.5 shrink-0" />
+                      <span className="text-xs font-semibold">
                         {table.seats} seats
                       </span>
                     </div>
-                  ) : (
-                    <span className="mt-2 text-xs font-semibold text-zinc-500">
-                      {table.seats} seats
-                    </span>
                   )}
 
                   {/* Lock icon for occupied tables owned by other employees */}

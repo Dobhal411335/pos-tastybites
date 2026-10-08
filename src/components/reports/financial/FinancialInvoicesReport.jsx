@@ -30,7 +30,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import OrderDetailBody, { STATUS_BADGE } from "@/components/reports/OrderDetailBody";
+import OrderDetailBody, {
+  OrderSourceBadge,
+  PAYMENT_STATUS_BADGE,
+  STATUS_BADGE,
+} from "@/components/reports/OrderDetailBody";
 import FinancialPageHeader from "./FinancialPageHeader";
 import FinancialKpiCards from "./FinancialKpiCards";
 import {
@@ -59,7 +63,9 @@ export default function FinancialInvoicesReport() {
     setDetailError(null);
     setDetailLoading(true);
     try {
-      const res = await fetch(`/api/orders/${id}`, { credentials: "include" });
+      const res = await fetch(`/api/admin/reports/financial/orders/${id}`, {
+        credentials: "include",
+      });
       const json = await res.json();
       if (!res.ok || !json.success) {
         throw new Error(json.message || "Invoice could not be loaded.");
@@ -89,7 +95,7 @@ export default function FinancialInvoicesReport() {
     <>
       <FinancialPageHeader
         title="Invoices"
-        description="Paid guest checks by invoice number stored on the order. Soft-deleted orders are excluded."
+        description="Paid guest checks by invoice number. Open a row for split payers, seats, extras, and order type."
         filters={filters}
         onFiltersChange={setFilters}
         filterProps={{
@@ -102,14 +108,14 @@ export default function FinancialInvoicesReport() {
         error={error}
         onRetry={reload}
         empty={!error && (!data || data.empty)}
-        emptyMessage="No paid invoices found for the selected period."
+        emptyMessage="No invoices found for the selected period."
       >
         <div className="space-y-4">
           <FinancialKpiCards
             items={[
               {
                 label: "Invoices",
-                value: summary?.invoiceCount || 0,
+                value: summary?.invoiceCount,
                 icon: FileText,
               },
               {
@@ -123,13 +129,12 @@ export default function FinancialInvoicesReport() {
                 value: summary?.discounts,
                 money: true,
                 icon: Percent,
-                tone: "danger",
               },
               {
                 label: "Net Sales",
                 value: summary?.netSales,
                 money: true,
-                icon: DollarSign,
+                icon: Receipt,
               },
               {
                 label: "Tax",
@@ -167,6 +172,7 @@ export default function FinancialInvoicesReport() {
                     ["orderNumber", "Order #"],
                     ["updatedAt", "Date"],
                     [null, "Time"],
+                    [null, "Type"],
                     [null, "Guest"],
                     [null, "Employee"],
                     ["subTotal", "Subtotal"],
@@ -218,6 +224,17 @@ export default function FinancialInvoicesReport() {
                     </TableCell>
                     <TableCell className="whitespace-nowrap">{row.date}</TableCell>
                     <TableCell className="whitespace-nowrap">{row.time}</TableCell>
+                    <TableCell>
+                      <div className="flex flex-col gap-1">
+                        <OrderSourceBadge order={row} />
+                        {row.hasSplits ? (
+                          <span className="text-[10px] text-violet-700 font-medium">
+                            {row.splitCount} payer{row.splitCount === 1 ? "" : "s"}
+                            {row.seatBasedPayments ? " · seats" : ""}
+                          </span>
+                        ) : null}
+                      </div>
+                    </TableCell>
                     <TableCell>{row.guest}</TableCell>
                     <TableCell>{row.employee}</TableCell>
                     <TableCell className="tabular-nums text-right">
@@ -244,7 +261,11 @@ export default function FinancialInvoicesReport() {
                     <TableCell>
                       <Badge
                         variant="outline"
-                        className={`text-[10px] ${STATUS_BADGE[row.status] || ""}`}
+                        className={`text-[10px] ${
+                          PAYMENT_STATUS_BADGE[row.paymentStatus] ||
+                          STATUS_BADGE[row.status] ||
+                          ""
+                        }`}
                       >
                         {row.paymentStatus || row.status}
                       </Badge>
@@ -287,7 +308,7 @@ export default function FinancialInvoicesReport() {
           <SheetHeader>
             <SheetTitle>Invoice details</SheetTitle>
             <SheetDescription>
-              Invoice numbers and totals come from the paid Order record.
+              Invoice numbers and totals come from the paid Order record, including splits and seats.
             </SheetDescription>
           </SheetHeader>
           {detailLoading ? (

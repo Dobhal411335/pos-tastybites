@@ -12,6 +12,8 @@ export {
   reprintPrintJob,
   reprintOrderTicket,
   markPrintJobPrinted,
+  cancelPrintJob,
+  cancelQueuedJobsForPrinter,
   toPrintJobEventPayload,
   SALES_PRINT_ROLES,
   assertPrintAdminRole,

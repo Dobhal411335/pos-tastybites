@@ -238,19 +238,46 @@ export default function GuestDirectoryReport() {
     }
   };
 
-  const openOrder = async (orderId) => {
-    setOrderDetail(null);
-    setOrderDetailLoading(true);
+  const openOrder = async (orderId, historyRow = null) => {
+    const fromHistory =
+      historyRow ||
+      guestDetail?.history?.find((row) => row.orderId === orderId) ||
+      null;
+
+    // History rows already include full pricing/items for the guest detail fetch.
+    if (fromHistory?.items) {
+      setOrderDetail({
+        ...fromHistory,
+        guestName: fromHistory.guestName || fromHistory.partyName,
+        _id: fromHistory.orderId,
+      });
+      setOrderDetailLoading(false);
+    } else {
+      setOrderDetail(null);
+      setOrderDetailLoading(true);
+    }
+
     try {
       const res = await fetch(`/api/orders/${orderId}`, {
         credentials: "include",
         cache: "no-store",
       });
       const json = await res.json();
-      if (!json.success) throw new Error(json.message || "Order not found");
-      setOrderDetail(json.data);
+      if (!json.success) {
+        if (!fromHistory?.items) {
+          throw new Error(json.message || "Order not found");
+        }
+        return;
+      }
+      setOrderDetail({
+        ...json.data,
+        sourceLabel: fromHistory?.sourceLabel,
+        orderTypeLabel: fromHistory?.orderTypeLabel || fromHistory?.sourceLabel,
+      });
     } catch (error) {
-      toast.error(error.message || "Failed to load order");
+      if (!fromHistory?.items) {
+        toast.error(error.message || "Failed to load order");
+      }
     } finally {
       setOrderDetailLoading(false);
     }

@@ -10,14 +10,15 @@ import Giftcard from "@/models/menu/Giftcard";
 import { buildWorkingHoursSummaryPipeline } from "@/lib/payEstimate";
 import { ACTIVE_ORDER_FILTER } from "@/lib/orders/activeOrderFilter";
 import { paidRevenueOrderMatch } from "@/lib/reports/financial/match";
+import { getItemLineTotal } from "@/utils/productChoices";
 import {
   businessCalendarDate,
   businessDateBounds,
   formatEmployeeName,
-  isCashPaymentMethod,
-  normalizePaymentTypeLabel,
+  paymentTypeContributions,
   priorBusinessDate,
   r2,
+  resolveCashTipAmount,
   resolveTenders,
 } from "./eodHelpers.js";
 import { reconcileEod } from "./reconcileEod.js";
@@ -311,16 +312,15 @@ export async function buildEodReport({
     srcRow.tips = r2(srcRow.tips + tip);
 
     // Categories — allocate order discount/tax proportionally by item line net
+    // Line gross includes customExtras (price is base unit only).
     const items = Array.isArray(order.items) ? order.items : [];
     const itemGrossTotal = items.reduce(
-      (s, it) => s + (Number(it.price) || 0) * (Number(it.qty) || 0),
+      (s, it) => s + getItemLineTotal(it),
       0
     );
     for (const it of items) {
       const catName = (it.category || "Other").trim() || "Other";
-      const lineGross = r2(
-        (Number(it.price) || 0) * (Number(it.qty) || 0)
-      );
+      const lineGross = r2(getItemLineTotal(it));
       const share =
         itemGrossTotal > 0 ? lineGross / itemGrossTotal : 0;
       const lineDisc = r2(disc * share);
@@ -337,7 +337,7 @@ export async function buildEodReport({
       cat.taxes = r2(cat.taxes + lineTax);
     }
 
-    // Tips by employee
+    // Tips by employee — prefer tipMethod / split tipMethods over paymentMethod
     const emp = order.processedBy;
     const empKey = emp?._id ? String(emp._id) : "unknown";
     const empName = formatEmployeeName(emp);
@@ -350,43 +350,28 @@ export async function buildEodReport({
       });
     }
     const tipRow = tipsByEmp.get(empKey);
-    const cashTip = isCashPaymentMethod(order.paymentMethod)
-      ? tip
-      : tenders.cash > 0 && tenders.card === 0 && tenders.giftCard === 0
-        ? tip
-        : 0;
+    const cashTip = resolveCashTipAmount(order);
     const nonCashTip = r2(tip - cashTip);
     tipRow.cashTips = r2(tipRow.cashTips + cashTip);
     tipRow.nonCashTips = r2(tipRow.nonCashTips + nonCashTip);
     tipRow.totalTips = r2(tipRow.totalTips + tip);
 
-    // Payment by type — attribute tip + tender to primary method label
-    const typeLabel = normalizePaymentTypeLabel(
-      order.paymentMethod,
-      tenders.giftCard
-    );
-    if (!paymentTypeMap.has(typeLabel)) {
-      paymentTypeMap.set(typeLabel, {
-        paymentType: typeLabel,
-        paymentCount: 0,
-        refunds: 0,
-        tips: 0,
-        paymentTotal: 0,
-      });
+    // Payment by type — attribute from paymentSplits when present
+    for (const contrib of paymentTypeContributions(order)) {
+      if (!paymentTypeMap.has(contrib.paymentType)) {
+        paymentTypeMap.set(contrib.paymentType, {
+          paymentType: contrib.paymentType,
+          paymentCount: 0,
+          refunds: 0,
+          tips: 0,
+          paymentTotal: 0,
+        });
+      }
+      const pt = paymentTypeMap.get(contrib.paymentType);
+      pt.paymentCount += contrib.paymentCount;
+      pt.tips = r2(pt.tips + contrib.tips);
+      pt.paymentTotal = r2(pt.paymentTotal + contrib.paymentTotal);
     }
-    const pt = paymentTypeMap.get(typeLabel);
-    pt.paymentCount += 1;
-    pt.tips = r2(pt.tips + tip);
-    const paymentTotalForOrder = r2(
-      tenders.cash + tenders.card + tenders.giftCard
-    );
-    // If tenders sum to 0 (edge), fall back to total+tip
-    pt.paymentTotal = r2(
-      pt.paymentTotal +
-        (paymentTotalForOrder > 0
-          ? paymentTotalForOrder
-          : r2(order.totalAmount + tip))
-    );
 
     // Tax breakdown
     const breakdown = Array.isArray(order.taxBreakdown)
@@ -729,7 +714,10 @@ export async function buildEodReport({
       ),
       total: {
         paymentType: "TOTAL",
-        paymentCount: billCount,
+        paymentCount: [...paymentTypeMap.values()].reduce(
+          (s, r) => s + (r.paymentCount || 0),
+          0
+        ),
         refunds: 0,
         tips: totalTips,
         paymentTotal: totalPayment,

@@ -79,6 +79,41 @@ export async function exportEodExcel(report) {
   ]);
   addBlank(sheet);
 
+  // 1b. ORDERS BY SOURCE
+  styleSectionHeader(sheet.addRow(["ORDERS BY SOURCE"]));
+  styleColumnHeader(
+    sheet.addRow([
+      "Source",
+      "Orders",
+      "Paid",
+      "Net Sales",
+      "Gross Sales",
+      "Tips",
+    ])
+  );
+  const sbs = report.salesBySource || {};
+  for (const row of sbs.rows || []) {
+    sheet.addRow([
+      row.label,
+      row.orderCount ?? 0,
+      row.paidCount ?? 0,
+      money(row.netSales),
+      money(row.grossSales),
+      money(row.tips),
+    ]);
+  }
+  if (sbs.total) {
+    sheet.addRow([
+      "TOTAL",
+      sbs.total.orderCount ?? 0,
+      sbs.total.paidCount ?? 0,
+      money(sbs.total.netSales),
+      money(sbs.total.grossSales),
+      money(sbs.total.tips),
+    ]);
+  }
+  addBlank(sheet);
+
   // 2. DETAILED LABOR SUMMARY
   styleSectionHeader(sheet.addRow(["DETAILED LABOR SUMMARY"]));
   styleColumnHeader(

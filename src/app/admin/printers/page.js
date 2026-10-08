@@ -11,6 +11,7 @@ import {
   Send,
   AlertCircle,
   Activity,
+  Bluetooth,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,6 +36,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import DeleteDialog from "@/components/common/DeleteDialog";
+import NetworkErrorPanel from "@/components/common/NetworkErrorPanel";
 
 const TARGET_LABELS = {
   KITCHEN: "Kitchen (KOT)",
@@ -43,6 +45,14 @@ const TARGET_LABELS = {
 };
 
 const LOCATION_OPTIONS = ["COUNTER", "KITCHEN", "BAR"];
+
+const ORDER_TYPE_OPTIONS = [
+  { value: "TAKE_AWAY", label: "Take away" },
+  { value: "DINE_IN", label: "Dine In" },
+  { value: "DELIVERY", label: "Delivery" },
+];
+
+const PAPER_SIZES = [58, 72, 78, 80];
 
 const PRINT_BRIDGE_URL =
   (typeof process !== "undefined" &&
@@ -54,11 +64,14 @@ const BUILTIN_SYSTEM_NAME = "BUILTIN";
 const EMPTY_FORM = {
   name: "",
   target: "RECEIPT",
-  /** UI connection: NETWORK | LAN | USB | USB_BUILTIN */
+  /** UI connection: NETWORK | LAN | USB | USB_BUILTIN | BLUETOOTH */
   connectionType: "USB_BUILTIN",
   systemPrinterName: BUILTIN_SYSTEM_NAME,
   host: "",
   port: "9100",
+  bluetoothAddress: "",
+  paperWidthMm: 80,
+  orderTypes: ["TAKE_AWAY", "DINE_IN", "DELIVERY"],
   location: "COUNTER",
   type: "THERMAL",
   enabled: true,
@@ -105,18 +118,24 @@ function isNetwork(connectionType) {
 /** Map DB printer → form connectionType value */
 function formConnectionFromPrinter(printer) {
   if (isBuiltInUsb(printer)) return "USB_BUILTIN";
+  const conn = String(printer.connectionType || "").toUpperCase();
+  if (conn === "BLUETOOTH") return "BLUETOOTH";
   return printer.connectionType || "LAN";
 }
 
 function connectionLabel(printer) {
   if (isBuiltInUsb(printer)) return "Built-in USB (Android POS)";
   if (isWindowsUsb(printer)) return "USB (Windows bridge)";
+  if (String(printer?.connectionType || "").toUpperCase() === "BLUETOOTH") {
+    return `Bluetooth ${printer.bluetoothAddress || ""}`.trim();
+  }
   return printer.connectionType || "LAN";
 }
 
 export default function AdminPrintersPage() {
   const [printers, setPrinters] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [testingId, setTestingId] = useState(null);
   const [probingId, setProbingId] = useState(null);
@@ -159,14 +178,18 @@ export default function AdminPrintersPage() {
 
   const fetchPrinters = useCallback(async () => {
     try {
+      setLoadError(null);
       const res = await fetch("/api/admin/printers");
       const json = await res.json();
       if (json.success) {
         setPrinters(json.data || []);
       } else {
-        toast.error(json.message || "Failed to load printers");
+        const msg = json.message || "Failed to load printers";
+        setLoadError(msg);
+        toast.error(msg);
       }
     } catch {
+      setLoadError("Failed to load printers");
       toast.error("Failed to load printers");
     } finally {
       setLoading(false);
@@ -198,11 +221,29 @@ export default function AdminPrintersPage() {
           : printer.systemPrinterName || "",
       host: printer.host || "",
       port: String(printer.port || 9100),
+      bluetoothAddress: printer.bluetoothAddress || "",
+      paperWidthMm: printer.paperWidthMm || 80,
+      orderTypes:
+        Array.isArray(printer.orderTypes) && printer.orderTypes.length
+          ? [...printer.orderTypes]
+          : ["TAKE_AWAY", "DINE_IN", "DELIVERY"],
       location: printer.location || "COUNTER",
       type: printer.type || "THERMAL",
       enabled: printer.enabled !== false,
     });
     window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const toggleOrderType = (value) => {
+    setForm((prev) => {
+      const has = prev.orderTypes.includes(value);
+      return {
+        ...prev,
+        orderTypes: has
+          ? prev.orderTypes.filter((t) => t !== value)
+          : [...prev.orderTypes, value],
+      };
+    });
   };
 
   const handleSave = async () => {
@@ -211,11 +252,18 @@ export default function AdminPrintersPage() {
     }
     const builtIn = form.connectionType === "USB_BUILTIN";
     const windowsUsb = form.connectionType === "USB";
+    const bluetooth = form.connectionType === "BLUETOOTH";
     if (windowsUsb && !form.systemPrinterName.trim()) {
       return toast.error("Windows system printer name is required for USB.");
     }
+    if (bluetooth && !form.bluetoothAddress.trim()) {
+      return toast.error("Bluetooth MAC address is required.");
+    }
     if (isNetwork(form.connectionType) && !form.host.trim()) {
       return toast.error("IP address is required for network printers.");
+    }
+    if (!form.orderTypes.length) {
+      return toast.error("Select at least one order type.");
     }
 
     setSubmitting(true);
@@ -229,21 +277,31 @@ export default function AdminPrintersPage() {
         location: form.location || null,
         enabled: form.enabled,
         isActive: form.enabled,
+        paperWidthMm: form.paperWidthMm || 80,
+        orderTypes: form.orderTypes,
       };
 
       if (builtIn) {
         payload.systemPrinterName = BUILTIN_SYSTEM_NAME;
         payload.host = null;
         payload.port = null;
+        payload.bluetoothAddress = null;
       } else if (windowsUsb) {
         payload.systemPrinterName = form.systemPrinterName.trim();
         payload.host = null;
         payload.port = null;
+        payload.bluetoothAddress = null;
+      } else if (bluetooth) {
+        payload.bluetoothAddress = form.bluetoothAddress.trim().toUpperCase();
+        payload.host = null;
+        payload.port = null;
+        payload.systemPrinterName = null;
       } else {
         payload.host = form.host.trim();
         payload.ipAddress = form.host.trim();
         payload.port = Number(form.port) || 9100;
         payload.systemPrinterName = form.systemPrinterName.trim() || null;
+        payload.bluetoothAddress = null;
       }
 
       const res = await fetch(
@@ -412,7 +470,10 @@ export default function AdminPrintersPage() {
         location: printer.location || null,
         enabled,
         isActive: enabled,
+        paperWidthMm: printer.paperWidthMm || 80,
+        orderTypes: printer.orderTypes || ["TAKE_AWAY", "DINE_IN", "DELIVERY"],
         systemPrinterName: printer.systemPrinterName || null,
+        bluetoothAddress: printer.bluetoothAddress || null,
         host: printer.host || null,
         ipAddress: printer.host || null,
         port: printer.port || 9100,
@@ -490,8 +551,24 @@ export default function AdminPrintersPage() {
 
   const builtInForm = form.connectionType === "USB_BUILTIN";
   const windowsUsbForm = form.connectionType === "USB";
+  const bluetoothForm = form.connectionType === "BLUETOOTH";
   const enabledPrinters = printers.filter((p) => p.enabled !== false);
   const singlePrinterDefault = enabledPrinters.length === 1;
+
+  if (loadError && printers.length === 0 && !loading) {
+    return (
+      <div className="flex min-h-[40vh] items-center justify-center">
+        <NetworkErrorPanel
+          title="Unable to load printers"
+          message={loadError}
+          onRetry={() => {
+            setLoading(true);
+            void fetchPrinters();
+          }}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">
@@ -501,16 +578,13 @@ export default function AdminPrintersPage() {
         </h1>
         <p className="text-slate-500 mt-2 max-w-2xl">
           One printer list is shared by{" "}
-          <span className="font-medium text-slate-700">Admin</span> and{" "}
+          <span className="font-medium text-slate-700">Admin</span>,{" "}
+          <span className="font-medium text-slate-700">Sales Web</span>, and{" "}
           <span className="font-medium text-slate-700">Mobile Sales</span>{" "}
-          (same database). Use{" "}
-          <span className="font-medium text-slate-700">
-            Built-in USB (Android POS)
-          </span>{" "}
-          for the dual-screen tablet&apos;s 80mm printer,{" "}
-          <span className="font-medium text-slate-700">NETWORK / Wi‑Fi</span> for
-          kitchen printers, and Windows USB only when a PC print bridge is
-          running. Only one printer per Target (Kitchen / Counter / Receipt).
+          (same database). Configure Built-in USB, NETWORK / Wi‑Fi, Bluetooth,
+          or Windows USB. Set paper width and order types to match Sales. Only
+          one printer per Target (Kitchen / Counter / Receipt). Turning a
+          printer Off cancels its queued jobs and stops new prints to it.
         </p>
       </div>
 
@@ -626,6 +700,27 @@ export default function AdminPrintersPage() {
                   <SelectItem value="NETWORK">NETWORK / Wi‑Fi</SelectItem>
                   <SelectItem value="LAN">LAN (legacy alias)</SelectItem>
                   <SelectItem value="USB">USB (Windows print bridge)</SelectItem>
+                  <SelectItem value="BLUETOOTH">Bluetooth</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Paper width</Label>
+              <Select
+                value={String(form.paperWidthMm || 80)}
+                onValueChange={(value) =>
+                  setForm({ ...form, paperWidthMm: Number(value) })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {PAPER_SIZES.map((mm) => (
+                    <SelectItem key={mm} value={String(mm)}>
+                      {mm} mm
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -682,6 +777,23 @@ export default function AdminPrintersPage() {
                   IP address is not used for USB.
                 </p>
               </div>
+            ) : bluetoothForm ? (
+              <div className="space-y-2 md:col-span-2">
+                <Label htmlFor="bluetoothAddress">
+                  Bluetooth MAC address
+                </Label>
+                <Input
+                  id="bluetoothAddress"
+                  placeholder="AA:BB:CC:DD:EE:FF"
+                  value={form.bluetoothAddress}
+                  onChange={(e) =>
+                    setForm({ ...form, bluetoothAddress: e.target.value })
+                  }
+                />
+                <p className="text-xs text-slate-500">
+                  Classic Bluetooth address used by the Android Sales app.
+                </p>
+              </div>
             ) : (
               <>
                 <div className="space-y-2">
@@ -710,14 +822,37 @@ export default function AdminPrintersPage() {
                 </div>
               </>
             )}
+
+            <div className="space-y-2 md:col-span-2">
+              <Label>Order types</Label>
+              <div className="flex flex-wrap gap-3">
+                {ORDER_TYPE_OPTIONS.map((opt) => {
+                  const checked = form.orderTypes.includes(opt.value);
+                  return (
+                    <label
+                      key={opt.value}
+                      className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => toggleOrderType(opt.value)}
+                      />
+                      {opt.label}
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
           </div>
 
           <div className="flex items-center justify-between rounded-lg border border-slate-200 px-4 py-3">
             <div>
               <p className="text-sm font-medium text-slate-900">Enabled</p>
               <p className="text-xs text-slate-500">
-                Turned-off printers stay registered but leave print jobs queued
-                until turned on again.
+                Turned-off printers stay registered. Queued jobs for that
+                printer are cancelled immediately and agents will not print to
+                it until turned on again.
               </p>
             </div>
             <Switch
@@ -769,6 +904,7 @@ export default function AdminPrintersPage() {
                   <TableHead>Name</TableHead>
                   <TableHead>Target</TableHead>
                   <TableHead>Connection</TableHead>
+                  <TableHead>Paper</TableHead>
                   <TableHead>Address / System</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
@@ -800,6 +936,9 @@ export default function AdminPrintersPage() {
                           {connectionLabel(printer)}
                         </Badge>
                       </TableCell>
+                      <TableCell className="text-xs text-slate-600">
+                        {printer.paperWidthMm || 80} mm
+                      </TableCell>
                       <TableCell className="font-mono text-xs">
                         <span className="inline-flex items-center gap-1">
                           {isBuiltInUsb(printer) ? (
@@ -811,6 +950,12 @@ export default function AdminPrintersPage() {
                             <>
                               <Usb className="h-3.5 w-3.5 text-slate-400" />
                               {printer.systemPrinterName || "—"}
+                            </>
+                          ) : String(printer.connectionType || "").toUpperCase() ===
+                            "BLUETOOTH" ? (
+                            <>
+                              <Bluetooth className="h-3.5 w-3.5 text-slate-400" />
+                              {printer.bluetoothAddress || "—"}
                             </>
                           ) : (
                             <>

@@ -24,6 +24,18 @@ const OrderItemSchema = new mongoose.Schema({
       subChoices: [{ type: String, trim: true }],
     },
   ],
+  /** Nested custom data: group → option → selected inner choice names */
+  customDataSelections: [
+    {
+      name: { type: String, trim: true },
+      subChoices: [
+        {
+          name: { type: String, trim: true },
+          choices: [{ type: String, trim: true }],
+        },
+      ],
+    },
+  ],
   addonChoiceSelections: [
     {
       name: { type: String, trim: true },

@@ -27,7 +27,7 @@ const PrintPreviewModal = ({
   guestCount,
   specialNote,
   jobMetadata = null,
-  /** Optional seat/group slips: [{ id, label, order?, jobMetadata?, jobId? }] */
+  /** Optional slips: [{ id, label, order?, jobMetadata?, jobId?, kotItems? }] */
   slips = null,
 }) => {
   const [reprinting, setReprinting] = useState(false);
@@ -45,7 +45,7 @@ const PrintPreviewModal = ({
 
   useEffect(() => {
     if (isOpen) setActiveSlip(0);
-  }, [isOpen, order?._id, slipList?.length]);
+  }, [isOpen, order?._id, slipList?.length, printType]);
 
   // Lock body scroll while open (same idea as Dialog, without Radix dismiss races)
   useEffect(() => {
@@ -71,14 +71,19 @@ const PrintPreviewModal = ({
     order?.restaurantName ||
     "TASTY BITES";
 
+  const slipKotItems = Array.isArray(currentSlip?.kotItems)
+    ? currentSlip.kotItems
+    : null;
   const resolvedKotItems =
-    kotItems && kotItems.length > 0
-      ? kotItems
-      : Array.isArray(previewOrder?.items)
-        ? previewOrder.items
-        : Array.isArray(order?.items)
-          ? order.items
-          : [];
+    slipKotItems && slipKotItems.length > 0
+      ? slipKotItems
+      : kotItems && kotItems.length > 0
+        ? kotItems
+        : Array.isArray(previewOrder?.items)
+          ? previewOrder.items
+          : Array.isArray(order?.items)
+            ? order.items
+            : [];
 
   const resolvedTaxBreakdown =
     taxBreakdown && taxBreakdown.length > 0
@@ -160,7 +165,7 @@ const PrintPreviewModal = ({
       setIsReprint(true);
       toast.success(
         printType === "customer"
-          ? slipList && slipList.length > 1
+          ? slipList && slipList.length > 1 && !currentSlip?.jobId
             ? "Seat receipts queued to printer!"
             : "Receipt queued to printer!"
           : printType === "bar"
@@ -177,17 +182,27 @@ const PrintPreviewModal = ({
   const reprintButtonLabel = (() => {
     if (reprinting) return "Sending to Printer...";
     if (printType === "customer") {
-      if (slipList && slipList.length > 1) return "Reprint all slips";
+      if (slipList && slipList.length > 1 && !currentSlip?.jobId) {
+        return "Reprint all slips";
+      }
       return "Reprint Receipt";
     }
-    if (printType === "bar") return "Reprint Bar Ticket";
-    return "Reprint KOT";
+    if (printType === "bar") {
+      return currentSlip?.jobId ? "Reprint this Bar ticket" : "Reprint Bar Ticket";
+    }
+    return currentSlip?.jobId ? "Reprint this KOT" : "Reprint KOT";
   })();
 
-  const title =
-    slipList && slipList.length > 1
-      ? "Seat bill preview"
-      : PREVIEW_TITLES[printType] || "Print Preview";
+  const title = (() => {
+    if (slipList && slipList.length > 0) {
+      if (printType === "customer") {
+        return slipList.length > 1 ? "Seat bill preview" : PREVIEW_TITLES.customer;
+      }
+      if (printType === "kot") return "KOT history";
+      if (printType === "bar") return "Bar ticket history";
+    }
+    return PREVIEW_TITLES[printType] || "Print Preview";
+  })();
 
   // Plain overlay (not Radix Dialog) so closing the payment modal / residual
   // pointer events cannot auto-dismiss the bill preview.

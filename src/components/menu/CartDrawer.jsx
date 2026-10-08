@@ -24,6 +24,7 @@ import { publicApiBase } from "@/lib/public/clientConfig";
 import { cn } from "@/lib/utils";
 import {
   getProductChoiceDetailLines,
+  getCustomDataDetailLines,
   getAddonChoiceDetailLines,
 } from "@/utils/productChoices";
 import { buildModifiedRequestRemark } from "@/utils/modifiedRequestRemark";
@@ -45,6 +46,9 @@ function lineNote(item) {
   }
   if (item.selectedAddons?.length) parts.push(item.selectedAddons.join(", "));
   if (item.preparationStyle) parts.push(item.preparationStyle);
+  for (const line of getCustomDataDetailLines(item)) {
+    parts.push(`${line.label}: ${line.value}`);
+  }
   for (const line of getProductChoiceDetailLines(item)) {
     parts.push(`${line.label}: ${line.value}`);
   }
@@ -79,6 +83,18 @@ export default function CartDrawer({ open = false, onOpenChange, mode = "drawer"
   const [placedOrder, setPlacedOrder] = useState(null);
   const [sendingOtp, setSendingOtp] = useState(false);
   const [placing, setPlacing] = useState(false);
+  /** Cart keys with Modified request inputs expanded */
+  const [expandedModifiedRequestKeys, setExpandedModifiedRequestKeys] =
+    useState(() => new Set());
+
+  const toggleModifiedRequest = (cartKey) => {
+    setExpandedModifiedRequestKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(cartKey)) next.delete(cartKey);
+      else next.add(cartKey);
+      return next;
+    });
+  };
 
   const isMenuMode = mode === "menu";
   const quoteActive = isMenuMode || open;
@@ -384,96 +400,123 @@ export default function CartDrawer({ open = false, onOpenChange, mode = "drawer"
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--customer-muted)]">
+                  <button
+                    type="button"
+                    onClick={() => toggleModifiedRequest(item.cartKey)}
+                    className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-[var(--customer-muted)] hover:text-[var(--customer-ink)]"
+                    aria-expanded={expandedModifiedRequestKeys.has(item.cartKey)}
+                    aria-controls={`cart-modified-${item.cartKey}`}
+                  >
                     Modified request
-                  </p>
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      <label
-                        htmlFor={`cart-note-without-${item.cartKey}`}
-                        className="w-14 shrink-0 text-[12px] font-bold text-[var(--customer-ink)]"
-                      >
-                        Without
-                      </label>
-                      <input
-                        id={`cart-note-without-${item.cartKey}`}
-                        type="text"
-                        value={item.noteWithout || ""}
-                        onChange={(e) => {
-                          const noteWithout = e.target.value;
-                          const noteAdd = item.noteAdd || "";
-                          updateCartItem(item.cartKey, {
-                            noteWithout,
-                            notes: buildModifiedRequestRemark(
+                    <span
+                      className={cn(
+                        "inline-flex h-4 w-4 items-center justify-center rounded border",
+                        expandedModifiedRequestKeys.has(item.cartKey)
+                          ? "border-primary/40 bg-primary/10 text-primary"
+                          : "border-[var(--border)]/40 bg-white text-[var(--customer-muted)]",
+                      )}
+                    >
+                      {expandedModifiedRequestKeys.has(item.cartKey) ? (
+                        <Minus className="h-3 w-3" />
+                      ) : (
+                        <Plus className="h-3 w-3" />
+                      )}
+                    </span>
+                  </button>
+                  {expandedModifiedRequestKeys.has(item.cartKey) ? (
+                    <div
+                      id={`cart-modified-${item.cartKey}`}
+                      className="space-y-2"
+                    >
+                      <div className="flex items-center gap-2">
+                        <label
+                          htmlFor={`cart-note-without-${item.cartKey}`}
+                          className="w-14 shrink-0 text-[12px] font-bold text-[var(--customer-ink)]"
+                        >
+                          Without
+                        </label>
+                        <input
+                          id={`cart-note-without-${item.cartKey}`}
+                          type="text"
+                          value={item.noteWithout || ""}
+                          onChange={(e) => {
+                            const noteWithout = e.target.value;
+                            const noteAdd = item.noteAdd || "";
+                            updateCartItem(item.cartKey, {
+                              noteWithout,
+                              notes: buildModifiedRequestRemark(
+                                noteWithout,
+                                noteAdd,
+                              ),
+                            });
+                          }}
+                          onBlur={(e) => {
+                            const noteWithout = String(
+                              e.target.value || "",
+                            ).trim();
+                            const noteAdd = String(item.noteAdd || "").trim();
+                            updateCartItem(item.cartKey, {
                               noteWithout,
                               noteAdd,
-                            ),
-                          });
-                        }}
-                        onBlur={(e) => {
-                          const noteWithout = String(e.target.value || "").trim();
-                          const noteAdd = String(item.noteAdd || "").trim();
-                          updateCartItem(item.cartKey, {
-                            noteWithout,
-                            noteAdd,
-                            notes: buildModifiedRequestRemark(
+                              notes: buildModifiedRequestRemark(
+                                noteWithout,
+                                noteAdd,
+                              ),
+                            });
+                          }}
+                          onKeyDown={(e) => e.stopPropagation()}
+                          maxLength={80}
+                          placeholder="Type Here"
+                          className="h-9 min-w-0 flex-1 rounded-lg border border-[var(--border)]/30 bg-white px-2.5 text-xs text-[var(--customer-ink)] placeholder:text-[var(--customer-muted)] focus:border-primary focus:outline-none"
+                        />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <label
+                          htmlFor={`cart-note-add-${item.cartKey}`}
+                          className="w-14 shrink-0 text-[12px] font-bold text-[var(--customer-ink)]"
+                        >
+                          Add
+                        </label>
+                        <input
+                          id={`cart-note-add-${item.cartKey}`}
+                          type="text"
+                          value={item.noteAdd || ""}
+                          onChange={(e) => {
+                            const noteAdd = e.target.value;
+                            const noteWithout = item.noteWithout || "";
+                            updateCartItem(item.cartKey, {
+                              noteAdd,
+                              notes: buildModifiedRequestRemark(
+                                noteWithout,
+                                noteAdd,
+                              ),
+                            });
+                          }}
+                          onBlur={(e) => {
+                            const noteAdd = String(e.target.value || "").trim();
+                            const noteWithout = String(
+                              item.noteWithout || "",
+                            ).trim();
+                            updateCartItem(item.cartKey, {
                               noteWithout,
                               noteAdd,
-                            ),
-                          });
-                        }}
-                        onKeyDown={(e) => e.stopPropagation()}
-                        maxLength={80}
-                        placeholder="Type Here"
-                        className="h-9 min-w-0 flex-1 rounded-lg border border-[var(--border)]/30 bg-white px-2.5 text-xs text-[var(--customer-ink)] placeholder:text-[var(--customer-muted)] focus:border-primary focus:outline-none"
-                      />
+                              notes: buildModifiedRequestRemark(
+                                noteWithout,
+                                noteAdd,
+                              ),
+                            });
+                          }}
+                          onKeyDown={(e) => e.stopPropagation()}
+                          maxLength={80}
+                          placeholder="Type Here"
+                          className="h-9 min-w-0 flex-1 rounded-lg border border-[var(--border)]/30 bg-white px-2.5 text-xs text-[var(--customer-ink)] placeholder:text-[var(--customer-muted)] focus:border-primary focus:outline-none"
+                        />
+                      </div>
+                      <p className="text-[11px] text-[var(--customer-muted)]">
+                        Optional — sent to the kitchen with this item
+                      </p>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <label
-                        htmlFor={`cart-note-add-${item.cartKey}`}
-                        className="w-14 shrink-0 text-[12px] font-bold text-[var(--customer-ink)]"
-                      >
-                        Add
-                      </label>
-                      <input
-                        id={`cart-note-add-${item.cartKey}`}
-                        type="text"
-                        value={item.noteAdd || ""}
-                        onChange={(e) => {
-                          const noteAdd = e.target.value;
-                          const noteWithout = item.noteWithout || "";
-                          updateCartItem(item.cartKey, {
-                            noteAdd,
-                            notes: buildModifiedRequestRemark(
-                              noteWithout,
-                              noteAdd,
-                            ),
-                          });
-                        }}
-                        onBlur={(e) => {
-                          const noteAdd = String(e.target.value || "").trim();
-                          const noteWithout = String(
-                            item.noteWithout || "",
-                          ).trim();
-                          updateCartItem(item.cartKey, {
-                            noteWithout,
-                            noteAdd,
-                            notes: buildModifiedRequestRemark(
-                              noteWithout,
-                              noteAdd,
-                            ),
-                          });
-                        }}
-                        onKeyDown={(e) => e.stopPropagation()}
-                        maxLength={80}
-                        placeholder="Type Here"
-                        className="h-9 min-w-0 flex-1 rounded-lg border border-[var(--border)]/30 bg-white px-2.5 text-xs text-[var(--customer-ink)] placeholder:text-[var(--customer-muted)] focus:border-primary focus:outline-none"
-                      />
-                    </div>
-                  </div>
-                    <p className="text-[11px] text-[var(--customer-muted)]">
-                      Optional — sent to the kitchen with this item
-                    </p>
+                  ) : null}
                 </div>
               </div>
             ))}

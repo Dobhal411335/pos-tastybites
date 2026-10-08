@@ -68,6 +68,7 @@ function pctDelta(current, previous) {
 }
 
 function mapOrderRow(order, tz) {
+  const source = String(order.source || "POS").toUpperCase();
   return {
     id: String(order._id),
     orderNumber: order.orderNumber,
@@ -76,7 +77,7 @@ function mapOrderRow(order, tz) {
     status: order.status,
     paymentStatus: order.paymentStatus,
     paymentMethod: order.paymentMethod || "—",
-    source: order.source || "POS",
+    source,
     table: order.tableNo || "—",
     guest: order.partyName || order.guestName || "—",
     guestCount: order.guestCount == null ? null : Number(order.guestCount),

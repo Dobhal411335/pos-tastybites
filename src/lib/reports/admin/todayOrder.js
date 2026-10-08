@@ -13,6 +13,12 @@ import {
   EMPLOYEE_LOOKUP,
   financialPipeline,
 } from "@/lib/reports/financial/metrics";
+import { paymentDisplayLabel } from "@/lib/orders/orderDeleteEligibility";
+import { getOrderPaidAmount } from "@/lib/orders/seatHelpers";
+import {
+  getOrderSourceLabel,
+  getOrderTypeLabel,
+} from "@/utils/orderDisplay";
 import { adminReportMeta } from "./query";
 
 const ORDER_LIST_PROJECT = {
@@ -23,31 +29,51 @@ const ORDER_LIST_PROJECT = {
   status: 1,
   paymentStatus: 1,
   paymentMethod: 1,
+  paymentSplits: 1,
+  cashAmount: 1,
+  cardAmount: 1,
+  giftcardUsedAmount: 1,
+  tipAmount: 1,
+  tipMethod: 1,
   source: 1,
   tableNo: 1,
   partyName: 1,
   guestName: 1,
   guestCount: 1,
   totalAmount: 1,
-  tipAmount: 1,
   employeeName: 1,
 };
 
 function mapOrderRow(order, tz) {
+  const source = String(order.source || "POS").toUpperCase();
+  const splits = Array.isArray(order.paymentSplits) ? order.paymentSplits : [];
+  const paidAmount = getOrderPaidAmount(splits);
+  const due = r2(order.totalAmount);
+  const paymentStatus = order.paymentStatus || null;
   return {
     id: String(order._id),
     orderNumber: order.orderNumber,
     date: formatRestaurantDate(order.updatedAt || order.createdAt, tz),
     time: formatRestaurantTime(order.updatedAt || order.createdAt, tz),
     status: order.status,
-    paymentStatus: order.paymentStatus,
+    paymentStatus,
     paymentMethod: order.paymentMethod || "—",
-    source: order.source || "POS",
+    paymentLabel: paymentDisplayLabel(order),
+    splitCount: splits.length,
+    hasSplits: splits.length > 0,
+    remainingDue:
+      paymentStatus === "PARTIAL" || paymentStatus === "UNPAID"
+        ? r2(Math.max(0, due - paidAmount))
+        : 0,
+    source,
+    sourceLabel: getOrderSourceLabel(source),
+    orderTypeLabel: getOrderTypeLabel(order),
     table: order.tableNo || "—",
     guest: order.partyName || order.guestName || "—",
     guestCount: order.guestCount == null ? null : Number(order.guestCount),
-    total: r2(order.totalAmount),
+    total: due,
     tips: r2(order.tipAmount),
+    tipMethod: order.tipMethod || null,
     employee: order.employeeName || "Unknown",
   };
 }

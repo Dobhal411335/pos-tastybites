@@ -71,6 +71,7 @@ export const PUT = withAuth(async (request, { params }) => {
       image,
       salesImage,
       preparationStyles,
+      customData,
       choiceOptions,
     } = data;
 
@@ -109,11 +110,30 @@ export const PUT = withAuth(async (request, { params }) => {
       updateData.taxData = { totalPercentage, totalFixed, taxNames };
     }
     if (status) updateData.status = status;
-    if (variants) updateData.variants = sanitizeVariants(variants);
+    if (variants) {
+      updateData.variants = sanitizeVariants(variants);
+      // Ensure POS incremental sync watermark moves when only variant prices change
+      updateData.updatedAt = new Date();
+    }
     if (addons) updateData.addons = stripAddonClientFields(addons);
     if (image !== undefined) updateData.image = image;
     if (salesImage !== undefined) updateData.salesImage = salesImage;
     if (preparationStyles !== undefined) updateData.preparationStyles = preparationStyles;
+    if (customData !== undefined) {
+      updateData.customData = (Array.isArray(customData) ? customData : [])
+        .map((group) => ({
+          name: String(group?.name || "").trim(),
+          subChoices: (Array.isArray(group?.subChoices) ? group.subChoices : [])
+            .map((option) => ({
+              name: String(option?.name || "").trim(),
+              choices: (Array.isArray(option?.choices) ? option.choices : [])
+                .map((value) => String(value || "").trim())
+                .filter(Boolean),
+            }))
+            .filter((option) => option.name && option.choices.length > 0),
+        }))
+        .filter((group) => group.name && group.subChoices.length > 0);
+    }
     if (choiceOptions !== undefined) {
       updateData.choiceOptions = (Array.isArray(choiceOptions) ? choiceOptions : [])
         .map((group) => ({

@@ -32,7 +32,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import OrderDetailBody, { STATUS_BADGE } from "@/components/reports/OrderDetailBody";
+import OrderDetailBody, {
+  OrderSourceBadge,
+  PAYMENT_STATUS_BADGE,
+  STATUS_BADGE,
+} from "@/components/reports/OrderDetailBody";
 import FinancialPageHeader from "./FinancialPageHeader";
 import FinancialKpiCards from "./FinancialKpiCards";
 import {
@@ -61,7 +65,9 @@ export default function FinancialOrdersReport() {
     setDetailError(null);
     setDetailLoading(true);
     try {
-      const res = await fetch(`/api/orders/${id}`, { credentials: "include" });
+      const res = await fetch(`/api/admin/reports/financial/orders/${id}`, {
+        credentials: "include",
+      });
       const json = await res.json();
       if (!res.ok || !json.success) {
         throw new Error(json.message || "Order could not be loaded.");
@@ -91,7 +97,7 @@ export default function FinancialOrdersReport() {
     <>
       <FinancialPageHeader
         title="Orders"
-        description="Financially relevant orders for the selected period."
+        description="Financially relevant orders for the selected period. Split payments, seats, and order types are included in the detail panel."
         filters={filters}
         onFiltersChange={setFilters}
         filterProps={{
@@ -159,6 +165,7 @@ export default function FinancialOrdersReport() {
                     ["invoiceNumber", "Invoice #"],
                     ["updatedAt", "Date"],
                     [null, "Time"],
+                    [null, "Type"],
                     [null, "Employee"],
                     [null, "Table"],
                     [null, "Guest"],
@@ -201,6 +208,21 @@ export default function FinancialOrdersReport() {
                     </TableCell>
                     <TableCell className="whitespace-nowrap">{row.date}</TableCell>
                     <TableCell className="whitespace-nowrap">{row.time}</TableCell>
+                    <TableCell>
+                      <div className="flex flex-col gap-1">
+                        <OrderSourceBadge order={row} />
+                        {row.hasSplits ? (
+                          <span className="text-[10px] text-violet-700 font-medium">
+                            {row.splitCount} payer{row.splitCount === 1 ? "" : "s"}
+                            {row.seatBasedPayments ? " · seats" : ""}
+                          </span>
+                        ) : row.hasSeatItems ? (
+                          <span className="text-[10px] text-zinc-500 font-medium">
+                            Seated
+                          </span>
+                        ) : null}
+                      </div>
+                    </TableCell>
                     <TableCell>{row.employee}</TableCell>
                     <TableCell>{row.table}</TableCell>
                     <TableCell>{row.guest}</TableCell>
@@ -210,14 +232,33 @@ export default function FinancialOrdersReport() {
                     <TableCell className="tabular-nums text-right">{money(row.tips)}</TableCell>
                     <TableCell className="tabular-nums text-right">{money(row.serviceCharge)}</TableCell>
                     <TableCell className="tabular-nums text-right font-medium">{money(row.total)}</TableCell>
-                    <TableCell className="whitespace-nowrap">{row.paymentLabel}</TableCell>
+                    <TableCell className="whitespace-nowrap">
+                      <div>{row.paymentLabel}</div>
+                      {row.paymentStatus === "PARTIAL" ? (
+                        <div className="text-[10px] text-amber-700">
+                          Partial · {money(row.remainingDue)} due
+                        </div>
+                      ) : null}
+                    </TableCell>
                     <TableCell>
-                      <Badge
-                        variant="outline"
-                        className={`text-[10px] ${STATUS_BADGE[row.status] || ""}`}
-                      >
-                        {row.status}
-                      </Badge>
+                      <div className="flex flex-col gap-1 items-start">
+                        <Badge
+                          variant="outline"
+                          className={`text-[10px] ${STATUS_BADGE[row.status] || ""}`}
+                        >
+                          {row.status}
+                        </Badge>
+                        {row.paymentStatus && row.paymentStatus !== row.status ? (
+                          <Badge
+                            variant="outline"
+                            className={`text-[10px] ${
+                              PAYMENT_STATUS_BADGE[row.paymentStatus] || ""
+                            }`}
+                          >
+                            {row.paymentStatus}
+                          </Badge>
+                        ) : null}
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -257,7 +298,7 @@ export default function FinancialOrdersReport() {
           <SheetHeader>
             <SheetTitle>Order details</SheetTitle>
             <SheetDescription>
-              Existing order record. Totals are stored POS values.
+              Includes split payers, seats, custom extras, and order type from the Order record.
             </SheetDescription>
           </SheetHeader>
           {detailLoading ? (

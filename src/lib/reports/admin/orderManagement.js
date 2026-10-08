@@ -23,6 +23,11 @@ import {
   isCashOnlyDeletable,
   paymentDisplayLabel,
 } from "@/lib/orders/orderDeleteEligibility";
+import { getOrderPaidAmount } from "@/lib/orders/seatHelpers";
+import {
+  getOrderSourceLabel,
+  getOrderTypeLabel,
+} from "@/utils/orderDisplay";
 
 function buildListMatch({
   restaurantId,
@@ -77,9 +82,13 @@ function displayRefNumber(primary, original, fallback = null) {
 function mapRow(order, tz, view) {
   const tenders = resolveTenders(order);
   const paymentLabel = paymentDisplayLabel(order);
-  const itemCount = Array.isArray(order.items)
-    ? order.items.reduce((sum, item) => sum + (Number(item.qty) || 0), 0)
-    : 0;
+  const items = Array.isArray(order.items) ? order.items : [];
+  const itemCount = items.reduce((sum, item) => sum + (Number(item.qty) || 0), 0);
+  const splits = Array.isArray(order.paymentSplits) ? order.paymentSplits : [];
+  const source = String(order.source || "POS").toUpperCase();
+  const paidAmount = getOrderPaidAmount(splits);
+  const due = r2(order.totalAmount);
+  const paymentStatus = order.paymentStatus || null;
 
   const originalOrderNumber =
     order.originalOrderNumber && !isPlaceholderNumber(order.originalOrderNumber)
@@ -115,10 +124,22 @@ function mapRow(order, tz, view) {
     createdAt: order.createdAt,
     table: order.tableNo || "—",
     server: order.employeeName || "Unknown",
-    source: order.source || "POS",
+    source,
+    sourceLabel: getOrderSourceLabel(source),
+    orderTypeLabel: getOrderTypeLabel(order),
     itemCount,
-    total: r2(order.totalAmount),
+    hasCustomExtras: items.some(
+      (item) =>
+        Array.isArray(item?.customExtras) && item.customExtras.length > 0
+    ),
+    hasSeatItems: items.some(
+      (item) => item?.seatNumber != null && item?.seatNumber !== ""
+    ),
+    splitCount: splits.length,
+    hasSplits: splits.length > 0,
+    total: due,
     tip: r2(order.tipAmount),
+    tipMethod: order.tipMethod || null,
     paymentMethod: order.paymentMethod || null,
     paymentLabel,
     tenders: {
@@ -126,12 +147,23 @@ function mapRow(order, tz, view) {
       card: tenders.card,
       giftCard: tenders.giftCard,
     },
-    paymentStatus: order.paymentStatus,
+    cashAmount: order.cashAmount != null ? r2(order.cashAmount) : null,
+    cardAmount: order.cardAmount != null ? r2(order.cardAmount) : null,
+    giftcardUsedAmount: r2(order.giftcardUsedAmount),
+    paymentStatus,
+    paidAmount: r2(paidAmount),
+    remainingDue:
+      paymentStatus === "PARTIAL" || paymentStatus === "UNPAID"
+        ? r2(Math.max(0, due - paidAmount))
+        : 0,
     status: order.status,
     guest: order.partyName || order.guestName || null,
+    guestCount: order.guestCount == null ? null : Number(order.guestCount),
     canDelete: view !== "deleted" && isCashOnlyDeletable(order),
+    isActive: order.isActive !== false,
     deletedAt: order.deletedAt || null,
     deletedByName: order.deletedByName || null,
+    deletionReason: order.deletionReason || null,
     restoredAt: order.restoredAt || null,
   };
 }

@@ -525,46 +525,50 @@ function writeOrders(doc, payload) {
     "Order",
     "Date/Time",
     "Employee",
-    "Table",
+    "Type",
+    "Table / Seats",
     "Subtotal",
-    "Disc",
-    "Tax",
-    "Svc",
     "Tip",
     "Total",
     "Pay",
     "Status",
   ];
   const colW = [
-    width * 0.07,
-    width * 0.11,
+    width * 0.08,
     width * 0.12,
-    width * 0.16,
+    width * 0.12,
     width * 0.08,
-    width * 0.07,
-    width * 0.06,
-    width * 0.06,
-    width * 0.06,
+    width * 0.14,
+    width * 0.09,
     width * 0.08,
-    width * 0.07,
-    width * 0.06,
+    width * 0.09,
+    width * 0.12,
+    width * 0.08,
   ];
-  const tableRows = rows.map((row) => [
-    `#${row.orderNumber || ""}`,
-    formatDateTime(row.createdAt, tz),
-    row.employeeName || "",
-    row.tableNo || "—",
-    money(row.subTotal),
-    money(row.discountTotal),
-    money(row.taxTotal),
-    money(row.serviceChargeTotal),
-    money(row.tipAmount),
-    money(row.totalAmount),
-    row.paymentLabel || "—",
-    row.status || "",
-  ]);
+  const tableRows = rows.map((row) => {
+    const tableSeats = [row.tableNo || "—", row.seatsLabel].filter(Boolean).join(" · ");
+    const payParts = [row.paymentLabel || "—"];
+    if (row.isSplit) payParts.push(`Split: ${row.splitLabel || row.splitCount}`);
+    if (row.paymentStatus && row.paymentStatus !== "PAID") {
+      payParts.push(row.paymentStatus);
+    }
+    return [
+      `#${row.orderNumber || ""}`,
+      formatDateTime(row.createdAt, tz),
+      row.employeeName || "",
+      row.orderTypeLabel || row.sourceLabel || row.source || "—",
+      tableSeats,
+      money(row.subTotal),
+      row.tipMethod
+        ? `${money(row.tipAmount)} (${row.tipMethod})`
+        : money(row.tipAmount),
+      money(row.totalAmount),
+      payParts.join(" · "),
+      row.status || "",
+    ];
+  });
   sectionTitle(doc, "Staff order list");
-  drawBorderedTable(doc, headers, colW, tableRows, { alignRightFrom: 4 });
+  drawBorderedTable(doc, headers, colW, tableRows, { alignRightFrom: 5 });
 }
 
 function writeCancellations(doc, payload) {

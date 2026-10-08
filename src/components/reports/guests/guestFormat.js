@@ -8,6 +8,7 @@ export {
   formatDateTime,
   dash,
   DetailItem,
+  OrderSourceBadge,
 } from "@/components/reports/OrderDetailBody";
 
 export function formatDate(value) {

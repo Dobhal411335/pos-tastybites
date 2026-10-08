@@ -29,6 +29,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import DeleteDialog from "@/components/common/DeleteDialog";
+import NetworkErrorPanel from "@/components/common/NetworkErrorPanel";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { employeeFetch } from "@/lib/employeeFetch";
 import {
@@ -133,6 +134,7 @@ export default function SalesPrintersPage() {
 
   const [printers, setPrinters] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
   const [saving, setSaving] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState(null);
@@ -148,15 +150,19 @@ export default function SalesPrintersPage() {
 
   const loadPrinters = useCallback(async () => {
     try {
+      setLoadError(null);
       const path = canEdit ? "/api/admin/printers" : "/api/sales/printers";
       const res = await employeeFetch(path);
       const json = await res.json();
       if (!json.success) {
-        toast.error(json.message || "Failed to load printers");
+        const msg = json.message || "Failed to load printers";
+        setLoadError(msg);
+        toast.error(msg);
         return;
       }
       setPrinters(json.data || []);
     } catch {
+      setLoadError("Failed to load printers");
       toast.error("Failed to load printers");
     } finally {
       setLoading(false);
@@ -640,6 +646,21 @@ export default function SalesPrintersPage() {
     );
   }
 
+  if (loadError && printers.length === 0) {
+    return (
+      <div className="mx-auto flex min-h-[40vh] max-w-5xl items-center justify-center px-4 py-6">
+        <NetworkErrorPanel
+          title="Unable to load printers"
+          message={loadError}
+          onRetry={() => {
+            setLoading(true);
+            void loadPrinters();
+          }}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="mx-auto max-w-5xl space-y-6 px-4 py-6 pb-16">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -656,7 +677,8 @@ export default function SalesPrintersPage() {
           </h1>
           <p className="mt-1 max-w-2xl text-sm text-stone-500">
             Kitchen KOT, Bar/Counter, and Customer Receipt printers. Connection:
-            Wi‑Fi/Ethernet, Bluetooth, USB, or Built-in.
+            Wi‑Fi/Ethernet, Bluetooth, USB, or Built-in. Same config as Admin —
+            turning a printer Off stops prints and cancels its queued jobs.
           </p>
           {!canEdit ? (
             <p className="mt-2 text-sm text-amber-800">

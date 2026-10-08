@@ -3,7 +3,11 @@ import "./print.css";
 import moment from "moment";
 import { isOfferItem } from "@/utils/offerDetails";
 import { getReceiptModifierLines } from "@/utils/productChoices";
-import { isDirectSaleOrder, formatTableLocation } from "@/utils/orderDisplay";
+import {
+  isDirectSaleOrder,
+  formatTableLocation,
+  getOrderTypeLabel,
+} from "@/utils/orderDisplay";
 
 /**
  * Hardware-independent Kitchen Order Ticket for 80mm thermal paper.
@@ -40,8 +44,9 @@ const KitchenOrderTicket = ({
     order.floorName || order.floor?.name,
   );
   const note = specialNote || order.specialNote;
+  const orderTypeLabel = getOrderTypeLabel(order);
   const partyLabel =
-    partyName || guestName || (isDirectSaleOrder(order) ? "Take-Away" : "");
+    partyName || guestName || (isDirectSaleOrder(order) ? orderTypeLabel : "");
   const directSale = isDirectSaleOrder(order);
   const brand = restaurantName || "TASTY BITES";
   const resolvedGuestCount =
@@ -108,10 +113,13 @@ const KitchenOrderTicket = ({
 
         <div className="text-sm receipt-bold mb-1">
           {directSale
-            ? partyLabel || "Take-Away"
+            ? partyLabel || orderTypeLabel
             : tableLabel
               ? `${tableLabel}`
-              : "Takeaway / No Table"}
+              : orderTypeLabel}
+        </div>
+        <div className="text-[11px] receipt-bold uppercase tracking-wide">
+          {orderTypeLabel}
         </div>
       </div>
 
@@ -120,6 +128,9 @@ const KitchenOrderTicket = ({
       <div className="text-left text-[11px] space-y-0.5 mb-3">
         <div>
           <span className="receipt-bold">Order #:</span> {orderNumber}
+        </div>
+        <div>
+          <span className="receipt-bold">Order type:</span> {orderTypeLabel}
         </div>
         <div>
           <span className="receipt-bold">Sent:</span>{" "}
@@ -190,9 +201,12 @@ const KitchenOrderTicket = ({
                                 key={`${line.kind}-${lineIdx}`}
                                 className={`text-[11px] font-semibold ${
                                   line.kind === "addon-choice-item" ||
-                                  line.kind === "choice-item"
+                                  line.kind === "choice-item" ||
+                                  line.kind === "custom-data-item"
                                     ? "pl-2"
-                                    : "italic"
+                                    : line.kind === "custom-data-option"
+                                      ? "pl-1 italic"
+                                      : "italic"
                                 }`}
                               >
                                 {line.text}

@@ -1,7 +1,11 @@
 import React from "react";
 import "./print.css";
 import moment from "moment";
-import { isDirectSaleOrder, formatTableNumbersWithFloor } from "@/utils/orderDisplay";
+import {
+  isDirectSaleOrder,
+  formatTableNumbersWithFloor,
+  getOrderTypeLabel,
+} from "@/utils/orderDisplay";
 import { getReceiptModifierLines } from "@/utils/productChoices";
 
 /**
@@ -39,7 +43,9 @@ const BarReceipt = ({
     order.floorName || order.floor?.name,
   );
   const note = specialNote || order.specialNote;
-  const partyLabel = partyName || guestName || (isDirectSaleOrder(order) ? "Take Away" : "");
+  const orderTypeLabel = getOrderTypeLabel(order);
+  const partyLabel =
+    partyName || guestName || (isDirectSaleOrder(order) ? orderTypeLabel : "");
   const directSale = isDirectSaleOrder(order);
   const covers =
     guestCount != null && guestCount !== ""
@@ -66,6 +72,9 @@ const BarReceipt = ({
             *** REPRINT ***
           </div>
         )}
+        <div className="text-[11px] receipt-bold uppercase tracking-wide">
+          {orderTypeLabel}
+        </div>
       </div>
 
       <div className="text-left text-[12px] space-y-0.5 mb-2">
@@ -77,7 +86,7 @@ const BarReceipt = ({
         )}
         {!directSale && (
           <div className="receipt-bold uppercase">
-            Table: {tableLabel || "Takeaway"}
+            Table: {tableLabel || orderTypeLabel}
           </div>
         )}
       </div>
@@ -97,6 +106,9 @@ const BarReceipt = ({
         )}
         <div>
           <span className="receipt-bold">Order:</span> {orderNumber}
+        </div>
+        <div>
+          <span className="receipt-bold">Order type:</span> {orderTypeLabel}
         </div>
         {partyLabel && (
           <div>
@@ -167,7 +179,9 @@ const BarReceipt = ({
                       key={`${line.kind}-${lineIdx}`}
                       className={`text-[11px] font-semibold ${
                         line.kind === "addon-choice-item" ||
-                        line.kind === "choice-item"
+                        line.kind === "choice-item" ||
+                        line.kind === "custom-data-item" ||
+                        line.kind === "custom-data-option"
                           ? "pl-2"
                           : "italic"
                       }`}

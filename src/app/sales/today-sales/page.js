@@ -35,10 +35,95 @@ import {
   shouldShowTable,
 } from "@/utils/orderDisplay";
 import { getItemLineTotal, normalizeCustomExtras } from "@/utils/productChoices";
+import {
+  formatMergedSeatLabel,
+  formatSeatLabel,
+} from "@/lib/orders/seatHelpers";
+import {
+  buildPaymentSplitReceiptSlips,
+  buildTicketHistorySlips,
+} from "@/utils/receiptSlips";
+
+const BAR_CATEGORIES = [
+  "BAR",
+  "WINE",
+  "BEER",
+  "DRINKS",
+  "DRINK",
+  "BEVERAGES",
+  "BEVERAGE",
+  "COCKTAILS",
+  "COCKTAIL",
+  "LIQUOR",
+  "SPIRITS",
+  "ALCOHOL",
+  "BAR & ALCOHOL",
+  "BAR / ALCOHOL",
+  "HARD LIQUOR",
+];
+
+function isBarOrderItem(it) {
+  const pType = String(it?.productType || "").trim().toUpperCase();
+  if (pType === "BAR") return true;
+  const cat = String(it?.category || "").trim().toUpperCase();
+  if (BAR_CATEGORIES.includes(cat)) return true;
+  return (
+    cat.includes("BAR") ||
+    cat.includes("WINE") ||
+    cat.includes("BEER") ||
+    cat.includes("ALCOHOL") ||
+    cat.includes("COCKTAIL") ||
+    cat.includes("LIQUOR")
+  );
+}
 
 const COLORS = ["#f97316", "#3b82f6", "#10b981", "#8b5cf6", "#ec4899"];
 
-const STATUS_OPTIONS = ["All", "PAID", "PENDING", "CONFIRMED", "WAIVED", "CANCELLED"];
+const STATUS_OPTIONS = [
+  "All",
+  "PAID",
+  "PARTIAL",
+  "UNPAID",
+  "PENDING",
+  "CONFIRMED",
+  "WAIVED",
+  "CANCELLED",
+];
+
+const STATUS_FILTER_STYLES = {
+  All: {
+    active: "bg-zinc-900 text-white border-zinc-900",
+    idle: "bg-white text-zinc-700 border-zinc-300 hover:border-zinc-500 hover:bg-zinc-50",
+  },
+  PAID: {
+    active: "bg-emerald-600 text-white border-emerald-600",
+    idle: "bg-emerald-50 text-emerald-800 border-emerald-300 hover:border-emerald-500",
+  },
+  PARTIAL: {
+    active: "bg-amber-500 text-white border-amber-500",
+    idle: "bg-amber-50 text-amber-900 border-amber-300 hover:border-amber-500",
+  },
+  UNPAID: {
+    active: "bg-rose-600 text-white border-rose-600",
+    idle: "bg-rose-50 text-rose-800 border-rose-300 hover:border-rose-500",
+  },
+  PENDING: {
+    active: "bg-orange-500 text-white border-orange-500",
+    idle: "bg-orange-50 text-orange-900 border-orange-300 hover:border-orange-500",
+  },
+  CONFIRMED: {
+    active: "bg-sky-600 text-white border-sky-600",
+    idle: "bg-sky-50 text-sky-800 border-sky-300 hover:border-sky-500",
+  },
+  WAIVED: {
+    active: "bg-slate-600 text-white border-slate-600",
+    idle: "bg-slate-50 text-slate-800 border-slate-300 hover:border-slate-500",
+  },
+  CANCELLED: {
+    active: "bg-red-600 text-white border-red-600",
+    idle: "bg-red-50 text-red-800 border-red-300 hover:border-red-500",
+  },
+};
 
 function getOrderGrandTotal(order) {
   return Number(order?.totalAmount || 0) + Number(order?.tipAmount || 0);
@@ -46,6 +131,33 @@ function getOrderGrandTotal(order) {
 
 function isOrderPaid(order) {
   return order?.paymentStatus === "PAID" || order?.status === "PAID";
+}
+
+function getPaymentSplits(order) {
+  return Array.isArray(order?.paymentSplits) ? order.paymentSplits : [];
+}
+
+function isSplitBillOrder(order) {
+  const splits = getPaymentSplits(order);
+  if (splits.length > 1) return true;
+  return /^split\b/i.test(String(order?.paymentMethod || "").trim());
+}
+
+function formatSplitSeatHint(split) {
+  if (!split) return null;
+  if (Array.isArray(split.seatNumbers) && split.seatNumbers.length > 0) {
+    return formatMergedSeatLabel(split.seatNumbers);
+  }
+  if (split.seatNumber !== undefined && split.seatNumber !== null) {
+    return formatSeatLabel(split.seatNumber);
+  }
+  return null;
+}
+
+function formatSplitMethodLabel(split) {
+  if (!split) return "—";
+  if (split.cardType) return `Card - ${split.cardType}`;
+  return split.method || "—";
 }
 
 function getPlacerName(order) {
@@ -61,12 +173,15 @@ function getPlacerName(order) {
 function getPaymentType(order) {
   const status = String(order?.status || "").toUpperCase();
   const paymentStatus = String(order?.paymentStatus || "").toUpperCase();
+  const splits = getPaymentSplits(order);
 
   if (status === "WAIVED" || paymentStatus === "WAIVED") {
     return {
       label: "Waived",
       Icon: Wallet,
       className: "bg-slate-50 text-slate-700 border-slate-200",
+      isSplit: false,
+      splitCount: 0,
     };
   }
 
@@ -75,12 +190,34 @@ function getPaymentType(order) {
   const giftAmount = Number(order?.giftcardUsedAmount || 0);
   const usedGiftCard = giftAmount > 0 || Boolean(order?.giftcardCode);
 
+  if (splits.length > 1 || /^split\b/i.test(lower)) {
+    return {
+      label: splits.length > 1 ? `Split · ${splits.length}` : "Split Bill",
+      Icon: Users,
+      className: "bg-violet-50 text-violet-800 border-violet-300",
+      isSplit: true,
+      splitCount: splits.length || 0,
+    };
+  }
+
+  if (paymentStatus === "PARTIAL") {
+    return {
+      label: splits.length ? `Partial · ${splits.length}` : "Partial",
+      Icon: Wallet,
+      className: "bg-amber-50 text-amber-800 border-amber-300",
+      isSplit: splits.length > 0,
+      splitCount: splits.length,
+    };
+  }
+
   const isPaid = paymentStatus === "PAID" || status === "PAID";
   if ((!rawMethod || lower === "unpaid") && !usedGiftCard && !isPaid) {
     return {
       label: "Unpaid",
       Icon: Wallet,
       className: "bg-rose-50 text-rose-700 border-rose-200",
+      isSplit: false,
+      splitCount: 0,
     };
   }
 
@@ -132,6 +269,8 @@ function getPaymentType(order) {
       label: "Gift + Card + Cash",
       Icon: Gift,
       className: "bg-violet-50 text-violet-700 border-violet-200",
+      isSplit: false,
+      splitCount: 0,
     };
   }
 
@@ -142,6 +281,8 @@ function getPaymentType(order) {
       label: `Gift + ${cardPart}`,
       Icon: Gift,
       className: "bg-violet-50 text-violet-700 border-violet-200",
+      isSplit: false,
+      splitCount: 0,
     };
   }
 
@@ -151,6 +292,8 @@ function getPaymentType(order) {
       label: "Gift + Cash",
       Icon: Gift,
       className: "bg-violet-50 text-violet-700 border-violet-200",
+      isSplit: false,
+      splitCount: 0,
     };
   }
 
@@ -160,6 +303,8 @@ function getPaymentType(order) {
       label: "Gift Card",
       Icon: Gift,
       className: "bg-violet-50 text-violet-700 border-violet-200",
+      isSplit: false,
+      splitCount: 0,
     };
   }
 
@@ -170,6 +315,8 @@ function getPaymentType(order) {
       label: `${cardPart} + Cash`,
       Icon: CreditCard,
       className: "bg-sky-50 text-sky-700 border-sky-200",
+      isSplit: false,
+      splitCount: 0,
     };
   }
 
@@ -179,6 +326,8 @@ function getPaymentType(order) {
       label: cardBrand ? `Card · ${cardBrand}` : "Card",
       Icon: CreditCard,
       className: "bg-sky-50 text-sky-700 border-sky-200",
+      isSplit: false,
+      splitCount: 0,
     };
   }
 
@@ -188,6 +337,8 @@ function getPaymentType(order) {
       label: "Cash",
       Icon: Banknote,
       className: "bg-emerald-50 text-emerald-700 border-emerald-200",
+      isSplit: false,
+      splitCount: 0,
     };
   }
 
@@ -200,6 +351,8 @@ function getPaymentType(order) {
     label: fallbackLabel,
     Icon: Wallet,
     className: "bg-zinc-100 text-zinc-700 border-zinc-200",
+    isSplit: false,
+    splitCount: 0,
   };
 }
 
@@ -215,10 +368,27 @@ const getStatusBadge = (status) => {
       return "bg-amber-100 text-amber-700 border-amber-200";
     case "PAID":
       return "bg-blue-100 text-blue-700 border-blue-200";
+    case "PARTIAL":
+      return "bg-amber-100 text-amber-800 border-amber-300";
+    case "UNPAID":
+      return "bg-rose-100 text-rose-800 border-rose-200";
+    case "COMPLETED":
+      return "bg-emerald-100 text-emerald-700 border-emerald-200";
     default:
       return "bg-zinc-100 text-zinc-700 border-zinc-200";
   }
 };
+
+function getDisplayStatus(order) {
+  const paymentStatus = String(order?.paymentStatus || "").toUpperCase();
+  const status = String(order?.status || "").toUpperCase();
+  if (status === "WAIVED") return "WAIVED";
+  if (status === "CANCELLED") return "CANCELLED";
+  if (paymentStatus === "PARTIAL") return "PARTIAL";
+  if (paymentStatus === "PAID" || status === "PAID") return "PAID";
+  if (paymentStatus === "UNPAID") return status || "UNPAID";
+  return status || paymentStatus || "—";
+}
 
 const getPaymentColor = (paymentStatus) => {
   switch (paymentStatus?.toUpperCase()) {
@@ -254,6 +424,63 @@ export default function EmployeeSalesPage() {
   // Print Preview Modal State
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
   const [printType, setPrintType] = useState("customer");
+  const [ticketHistorySlips, setTicketHistorySlips] = useState(null);
+  const [ticketHistoryLoading, setTicketHistoryLoading] = useState(false);
+
+  const customerPrintSlips = useMemo(
+    () => buildPaymentSplitReceiptSlips(selectedOrder),
+    [selectedOrder],
+  );
+
+  const previewSlips = useMemo(() => {
+    if (printType === "customer") return customerPrintSlips;
+    if (printType === "kot" || printType === "bar") {
+      return ticketHistorySlips && ticketHistorySlips.length > 0
+        ? ticketHistorySlips
+        : null;
+    }
+    return null;
+  }, [printType, customerPrintSlips, ticketHistorySlips]);
+
+  const fallbackKotItems = useMemo(() => {
+    const items = selectedOrder?.items || [];
+    if (printType === "bar") return items.filter(isBarOrderItem);
+    if (printType === "kot") return items.filter((it) => !isBarOrderItem(it));
+    return items;
+  }, [selectedOrder, printType]);
+
+  const openPrintPreview = useCallback(
+    async (type) => {
+      setPrintType(type);
+      setTicketHistorySlips(null);
+
+      if ((type === "kot" || type === "bar") && selectedOrder?._id) {
+        setTicketHistoryLoading(true);
+        try {
+          const apiType = type === "bar" ? "BAR_RECEIPT" : "KOT";
+          const res = await fetch(
+            `/api/sales/print-jobs?orderId=${encodeURIComponent(
+              String(selectedOrder._id),
+            )}&printType=${apiType}&date=all&limit=50&stats=0`,
+          );
+          const json = await res.json();
+          if (res.ok && json.success) {
+            const slips = buildTicketHistorySlips(json.data || [], type);
+            setTicketHistorySlips(slips.length ? slips : null);
+          } else {
+            setTicketHistorySlips(null);
+          }
+        } catch {
+          setTicketHistorySlips(null);
+        } finally {
+          setTicketHistoryLoading(false);
+        }
+      }
+
+      setIsPrintModalOpen(true);
+    },
+    [selectedOrder?._id],
+  );
 
   const fetchOrders = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -308,6 +535,7 @@ export default function EmployeeSalesPage() {
   const closePanel = () => {
     setSelectedOrderId(null);
     setIsPrintModalOpen(false);
+    setTicketHistorySlips(null);
   };
 
   // Date Range Filtering
@@ -413,12 +641,21 @@ export default function EmployeeSalesPage() {
   // Search & Status Filtering
   const filteredOrders = useMemo(() => {
     return dateFilteredOrders.filter((o) => {
+      const status = String(o.status || "").toUpperCase();
+      const paymentStatus = String(o.paymentStatus || "").toUpperCase();
       const matchesStatus =
         statusFilter === "All"
           ? true
           : statusFilter === "PAID"
-            ? o.status === "PAID" || o.paymentStatus === "PAID"
-            : o.status === statusFilter;
+            ? status === "PAID" || paymentStatus === "PAID"
+            : statusFilter === "PARTIAL"
+              ? paymentStatus === "PARTIAL"
+              : statusFilter === "UNPAID"
+                ? paymentStatus === "UNPAID" &&
+                  status !== "PAID" &&
+                  status !== "WAIVED" &&
+                  status !== "CANCELLED"
+                : status === statusFilter;
 
       const q = searchQuery.toLowerCase().trim();
       if (!q) return matchesStatus;
@@ -430,6 +667,9 @@ export default function EmployeeSalesPage() {
       const method = (o.paymentMethod || "").toLowerCase();
       const placer = (getPlacerName(o) || "").toLowerCase();
       const type = getOrderTypeLabel(o).toLowerCase();
+      const splitNames = getPaymentSplits(o)
+        .map((s) => String(s?.name || "").toLowerCase())
+        .join(" ");
 
       const matchesSearch =
         orderNum.includes(q) ||
@@ -438,7 +678,9 @@ export default function EmployeeSalesPage() {
         party.includes(q) ||
         method.includes(q) ||
         placer.includes(q) ||
-        type.includes(q);
+        type.includes(q) ||
+        splitNames.includes(q) ||
+        (q.includes("split") && isSplitBillOrder(o));
 
       return matchesStatus && matchesSearch;
     });
@@ -636,21 +878,23 @@ export default function EmployeeSalesPage() {
 
           <div className="flex flex-col sm:flex-row gap-2.5 w-full lg:w-auto items-stretch sm:items-center">
             {/* Status Filter Pills */}
-            <div className="flex gap-1 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
-              {STATUS_OPTIONS.map((status) => (
-                <button
-                  key={status}
-                  type="button"
-                  onClick={() => handleStatusFilterChange(status)}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors ${
-                    statusFilter === status
-                      ? "bg-zinc-900 text-white shadow-xs"
-                      : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"
-                  }`}
-                >
-                  {status}
-                </button>
-              ))}
+            <div className="flex gap-2 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
+              {STATUS_OPTIONS.map((status) => {
+                const styles = STATUS_FILTER_STYLES[status] || STATUS_FILTER_STYLES.All;
+                const active = statusFilter === status;
+                return (
+                  <button
+                    key={status}
+                    type="button"
+                    onClick={() => handleStatusFilterChange(status)}
+                    className={`px-3.5 py-2 rounded-xl text-sm font-bold whitespace-nowrap transition-all border-2 shadow-xs ${
+                      active ? styles.active : styles.idle
+                    }`}
+                  >
+                    {status}
+                  </button>
+                );
+              })}
             </div>
 
             {/* Search Input */}
@@ -658,7 +902,7 @@ export default function EmployeeSalesPage() {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-400" />
               <Input 
                 type="text" 
-                placeholder="Search order #, table, guest..." 
+                placeholder="Search order #, table, guest, split..." 
                 value={searchQuery}
                 onChange={(e) => handleSearchChange(e.target.value)}
                 className="pl-8.5 pr-7 bg-zinc-50 border-zinc-200 rounded-xl h-9 text-xs focus-visible:ring-1 focus-visible:ring-orange-500 font-medium"
@@ -721,6 +965,8 @@ export default function EmployeeSalesPage() {
                   const isSelected = selectedOrder?._id === order._id;
                   const grandTotal = getOrderGrandTotal(order);
                   const totalItems = (order.items || []).reduce((acc, it) => acc + (it.qty || 1), 0);
+                  const splits = getPaymentSplits(order);
+                  const displayStatus = getDisplayStatus(order);
 
                   return (
                     <TableRow 
@@ -734,13 +980,18 @@ export default function EmployeeSalesPage() {
                     >
                       {/* Order # */}
                       <TableCell className="py-3 px-4 align-middle">
-                        <div className="font-bold text-zinc-900 flex items-center gap-1.5">
+                        <div className="font-bold text-zinc-900 flex items-center gap-1.5 flex-wrap">
                           <span>#{order.orderNumber}</span>
                           <span
                             className={`inline-flex items-center px-1.5 py-0.2 rounded border text-[9px] font-bold uppercase tracking-wider ${getOrderTypeBadgeClass(order)}`}
                           >
                             {orderType}
                           </span>
+                          {payment.isSplit ? (
+                            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded border border-violet-300 bg-violet-50 text-violet-800 text-[9px] font-bold uppercase tracking-wider">
+                              Split
+                            </span>
+                          ) : null}
                         </div>
                       </TableCell>
 
@@ -756,6 +1007,13 @@ export default function EmployeeSalesPage() {
                               {order.guestCount ? ` · ${order.guestCount} guests` : ""}
                             </span>
                           )}
+                          {payment.isSplit && splits.length > 0 ? (
+                            <span className="text-[10px] text-violet-700 font-semibold block truncate max-w-44">
+                              {splits.length} payers
+                              {splits[0]?.name ? ` · ${splits[0].name}` : ""}
+                              {splits.length > 1 ? "…" : ""}
+                            </span>
+                          ) : null}
                         </div>
                       </TableCell>
 
@@ -780,10 +1038,21 @@ export default function EmployeeSalesPage() {
 
                       {/* Payment */}
                       <TableCell className="py-3 px-3 align-middle">
-                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg border text-[10px] font-bold uppercase tracking-wider ${payment.className}`}>
-                          <PaymentIcon className="w-3 h-3 shrink-0" />
-                          <span>{payment.label}</span>
-                        </span>
+                        <div className="flex flex-col items-start gap-1">
+                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg border text-[10px] font-bold uppercase tracking-wider ${payment.className}`}>
+                            <PaymentIcon className="w-3 h-3 shrink-0" />
+                            <span>{payment.label}</span>
+                          </span>
+                          {payment.isSplit && splits.length > 0 ? (
+                            <span className="text-[10px] text-zinc-500 font-medium max-w-36 truncate">
+                              {splits
+                                .slice(0, 2)
+                                .map((s) => formatSplitMethodLabel(s))
+                                .join(" · ")}
+                              {splits.length > 2 ? "…" : ""}
+                            </span>
+                          ) : null}
+                        </div>
                       </TableCell>
 
                       {/* Time */}
@@ -796,8 +1065,8 @@ export default function EmployeeSalesPage() {
 
                       {/* Status */}
                       <TableCell className="py-3 px-3 align-middle text-center">
-                        <Badge className={`${getStatusBadge(order.status)} border px-2 py-0.5 shadow-none font-bold uppercase text-[10px] tracking-wider`}>
-                          {order.status}
+                        <Badge className={`${getStatusBadge(displayStatus)} border px-2 py-0.5 shadow-none font-bold uppercase text-[10px] tracking-wider`}>
+                          {displayStatus}
                         </Badge>
                       </TableCell>
 
@@ -898,13 +1167,30 @@ export default function EmployeeSalesPage() {
                   >
                     {getOrderTypeLabel(selectedOrder)}
                   </span>
-                  <Badge className={`${getStatusBadge(selectedOrder.status)} text-[10px] uppercase font-bold px-2 py-0.5 border shadow-none`}>
-                    {selectedOrder.status}
+                  <Badge className={`${getStatusBadge(getDisplayStatus(selectedOrder))} text-[10px] uppercase font-bold px-2 py-0.5 border shadow-none`}>
+                    {getDisplayStatus(selectedOrder)}
                   </Badge>
+                  {isSplitBillOrder(selectedOrder) ? (
+                    <span className="inline-flex items-center gap-1 rounded-md border border-violet-300 bg-violet-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-violet-800">
+                      <Users className="w-3 h-3" />
+                      Split Bill
+                    </span>
+                  ) : null}
                 </div>
                 <p className="text-sm font-semibold text-zinc-800">
-                  {getOrderLocationLabel(selectedOrder)}
-                  {getOrderPartyLabel(selectedOrder) && ` · ${getOrderPartyLabel(selectedOrder)}`}
+                  {(() => {
+                    const location = getOrderLocationLabel(selectedOrder);
+                    const party = getOrderPartyLabel(selectedOrder);
+                    // Takeaway/staff location already uses party name — avoid "Name · Name".
+                    if (
+                      !party ||
+                      String(party).trim().toLowerCase() ===
+                        String(location).trim().toLowerCase()
+                    ) {
+                      return location;
+                    }
+                    return `${location} · ${party}`;
+                  })()}
                 </p>
                 {getPlacerName(selectedOrder) && (
                   <p className="text-xs font-bold text-zinc-900 mt-1">
@@ -1007,37 +1293,74 @@ export default function EmployeeSalesPage() {
                     </div>
                   )}
                   {selectedOrder.paymentMethod && (
-                    <div className="flex justify-between text-zinc-500 font-medium">
-                      <span>Method</span>
-                      <span className="text-zinc-800 font-semibold">{selectedOrder.paymentMethod}</span>
+                    <div className="flex justify-between text-zinc-500 font-medium gap-3">
+                      <span className="shrink-0">Method</span>
+                      <span className="text-zinc-800 font-semibold text-right">
+                        {selectedOrder.paymentMethod}
+                      </span>
                     </div>
                   )}
-                  {Array.isArray(selectedOrder.paymentSplits) &&
-                    selectedOrder.paymentSplits.length > 0 && (
-                      <div className="rounded-xl border border-violet-200 bg-violet-50/60 px-3 py-2.5 space-y-1.5">
-                        <span className="text-[11px] font-bold text-violet-700 uppercase tracking-wider">
-                          Payment Splits
-                        </span>
-                        {selectedOrder.paymentSplits.map((split, idx) => (
-                          <div
-                            key={`${split.name}-${idx}`}
-                            className="flex justify-between text-sm font-semibold text-zinc-800"
-                          >
-                            <span className="truncate pr-2">
-                              {split.name}
-                              <span className="text-zinc-500 font-medium">
-                                {" "}
-                                ·{" "}
-                                {split.cardType
-                                  ? `Card - ${split.cardType}`
-                                  : split.method}
-                              </span>
-                            </span>
-                            <span className="shrink-0">
-                              ${(Number(split.amount) || 0).toFixed(2)}
-                            </span>
-                          </div>
-                        ))}
+                  {getPaymentSplits(selectedOrder).length > 0 && (
+                      <div className="rounded-xl border-2 border-violet-300 bg-violet-50 px-3 py-3 space-y-2.5">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[11px] font-bold text-violet-800 uppercase tracking-wider flex items-center gap-1.5">
+                            <Users className="w-3.5 h-3.5" />
+                            Split Bill
+                          </span>
+                          <span className="text-[11px] font-bold text-violet-700 bg-white border border-violet-200 rounded-md px-1.5 py-0.5">
+                            {getPaymentSplits(selectedOrder).length} payers
+                          </span>
+                        </div>
+                        {getPaymentSplits(selectedOrder).map((split, idx) => {
+                          const seatHint = formatSplitSeatHint(split);
+                          const tip = Number(split.tipAmount || 0);
+                          return (
+                            <div
+                              key={`${split.name}-${idx}`}
+                              className="rounded-lg border border-violet-200 bg-white px-2.5 py-2 space-y-1"
+                            >
+                              <div className="flex justify-between gap-2 text-sm font-semibold text-zinc-900">
+                                <span className="truncate min-w-0">
+                                  {split.name || `Payer ${idx + 1}`}
+                                </span>
+                                <span className="shrink-0 tabular-nums">
+                                  ${(Number(split.amount) || 0).toFixed(2)}
+                                </span>
+                              </div>
+                              <div className="flex flex-wrap items-center gap-1.5 text-[11px] font-semibold text-zinc-600">
+                                <span className="inline-flex items-center rounded-md border border-zinc-200 bg-zinc-50 px-1.5 py-0.5">
+                                  {formatSplitMethodLabel(split)}
+                                </span>
+                                {seatHint ? (
+                                  <span className="inline-flex items-center rounded-md border border-sky-200 bg-sky-50 px-1.5 py-0.5 text-sky-800">
+                                    {seatHint}
+                                  </span>
+                                ) : null}
+                                {tip > 0 ? (
+                                  <span className="text-emerald-700">
+                                    +${tip.toFixed(2)} tip
+                                    {split.tipMethod ? ` (${split.tipMethod})` : ""}
+                                  </span>
+                                ) : null}
+                              </div>
+                              {(Number(split.cashAmount) > 0 ||
+                                Number(split.cardAmount) > 0) && (
+                                <div className="text-[10px] font-medium text-zinc-500">
+                                  {Number(split.cardAmount) > 0
+                                    ? `Card $${Number(split.cardAmount).toFixed(2)}`
+                                    : null}
+                                  {Number(split.cashAmount) > 0 &&
+                                  Number(split.cardAmount) > 0
+                                    ? " · "
+                                    : null}
+                                  {Number(split.cashAmount) > 0
+                                    ? `Cash $${Number(split.cashAmount).toFixed(2)}`
+                                    : null}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
                   <div className="flex justify-between text-zinc-500 font-medium">
@@ -1214,32 +1537,30 @@ export default function EmployeeSalesPage() {
                         <span className="font-semibold text-zinc-700">{selectedOrder.paymentMethod}</span>
                       </div>
                     )}
-                    {Array.isArray(selectedOrder.paymentSplits) &&
-                      selectedOrder.paymentSplits.length > 0 && (
-                        <div className="pt-2 space-y-1 border-t border-zinc-100">
+                    {getPaymentSplits(selectedOrder).length > 0 && (
+                        <div className="pt-2 space-y-1.5 border-t border-zinc-100">
                           <p className="text-[10px] font-bold uppercase tracking-wider text-violet-700">
-                            Payment Splits
+                            Split Bill · {getPaymentSplits(selectedOrder).length} payers
                           </p>
-                          {selectedOrder.paymentSplits.map((split, idx) => (
-                            <div
-                              key={`ts-split-${idx}`}
-                              className="flex justify-between text-xs text-zinc-700"
-                            >
-                              <span>
-                                {split.name}
-                                {split.method
-                                  ? ` · ${
-                                      split.cardType
-                                        ? `Card - ${split.cardType}`
-                                        : split.method
-                                    }`
-                                  : ""}
-                              </span>
-                              <span className="font-semibold">
-                                ${(Number(split.amount) || 0).toFixed(2)}
-                              </span>
-                            </div>
-                          ))}
+                          {getPaymentSplits(selectedOrder).map((split, idx) => {
+                            const seatHint = formatSplitSeatHint(split);
+                            return (
+                              <div
+                                key={`ts-split-${idx}`}
+                                className="flex justify-between gap-2 text-xs text-zinc-700"
+                              >
+                                <span className="min-w-0 truncate">
+                                  {split.name || `Payer ${idx + 1}`}
+                                  {" · "}
+                                  {formatSplitMethodLabel(split)}
+                                  {seatHint ? ` · ${seatHint}` : ""}
+                                </span>
+                                <span className="font-semibold shrink-0 tabular-nums">
+                                  ${(Number(split.amount) || 0).toFixed(2)}
+                                </span>
+                              </div>
+                            );
+                          })}
                         </div>
                       )}
                   </div>
@@ -1250,44 +1571,12 @@ export default function EmployeeSalesPage() {
             {/* Drawer Footer Actions */}
             <div className="p-4 border-t border-zinc-200 shrink-0 bg-white space-y-2">
               {(() => {
-                const isBarOrderItem = (it) => {
-                  const pType = String(it?.productType || "").trim().toUpperCase();
-                  if (pType === "BAR") return true;
-
-                  const cat = String(it?.category || "").trim().toUpperCase();
-                  const barCategories = [
-                    "BAR",
-                    "WINE",
-                    "BEER",
-                    "DRINKS",
-                    "DRINK",
-                    "BEVERAGES",
-                    "BEVERAGE",
-                    "COCKTAILS",
-                    "COCKTAIL",
-                    "LIQUOR",
-                    "SPIRITS",
-                    "ALCOHOL",
-                    "BAR & ALCOHOL",
-                    "BAR / ALCOHOL",
-                    "HARD LIQUOR",
-                  ];
-                  if (barCategories.includes(cat)) return true;
-
-                  return (
-                    cat.includes("BAR") ||
-                    cat.includes("WINE") ||
-                    cat.includes("BEER") ||
-                    cat.includes("ALCOHOL") ||
-                    cat.includes("COCKTAIL") ||
-                    cat.includes("LIQUOR")
-                  );
-                };
-
                 const orderItems = selectedOrder?.items || [];
                 const hasBarItems = Boolean(orderItems.some(isBarOrderItem));
                 const hasKitchenItems =
-                  orderItems.length === 0 ? true : orderItems.some((it) => !isBarOrderItem(it));
+                  orderItems.length === 0
+                    ? true
+                    : orderItems.some((it) => !isBarOrderItem(it));
 
                 const buttonCount =
                   1 + (hasKitchenItems ? 1 : 0) + (hasBarItems ? 1 : 0);
@@ -1295,44 +1584,55 @@ export default function EmployeeSalesPage() {
                   buttonCount === 3
                     ? "grid-cols-3"
                     : buttonCount === 2
-                    ? "grid-cols-2"
-                    : "grid-cols-1";
+                      ? "grid-cols-2"
+                      : "grid-cols-1";
 
                 return (
                   <div className={`grid ${gridClass} gap-2`}>
                     <Button
                       onClick={() => {
-                        setPrintType("customer");
-                        setIsPrintModalOpen(true);
+                        void openPrintPreview("customer");
                       }}
+                      disabled={ticketHistoryLoading}
                       className="h-10 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-xl shadow-none text-xs"
                     >
                       <Printer className="w-3.5 h-3.5 mr-1" />
                       Receipt
+                      {customerPrintSlips && customerPrintSlips.length > 1
+                        ? ` (${customerPrintSlips.length})`
+                        : ""}
                     </Button>
                     {hasKitchenItems && (
                       <Button
                         onClick={() => {
-                          setPrintType("kot");
-                          setIsPrintModalOpen(true);
+                          void openPrintPreview("kot");
                         }}
+                        disabled={ticketHistoryLoading}
                         variant="outline"
                         className="h-10 border-zinc-200 text-zinc-800 hover:bg-zinc-100 font-bold rounded-xl shadow-none text-xs"
                       >
-                        <UtensilsCrossed className="w-3.5 h-3.5 mr-1 text-zinc-600" />
+                        {ticketHistoryLoading && printType === "kot" ? (
+                          <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />
+                        ) : (
+                          <UtensilsCrossed className="w-3.5 h-3.5 mr-1 text-zinc-600" />
+                        )}
                         KOT
                       </Button>
                     )}
                     {hasBarItems && (
                       <Button
                         onClick={() => {
-                          setPrintType("bar");
-                          setIsPrintModalOpen(true);
+                          void openPrintPreview("bar");
                         }}
+                        disabled={ticketHistoryLoading}
                         variant="outline"
                         className="h-10 border-zinc-200 text-zinc-800 hover:bg-zinc-100 font-bold rounded-xl shadow-none text-xs"
                       >
-                        <Wine className="w-3.5 h-3.5 mr-1 text-zinc-600" />
+                        {ticketHistoryLoading && printType === "bar" ? (
+                          <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />
+                        ) : (
+                          <Wine className="w-3.5 h-3.5 mr-1 text-zinc-600" />
+                        )}
                         Bar
                       </Button>
                     )}
@@ -1354,68 +1654,13 @@ export default function EmployeeSalesPage() {
       {/* RECEIPT / KOT PRINT PREVIEW MODAL */}
       <PrintPreviewModal
         isOpen={isPrintModalOpen}
-        onClose={() => setIsPrintModalOpen(false)}
+        onClose={() => {
+          setIsPrintModalOpen(false);
+          setTicketHistorySlips(null);
+        }}
         order={selectedOrder}
         printType={printType}
-        kotItems={
-          printType === "bar"
-            ? (selectedOrder?.items || []).filter((it) => {
-                const pType = String(it?.productType || "").trim().toUpperCase();
-                if (pType === "BAR") return true;
-                const cat = String(it?.category || "").trim().toUpperCase();
-                return (
-                  [
-                    "BAR",
-                    "WINE",
-                    "BEER",
-                    "DRINKS",
-                    "DRINK",
-                    "BEVERAGES",
-                    "BEVERAGE",
-                    "COCKTAILS",
-                    "COCKTAIL",
-                    "LIQUOR",
-                    "SPIRITS",
-                    "ALCOHOL",
-                    "BAR & ALCOHOL",
-                    "BAR / ALCOHOL",
-                  ].includes(cat) ||
-                  cat.includes("BAR") ||
-                  cat.includes("WINE") ||
-                  cat.includes("BEER") ||
-                  cat.includes("ALCOHOL")
-                );
-              })
-            : printType === "kot"
-            ? (selectedOrder?.items || []).filter((it) => {
-                const pType = String(it?.productType || "").trim().toUpperCase();
-                if (pType === "BAR") return false;
-                const cat = String(it?.category || "").trim().toUpperCase();
-                return !(
-                  [
-                    "BAR",
-                    "WINE",
-                    "BEER",
-                    "DRINKS",
-                    "DRINK",
-                    "BEVERAGES",
-                    "BEVERAGE",
-                    "COCKTAILS",
-                    "COCKTAIL",
-                    "LIQUOR",
-                    "SPIRITS",
-                    "ALCOHOL",
-                    "BAR & ALCOHOL",
-                    "BAR / ALCOHOL",
-                  ].includes(cat) ||
-                  cat.includes("BAR") ||
-                  cat.includes("WINE") ||
-                  cat.includes("BEER") ||
-                  cat.includes("ALCOHOL")
-                );
-              })
-            : selectedOrder?.items || []
-        }
+        kotItems={fallbackKotItems}
         taxBreakdown={selectedOrder?.taxBreakdown || []}
         restaurantDetails={{
           name: selectedOrder?.restaurantName || "TASTY BITES",
@@ -1424,6 +1669,7 @@ export default function EmployeeSalesPage() {
         serverName={getPlacerName(selectedOrder || {})}
         guestCount={selectedOrder?.guestCount}
         specialNote={selectedOrder?.specialNote}
+        slips={previewSlips}
       />
     </div>
   );

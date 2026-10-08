@@ -12,10 +12,12 @@ import { Badge } from "@/components/ui/badge";
 import { ChartCard, NamedBarChart, TimeAreaChart } from "../EmployeeReportUi";
 import {
   STATUS_BADGE,
+  PAYMENT_STATUS_BADGE,
   formatDateTz,
   formatHoursLabel,
   formatTimeTz,
   money,
+  OrderSourceBadge,
 } from "../employeeFormat";
 import EmployeeSheetShell, {
   EmployeeSheetHeaderCard,
@@ -34,7 +36,8 @@ function OrdersMiniTable({ orders = [], timezone, onSelectOrder, columns = "sale
           <TableRow className="bg-zinc-50">
             <TableHead>Order</TableHead>
             <TableHead>When</TableHead>
-            {columns !== "cancel" ? <TableHead>Table</TableHead> : null}
+            {columns !== "cancel" ? <TableHead>Type</TableHead> : null}
+            {columns !== "cancel" ? <TableHead>Table / Seats</TableHead> : null}
             {columns === "tips" || columns === "tipsByPayment" ? (
               <>
                 <TableHead>Tip method</TableHead>
@@ -45,7 +48,10 @@ function OrdersMiniTable({ orders = [], timezone, onSelectOrder, columns = "sale
               <TableHead className="text-right">Service charge</TableHead>
             ) : null}
             {columns === "sales" || columns === "orders" ? (
-              <TableHead className="text-right">Total</TableHead>
+              <>
+                <TableHead>Payment</TableHead>
+                <TableHead className="text-right">Total</TableHead>
+              </>
             ) : null}
             {columns === "cancel" ? (
               <>
@@ -72,7 +78,19 @@ function OrdersMiniTable({ orders = [], timezone, onSelectOrder, columns = "sale
                 {formatTimeTz(row.createdAt, timezone)}
               </TableCell>
               {columns !== "cancel" ? (
-                <TableCell className="tabular-nums">{row.tableNo || "—"}</TableCell>
+                <TableCell>
+                  <OrderSourceBadge order={row} />
+                </TableCell>
+              ) : null}
+              {columns !== "cancel" ? (
+                <TableCell className="text-xs">
+                  <div className="tabular-nums">{row.tableNo || "—"}</div>
+                  {row.seatsLabel ? (
+                    <div className="text-[10px] text-violet-700 font-medium">
+                      {row.seatsLabel}
+                    </div>
+                  ) : null}
+                </TableCell>
               ) : null}
               {columns === "tips" || columns === "tipsByPayment" ? (
                 <>
@@ -90,9 +108,35 @@ function OrdersMiniTable({ orders = [], timezone, onSelectOrder, columns = "sale
                 </TableCell>
               ) : null}
               {columns === "sales" || columns === "orders" ? (
-                <TableCell className="text-right tabular-nums">
-                  {money(row.totalAmount)}
-                </TableCell>
+                <>
+                  <TableCell className="text-xs">
+                    <div>{row.paymentLabel || row.paymentMethod || "—"}</div>
+                    {row.isSplit ? (
+                      <div className="text-[10px] text-violet-700 font-medium truncate max-w-[120px]">
+                        Split · {row.splitLabel || `${row.splitCount} payers`}
+                      </div>
+                    ) : null}
+                    {row.paymentStatus && row.paymentStatus !== "PAID" ? (
+                      <div className="mt-0.5">
+                        <Badge
+                          variant="outline"
+                          className={`text-[10px] ${
+                            PAYMENT_STATUS_BADGE[row.paymentStatus] ||
+                            "bg-zinc-50 text-zinc-600"
+                          }`}
+                        >
+                          {row.paymentStatus === "PARTIAL" &&
+                          Number(row.remainingDue) > 0
+                            ? `PARTIAL · ${money(row.remainingDue)} due`
+                            : row.paymentStatus}
+                        </Badge>
+                      </div>
+                    ) : null}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {money(row.totalAmount)}
+                  </TableCell>
+                </>
               ) : null}
               {columns === "cancel" ? (
                 <>

@@ -20,6 +20,7 @@ import { freeSessionTables } from "@/lib/orders/sessionTables";
 import { countryCodes } from "@/utils/countryCodes";
 import {
   cartChoiceSelectionsKey,
+  cartCustomDataSelectionsKey,
   cartCustomExtrasKey,
 } from "@/utils/productChoices";
 import {
@@ -45,6 +46,8 @@ function orderItemsMatch(existingItem, incomingItem) {
       cartCustomExtrasKey(incomingItem.customExtras) &&
     cartChoiceSelectionsKey(existingItem.choiceSelections) ===
       cartChoiceSelectionsKey(incomingItem.choiceSelections) &&
+    cartCustomDataSelectionsKey(existingItem.customDataSelections) ===
+      cartCustomDataSelectionsKey(incomingItem.customDataSelections) &&
     cartChoiceSelectionsKey(existingItem.addonChoiceSelections) ===
       cartChoiceSelectionsKey(incomingItem.addonChoiceSelections)
   );

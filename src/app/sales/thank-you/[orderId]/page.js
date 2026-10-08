@@ -17,40 +17,23 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import PrintPreviewModal from "@/components/receipts/PrintPreviewModal";
 import {
-  filterItemsBySeat,
-  filterItemsBySeats,
   formatMergedSeatLabel,
   formatSeatLabel,
   normalizeSeatNumber,
-  proportionalOrderTotalsForItems,
 } from "@/lib/orders/seatHelpers";
 import {
   getOrderLocationLabel,
   getOrderPartyLabel,
   shouldShowTable,
 } from "@/utils/orderDisplay";
+import {
+  buildPaymentSplitReceiptSlips,
+  seatsFromSplit,
+  splitDisplayName,
+} from "@/utils/receiptSlips";
 
 function money(n) {
   return `$${Number(n || 0).toFixed(2)}`;
-}
-
-function seatsFromSplit(split) {
-  if (Array.isArray(split?.seatNumbers) && split.seatNumbers.length) {
-    return split.seatNumbers;
-  }
-  if (split?.seatNumber !== undefined && split?.seatNumber !== null) {
-    return [split.seatNumber];
-  }
-  return [];
-}
-
-function splitDisplayName(split, index) {
-  const name = String(split?.name || "").trim();
-  if (name) return name;
-  const seats = seatsFromSplit(split);
-  if (seats.length > 1) return formatMergedSeatLabel(seats);
-  if (seats.length === 1) return formatSeatLabel(seats[0]);
-  return `Payer ${index + 1}`;
 }
 
 export default function SalesPaymentThankYouPage() {
@@ -153,95 +136,10 @@ export default function SalesPaymentThankYouPage() {
 
   const isTableSession = Boolean(resolvedSessionId);
 
-  const printSlips = useMemo(() => {
-    if (!order) return null;
-    if (!paymentSplits.length) return null;
-
-    return paymentSplits.map((split, index) => {
-      const seats = seatsFromSplit(split);
-      const label =
-        seats.length > 1
-          ? formatMergedSeatLabel(seats)
-          : seats.length === 1
-            ? formatSeatLabel(seats[0])
-            : splitDisplayName(split, index);
-      const tipAmt = Number(split.tipAmount) || 0;
-      const cashAmt = Number(split.cashAmount) || 0;
-      const cardAmt = Number(split.cardAmount) || 0;
-      const giftAmt =
-        Number(split.giftAmount) ||
-        Number(split.giftcardUsedAmount) ||
-        Number(split.giftUseAmount) ||
-        0;
-      const amount = Number(split.amount) || 0;
-      const method =
-        String(split.method || split.paymentMethod || "").trim() || "Card";
-      const partyName = splitDisplayName(split, index);
-
-      const items =
-        seats.length > 1
-          ? filterItemsBySeats(order.items || [], seats)
-          : seats.length === 1
-            ? filterItemsBySeat(order.items || [], seats[0])
-            : order.items || [];
-
-      const totals = seats.length
-        ? proportionalOrderTotalsForItems(order, items)
-        : {
-            subTotal: order.subTotal,
-            taxTotal: order.taxTotal,
-            discountTotal: order.discountTotal,
-            serviceChargeTotal: order.serviceChargeTotal,
-            totalAmount: amount || order.totalAmount,
-            taxBreakdown: order.taxBreakdown,
-          };
-
-      const previewOrder = {
-        ...order,
-        items: order.items || [],
-        subTotal: Number(totals.subTotal || 0),
-        taxTotal: Number(totals.taxTotal || 0),
-        discountTotal: Number(totals.discountTotal || 0),
-        serviceChargeTotal: Number(totals.serviceChargeTotal || 0),
-        totalAmount: amount > 0 ? amount : Number(totals.totalAmount || 0),
-        tipAmount: tipAmt,
-        tipMethod: tipAmt > 0 ? split.tipMethod || null : null,
-        giftcardUsedAmount: giftAmt,
-        cashAmount: cashAmt,
-        cardAmount: cardAmt,
-        paymentMethod: method,
-        guestName: partyName,
-        partyName,
-        taxBreakdown: totals.taxBreakdown || order.taxBreakdown,
-      };
-
-      const jobMetadata = {
-        isSplitReceipt: true,
-        filterReceiptBySeat: seats.length > 0,
-        splitIndex: index + 1,
-        splitTotal: paymentSplits.length,
-        splitSeatNumber: seats.length === 1 ? seats[0] : null,
-        splitSeatNumbers: seats,
-        splitName: partyName,
-        splitAmount: amount,
-        splitMethod: method,
-        paymentMethod: method,
-        cashAmount: cashAmt,
-        cardAmount: cardAmt,
-        tipAmount: tipAmt,
-        giftcardUsedAmount: giftAmt,
-        guestName: partyName,
-        partyName,
-      };
-
-      return {
-        id: split._id || split.id || `slip-${index}`,
-        label,
-        order: previewOrder,
-        jobMetadata,
-      };
-    });
-  }, [order, paymentSplits]);
+  const printSlips = useMemo(
+    () => buildPaymentSplitReceiptSlips(order),
+    [order],
+  );
 
   const goBack = useCallback(
     (extraQuery) => {

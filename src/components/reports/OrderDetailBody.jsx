@@ -10,7 +10,19 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { getReceiptModifierLines } from "@/utils/productChoices";
+import {
+  formatMergedSeatLabel,
+  groupItemsBySeat,
+} from "@/lib/orders/seatHelpers";
+import {
+  getItemLineTotal,
+  getReceiptModifierLines,
+} from "@/utils/productChoices";
+import {
+  getOrderSourceLabel,
+  getOrderTypeBadgeClass,
+  getOrderTypeLabel,
+} from "@/utils/orderDisplay";
 
 export const STATUS_BADGE = {
   PAID: "bg-blue-50 text-blue-700 border-blue-200",
@@ -19,6 +31,13 @@ export const STATUS_BADGE = {
   COMPLETED: "bg-emerald-50 text-emerald-700 border-emerald-200",
   CANCELLED: "bg-red-50 text-red-700 border-red-200",
   WAIVED: "bg-zinc-100 text-zinc-600 border-zinc-200",
+};
+
+export const PAYMENT_STATUS_BADGE = {
+  PAID: "bg-blue-50 text-blue-700 border-blue-200",
+  PARTIAL: "bg-amber-50 text-amber-800 border-amber-300",
+  UNPAID: "bg-zinc-100 text-zinc-600 border-zinc-200",
+  REFUNDED: "bg-red-50 text-red-700 border-red-200",
 };
 
 const cellBorder = "border border-zinc-300 px-3 py-2";
@@ -107,11 +126,126 @@ function cardPaymentLabel(paymentMethod) {
 }
 
 function itemLineTotal(item) {
-  return Number(item.price || 0) * Number(item.qty || 0);
+  if (item?.lineTotal != null && Number.isFinite(Number(item.lineTotal))) {
+    return Number(item.lineTotal);
+  }
+  return getItemLineTotal(item);
 }
 
 function isExtraLine(item) {
   return /^extra$/i.test(String(item?.size || ""));
+}
+
+function seatLabel(split) {
+  if (split?.seatLabel) return split.seatLabel;
+  if (Array.isArray(split?.seatNumbers) && split.seatNumbers.length > 0) {
+    return formatMergedSeatLabel(split.seatNumbers);
+  }
+  if (split?.seatNumber != null) return formatMergedSeatLabel([split.seatNumber]);
+  return null;
+}
+
+function ItemRows({ items, startIndex = 0 }) {
+  return items.map((item, index) => {
+    const extra = isExtraLine(item);
+    const modifierLines = getReceiptModifierLines(item);
+    const even = (startIndex + index) % 2 === 1;
+    return (
+      <TableRow
+        key={item.cartId || `${item.name}-${startIndex + index}`}
+        className={`hover:bg-orange-50/70 ${even ? "bg-amber-50/80" : "bg-white"}`}
+      >
+        <TableCell className={`${cellBorder} align-top ${even ? "bg-amber-50/80" : ""}`}>
+          <div className="font-medium text-zinc-900">
+            {item.productCode ? (
+              <span className="text-orange-600 mr-1.5">{item.productCode}</span>
+            ) : null}
+            {item.name}
+            {item.size && item.size !== "Standard" ? (
+              <span className="text-zinc-500 font-normal"> ({item.size})</span>
+            ) : null}
+            {extra ? (
+              <span className="ml-1.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700">
+                Extra
+              </span>
+            ) : null}
+            {item.isOffer ? (
+              <span className="ml-1.5 text-[10px] font-semibold uppercase tracking-wide text-violet-700">
+                Offer
+              </span>
+            ) : null}
+          </div>
+          {item.category ? (
+            <div className="text-[11px] text-zinc-500 mt-0.5">{item.category}</div>
+          ) : null}
+          {modifierLines.length > 0 ? (
+            <div className="mt-1 space-y-0.5 text-[12px] text-zinc-600 italic">
+              {modifierLines.map((line, lineIdx) => (
+                <div key={`${line.kind}-${lineIdx}`}>
+                  {line.text}
+                  {line.kind === "custom-extra" && Number(line.price) > 0
+                    ? ` (${money(line.price)})`
+                    : ""}
+                </div>
+              ))}
+            </div>
+          ) : null}
+          {item.notes ? (
+            <div className="mt-1 text-[12px] font-medium italic text-amber-800">
+              Remark: {item.notes}
+            </div>
+          ) : null}
+        </TableCell>
+        <TableCell
+          className={`${cellBorder} text-right align-top tabular-nums ${even ? "bg-amber-50/80" : ""}`}
+        >
+          {item.qty}
+        </TableCell>
+        <TableCell
+          className={`${cellBorder} text-right align-top tabular-nums font-medium ${even ? "bg-amber-50/80" : ""}`}
+        >
+          {money(itemLineTotal(item))}
+          {Array.isArray(item.customExtras) && item.customExtras.length > 0 ? (
+            <div className="mt-1 space-y-0.5 text-[10px] font-normal text-zinc-500">
+              {item.customExtras.map((extra, extraIdx) => (
+                <div key={`${extra.name}-${extraIdx}`}>
+                  + {extra.name}
+                  {Number(extra.price) > 0 ? ` (${money(extra.price)})` : ""}
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </TableCell>
+      </TableRow>
+    );
+  });
+}
+
+const SOURCE_BADGE_CLASS = {
+  POS: "bg-emerald-100 text-emerald-800 border-emerald-200",
+  WALK_IN: "bg-orange-100 text-orange-800 border-orange-200",
+  TAKEAWAY: "bg-orange-100 text-orange-800 border-orange-200",
+  STAFF: "bg-indigo-100 text-indigo-800 border-indigo-200",
+  ONLINE: "bg-sky-100 text-sky-800 border-sky-200",
+};
+
+export function OrderSourceBadge({ order, source, className = "" }) {
+  const sourceValue = String(source || order?.source || "POS").toUpperCase();
+  const label =
+    order?.orderTypeLabel ||
+    order?.sourceLabel ||
+    getOrderSourceLabel(sourceValue) ||
+    getOrderTypeLabel(order || { source: sourceValue });
+  const badgeClass =
+    SOURCE_BADGE_CLASS[sourceValue] ||
+    getOrderTypeBadgeClass(order || { source: sourceValue });
+  return (
+    <span
+      className={`inline-flex items-center border font-semibold text-[10px] uppercase tracking-wide px-2 py-0.5 rounded-md w-max ${badgeClass} ${className}`}
+    >
+      {label}
+    </span>
+  );
 }
 
 export default function OrderDetailBody({ order }) {
@@ -125,18 +259,50 @@ export default function OrderDetailBody({ order }) {
       : taxTotal;
   const serviceCharge = Number(order.serviceChargeTotal || 0);
   const tip = Number(order.tipAmount || 0);
-  const giftUsed = Number(order.giftcardUsedAmount || 0);
-  const cash = Number(order.cashAmount || 0);
-  const card = Number(order.cardAmount || 0);
+  const giftUsed = Number(
+    order.giftcardUsedAmount != null
+      ? order.giftcardUsedAmount
+      : order.giftCard || 0
+  );
+  const cash = Number(
+    order.cashAmount != null ? order.cashAmount : order.cash || 0
+  );
+  const card = Number(
+    order.cardAmount != null ? order.cardAmount : order.card || 0
+  );
   const orderTotal = Number(order.totalAmount || 0);
   const grandTotal = orderTotal + tip;
   const discountLabel =
     order.source === "STAFF" || String(order.discountCode || "").toUpperCase() === "STAFF"
       ? "Staff Discount"
       : order.discountCode
-        ? `Discount (${order.discountCode})`
-        : "Discount";
+        ? `Discount (${order.discountCode}${
+            order.discountPercent != null ? ` ${order.discountPercent}%` : ""
+          })`
+        : order.discountPercent != null
+          ? `Discount (${order.discountPercent}%)`
+          : "Discount";
   const hasPaymentSplit = giftUsed > 0 || cash > 0 || card > 0;
+  const paymentSplits = Array.isArray(order.paymentSplits)
+    ? order.paymentSplits
+    : [];
+  const seatGroups =
+    Array.isArray(order.seatGroups) && order.seatGroups.length > 0
+      ? order.seatGroups
+      : groupItemsBySeat(items);
+  const showSeatGroups =
+    seatGroups.length > 1 ||
+    items.some((item) => item?.seatNumber != null && item?.seatNumber !== "");
+  const paidAmount =
+    order.paidAmount != null
+      ? Number(order.paidAmount)
+      : paymentSplits.reduce((sum, split) => sum + (Number(split.amount) || 0), 0);
+  const remainingDue =
+    order.remainingDue != null
+      ? Number(order.remainingDue)
+      : order.paymentStatus === "PARTIAL" || order.paymentStatus === "UNPAID"
+        ? Math.max(0, orderTotal - paidAmount)
+        : 0;
 
   return (
     <div className="mt-4 space-y-5 text-sm">
@@ -169,9 +335,12 @@ export default function OrderDetailBody({ order }) {
         </div>
       ) : null}
       <div>
-        <h3 className="text-[11px] font-bold uppercase tracking-wider text-orange-700 mb-2">
-          Order details
-        </h3>
+        <div className="flex items-center justify-between gap-2 mb-2">
+          <h3 className="text-[11px] font-bold uppercase tracking-wider text-orange-700">
+            Order details
+          </h3>
+          <OrderSourceBadge order={order} />
+        </div>
         <div className="grid grid-cols-2 gap-2">
           {order.orderNumber ? (
             <DetailItem label="Order #" value={order.orderNumber} highlight />
@@ -188,9 +357,26 @@ export default function OrderDetailBody({ order }) {
           ) : null}
           <DetailItem label="Employee" value={dash(order.processedByName)} />
           <DetailItem label="Status" value={order.status} highlight />
-          <DetailItem label="Payment" value={dash(order.paymentMethod)} highlight />
-          <DetailItem label="Payment status" value={order.paymentStatus} highlight />
-          {order.source ? <DetailItem label="Source" value={order.source} /> : null}
+          <DetailItem label="Payment" value={dash(order.paymentMethod || order.paymentLabel)} highlight />
+          <DetailItem
+            label="Payment status"
+            value={
+              order.paymentStatus === "PARTIAL" && remainingDue > 0
+                ? `PARTIAL · ${money(remainingDue)} due`
+                : order.paymentStatus
+            }
+            highlight
+          />
+          <DetailItem
+            label="Order type"
+            value={
+              order.orderTypeLabel ||
+              order.sourceLabel ||
+              getOrderTypeLabel(order) ||
+              getOrderSourceLabel(order.source)
+            }
+            highlight
+          />
           {order.contactNumber ? (
             <DetailItem
               label="Phone"
@@ -200,6 +386,12 @@ export default function OrderDetailBody({ order }) {
           {order.guestEmail ? <DetailItem label="Email" value={order.guestEmail} /> : null}
           {order.staffOrderReason ? (
             <DetailItem label="Staff reason" value={order.staffOrderReason} />
+          ) : null}
+          {Array.isArray(order.releasedSeats) && order.releasedSeats.length > 0 ? (
+            <DetailItem
+              label="Released seats"
+              value={formatMergedSeatLabel(order.releasedSeats)}
+            />
           ) : null}
           {order.waiveReason ? (
             <DetailItem label="Waive reason" value={order.waiveReason} highlight />
@@ -236,61 +428,33 @@ export default function OrderDetailBody({ order }) {
                   No items on this order.
                 </TableCell>
               </TableRow>
-            ) : (
-              items.map((item, index) => {
-                const extra = isExtraLine(item);
-                const modifierLines = getReceiptModifierLines(item);
-                const even = index % 2 === 1;
-                return (
+            ) : showSeatGroups ? (
+              seatGroups.flatMap((group, groupIdx) => {
+                const header = (
                   <TableRow
-                    key={item.cartId || `${item.name}-${index}`}
-                    className={`hover:bg-orange-50/70 ${even ? "bg-amber-50/80" : "bg-white"}`}
+                    key={`seat-header-${group.seatNumber ?? "table"}-${groupIdx}`}
+                    className="hover:bg-transparent"
                   >
-                    <TableCell className={`${cellBorder} align-top ${even ? "bg-amber-50/80" : ""}`}>
-                      <div className="font-medium text-zinc-900">
-                        {item.productCode ? (
-                          <span className="text-orange-600 mr-1.5">{item.productCode}</span>
-                        ) : null}
-                        {item.name}
-                        {item.size && item.size !== "Standard" ? (
-                          <span className="text-zinc-500 font-normal"> ({item.size})</span>
-                        ) : null}
-                        {extra ? (
-                          <span className="ml-1.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700">
-                            Extra
-                          </span>
-                        ) : null}
-                        {item.isOffer ? (
-                          <span className="ml-1.5 text-[10px] font-semibold uppercase tracking-wide text-violet-700">
-                            Offer
-                          </span>
-                        ) : null}
-                      </div>
-                      {item.category ? (
-                        <div className="text-[11px] text-zinc-500 mt-0.5">{item.category}</div>
+                    <TableCell
+                      colSpan={3}
+                      className={`${cellBorder} bg-zinc-100 text-[11px] font-bold uppercase tracking-wider text-zinc-700`}
+                    >
+                      {group.label || formatMergedSeatLabel([group.seatNumber])}
+                      {group.subtotal != null ? (
+                        <span className="ml-2 font-semibold normal-case tracking-normal tabular-nums text-zinc-500">
+                          {money(group.subtotal)}
+                        </span>
                       ) : null}
-                      {modifierLines.length > 0 ? (
-                        <div className="mt-1 space-y-0.5 text-[12px] text-zinc-600 italic">
-                          {modifierLines.map((line, lineIdx) => (
-                            <div key={`${line.kind}-${lineIdx}`}>{line.text}</div>
-                          ))}
-                        </div>
-                      ) : null}
-                      {item.notes ? (
-                        <div className="mt-1 text-[12px] font-medium italic text-amber-800">
-                          Remark: {item.notes}
-                        </div>
-                      ) : null}
-                    </TableCell>
-                    <TableCell className={`${cellBorder} text-right align-top tabular-nums ${even ? "bg-amber-50/80" : ""}`}>
-                      {item.qty}
-                    </TableCell>
-                    <TableCell className={`${cellBorder} text-right align-top tabular-nums font-medium ${even ? "bg-amber-50/80" : ""}`}>
-                      {money(itemLineTotal(item))}
                     </TableCell>
                   </TableRow>
                 );
+                const priorCount = seatGroups
+                  .slice(0, groupIdx)
+                  .reduce((sum, g) => sum + (g.items?.length || 0), 0);
+                return [header, ...ItemRows({ items: group.items || [], startIndex: priorCount })];
               })
+            ) : (
+              <ItemRows items={items} />
             )}
           </TableBody>
         </Table>
@@ -304,19 +468,21 @@ export default function OrderDetailBody({ order }) {
         <TotalsRow label="Subtotal" value={order.subTotal} muted />
         <TotalsRow label={discountLabel} value={discount} muted negative={discount > 0} />
         {hstAmount > 0 && <TotalsRow label="HST" value={hstAmount} muted />}
-        <TotalsRow
-          label={order.serviceChargeName || "Service charge"}
-          value={serviceCharge}
-          muted
-        />
-        <TotalsRow label={tipLabel(order)} value={tip} muted />
+        {(serviceCharge > 0 || order.serviceChargeName) ? (
+          <TotalsRow
+            label={order.serviceChargeName || "Service charge"}
+            value={serviceCharge}
+            muted
+          />
+        ) : null}
+        {tip > 0 ? <TotalsRow label={tipLabel(order)} value={tip} muted /> : null}
         {hasPaymentSplit ? (
           <div className="pt-1 space-y-1.5 border-t border-dashed border-zinc-300">
             {giftUsed > 0 ? (
               <TotalsRow
                 label={
                   order.giftcardCode
-                    ? `Gift Card `
+                    ? `Gift Card (${order.giftcardCode})`
                     : "Gift Card"
                 }
                 value={giftUsed}
@@ -329,31 +495,65 @@ export default function OrderDetailBody({ order }) {
             ) : null}
           </div>
         ) : null}
-        {Array.isArray(order.paymentSplits) && order.paymentSplits.length > 0 ? (
-          <div className="pt-1.5 space-y-1 border-t border-dashed border-violet-200">
+        {paymentSplits.length > 0 ? (
+          <div className="pt-1.5 space-y-1.5 border-t border-dashed border-violet-200">
             <p className="text-[10px] font-bold uppercase tracking-wider text-violet-700">
               Named splits
             </p>
-            {order.paymentSplits.map((split, idx) => (
-              <div
-                key={`od-split-${idx}`}
-                className="flex justify-between text-xs text-zinc-700"
-              >
-                <span>
-                  {split.name}
-                  {split.method
-                    ? ` · ${
-                        split.cardType
-                          ? `Card - ${split.cardType}`
-                          : split.method
-                      }`
-                    : ""}
-                </span>
-                <span className="font-semibold tabular-nums">
-                  ${(Number(split.amount) || 0).toFixed(2)}
-                </span>
-              </div>
-            ))}
+            {paymentSplits.map((split, idx) => {
+              const seats = seatLabel(split);
+              const splitTip = Number(split.tipAmount) || 0;
+              return (
+                <div
+                  key={`od-split-${idx}`}
+                  className="rounded-md bg-violet-50/60 px-2 py-1.5 space-y-0.5"
+                >
+                  <div className="flex justify-between text-xs text-zinc-800 gap-3">
+                    <span className="min-w-0">
+                      <span className="font-semibold">{split.name}</span>
+                      {split.method
+                        ? ` · ${
+                            split.cardType
+                              ? `Card - ${split.cardType}`
+                              : split.method
+                          }`
+                        : ""}
+                      {seats ? ` · ${seats}` : ""}
+                    </span>
+                    <span className="font-semibold tabular-nums shrink-0">
+                      {money(split.amount)}
+                    </span>
+                  </div>
+                  {splitTip > 0 ? (
+                    <div className="flex justify-between text-[11px] text-zinc-600 gap-3">
+                      <span>
+                        Tip
+                        {split.tipMethod ? ` (${split.tipMethod})` : ""}
+                      </span>
+                      <span className="tabular-nums">{money(splitTip)}</span>
+                    </div>
+                  ) : null}
+                  {(Number(split.cashAmount) > 0 ||
+                    Number(split.cardAmount) > 0 ||
+                    Number(split.giftAmount) > 0 ||
+                    Number(split.tenders?.giftCard) > 0) ? (
+                    <div className="flex flex-wrap gap-x-3 text-[11px] text-zinc-500">
+                      {Number(split.cashAmount) > 0 ? (
+                        <span>Cash {money(split.cashAmount)}</span>
+                      ) : null}
+                      {Number(split.cardAmount) > 0 ? (
+                        <span>Card {money(split.cardAmount)}</span>
+                      ) : null}
+                      {Number(split.giftAmount || split.tenders?.giftCard) > 0 ? (
+                        <span>
+                          Gift {money(split.giftAmount || split.tenders?.giftCard)}
+                        </span>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
           </div>
         ) : null}
         <TotalsRow label="Total" value={grandTotal} bold />
