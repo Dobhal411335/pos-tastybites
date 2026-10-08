@@ -39,9 +39,10 @@ export async function resolveOperationalActor(
     null;
 
   if (!actorName && actorId) {
+    // `name` is a virtual (firstName + lastName); enable virtuals on lean().
     const emp = await Employee.findById(actorId)
       .select("firstName lastName")
-      .lean();
+      .lean({ virtuals: true });
     actorName = formatEmployeeActorName(emp);
   }
 
@@ -70,7 +71,7 @@ export async function resolveActorNamesByIds(actorIds = []) {
 
   const emps = await Employee.find({ _id: { $in: ids } })
     .select("firstName lastName")
-    .lean();
+    .lean({ virtuals: true });
 
   return new Map(
     emps.map((emp) => [String(emp._id), formatEmployeeActorName(emp)])

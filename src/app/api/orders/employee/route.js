@@ -322,6 +322,7 @@ export const POST = withAuth(async (request) => {
     }
 
     const employeeId = request.user.id;
+    const actor = await resolveOperationalActor(request);
     const orderSource = ["WALK_IN", "STAFF", "POS", "ONLINE"].includes(data.source)
       ? data.source
       : "POS";
@@ -706,7 +707,6 @@ export const POST = withAuth(async (request) => {
       if (global.io) global.io.to(`floor:${session.floor}`).emit('order:updated', { orderId: order._id, sessionId });
 
       // Audit Log
-      const actor = await resolveOperationalActor(request);
       await OperationalAuditLog.create({
         restaurantId: request.restaurant,
         actorId: actor.actorId,
@@ -817,7 +817,6 @@ export const POST = withAuth(async (request) => {
       if (global.io) global.io.to(`floor:${session.floor}`).emit('order:created', { orderId: newOrder._id, sessionId });
 
       // Audit Log
-      const actor = await resolveOperationalActor(request);
       await OperationalAuditLog.create({
         restaurantId: request.restaurant,
         actorId: actor.actorId,
@@ -999,6 +998,7 @@ export const PATCH = withAuth(async (request) => {
   try {
     const employeeId = request.user.id;
     const restaurantId = request.restaurant;
+    const actor = await resolveOperationalActor(request);
     const body = await request.json();
     const { orderId, action, reason } = body || {};
 
@@ -1047,10 +1047,9 @@ export const PATCH = withAuth(async (request) => {
       }
 
       try {
-        const actor = await resolveOperationalActor(request);
         await OperationalAuditLog.create({
           restaurantId,
-          actorId: actor.actorId || employeeId,
+          actorId: actor.actorId,
           actorType: actor.actorType,
           actorName: actor.actorName,
           action: "ORDER_UPDATED",
@@ -1276,12 +1275,11 @@ export const PATCH = withAuth(async (request) => {
           sessionReleased = true;
 
           try {
-            const releaseActor = await resolveOperationalActor(request);
             await OperationalAuditLog.create({
               restaurantId,
-              actorId: releaseActor.actorId || employeeId,
-              actorType: releaseActor.actorType,
-              actorName: releaseActor.actorName,
+              actorId: actor.actorId,
+              actorType: actor.actorType,
+              actorName: actor.actorName,
               action: "TABLE_RELEASED",
               floorId: session.floor,
               tableId: session.primaryTable,
@@ -1327,12 +1325,11 @@ export const PATCH = withAuth(async (request) => {
     }
 
     try {
-      const cancelActor = await resolveOperationalActor(request);
       await OperationalAuditLog.create({
         restaurantId,
-        actorId: cancelActor.actorId || employeeId,
-        actorType: cancelActor.actorType,
-        actorName: cancelActor.actorName,
+        actorId: actor.actorId,
+        actorType: actor.actorType,
+        actorName: actor.actorName,
         action: "ORDER_CANCELLED",
         floorId: order.floor,
         tableId: order.table,

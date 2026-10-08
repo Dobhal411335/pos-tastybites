@@ -387,7 +387,7 @@ export const PUT = withAuth(async (request) => {
         await OperationalAuditLog.create({
           restaurantId: request.restaurant,
           actorId: actor.actorId,
-          actorType: 'Admin',
+          actorType: actor.actorType,
           actorName: actor.actorName,
           action: 'ADMIN_OVERRIDE',
           floorId: session.floor,
