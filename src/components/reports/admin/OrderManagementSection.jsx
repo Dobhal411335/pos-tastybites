@@ -703,7 +703,7 @@ export default function OrderManagementSection() {
                               type="button"
                               size="icon"
                               variant="outline"
-                              disabled={!row.canDelete || busyId === row.id}
+                              disabled={!row.canDelete || busyId === (row.rowKey || row.id)}
                               className={cn(
                                 "h-8 w-8",
                                 row.canDelete
@@ -734,7 +734,7 @@ export default function OrderManagementSection() {
                                 openCashDeleteConfirm(row);
                               }}
                             >
-                              {busyId === row.id ? (
+                              {busyId === (row.rowKey || row.id) ? (
                                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
                               ) : (
                                 <Trash2 className="h-3.5 w-3.5" />
@@ -778,7 +778,7 @@ export default function OrderManagementSection() {
                                 type="button"
                                 size="sm"
                                 variant="outline"
-                                disabled={busyId === row.id}
+                                disabled={busyId === (row.rowKey || row.id)}
                                 className="h-8 border-emerald-200 text-emerald-800 hover:bg-emerald-50"
                                 onClick={(e) => {
                                   e.stopPropagation();
@@ -792,7 +792,7 @@ export default function OrderManagementSection() {
                                 type="button"
                                 size="icon"
                                 variant="outline"
-                                disabled={busyId === row.id}
+                                disabled={busyId === (row.rowKey || row.id)}
                                 className="h-8 w-8 border-red-300 text-red-800 hover:bg-red-50"
                                 title="Permanently delete"
                                 onClick={(e) => {

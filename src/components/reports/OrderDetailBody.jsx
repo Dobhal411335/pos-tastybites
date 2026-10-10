@@ -550,8 +550,7 @@ export default function OrderDetailBody({ order }) {
                 const d = Number(split.cardAmount) || 0;
                 const g =
                   Number(split.giftAmount || split.tenders?.giftCard) || 0;
-                const amt = Number(split.amount) || 0;
-                if (c <= 0 && d <= 0 && g <= 0 && amt <= 0) return false;
+                if (c <= 0 && d <= 0 && g <= 0) return false;
                 return true;
               })
               .map((split, idx) => {

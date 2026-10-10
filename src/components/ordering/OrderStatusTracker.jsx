@@ -13,7 +13,7 @@ const STEPS = [
 function stepIndex(status, paymentStatus) {
   const s = String(status || "").toUpperCase();
   if (s === "CANCELLED" || s === "WAIVED") return -1;
-  if (s === "COMPLETED" || s === "PAID" || paymentStatus === "PAID") return 3;
+  if (s === "COMPLETED" || s === "PAID") return 3;
   if (s === "READY") return 2;
   if (s === "CONFIRMED") return 1;
   return 0; // PENDING

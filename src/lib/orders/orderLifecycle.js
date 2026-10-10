@@ -138,6 +138,7 @@ function buildRemovedCashEntry({
   removedAt,
   cashPrintJobIds,
   entryId,
+  originalSplitIndex,
 }) {
   const plain = splitToPlain(split);
   const seatNumbers = normalizeSeatNumbersList(plain);
@@ -159,6 +160,7 @@ function buildRemovedCashEntry({
         };
   return {
     entryId: entryId || makeCashEntryId(0),
+    originalSplitIndex: originalSplitIndex != null ? originalSplitIndex : -1,
     split: plain,
     seatNumbers,
     items: seatItems,
@@ -1038,6 +1040,24 @@ export async function softRemoveCashTender({
       taxBreakdown: liveBefore.taxBreakdown,
     };
 
+    const originalSplits = Array.isArray(baseSnap.paymentSplits)
+      ? baseSnap.paymentSplits
+      : liveBefore.paymentSplits;
+
+    const currentToOriginalMap = [];
+    if (isFirstRemoval || !baseSnap.removedSplitIndices) {
+      for (let i = 0; i < originalSplits.length; i++) currentToOriginalMap.push(i);
+    } else {
+      const removedSet = new Set(baseSnap.removedSplitIndices);
+      let cIdx = 0;
+      for (let origIdx = 0; origIdx < originalSplits.length; origIdx++) {
+        if (!removedSet.has(origIdx)) {
+          currentToOriginalMap[cIdx] = origIdx;
+          cIdx++;
+        }
+      }
+    }
+
     const newEntries = selectedIndices.map((idx) => {
       const split = liveBefore.paymentSplits[idx];
       const jobsForSplit = cashJobs.filter((job) => {
@@ -1051,6 +1071,7 @@ export async function softRemoveCashTender({
         removedAt,
         cashPrintJobIds: jobsForSplit.map((j) => j._id),
         entryId: makeCashEntryId(idx),
+        originalSplitIndex: currentToOriginalMap[idx],
       });
     });
 
@@ -1102,12 +1123,9 @@ export async function softRemoveCashTender({
     const prevRemoved = r2(baseSnap.removedCash);
 
     // Map removed seats onto original snapshot split indexes (stable for detail/legacy).
-    const originalSplits = Array.isArray(baseSnap.paymentSplits)
-      ? baseSnap.paymentSplits
-      : liveBefore.paymentSplits;
-    const originalIndices = nextEntries
-      .map((e) => findSplitIndexBySeats(originalSplits, e.seatNumbers))
-      .filter((i) => i >= 0);
+    const newOriginalIndices = selectedIndices.map((idx) => currentToOriginalMap[idx]);
+    const prevOriginalIndices = baseSnap.removedSplitIndices || [];
+    const originalIndices = [...new Set([...prevOriginalIndices, ...newOriginalIndices])].filter((i) => i >= 0);
 
     order.removedCashSnapshot = {
       ...baseSnap,
@@ -1303,9 +1321,12 @@ export async function restoreCashTender({
       // Rebuild live order = original snapshot minus seats still removed.
       applyFullCashSnapshotToOrder(order, snap);
       const stripIndices = remaining
-        .map((e) =>
-          findSplitIndexBySeats(order.paymentSplits, e.seatNumbers)
-        )
+        .map((e) => {
+          if (e.originalSplitIndex != null && e.originalSplitIndex >= 0) {
+            return e.originalSplitIndex;
+          }
+          return findSplitIndexBySeats(order.paymentSplits, e.seatNumbers);
+        })
         .filter((i) => i >= 0);
       applyCashTenderRemoval(order, { splitIndices: stripIndices });
       const remainingCash = r2(
