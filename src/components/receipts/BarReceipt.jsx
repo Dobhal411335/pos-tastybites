@@ -180,13 +180,19 @@ const BarReceipt = ({
                       className={`text-[11px] font-semibold ${
                         line.kind === "addon-choice-item" ||
                         line.kind === "choice-item" ||
-                        line.kind === "custom-data-item" ||
-                        line.kind === "custom-data-option"
+                        line.kind === "custom-data-item"
                           ? "pl-2"
-                          : "italic"
+                          : line.kind === "custom-extra"
+                            ? "flex justify-between gap-2 not-italic"
+                            : "italic"
                       }`}
                     >
-                      {line.text}
+                      <span>{line.text}</span>
+                      {line.kind === "custom-extra" && line.price != null ? (
+                        <span className="shrink-0">
+                          +${Number(line.price).toFixed(2)}
+                        </span>
+                      ) : null}
                     </div>
                   ))}
                 </div>

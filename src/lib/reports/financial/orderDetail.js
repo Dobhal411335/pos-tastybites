@@ -22,10 +22,17 @@ import {
 import { toObjectId } from "./match.js";
 
 function shapeCustomExtras(list) {
-  return (Array.isArray(list) ? list : []).map((extra) => ({
-    name: extra?.name || "",
-    price: r2(extra?.price),
-  }));
+  return (Array.isArray(list) ? list : []).map((extra) => {
+    const rawQty = Number(extra?.qty);
+    const qty = Number.isFinite(rawQty)
+      ? Math.min(99, Math.max(1, Math.floor(rawQty)))
+      : 1;
+    return {
+      name: extra?.name || "",
+      price: r2(extra?.price),
+      qty,
+    };
+  });
 }
 
 export function shapeFinancialOrderItems(items) {

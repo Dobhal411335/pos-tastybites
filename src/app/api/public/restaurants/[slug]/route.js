@@ -3,7 +3,7 @@ import { sendError } from "@/utils/errorHandler";
 import { getPublicRestaurantProfile } from "@/lib/public/resolveRestaurant";
 import { buildSameDayPickupSlots } from "@/lib/public/pickup";
 import { timeToMinutes } from "@/lib/public/restaurantHours";
-import { DEFAULT_RESTAURANT_TIMEZONE } from "@/lib/restaurantTime";
+import { getRestaurantTimezone } from "@/lib/restaurantTime";
 import OfferDetails from "@/models/Web/OfferDetails";
 import PopupBanner from "@/models/Web/popupBanner";
 import ManageBanner from "@/models/Web/ManageBanners";
@@ -33,17 +33,25 @@ export async function GET(_request, { params }) {
 
     const todayHours = profile.todayHours || null;
     const pickupOptions = {};
-    if (todayHours?.is24Hours) {
+    // Whole day closed, or today's open window already ended → no pickup slots.
+    // 24h restaurants never force-close on pastClose.
+    if (
+      todayHours?.closed ||
+      (!todayHours?.is24Hours && todayHours?.pastClose)
+    ) {
+      pickupOptions.forceClosed = true;
+    } else if (todayHours?.is24Hours) {
       pickupOptions.openMinutes = 0;
       pickupOptions.endMinutes = 23 * 60 + 45;
       pickupOptions.is24Hours = true;
-    } else if (todayHours && !todayHours.closed) {
+    } else if (todayHours) {
       const openMin = timeToMinutes(todayHours.open);
       const closeMin = timeToMinutes(todayHours.close);
       if (openMin != null) pickupOptions.openMinutes = openMin;
-      if (closeMin != null) pickupOptions.endMinutes = closeMin;
-    } else if (todayHours?.closed) {
-      pickupOptions.forceClosed = true;
+      // Last slot must be before close (exclusive of closing minute).
+      if (closeMin != null) {
+        pickupOptions.endMinutes = Math.max(0, closeMin - 15);
+      }
     }
 
     return sendSuccess(
@@ -52,7 +60,7 @@ export async function GET(_request, { params }) {
         pickupSlots: pickupOptions.forceClosed
           ? []
           : buildSameDayPickupSlots(undefined, undefined, pickupOptions),
-        timezone: DEFAULT_RESTAURANT_TIMEZONE,
+        timezone: getRestaurantTimezone(),
         todayHours,
         promotions: offerDetails
           ? {

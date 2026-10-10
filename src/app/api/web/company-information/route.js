@@ -55,11 +55,17 @@ const normalizePayload = (payload) => ({
   restaurantHours: normalizeRestaurantHours(payload?.restaurantHours),
 })
 
+const restaurantOwnerFilter = (restaurantId) => ({
+  $or: [{ restaurantId }, { restaurant: restaurantId }],
+})
+
 export const GET = withAuth(async (request) => {
   try {
     await connectDB()
 
-    const companyBasicInfo = await CompanyBasicInfo.findOne({ restaurant: request.restaurant }).sort({ updatedAt: -1 })
+    const companyBasicInfo = await CompanyBasicInfo.findOne(
+      restaurantOwnerFilter(request.restaurant)
+    ).sort({ updatedAt: -1 })
     return NextResponse.json({ success: true, data: companyBasicInfo }, { status: 200 })
   } catch (error) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 })
@@ -84,9 +90,9 @@ export const POST = withAuth(async (request) => {
       return NextResponse.json({ success: false, error: 'Each contact number must be exactly 10 digits' }, { status: 400 })
     }
 
-    const companyBasicInfo = await CompanyBasicInfo.create({ 
-      ...normalizedPayload, 
-      restaurant: request.restaurant 
+    const companyBasicInfo = await CompanyBasicInfo.create({
+      ...normalizedPayload,
+      restaurantId: request.restaurant,
     })
     return NextResponse.json({ success: true, data: companyBasicInfo }, { status: 201 })
   } catch (error) {
@@ -115,23 +121,24 @@ export const PUT = withAuth(async (request) => {
     }
 
     let companyBasicInfo = null
+    const ownerFilter = restaurantOwnerFilter(request.restaurant)
 
     if (id) {
       companyBasicInfo = await CompanyBasicInfo.findOneAndUpdate(
-        { _id: id, restaurant: request.restaurant },
-        normalizedPayload, 
+        { _id: id, $and: [ownerFilter] },
+        { ...normalizedPayload, restaurantId: request.restaurant },
         { new: true, runValidators: true }
       )
     } else {
-      const existingRecord = await CompanyBasicInfo.findOne({ restaurant: request.restaurant }).sort({ updatedAt: -1 })
+      const existingRecord = await CompanyBasicInfo.findOne(ownerFilter).sort({ updatedAt: -1 })
 
       if (!existingRecord) {
         return NextResponse.json({ success: false, error: 'Company basic info not found' }, { status: 404 })
       }
 
       companyBasicInfo = await CompanyBasicInfo.findOneAndUpdate(
-        { _id: existingRecord._id, restaurant: request.restaurant },
-        normalizedPayload,
+        { _id: existingRecord._id, $and: [ownerFilter] },
+        { ...normalizedPayload, restaurantId: request.restaurant },
         { new: true, runValidators: true }
       )
     }

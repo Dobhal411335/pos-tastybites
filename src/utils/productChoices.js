@@ -46,25 +46,29 @@ export function normalizeChoiceSelections(list) {
     .filter((group) => group.name && group.subChoices.length > 0);
 }
 
-/** Product catalog: group → option (subChoice) → many inner choice names */
+/** Product catalog: group name → flat option strings (radio at order time) */
 export function normalizeCustomData(list) {
   if (!Array.isArray(list)) return [];
   return list
     .map((group) => ({
       name: String(group?.name || "").trim(),
-      subChoices: (Array.isArray(group?.subChoices) ? group.subChoices : [])
-        .map((option) => ({
-          name: String(option?.name || "").trim(),
-          choices: cleanChoiceList(option?.choices),
-        }))
-        .filter((option) => option.name && option.choices.length > 0),
+      subChoices: cleanChoiceList(group?.subChoices),
     }))
     .filter((group) => group.name && group.subChoices.length > 0);
 }
 
-/** Cart / order selections matching normalizeCustomData shape */
+/** Cart / order selections: same shape; at most one option per group */
 export function normalizeCustomDataSelections(list) {
-  return normalizeCustomData(list);
+  if (!Array.isArray(list)) return [];
+  return list
+    .map((group) => {
+      const subChoices = cleanChoiceList(group?.subChoices).slice(0, 1);
+      return {
+        name: String(group?.name || "").trim(),
+        subChoices,
+      };
+    })
+    .filter((group) => group.name && group.subChoices.length > 0);
 }
 
 export function productHasChoiceOptions(product) {
@@ -77,6 +81,7 @@ export function productHasCustomData(product) {
 
 /**
  * Keep only allowed custom-data selections against product catalog.
+ * Caps each group to a single selected option (radio).
  */
 export function filterCustomDataSelections(selected, allowed) {
   const allowedGroups = normalizeCustomData(allowed);
@@ -86,28 +91,14 @@ export function filterCustomDataSelections(selected, allowed) {
         (group) => group.name.toLowerCase() === sel.name.toLowerCase(),
       );
       if (!match) return null;
-
-      const optionByLower = new Map(
-        match.subChoices.map((option) => [option.name.toLowerCase(), option]),
+      const allowByLower = new Map(
+        match.subChoices.map((value) => [value.toLowerCase(), value]),
       );
-
-      const subChoices = sel.subChoices
-        .map((option) => {
-          const allowedOption = optionByLower.get(option.name.toLowerCase());
-          if (!allowedOption) return null;
-          const allowByLower = new Map(
-            allowedOption.choices.map((value) => [value.toLowerCase(), value]),
-          );
-          const choices = option.choices
-            .map((value) => allowByLower.get(String(value || "").trim().toLowerCase()))
-            .filter(Boolean);
-          if (!choices.length) return null;
-          return { name: allowedOption.name, choices: [...new Set(choices)] };
-        })
+      const picked = sel.subChoices
+        .map((value) => allowByLower.get(String(value || "").trim().toLowerCase()))
         .filter(Boolean);
-
-      if (!subChoices.length) return null;
-      return { name: match.name, subChoices };
+      if (!picked.length) return null;
+      return { name: match.name, subChoices: [picked[0]] };
     })
     .filter(Boolean);
 }
@@ -158,12 +149,11 @@ export function getProductChoiceDetailLines(item) {
 }
 
 export function getCustomDataDetailLines(item) {
-  return normalizeCustomDataSelections(item?.customDataSelections).flatMap(
-    (group) =>
-      group.subChoices.map((option) => ({
-        label: `${group.name} · ${option.name}`,
-        value: option.choices.join(", "),
-      })),
+  return normalizeCustomDataSelections(item?.customDataSelections).map(
+    (group) => ({
+      label: group.name,
+      value: group.subChoices.join(", "),
+    }),
   );
 }
 
@@ -315,9 +305,13 @@ export function isStandaloneExtraLine(item) {
  */
 export function isRedundantStandaloneExtraOption(item, opt) {
   if (!isStandaloneExtraLine(item)) return false;
-  const itemName = String(item?.name || "").trim().toLowerCase();
-  const label = String(opt || "").trim().toLowerCase();
-  return Boolean(itemName && label && itemName === label);
+  const itemName = String(item?.name || "").trim();
+  if (!itemName) return false;
+  const label = String(opt || "").trim();
+  if (!label) return false;
+  if (label.toLowerCase() === itemName.toLowerCase()) return true;
+  const escaped = itemName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`^(?:addons|extras)\\s*:\\s*${escaped}$`, "i").test(label);
 }
 
 /** Addon / extra labels stored on `item.options`, excluding preparation style. */
@@ -363,8 +357,11 @@ export function getVisibleCartModifier(item) {
  */
 export function getReceiptModifierLines(item) {
   const lines = [];
+  // Standalone Extra (addon) lines: print the addon name in the title only —
+  // never repeat prep style / duplicate addon labels underneath.
+  const isExtra = isStandaloneExtraLine(item);
   const style = String(item?.preparationStyle || "").trim();
-  if (style) {
+  if (style && !isExtra) {
     lines.push({ kind: "style", text: `+ ${style}` });
   }
 
@@ -377,11 +374,8 @@ export function getReceiptModifierLines(item) {
 
   for (const group of normalizeCustomDataSelections(item?.customDataSelections)) {
     lines.push({ kind: "custom-data", text: `${group.name}:` });
-    for (const option of group.subChoices) {
-      lines.push({ kind: "custom-data-option", text: `${option.name}:` });
-      for (const choice of option.choices) {
-        lines.push({ kind: "custom-data-item", text: `• ${choice}` });
-      }
+    for (const choice of group.subChoices) {
+      lines.push({ kind: "custom-data-item", text: `• ${choice}` });
     }
   }
 
@@ -406,10 +400,14 @@ export function getReceiptModifierLines(item) {
   }
 
   for (const extra of normalizeCustomExtras(item?.customExtras)) {
+    const linePrice =
+      Math.round(Number(extra.price) * Number(extra.qty) * 100) / 100;
+    const qtySuffix = extra.qty > 1 ? ` ×${extra.qty}` : "";
     lines.push({
       kind: "custom-extra",
-      text: `+ ${extra.name}`,
-      price: extra.price,
+      text: `+ ${extra.name}${qtySuffix}`,
+      price: linePrice,
+      qty: extra.qty,
     });
   }
   return lines;
@@ -428,22 +426,29 @@ export function cartCustomDataSelectionsKey(selections) {
   return JSON.stringify(
     normalizeCustomDataSelections(selections).map((group) => ({
       name: group.name,
-      subChoices: group.subChoices.map((option) => ({
-        name: option.name,
-        choices: [...option.choices].sort(),
-      })),
+      subChoices: [...group.subChoices].sort(),
     })),
   );
 }
 
-/** Normalize free-text POS custom extras: [{ name, price }]. */
+/** Max qty allowed for a single POS custom extra row. */
+export const MAX_CUSTOM_EXTRA_QTY = 99;
+
+/** Normalize free-text POS custom extras: [{ name, price, qty }]. */
 export function normalizeCustomExtras(list) {
   if (!Array.isArray(list)) return [];
   return list
     .map((entry) => {
       const name = String(entry?.name || "").trim();
       const price = Math.round((Number(entry?.price) || 0) * 100) / 100;
-      return { name, price };
+      const rawQty = Number(entry?.qty);
+      const qty = Number.isFinite(rawQty)
+        ? Math.min(
+            MAX_CUSTOM_EXTRA_QTY,
+            Math.max(1, Math.floor(rawQty)),
+          )
+        : 1;
+      return { name, price, qty };
     })
     .filter(
       (entry) =>
@@ -454,8 +459,12 @@ export function normalizeCustomExtras(list) {
     );
 }
 
+/** Unit add-on total for one parent item: sum(price × qty). */
 export function customExtrasUnitTotal(list) {
-  return normalizeCustomExtras(list).reduce((sum, entry) => sum + entry.price, 0);
+  return normalizeCustomExtras(list).reduce(
+    (sum, entry) => sum + entry.price * entry.qty,
+    0,
+  );
 }
 
 export function cartCustomExtrasKey(list) {

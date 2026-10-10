@@ -1,4 +1,4 @@
-import { DEFAULT_RESTAURANT_TIMEZONE } from "@/lib/restaurantTime";
+import { getRestaurantTimezone } from "@/lib/restaurantTime";
 
 export const WEEKDAY_KEYS = [
   "sunday",
@@ -83,13 +83,52 @@ export function normalizeRestaurantHours(raw) {
   return { mode, is24Hours, sameHours, weekly };
 }
 
-function getLocalWeekdayKey(date = new Date(), timeZone = DEFAULT_RESTAURANT_TIMEZONE) {
+function getLocalWeekdayKey(date = new Date(), timeZone = getRestaurantTimezone()) {
   const weekday = new Intl.DateTimeFormat("en-US", {
     timeZone,
     weekday: "long",
   }).format(date);
   const key = String(weekday || "").toLowerCase();
   return WEEKDAY_KEYS.includes(key) ? key : "monday";
+}
+
+/** Minutes from midnight in the restaurant timezone. */
+export function getLocalMinutes(
+  date = new Date(),
+  timeZone = getRestaurantTimezone(),
+) {
+  const fmt = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+  const parts = Object.fromEntries(
+    fmt.formatToParts(date).map((p) => [p.type, p.value]),
+  );
+  const hour = parts.hour === "24" ? 0 : Number(parts.hour);
+  const minute = Number(parts.minute);
+  return hour * 60 + minute;
+}
+
+/**
+ * Whether `nowMinutes` falls inside an open→close window.
+ * Supports overnight windows (e.g. 18:00 → 02:00).
+ */
+export function isWithinOpenClose(nowMinutes, openMinutes, closeMinutes) {
+  if (
+    !Number.isFinite(nowMinutes) ||
+    !Number.isFinite(openMinutes) ||
+    !Number.isFinite(closeMinutes)
+  ) {
+    return false;
+  }
+  if (openMinutes === closeMinutes) return false;
+  if (closeMinutes > openMinutes) {
+    return nowMinutes >= openMinutes && nowMinutes < closeMinutes;
+  }
+  // Overnight: open late, close after midnight.
+  return nowMinutes >= openMinutes || nowMinutes < closeMinutes;
 }
 
 export function formatTime12h(value) {
@@ -105,11 +144,16 @@ export function formatTime12h(value) {
 
 /**
  * Resolve today's restaurant hours for display / pickup.
+ * `closed` = marked shut for the whole calendar day (checkbox).
+ * `isOpenNow` = wall clock is currently inside today's open→close window.
+ * `pastClose` = same-day window already ended (no more pickup today).
  * @returns {{
  *   dayKey: string,
  *   dayLabel: string,
  *   is24Hours: boolean,
  *   closed: boolean,
+ *   isOpenNow: boolean,
+ *   pastClose: boolean,
  *   open: string|null,
  *   close: string|null,
  *   label: string,
@@ -120,7 +164,7 @@ export function formatTime12h(value) {
 export function getTodayRestaurantHours(
   hoursConfig,
   date = new Date(),
-  timeZone = DEFAULT_RESTAURANT_TIMEZONE,
+  timeZone = getRestaurantTimezone(),
 ) {
   const hours = normalizeRestaurantHours(hoursConfig);
   const dayKey = getLocalWeekdayKey(date, timeZone);
@@ -132,6 +176,8 @@ export function getTodayRestaurantHours(
       dayLabel,
       is24Hours: true,
       closed: false,
+      isOpenNow: true,
+      pastClose: false,
       open: "00:00",
       close: "23:59",
       label: "Open 24 hours",
@@ -151,6 +197,8 @@ export function getTodayRestaurantHours(
       dayLabel,
       is24Hours: false,
       closed: true,
+      isOpenNow: false,
+      pastClose: true,
       open: null,
       close: null,
       label: "Closed today",
@@ -161,11 +209,25 @@ export function getTodayRestaurantHours(
 
   const openLabel = formatTime12h(day.open);
   const closeLabel = formatTime12h(day.close);
+  const openMin = timeToMinutes(day.open);
+  const closeMin = timeToMinutes(day.close);
+  const nowMin = getLocalMinutes(date, timeZone);
+  const isOpenNow = isWithinOpenClose(nowMin, openMin, closeMin);
+  // Past close only for same-calendar-day windows (close after open).
+  // Overnight windows stay orderable until the early-morning close.
+  const pastClose =
+    Number.isFinite(openMin) &&
+    Number.isFinite(closeMin) &&
+    closeMin > openMin &&
+    nowMin >= closeMin;
+
   return {
     dayKey,
     dayLabel,
     is24Hours: false,
     closed: false,
+    isOpenNow,
+    pastClose,
     open: day.open,
     close: day.close,
     label: `${openLabel} – ${closeLabel}`,

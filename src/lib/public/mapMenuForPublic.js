@@ -51,13 +51,8 @@ function mapCustomData(customData = []) {
     .map((group) => ({
       name: String(group?.name || "").trim(),
       subChoices: (Array.isArray(group?.subChoices) ? group.subChoices : [])
-        .map((option) => ({
-          name: String(option?.name || "").trim(),
-          choices: (Array.isArray(option?.choices) ? option.choices : [])
-            .map((value) => String(value || "").trim())
-            .filter(Boolean),
-        }))
-        .filter((option) => option.name && option.choices.length > 0),
+        .map((value) => String(value || "").trim())
+        .filter(Boolean),
     }))
     .filter((group) => group.name && group.subChoices.length > 0);
 }

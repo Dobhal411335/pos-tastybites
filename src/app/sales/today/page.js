@@ -1151,16 +1151,14 @@ function TodayOrdersPageContent() {
                                   line.kind === "choice-item" ||
                                   line.kind === "custom-data-item"
                                     ? "pl-3 text-sky-800"
-                                    : line.kind === "custom-data-option"
-                                      ? "pl-2 text-violet-800"
-                                      : line.kind === "custom-data"
-                                        ? "text-violet-900"
-                                        : line.kind === "addon-choice" ||
-                                            line.kind === "choice"
-                                          ? "text-sky-900"
-                                          : line.kind === "custom-extra"
-                                            ? "text-zinc-900"
-                                            : "text-zinc-900 italic"
+                                    : line.kind === "custom-data"
+                                      ? "text-violet-900"
+                                      : line.kind === "addon-choice" ||
+                                          line.kind === "choice"
+                                        ? "text-sky-900"
+                                        : line.kind === "custom-extra"
+                                          ? "text-zinc-900"
+                                          : "text-zinc-900 italic"
                                 }`}
                               >
                                 {line.text}

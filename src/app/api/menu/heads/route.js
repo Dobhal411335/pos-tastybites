@@ -1,5 +1,6 @@
 import { withAuth } from "@/utils/auth";
 import Head from "@/models/menu/Head";
+import ProductHead from "@/models/menu/ProductHead";
 import { sendSuccess } from "@/utils/apiResponse";
 import { sendError } from "@/utils/errorHandler";
 import { logger } from "@/utils/logger";
@@ -116,12 +117,35 @@ export const DELETE = withAuth(async (request) => {
       try { await deleteImage(deleted.image.key); } catch (e) { logger.error("Cloudinary delete error", e); }
     }
 
+    // Cascade: remove product-head mappings tied to this head
+    const mappings = await ProductHead.find({
+      head: id,
+      restaurant: request.restaurant,
+    }).select("_id").lean();
+
+    if (mappings.length > 0) {
+      await ProductHead.deleteMany({
+        head: id,
+        restaurant: request.restaurant,
+      });
+      await Promise.all(
+        mappings.map((m) =>
+          recordMenuDeletion({
+            restaurantId: request.restaurant,
+            entityType: "productHead",
+            entityId: m._id,
+          }),
+        ),
+      );
+    }
+
     await recordMenuDeletion({
       restaurantId: request.restaurant,
       entityType: "head",
       entityId: id,
     });
 
+    emitMenuStale(request.restaurant);
     logger.info(`Head deleted: ${id}`);
     return sendSuccess(null, "Head deleted successfully");
   } catch (error) {

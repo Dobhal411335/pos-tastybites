@@ -255,10 +255,17 @@ function itemSummary(items) {
 function shapeOrderItems(items) {
   return (Array.isArray(items) ? items : []).map((item) => {
     const customExtras = Array.isArray(item?.customExtras)
-      ? item.customExtras.map((extra) => ({
-          name: extra?.name || "",
-          price: r2(extra?.price),
-        }))
+      ? item.customExtras.map((extra) => {
+          const rawQty = Number(extra?.qty);
+          const qty = Number.isFinite(rawQty)
+            ? Math.min(99, Math.max(1, Math.floor(rawQty)))
+            : 1;
+          return {
+            name: extra?.name || "",
+            price: r2(extra?.price),
+            qty,
+          };
+        })
       : [];
     return {
       cartId: item?.cartId || null,

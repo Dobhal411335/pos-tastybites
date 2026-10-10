@@ -5,7 +5,7 @@ import {
   getTodayRestaurantHours,
   normalizeRestaurantHours,
 } from "@/lib/public/restaurantHours";
-import { DEFAULT_RESTAURANT_TIMEZONE } from "@/lib/restaurantTime";
+import { getRestaurantTimezone } from "@/lib/restaurantTime";
 
 export function getDefaultRestaurantSlug() {
   return (
@@ -54,8 +54,12 @@ export async function getPublicRestaurantProfile(slug) {
   const restaurant = await resolveRestaurantBySlug(slug);
   if (!restaurant) return null;
 
+  // Schema field is restaurantId; older writes used `restaurant`.
   let company = await CompanyBasicInfo.findOne({
-    restaurantId: restaurant._id,
+    $or: [
+      { restaurantId: restaurant._id },
+      { restaurant: restaurant._id },
+    ],
   })
     .sort({ updatedAt: -1 })
     .lean();
@@ -82,7 +86,7 @@ export async function getPublicRestaurantProfile(slug) {
   const todayHours = getTodayRestaurantHours(
     restaurantHours,
     new Date(),
-    DEFAULT_RESTAURANT_TIMEZONE,
+    getRestaurantTimezone(),
   );
 
   return {

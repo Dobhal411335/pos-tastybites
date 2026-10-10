@@ -156,15 +156,13 @@ export default function ProductConfigModal({ isOpen, onClose, product }) {
   }, [addonQtyById]);
 
   const productCustomDataPayload = customDataGroups
-    .map((group) => ({
-      name: group.name,
-      subChoices: group.subChoices
-        .map((option) => ({
-          name: option.name,
-          choices: customDataSelections[group.name]?.[option.name] || [],
-        }))
-        .filter((option) => option.choices.length > 0),
-    }))
+    .map((group) => {
+      const picked = String(customDataSelections[group.name] || "").trim();
+      return {
+        name: group.name,
+        subChoices: picked ? [picked] : [],
+      };
+    })
     .filter((group) => group.subChoices.length > 0);
 
   const productChoicePayload = choiceOptions
@@ -245,18 +243,12 @@ export default function ProductConfigModal({ isOpen, onClose, product }) {
     });
   };
 
-  const toggleCustomDataChoice = (groupName, optionName, choice, multi) => {
+  const toggleCustomDataChoice = (groupName, choice) => {
     setCustomDataSelections((prev) => {
-      const group = prev[groupName] || {};
-      const current = group[optionName] || [];
-      const next = !multi
-        ? [choice]
-        : current.includes(choice)
-          ? current.filter((value) => value !== choice)
-          : [...current, choice];
+      const current = prev[groupName] || "";
       return {
         ...prev,
-        [groupName]: { ...group, [optionName]: next },
+        [groupName]: current === choice ? "" : choice,
       };
     });
   };
@@ -536,6 +528,7 @@ export default function ProductConfigModal({ isOpen, onClose, product }) {
 
                 {customDataGroups.map((group, groupIndex) => {
                   const value = `custom-${groupIndex}-${group.name}`;
+                  const selected = customDataSelections[group.name] || "";
                   return (
                     <AccordionItem
                       key={value}
@@ -546,55 +539,32 @@ export default function ProductConfigModal({ isOpen, onClose, product }) {
                         {group.name}
                       </AccordionTrigger>
                       <AccordionContent className={accordionContentClass}>
-                        <div className="space-y-4">
-                          {group.subChoices.map((option) => {
-                            const multi = (option.choices || []).length > 2;
-                            const selected =
-                              customDataSelections[group.name]?.[option.name] ||
-                              [];
+                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                          {(group.subChoices || []).map((choice) => {
+                            const checked = selected === choice;
                             return (
-                              <div
-                                key={`${group.name}-${option.name}`}
-                                className="space-y-2"
+                              <label
+                                key={`${group.name}-${choice}`}
+                                className={cn(
+                                  "flex cursor-pointer items-center rounded-lg border p-3 transition-colors",
+                                  checked
+                                    ? "border-violet-500 bg-violet-50/30"
+                                    : "border-zinc-200 hover:border-violet-300",
+                                )}
                               >
-                                <p className="text-[12px] font-bold uppercase tracking-wide text-zinc-500">
-                                  {option.name}
-                                </p>
-                                <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                                  {(option.choices || []).map((choice) => {
-                                    const checked = selected.includes(choice);
-                                    return (
-                                      <label
-                                        key={`${group.name}-${option.name}-${choice}`}
-                                        className={cn(
-                                          "flex cursor-pointer items-center rounded-lg border p-3 transition-colors",
-                                          checked
-                                            ? "border-violet-500 bg-violet-50/30"
-                                            : "border-zinc-200 hover:border-violet-300",
-                                        )}
-                                      >
-                                        <div className="flex flex-1 items-center gap-3 text-[14px] font-bold text-zinc-800">
-                                          <input
-                                            type={multi ? "checkbox" : "radio"}
-                                            name={`custom-${group.name}-${option.name}`}
-                                            checked={checked}
-                                            onChange={() =>
-                                              toggleCustomDataChoice(
-                                                group.name,
-                                                option.name,
-                                                choice,
-                                                multi,
-                                              )
-                                            }
-                                            className="h-4 w-4 accent-violet-500"
-                                          />
-                                          <span>{choice}</span>
-                                        </div>
-                                      </label>
-                                    );
-                                  })}
+                                <div className="flex flex-1 items-center gap-3 text-[14px] font-bold text-zinc-800">
+                                  <input
+                                    type="radio"
+                                    name={`custom-${group.name}`}
+                                    checked={checked}
+                                    onChange={() =>
+                                      toggleCustomDataChoice(group.name, choice)
+                                    }
+                                    className="h-4 w-4 accent-violet-500"
+                                  />
+                                  <span>{choice}</span>
                                 </div>
-                              </div>
+                              </label>
                             );
                           })}
                         </div>

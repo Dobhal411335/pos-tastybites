@@ -1,4 +1,6 @@
 import Order from "@/models/Order";
+import PrintJob from "@/models/PrintJob";
+import Notification from "@/models/Notification";
 import OperationalAuditLog from "@/models/OperationalAuditLog";
 import {
   businessDateBounds,
@@ -117,6 +119,45 @@ export async function renumberOrdersForBusinessDay({
       },
       session ? { session } : undefined
     );
+  }
+
+  // Keep denormalized order # on print jobs + notifications in sync with live Order.
+  const opts = session ? { session } : undefined;
+  for (const change of changes) {
+    const oldNum = String(change.oldOrderNumber || "");
+    const newNum = String(change.newOrderNumber || "");
+    if (!newNum || oldNum === newNum) continue;
+
+    await PrintJob.updateMany(
+      { orderId: change.orderId, restaurantId },
+      { $set: { "metadata.orderNumber": newNum } },
+      opts
+    );
+
+    await Notification.updateMany(
+      { orderId: change.orderId, restaurantId },
+      { $set: { "metadata.orderNumber": newNum } },
+      opts
+    );
+
+    // Rewrite "Order #NNNN" in notification messages that still use the old number.
+    if (oldNum && !/^(DEL-|RST-)/i.test(oldNum)) {
+      const escaped = oldNum.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      let notifQuery = Notification.find({
+        orderId: change.orderId,
+        restaurantId,
+        message: { $regex: `Order\\s*#\\s*${escaped}`, $options: "i" },
+      }).select("_id message");
+      if (session) notifQuery = notifQuery.session(session);
+      const notifs = await notifQuery;
+      for (const n of notifs) {
+        n.message = String(n.message || "").replace(
+          new RegExp(`Order\\s*#\\s*${escaped}`, "ig"),
+          `Order #${newNum}`
+        );
+        await n.save(opts);
+      }
+    }
   }
 
   if (actor?.actorId) {

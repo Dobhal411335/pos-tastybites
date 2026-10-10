@@ -337,6 +337,16 @@ export async function repricePosCartItems({
               err.status = 400;
               throw err;
             }
+            if (raw?.qty != null && raw?.qty !== "") {
+              const rawQty = Math.floor(Number(raw.qty));
+              if (!Number.isFinite(rawQty) || rawQty < 1 || rawQty > 99) {
+                const err = new Error(
+                  `Invalid custom item qty for: ${rawName}`,
+                );
+                err.status = 400;
+                throw err;
+              }
+            }
           }
         }
       }

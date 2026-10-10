@@ -43,14 +43,20 @@ export default function MenuHero({
   const brandName = restaurant?.name || "";
   const slots = restaurant?.pickupSlots || [];
   const todayHours = restaurant?.todayHours || null;
-  const kitchenLive = slots.length > 0 && !todayHours?.closed;
+  // Live = still offering same-day slots (before open is OK; past close is not).
+  const kitchenLive =
+    slots.length > 0 && !todayHours?.closed && !todayHours?.pastClose;
   const hoursLabel = todayHours?.is24Hours
     ? "Open 24 hours"
     : todayHours?.closed
       ? "Closed today"
-      : todayHours?.label
-        ? `Today ${todayHours.label}`
-        : null;
+      : todayHours?.pastClose
+        ? `Closed · Was ${todayHours.label}`
+        : todayHours?.isOpenNow
+          ? `Open now · ${todayHours.label}`
+          : todayHours?.label
+            ? `Today ${todayHours.label}`
+            : null;
 
   const pushFilters = (next = {}) => {
     const params = new URLSearchParams(searchParams.toString());

@@ -324,16 +324,22 @@ function isStandaloneExtraLine(item) {
 
 function isRedundantStandaloneExtraOption(item, opt) {
   if (!isStandaloneExtraLine(item)) return false;
-  const itemName = String(item?.name || "").trim().toLowerCase();
-  const label = String(opt || "").trim().toLowerCase();
-  return Boolean(itemName && label && itemName === label);
+  const itemName = String(item?.name || "").trim();
+  if (!itemName) return false;
+  const label = String(opt || "").trim();
+  if (!label) return false;
+  if (label.toLowerCase() === itemName.toLowerCase()) return true;
+  const escaped = itemName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`^(?:addons|extras)\\s*:\\s*${escaped}$`, "i").test(label);
 }
 
-/** Mirrors getReceiptModifierLines from productChoices.js */
-function getReceiptModifierLines(item, { includeCustomPrices = false } = {}) {
+/** Mirrors getReceiptModifierLines from productChoices.js (custom extras handled separately). */
+function getReceiptModifierLines(item) {
   const lines = [];
+  // Extra addon lines: title is the addon name — skip prep style under the line.
+  const isExtra = isStandaloneExtraLine(item);
   const style = String(item?.preparationStyle || "").trim();
-  if (style) lines.push(`+ ${style}`);
+  if (style && !isExtra) lines.push(`+ ${style}`);
 
   if (isOfferItem(item)) {
     const inclusions = cleanList(item?.inclusions);
@@ -342,7 +348,7 @@ function getReceiptModifierLines(item, { includeCustomPrices = false } = {}) {
     if (inclusions.length) lines.push(`Includes: ${inclusions.join(", ")}`);
     if (choices.length) lines.push(`Choices: ${choices.join(", ")}`);
     if (drinks.length) lines.push(`Drinks: ${drinks.join(", ")}`);
-    if (lines.length > (style ? 1 : 0)) return lines;
+    if (lines.length > (style && !isExtra ? 1 : 0)) return lines;
 
     for (const opt of item?.options || []) {
       const text = String(opt || "").trim();
@@ -354,16 +360,10 @@ function getReceiptModifierLines(item, { includeCustomPrices = false } = {}) {
   if (Array.isArray(item?.customDataSelections)) {
     for (const group of item.customDataSelections) {
       const name = String(group?.name || "").trim();
-      const options = Array.isArray(group?.subChoices) ? group.subChoices : [];
-      if (!name || !options.length) continue;
+      const subs = cleanList(group?.subChoices);
+      if (!name || !subs.length) continue;
       lines.push(`${name}:`);
-      for (const option of options) {
-        const optionName = String(option?.name || "").trim();
-        const choices = cleanList(option?.choices);
-        if (!optionName || !choices.length) continue;
-        lines.push(`  ${optionName}:`);
-        for (const choice of choices) lines.push(`    • ${choice}`);
-      }
+      for (const sub of subs) lines.push(`  • ${sub}`);
     }
   }
   if (Array.isArray(item?.choiceSelections)) {
@@ -391,23 +391,35 @@ function getReceiptModifierLines(item, { includeCustomPrices = false } = {}) {
     const label = String(opt || "").trim();
     if (label) lines.push(`+ ${label}`);
   }
-  if (Array.isArray(item?.customExtras)) {
-    for (const extra of item.customExtras) {
-      const label = String(extra?.name || "").trim();
-      if (!label) continue;
-      const price = Number(extra?.price);
-      if (
-        includeCustomPrices &&
-        Number.isFinite(price) &&
-        price >= 0
-      ) {
-        lines.push(`+ ${label} (+$${price.toFixed(2)})`);
-      } else {
-        lines.push(`+ ${label}`);
-      }
-    }
-  }
   return lines;
+}
+
+/** Custom extras as left/right rows so bill printers can right-align amount. */
+function getCustomExtraPrintRows(item) {
+  if (!Array.isArray(item?.customExtras)) return [];
+  const rows = [];
+  for (const extra of item.customExtras) {
+    const label = String(extra?.name || "").trim();
+    if (!label) continue;
+    const unitPrice = Number(extra?.price);
+    const rawQty = Number(extra?.qty);
+    const qty = Number.isFinite(rawQty)
+      ? Math.min(99, Math.max(1, Math.floor(rawQty)))
+      : 1;
+    const linePrice =
+      Number.isFinite(unitPrice) && unitPrice >= 0
+        ? Math.round(unitPrice * qty * 100) / 100
+        : NaN;
+    const qtySuffix = qty > 1 ? ` ×${qty}` : "";
+    rows.push({
+      left: `+ ${label}${qtySuffix}`,
+      right:
+        Number.isFinite(linePrice) && linePrice >= 0
+          ? `+$${linePrice.toFixed(2)}`
+          : null,
+    });
+  }
+  return rows;
 }
 
 function customExtrasUnitTotal(list) {
@@ -417,7 +429,11 @@ function customExtrasUnitTotal(list) {
     if (!String(entry?.name || "").trim() || !Number.isFinite(price) || price < 0) {
       return sum;
     }
-    return sum + price;
+    const rawQty = Number(entry?.qty);
+    const qty = Number.isFinite(rawQty)
+      ? Math.min(99, Math.max(1, Math.floor(rawQty)))
+      : 1;
+    return sum + price * qty;
   }, 0);
 }
 
@@ -463,6 +479,10 @@ function writeTicketItem(e, item, { qtySep = "x", includeSeats = false } = {}) {
   for (const line of getReceiptModifierLines(item)) {
     writeWrapped(e, `       ${line}`);
   }
+  // KOT/bar: name + qty only (no amount column)
+  for (const row of getCustomExtraPrintRows(item)) {
+    writeWrapped(e, `       ${row.left}`);
+  }
   if (item.notes || item.specialInstructions) {
     writeWrapped(
       e,
@@ -503,8 +523,16 @@ function writeReceiptItem(e, item) {
   } else {
     e.line(first);
   }
-  for (const line of getReceiptModifierLines(item, { includeCustomPrices: true })) {
+  for (const line of getReceiptModifierLines(item)) {
     writeWrapped(e, `   ${line}`);
+  }
+  // Right-align custom-extra amount under AMOUNT column (not inline after name)
+  for (const row of getCustomExtraPrintRows(item)) {
+    if (row.right) {
+      e.line(formatTwoColumnLine(`   ${row.left}`, row.right));
+    } else {
+      writeWrapped(e, `   ${row.left}`);
+    }
   }
   if (item.notes || item.specialInstructions) {
     writeWrapped(

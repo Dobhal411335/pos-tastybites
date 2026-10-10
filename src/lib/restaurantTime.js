@@ -13,13 +13,20 @@
  *   Local testing (India):           Asia/Kolkata
  * Default when unset: America/Toronto (production-safe).
  */
-export const DEFAULT_RESTAURANT_TIMEZONE =
-  process.env.RESTAURANT_TIMEZONE ||
-  process.env.NEXT_PUBLIC_RESTAURANT_TIMEZONE ||
-  process.env.ONLINE_ORDERING_TIMEZONE ||
-  "America/Toronto";
+/** Resolve restaurant TZ at call time (env can differ by deploy / .env.local). */
+export function getRestaurantTimezone() {
+  return (
+    process.env.RESTAURANT_TIMEZONE ||
+    process.env.NEXT_PUBLIC_RESTAURANT_TIMEZONE ||
+    process.env.ONLINE_ORDERING_TIMEZONE ||
+    "America/Toronto"
+  );
+}
 
-function tzParts(date, timeZone = DEFAULT_RESTAURANT_TIMEZONE) {
+/** @deprecated Prefer getRestaurantTimezone() so env is read at call time. */
+export const DEFAULT_RESTAURANT_TIMEZONE = getRestaurantTimezone();
+
+function tzParts(date, timeZone = getRestaurantTimezone()) {
   const fmt = new Intl.DateTimeFormat("en-US", {
     timeZone,
     year: "numeric",
@@ -77,7 +84,7 @@ export function zonedDateTime(
   day,
   hours,
   minutes = 0,
-  timeZone = DEFAULT_RESTAURANT_TIMEZONE
+  timeZone = getRestaurantTimezone()
 ) {
   const local =
     day &&
@@ -125,7 +132,7 @@ export function zonedDateTime(
 
 export function formatTimeInRestaurantTz(
   date,
-  timeZone = DEFAULT_RESTAURANT_TIMEZONE
+  timeZone = getRestaurantTimezone()
 ) {
   if (!date) return "";
   return new Intl.DateTimeFormat("en-CA", {
@@ -138,13 +145,13 @@ export function formatTimeInRestaurantTz(
 
 export function weekdayInRestaurantTz(
   date,
-  timeZone = DEFAULT_RESTAURANT_TIMEZONE
+  timeZone = getRestaurantTimezone()
 ) {
   return tzParts(date, timeZone).weekday;
 }
 
 /** YYYY-MM-DD for the restaurant wall clock (safe on client + server). */
-export function todayRestaurantISO(timeZone = DEFAULT_RESTAURANT_TIMEZONE) {
+export function todayRestaurantISO(timeZone = getRestaurantTimezone()) {
   return new Intl.DateTimeFormat("en-CA", {
     timeZone,
     year: "numeric",
@@ -160,7 +167,7 @@ export function todayRestaurantISO(timeZone = DEFAULT_RESTAURANT_TIMEZONE) {
  */
 export function restaurantCalendarDate(
   day = new Date(),
-  timeZone = DEFAULT_RESTAURANT_TIMEZONE
+  timeZone = getRestaurantTimezone()
 ) {
   const local = tzParts(day, timeZone);
   return new Date(Date.UTC(local.year, local.month - 1, local.day, 12, 0, 0));
@@ -169,7 +176,7 @@ export function restaurantCalendarDate(
 /** Inclusive start / exclusive end of the restaurant-local calendar day. */
 export function restaurantDayBounds(
   day = new Date(),
-  timeZone = DEFAULT_RESTAURANT_TIMEZONE
+  timeZone = getRestaurantTimezone()
 ) {
   const local = tzParts(day, timeZone);
   const start = zonedDateTime(

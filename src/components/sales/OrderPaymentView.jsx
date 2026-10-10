@@ -1891,16 +1891,15 @@ export default function OrderPaymentView({
                           line.kind === "choice-item"
                             ? "pl-2 font-semibold text-sky-800"
                             : line.kind === "custom-extra"
-                              ? "font-semibold text-zinc-800"
+                              ? "flex justify-between gap-2 font-semibold text-zinc-800"
                               : "font-semibold"
                         }
                       >
-                        {line.text}
+                        <span>{line.text}</span>
                         {line.kind === "custom-extra" &&
                         line.price != null ? (
-                          <span className="text-zinc-500">
-                            {" "}
-                            (+${Number(line.price).toFixed(2)})
+                          <span className="shrink-0 text-zinc-700">
+                            +${Number(line.price).toFixed(2)}
                           </span>
                         ) : null}
                       </li>

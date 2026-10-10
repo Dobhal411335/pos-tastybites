@@ -4,6 +4,8 @@ import React from "react";
 import NotificationBell from "@/components/common/NotificationBell";
 import { SocketProvider } from "@/components/providers/SocketProvider";
 
+const LOGIN_PAGE_SUPPRESS_ALERTS = ["EMPLOYEE_LOGIN"];
+
 export default function LoginNotificationBell() {
   const [restaurantId, setRestaurantId] = React.useState(null);
 
@@ -18,7 +20,13 @@ export default function LoginNotificationBell() {
       .catch(() => {});
   }, []);
 
-  const bell = <NotificationBell showViewAll={false} />;
+  // Login page already shows "Welcome back" — don't also toast/sound EMPLOYEE_LOGIN here.
+  const bell = (
+    <NotificationBell
+      showViewAll={false}
+      suppressAlertTypes={LOGIN_PAGE_SUPPRESS_ALERTS}
+    />
+  );
 
   if (!restaurantId) return bell;
 

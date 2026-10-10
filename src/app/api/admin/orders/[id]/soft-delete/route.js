@@ -2,8 +2,17 @@ import { withAuth } from "@/utils/auth";
 import { sendSuccess } from "@/utils/apiResponse";
 import { sendError } from "@/utils/errorHandler";
 import { logger } from "@/utils/logger";
-import { softDeleteOrder } from "@/lib/orders/orderLifecycle";
+import {
+  softDeleteOrder,
+  softRemoveCashTender,
+} from "@/lib/orders/orderLifecycle";
+import {
+  DELETE_MODE_CASH_TENDER,
+  getDeleteMode,
+} from "@/lib/orders/orderDeleteEligibility";
 import { resolveOperationalActor } from "@/lib/orders/resolveOperationalActor";
+import connectDB from "@/lib/db";
+import Order from "@/models/Order";
 
 async function resolveActor(request) {
   return resolveOperationalActor(request, { actorType: "Admin" });
@@ -23,6 +32,28 @@ export const POST = withAuth(async (request, { params }) => {
     const actor = await resolveActor(request);
     if (!actor.actorId) {
       return sendError(new Error("Unauthorized"), "Actor required", 401);
+    }
+
+    await connectDB();
+    const order = await Order.findOne({
+      _id: id,
+      restaurantId: request.restaurant,
+    }).lean();
+
+    if (!order) {
+      return sendError(new Error("Order not found"), "Order not found", 404);
+    }
+
+    const mode = getDeleteMode(order);
+
+    if (mode === DELETE_MODE_CASH_TENDER) {
+      const result = await softRemoveCashTender({
+        restaurantId: request.restaurant,
+        orderId: id,
+        actor,
+        reason,
+      });
+      return sendSuccess(result, "Cash payment removed from order");
     }
 
     const result = await softDeleteOrder({

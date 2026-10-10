@@ -13,6 +13,7 @@ import { createReceiptPrintJob, createSplitReceiptPrintJobs } from "@/lib/printi
 import { createNotification } from "@/lib/notifications/notificationService";
 import { buildTaxBreakdownForOrder } from "@/lib/eod/buildTaxBreakdown";
 import { redeemGiftCardAtomic } from "@/lib/giftcards/redeemGiftCardAtomic";
+import { maybeSendOnlineOrderPaidEmail } from "@/lib/brevo/sendOnlineOrderStatusEmail";
 import {
   STAFF_DISCOUNT_CODE,
   calcStaffDiscountAmount,
@@ -528,6 +529,14 @@ export const POST = withAuth(async (request) => {
           "Failed to create seat RECEIPT PrintJob (payment still succeeded)",
           printErr,
         );
+      }
+
+      if (order.paymentStatus === "PAID") {
+        try {
+          await maybeSendOnlineOrderPaidEmail(order);
+        } catch (emailErr) {
+          logger.error("Failed to send online paid email (seat)", emailErr);
+        }
       }
 
       logger.info(
@@ -1071,6 +1080,12 @@ export const POST = withAuth(async (request) => {
           "Failed to create remaining RECEIPT PrintJob (payment still succeeded)",
           printErr,
         );
+      }
+
+      try {
+        await maybeSendOnlineOrderPaidEmail(order);
+      } catch (emailErr) {
+        logger.error("Failed to send online paid email (remaining)", emailErr);
       }
 
       logger.info(
@@ -1764,6 +1779,12 @@ export const POST = withAuth(async (request) => {
       });
     } catch (notifErr) {
       logger.error("Failed to create PAYMENT_COMPLETED notification", notifErr);
+    }
+
+    try {
+      await maybeSendOnlineOrderPaidEmail(order);
+    } catch (emailErr) {
+      logger.error("Failed to send online paid email", emailErr);
     }
 
     logger.info(`Payment processed for Order ${order.orderNumber} via ${method}`);

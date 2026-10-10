@@ -91,10 +91,17 @@ const CustomerReceipt = ({
   const resolvedTotalAmount = isSplitReceipt
     ? Number(meta.splitAmount) || seatScopedTotals?.totalAmount || totalAmount
     : seatScopedTotals?.totalAmount ?? totalAmount;
-  // Prefer an explicit customer party name over the seat/group label on split bills.
+  // Split slips: prefer the payer name saved on the print job (set at payment),
+  // not the order-level party name (often table/seat default or last payer).
   const partyLabel = isSplitReceipt
-    ? order.partyName || guestName || splitName
-    : order.partyName || guestName;
+    ? splitName ||
+      String(meta.partyName || meta.guestName || "").trim() ||
+      order.partyName ||
+      guestName
+    : order.partyName ||
+      guestName ||
+      String(meta.partyName || meta.guestName || "").trim() ||
+      "";
   const floorName = order.floorName || order.floor?.name;
   const tableLabel = formatTableNumbersWithFloor(tableNo, floorName);
 
@@ -225,18 +232,21 @@ const CustomerReceipt = ({
 
   const tipLabel = (() => {
     if (!(tip > 0)) return "Tip";
-    const raw = String(tipMethod || "").trim();
+    const raw = String(
+      (isSplitReceipt ? meta.tipMethod : null) || tipMethod || "",
+    ).trim();
     if (/gift/i.test(raw)) return "Tip (Gift Card)";
-    if (/cash/i.test(raw)) return "Tip (Cash)";
-    if (/card/i.test(raw)) return "Tip (Card)";
+    if (/cash/i.test(raw) && !/card/i.test(raw)) return "Tip (Cash)";
+    if (/card/i.test(raw) && !/cash/i.test(raw)) return "Tip (Card)";
+    if (/cash/i.test(raw) && /card/i.test(raw)) return "Tip";
     // Fallback from payment method when tipMethod missing on older orders
     if (/gift\s*card/i.test(methodStr) && !/cash|card\s*-/i.test(methodStr)) {
       return "Tip (Gift Card)";
     }
     if (/cash/i.test(methodStr) && !/card/i.test(methodStr)) return "Tip (Cash)";
     if (/card/i.test(methodStr) && !/cash/i.test(methodStr)) return "Tip (Card)";
-    if (/cash/i.test(methodStr)) return "Tip (Cash)";
     if (/card/i.test(methodStr)) return "Tip (Card)";
+    if (/cash/i.test(methodStr)) return "Tip (Cash)";
     return "Tip";
   })();
 
@@ -309,11 +319,9 @@ const CustomerReceipt = ({
                   line.kind === "choice-item" ||
                   line.kind === "custom-data-item"
                     ? "pl-2 font-semibold"
-                    : line.kind === "custom-data-option"
-                      ? "pl-1 font-semibold"
-                      : line.kind === "custom-extra"
-                        ? "flex justify-between gap-2"
-                        : ""
+                    : line.kind === "custom-extra"
+                      ? "flex justify-between gap-2"
+                      : ""
                 }
               >
                 <span>{line.text}</span>
@@ -503,19 +511,34 @@ const CustomerReceipt = ({
             {splitName ? (
               <Row label="Payer" value={splitName} />
             ) : null}
-            <Row
-              label={
-                /cash/i.test(splitMethod)
-                  ? "Cash"
-                  : cardLabelMatch
-                    ? cardLabel
-                    : /card/i.test(splitMethod)
-                      ? "Card"
-                      : splitMethod || "Paid"
-              }
-              value={money(splitAmount || cash || card)}
-              bold
-            />
+            {/* Prefer explicit tender amounts — method strings like "Card + Cash"
+                must not force a Cash label when cashAmount was stripped. */}
+            {cash > 0 && card > 0 ? (
+              <>
+                <Row label="Cash" value={money(cash)} bold />
+                <Row label={cardLabel} value={money(card)} bold />
+              </>
+            ) : cash > 0 ? (
+              <Row label="Cash" value={money(cash)} bold />
+            ) : card > 0 ? (
+              <Row label={cardLabel} value={money(card)} bold />
+            ) : (
+              <Row
+                label={
+                  /cash/i.test(splitMethod) && !/card/i.test(splitMethod)
+                    ? "Cash"
+                    : cardLabelMatch
+                      ? cardLabel
+                      : /card/i.test(splitMethod)
+                        ? "Card"
+                        : /cash/i.test(splitMethod)
+                          ? "Cash"
+                          : splitMethod || "Paid"
+                }
+                value={money(splitAmount || cash || card)}
+                bold
+              />
+            )}
             <Row
               label={`Bill total (#${orderNumber})`}
               value={money(grandTotal)}

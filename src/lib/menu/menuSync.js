@@ -5,6 +5,7 @@ import Head from '@/models/menu/Head';
 import ProductHead from '@/models/menu/ProductHead';
 import Tax from '@/models/tax/Tax';
 import MenuDeletion from '@/models/menu/MenuDeletion';
+import { normalizeIngredients } from '@/lib/menu/addons';
 
 function toId(value) {
   if (value == null) return '';
@@ -59,14 +60,7 @@ function normalizeCustomData(raw) {
     .map((group) => ({
       name: String(group?.name ?? '').trim(),
       subChoices: Array.isArray(group?.subChoices)
-        ? group.subChoices
-            .map((option) => ({
-              name: String(option?.name ?? '').trim(),
-              choices: Array.isArray(option?.choices)
-                ? option.choices.map((s) => String(s)).filter(Boolean)
-                : [],
-            }))
-            .filter((option) => option.name && option.choices.length > 0)
+        ? group.subChoices.map((s) => String(s)).filter(Boolean)
         : [],
     }))
     .filter((g) => g.name && g.subChoices.length > 0);
@@ -80,6 +74,7 @@ function normalizeAddon(raw) {
     size: raw.size ? String(raw.size) : undefined,
     status: raw.status != null ? String(raw.status) : undefined,
     choiceOptions: normalizeChoiceOptions(raw.choiceOptions),
+    ingredients: normalizeIngredients(raw.ingredients),
   };
 }
 
@@ -88,6 +83,7 @@ function normalizeVariant(raw) {
     size: String(raw.size ?? 'Standard'),
     price: Number(raw.price) || 0,
     status: raw.status != null ? String(raw.status) : undefined,
+    ingredients: normalizeIngredients(raw.ingredients),
   };
 }
 

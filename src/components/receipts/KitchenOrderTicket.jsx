@@ -204,11 +204,12 @@ const KitchenOrderTicket = ({
                                   line.kind === "choice-item" ||
                                   line.kind === "custom-data-item"
                                     ? "pl-2"
-                                    : line.kind === "custom-data-option"
-                                      ? "pl-1 italic"
+                                    : line.kind === "custom-extra"
+                                      ? "not-italic"
                                       : "italic"
                                 }`}
                               >
+                                {/* KOT: name + qty only (no prices); text includes ×qty from helpers */}
                                 {line.text}
                               </div>
                             ))}

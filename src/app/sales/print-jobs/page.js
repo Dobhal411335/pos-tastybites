@@ -88,9 +88,10 @@ function employeeLabel(emp) {
 }
 
 function orderLabel(job) {
+  // Prefer live Order number — metadata goes stale after business-day renumber.
   return (
-    job.metadata?.orderNumber ||
     job.orderId?.orderNumber ||
+    job.metadata?.orderNumber ||
     "—"
   );
 }

@@ -14,10 +14,16 @@ export function notificationMetaLine(n) {
         : n.metadata.employeeName
     );
   }
-  if (n.metadata?.orderNumber) parts.push(`Order #${n.metadata.orderNumber}`);
+  // Prefer populated live order number when API includes it.
+  const orderNumber =
+    n.orderId?.orderNumber || n.metadata?.orderNumber || null;
+  if (orderNumber) parts.push(`Order #${orderNumber}`);
   if (n.metadata?.tableNo) {
     const table = String(n.metadata.tableNo).trim();
     parts.push(/^tables?\b/i.test(table) ? table : `Table ${table}`);
+  }
+  if (n.type === "PAYMENT_COMPLETED" && n.metadata?.method) {
+    parts.push(String(n.metadata.method));
   }
   if (n.type === "NEW_RESERVATION") {
     if (n.metadata?.guests) {

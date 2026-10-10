@@ -47,7 +47,10 @@ import OrderDetailBody, {
   STATUS_BADGE,
   formatDateTime,
 } from "@/components/reports/OrderDetailBody";
-import { CASH_ONLY_DELETE_ERROR } from "@/lib/orders/orderDeleteEligibility";
+import {
+  CASH_ONLY_DELETE_ERROR,
+  DELETE_MODE_CASH_TENDER,
+} from "@/lib/orders/orderDeleteEligibility";
 import AdminReportFilters from "./AdminReportFilters";
 import {
   AdminEmptyState,
@@ -70,7 +73,9 @@ function PaymentBadge({ label }) {
           ? "border-violet-200 bg-violet-50 text-violet-800"
           : label === "Split"
             ? "border-amber-200 bg-amber-50 text-amber-900"
-            : "border-zinc-200 bg-zinc-50 text-zinc-700";
+            : label === "Cash removed"
+              ? "border-red-200 bg-red-50 text-red-800"
+              : "border-zinc-200 bg-zinc-50 text-zinc-700";
   return (
     <Badge variant="outline" className={`text-[12px] font-medium ${tone}`}>
       {label || "—"}
@@ -203,8 +208,18 @@ export default function OrderManagementSection() {
           method: "POST",
           credentials: "include",
         });
+      } else if (type === "restore-cash") {
+        res = await fetch(`/api/admin/orders/${row.id}/restore-cash`, {
+          method: "POST",
+          credentials: "include",
+        });
       } else if (type === "permanent") {
         res = await fetch(`/api/admin/orders/${row.id}/permanent`, {
+          method: "DELETE",
+          credentials: "include",
+        });
+      } else if (type === "permanent-cash") {
+        res = await fetch(`/api/admin/orders/${row.id}/permanent-cash`, {
           method: "DELETE",
           credentials: "include",
         });
@@ -300,8 +315,10 @@ export default function OrderManagementSection() {
 
       {isDeletedView ? (
         <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm text-zinc-600">
-          Showing soft-deleted orders for this period. Restore returns them to
-          active reports; permanent delete cannot be undone.
+          Showing soft-deleted orders and split orders with cash removed for
+          this period. Full deletes can be restored to active reports; cash
+          removals restore cash only (card stays). Permanent delete cannot be
+          undone.
         </div>
       ) : null}
 
@@ -381,7 +398,7 @@ export default function OrderManagementSection() {
                     <TableHead className={TH_CLASS}>Payment</TableHead>
                     {isDeletedView ? (
                       <>
-                        <TableHead className={TH_CLASS}>Deleted by</TableHead>
+                        {/* <TableHead className={TH_CLASS}>Deleted by</TableHead> */}
                         <TableHead className={TH_CLASS}>Deleted at</TableHead>
                       </>
                     ) : (
@@ -459,6 +476,16 @@ export default function OrderManagementSection() {
                       <TableCell className={TD_CLASS}>
                         <div className="flex flex-col items-start gap-1">
                           <PaymentBadge label={row.paymentLabel} />
+                          {isDeletedView &&
+                          row.deletionKind === "cash_tender" &&
+                          row.liveOrderNumber &&
+                          row.orderNumber &&
+                          String(row.liveOrderNumber) !==
+                            String(row.orderNumber) ? (
+                            <span className="text-[10px] text-zinc-500">
+                              Active as #{row.liveOrderNumber}
+                            </span>
+                          ) : null}
                           {row.paymentStatus === "PARTIAL" ? (
                             <Badge
                               variant="outline"
@@ -481,9 +508,9 @@ export default function OrderManagementSection() {
                       </TableCell>
                       {isDeletedView ? (
                         <>
-                          <TableCell className={TD_CLASS}>
+                          {/* <TableCell className={TD_CLASS}>
                             {row.deletedByName || "—"}
-                          </TableCell>
+                          </TableCell> */}
                           <TableCell
                             className={`${TD_CLASS} whitespace-nowrap text-[13px]`}
                           >
@@ -507,42 +534,97 @@ export default function OrderManagementSection() {
                           </Badge>
                         </TableCell>
                       )}
-                      <TableCell className={`${TD_CLASS} text-right`}>
-                        <div className="inline-flex flex-wrap justify-end gap-1.5">
+                      <TableCell className={`${TD_CLASS} text-center`}>
+                        <div className="inline-flex flex-wrap justify-end items-center gap-1.5">
                           {!isDeletedView ? (
-                            <Button
-                              type="button"
-                              size="icon"
-                              variant="outline"
-                              disabled={!row.canDelete || busyId === row.id}
-                              className={cn(
-                                "h-8 w-8",
-                                row.canDelete
-                                  ? "border-red-200 text-red-700 hover:bg-red-50"
-                                  : "border-zinc-200 text-zinc-300"
-                              )}
-                              title={
-                                row.canDelete
-                                  ? row.hasSplits
-                                    ? "Delete cash-only split order"
-                                    : "Delete cash-only order"
-                                  : "Only cash-only orders (incl. cash splits) can be deleted"
-                              }
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (!row.canDelete) {
-                                  setActionError(CASH_ONLY_DELETE_ERROR);
-                                  return;
-                                }
-                                setConfirm({ type: "soft-delete", row });
-                              }}
-                            >
-                              {busyId === row.id ? (
-                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                              ) : (
+                            row.hasRemovedCash ? (
+                              // Cash already stripped — card/gift must not look deletable.
+                              // Restore / permanent cash live in Deleted Orders.
+                              <Button
+                                type="button"
+                                size="icon"
+                                variant="outline"
+                                disabled
+                                className="h-8 w-8 border-zinc-200 text-zinc-300"
+                                title="Cash payment already removed. Open Deleted Orders to restore cash or permanently clear it. Card/gift cannot be deleted."
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setActionError(
+                                    "Cash was already removed from this order. Use Deleted Orders to restore cash. Card/gift payments cannot be deleted."
+                                  );
+                                }}
+                              >
                                 <Trash2 className="h-3.5 w-3.5" />
-                              )}
-                            </Button>
+                              </Button>
+                            ) : (
+                              <Button
+                                type="button"
+                                size="icon"
+                                variant="outline"
+                                disabled={!row.canDelete || busyId === row.id}
+                                className={cn(
+                                  "h-8 w-8",
+                                  row.canDelete
+                                    ? "border-red-200 text-red-700 hover:bg-red-50"
+                                    : "border-zinc-200 text-zinc-300"
+                                )}
+                                title={
+                                  row.canDelete
+                                    ? row.deleteMode === DELETE_MODE_CASH_TENDER
+                                      ? "Remove cash payment only (keep card/gift)"
+                                      : row.hasSplits
+                                        ? "Delete cash-only split order"
+                                        : "Delete cash-only order"
+                                    : "Only cash-only orders, or cash on mixed tenders, can be deleted"
+                                }
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (!row.canDelete) {
+                                    setActionError(CASH_ONLY_DELETE_ERROR);
+                                    return;
+                                  }
+                                  setConfirm({ type: "soft-delete", row });
+                                }}
+                              >
+                                {busyId === row.id ? (
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                ) : (
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                )}
+                              </Button>
+                            )
+                          ) : row.deletionKind === "cash_tender" ? (
+                            <>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                disabled={busyId === row.id}
+                                className="h-8 border-emerald-200 text-emerald-800 hover:bg-emerald-50"
+                                title="Restore removed cash payment"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setConfirm({ type: "restore-cash", row });
+                                }}
+                              >
+                                <RotateCcw className="h-3.5 w-3.5 mr-1" />
+                                Restore cash
+                              </Button>
+                              <Button
+                                type="button"
+                                size="icon"
+                                variant="outline"
+                                disabled={busyId === row.id}
+                                className="h-8 w-8 border-red-300 text-red-800 hover:bg-red-50"
+                                title="Permanently delete cash payment history"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setConfirm({ type: "permanent-cash", row });
+                                }}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </>
                           ) : (
                             <>
                               <Button
@@ -640,6 +722,22 @@ export default function OrderManagementSection() {
                   </div>
                 </div>
               ) : null}
+              {orderDetail.cashTenderRemovedAt ? (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-3 text-sm">
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-amber-800">
+                    Cash payment removed
+                  </p>
+                  <div className="mt-1.5 space-y-0.5 text-amber-900">
+                    <div>
+                      Removed at: {formatDateTime(orderDetail.cashTenderRemovedAt)}
+                    </div>
+                    {orderDetail.cashTenderRemovalReason ? (
+                      <div>Reason: {orderDetail.cashTenderRemovalReason}</div>
+                    ) : null}
+                    <div>Showing card/gift payment data only.</div>
+                  </div>
+                </div>
+              ) : null}
               <OrderDetailBody order={orderDetail} />
             </div>
           ) : (
@@ -660,13 +758,27 @@ export default function OrderManagementSection() {
           <AlertDialogHeader>
             <AlertDialogTitle>
               {confirm?.type === "soft-delete"
-                ? "Delete Order?"
+                ? confirm?.row?.deleteMode === DELETE_MODE_CASH_TENDER
+                  ? "Remove Cash Payment?"
+                  : "Delete Order?"
                 : confirm?.type === "restore"
                   ? "Restore Order?"
-                  : "Permanent Delete"}
+                  : confirm?.type === "restore-cash"
+                    ? "Restore Cash Payment?"
+                    : confirm?.type === "permanent-cash"
+                      ? "Permanently Delete Cash?"
+                      : "Permanent Delete"}
             </AlertDialogTitle>
             <AlertDialogDescription>
-              {confirm?.type === "soft-delete" ? (
+              {confirm?.type === "soft-delete" &&
+              confirm?.row?.deleteMode === DELETE_MODE_CASH_TENDER ? (
+                <>
+                  Remove the cash payment from Order #
+                  {confirm?.row?.orderNumber} only. Card/gift stays. The order
+                  remains active and will show card payment data only. You can
+                  restore cash later until permanently deleted.
+                </>
+              ) : confirm?.type === "soft-delete" ? (
                 <>
                   Are you sure you want to delete Order #
                   {confirm?.row?.orderNumber}? This order will be removed from
@@ -676,6 +788,17 @@ export default function OrderManagementSection() {
                 <>
                   Restoring this order will return it to the active order list
                   and update the order-number sequence for that business day.
+                </>
+              ) : confirm?.type === "restore-cash" ? (
+                <>
+                  Restore the previously removed cash payment on Order #
+                  {confirm?.row?.orderNumber}? Card/gift amounts are unchanged.
+                </>
+              ) : confirm?.type === "permanent-cash" ? (
+                <>
+                  Permanently delete the removed cash payment history for Order
+                  #{confirm?.row?.orderNumber}? This cannot be undone. The order
+                  stays active with card/gift only.
                 </>
               ) : (
                 <>
@@ -692,8 +815,7 @@ export default function OrderManagementSection() {
             <AlertDialogAction
               disabled={Boolean(busyId)}
               className={
-                
-                confirm?.type === "restore"
+                confirm?.type === "restore" || confirm?.type === "restore-cash"
                   ? "bg-emerald-600 hover:bg-emerald-700"
                   : "bg-red-600 text-white hover:bg-red-700"
               }
@@ -705,9 +827,15 @@ export default function OrderManagementSection() {
               {busyId ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : confirm?.type === "soft-delete" ? (
-                "Delete Order"
+                confirm?.row?.deleteMode === DELETE_MODE_CASH_TENDER
+                  ? "Remove Cash"
+                  : "Delete Order"
               ) : confirm?.type === "restore" ? (
                 "Restore Order"
+              ) : confirm?.type === "restore-cash" ? (
+                "Restore Cash"
+              ) : confirm?.type === "permanent-cash" ? (
+                "Permanently Delete Cash"
               ) : (
                 "Permanently Delete"
               )}

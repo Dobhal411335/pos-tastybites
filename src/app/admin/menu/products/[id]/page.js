@@ -88,13 +88,8 @@ export default function ProductDetailsConfigPage() {
             ? p.customData.map((group) => ({
                 name: group.name || "",
                 subChoices: group.subChoices?.length
-                  ? group.subChoices.map((option) => ({
-                      name: option.name || "",
-                      choices: option.choices?.length
-                        ? [...option.choices]
-                        : ["", ""],
-                    }))
-                  : [{ name: "", choices: ["", ""] }],
+                  ? [...group.subChoices]
+                  : ["", ""],
               }))
             : []
         );
@@ -376,13 +371,8 @@ export default function ProductDetailsConfigPage() {
             .map((group) => ({
               name: (group.name || "").trim(),
               subChoices: (group.subChoices || [])
-                .map((option) => ({
-                  name: (option.name || "").trim(),
-                  choices: (option.choices || [])
-                    .map((value) => String(value || "").trim())
-                    .filter(Boolean),
-                }))
-                .filter((option) => option.name && option.choices.length > 0),
+                .map((value) => String(value || "").trim())
+                .filter(Boolean),
             }))
             .filter((group) => group.name && group.subChoices.length > 0),
           choiceOptions: choiceOptions
@@ -633,13 +623,13 @@ export default function ProductDetailsConfigPage() {
                   <CardHeader className="bg-zinc-50/50 border-b border-zinc-100 pb-4">
                     <CardTitle className="text-[18px] font-bold text-zinc-900">Custom Data</CardTitle>
                     <CardDescription className="text-[14px]">
-                      Add a named group, options under it, and inner choices for each option.
+                      Add a named group and its option names. Customers pick one option (radio).
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="p-6 space-y-6">
                     {customData.length === 0 && (
                       <p className="text-[13px] text-zinc-500">
-                        No custom data groups. Add one for nested name → option → choices.
+                        No custom data groups. Add one for name → options (single select).
                       </p>
                     )}
                     {customData.map((group, groupIndex) => (
@@ -677,27 +667,24 @@ export default function ProductDetailsConfigPage() {
                           }}
                           className="h-11 text-[15px] bg-white rounded-full px-5"
                         />
-                        <div className="space-y-4">
+                        <div className="space-y-3">
                           <label className="text-[14px] font-semibold text-zinc-900">
                             Options
                           </label>
-                          {(group.subChoices || []).map((option, optionIndex) => (
-                            <div
-                              key={`custom-option-${groupIndex}-${optionIndex}`}
-                              className="space-y-3 rounded-xl border border-zinc-100 bg-zinc-50/60 p-3"
-                            >
-                              <div className="flex items-center gap-2">
+                          <div className="grid grid-cols-2 gap-3">
+                            {(group.subChoices || []).map((option, optionIndex) => (
+                              <div
+                                key={`custom-option-${groupIndex}-${optionIndex}`}
+                                className="flex items-center gap-1.5"
+                              >
                                 <Input
                                   type="text"
-                                  placeholder="Option name (e.g. Protein)"
-                                  value={option.name}
+                                  placeholder="Option name"
+                                  value={option}
                                   onChange={(e) => {
                                     const next = [...customData];
                                     const subChoices = [...next[groupIndex].subChoices];
-                                    subChoices[optionIndex] = {
-                                      ...subChoices[optionIndex],
-                                      name: e.target.value,
-                                    };
+                                    subChoices[optionIndex] = e.target.value;
                                     next[groupIndex] = { ...next[groupIndex], subChoices };
                                     setCustomData(next);
                                   }}
@@ -721,82 +708,8 @@ export default function ProductDetailsConfigPage() {
                                   </Button>
                                 )}
                               </div>
-                              <label className="text-[13px] font-semibold text-zinc-700">
-                                Inner choices
-                              </label>
-                              <div className="grid grid-cols-2 gap-3">
-                                {(option.choices || []).map((choice, choiceIndex) => (
-                                  <div
-                                    key={`custom-choice-${groupIndex}-${optionIndex}-${choiceIndex}`}
-                                    className="flex items-center gap-1.5"
-                                  >
-                                    <Input
-                                      type="text"
-                                      placeholder="Choice name"
-                                      value={choice}
-                                      onChange={(e) => {
-                                        const next = [...customData];
-                                        const subChoices = [...next[groupIndex].subChoices];
-                                        const choices = [...(subChoices[optionIndex].choices || [])];
-                                        choices[choiceIndex] = e.target.value;
-                                        subChoices[optionIndex] = {
-                                          ...subChoices[optionIndex],
-                                          choices,
-                                        };
-                                        next[groupIndex] = { ...next[groupIndex], subChoices };
-                                        setCustomData(next);
-                                      }}
-                                      className="h-10 text-[14px] bg-white rounded-full px-4"
-                                    />
-                                    {(option.choices || []).length > 1 && (
-                                      <Button
-                                        type="button"
-                                        variant="outline"
-                                        onClick={() => {
-                                          const next = [...customData];
-                                          const subChoices = [...next[groupIndex].subChoices];
-                                          const choices = [...(subChoices[optionIndex].choices || [])];
-                                          choices.splice(choiceIndex, 1);
-                                          subChoices[optionIndex] = {
-                                            ...subChoices[optionIndex],
-                                            choices,
-                                          };
-                                          next[groupIndex] = { ...next[groupIndex], subChoices };
-                                          setCustomData(next);
-                                        }}
-                                        className="h-10 w-10 p-0 shrink-0 text-red-500 hover:text-red-700 hover:bg-red-50"
-                                        aria-label="Delete inner choice"
-                                      >
-                                        <Trash2 className="w-4 h-4" />
-                                      </Button>
-                                    )}
-                                  </div>
-                                ))}
-                              </div>
-                              <div className="flex items-center justify-end gap-3">
-                                <span className="text-[13px] font-medium text-zinc-600">
-                                  Add inner choice
-                                </span>
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  onClick={() => {
-                                    const next = [...customData];
-                                    const subChoices = [...next[groupIndex].subChoices];
-                                    subChoices[optionIndex] = {
-                                      ...subChoices[optionIndex],
-                                      choices: [...(subChoices[optionIndex].choices || []), ""],
-                                    };
-                                    next[groupIndex] = { ...next[groupIndex], subChoices };
-                                    setCustomData(next);
-                                  }}
-                                  className="h-10 w-10 p-0 shrink-0 text-zinc-700"
-                                >
-                                  <Plus className="w-5 h-5" />
-                                </Button>
-                              </div>
-                            </div>
-                          ))}
+                            ))}
+                          </div>
                           <div className="flex items-center justify-end gap-3 pt-1">
                             <span className="text-[13px] font-medium text-zinc-600">
                               Need more option
@@ -810,7 +723,7 @@ export default function ProductDetailsConfigPage() {
                                   ...next[groupIndex],
                                   subChoices: [
                                     ...(next[groupIndex].subChoices || []),
-                                    { name: "", choices: ["", ""] },
+                                    "",
                                   ],
                                 };
                                 setCustomData(next);
@@ -832,7 +745,7 @@ export default function ProductDetailsConfigPage() {
                             ...customData,
                             {
                               name: "",
-                              subChoices: [{ name: "", choices: ["", ""] }],
+                              subChoices: ["", ""],
                             },
                           ])
                         }

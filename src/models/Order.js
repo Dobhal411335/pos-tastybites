@@ -24,16 +24,11 @@ const OrderItemSchema = new mongoose.Schema({
       subChoices: [{ type: String, trim: true }],
     },
   ],
-  /** Nested custom data: group → option → selected inner choice names */
+  /** Custom data: group name → one selected option string (radio) */
   customDataSelections: [
     {
       name: { type: String, trim: true },
-      subChoices: [
-        {
-          name: { type: String, trim: true },
-          choices: [{ type: String, trim: true }],
-        },
-      ],
+      subChoices: [{ type: String, trim: true }],
     },
   ],
   addonChoiceSelections: [
@@ -46,11 +41,12 @@ const OrderItemSchema = new mongoose.Schema({
   ],
   drinks: [{ type: String }],
   notes: { type: String, default: "" },
-  /** Free-text extras from POS (name + price not in catalog addons). */
+  /** Free-text extras from POS (name + unit price × qty not in catalog addons). */
   customExtras: [
     {
       name: { type: String, trim: true },
       price: { type: Number, default: 0 },
+      qty: { type: Number, default: 1 },
     },
   ],
   sentQty: { type: Number, default: 0 },
@@ -78,6 +74,15 @@ const OrderSchema = new mongoose.Schema(
     restoredBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee', default: null },
     permanentlyDeletedAt: { type: Date, default: null },
     permanentlyDeletedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee', default: null },
+    /**
+     * Soft-remove cash tender from a mixed (cash+card/gift) order.
+     * Order stays active; card/gift payment data is preserved.
+     */
+    cashTenderRemovedAt: { type: Date, default: null },
+    cashTenderRemovedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee', default: null },
+    cashTenderRemovalReason: { type: String, default: null },
+    /** Snapshot of payment fields before cash tender soft-removal (for restore). */
+    removedCashSnapshot: { type: mongoose.Schema.Types.Mixed, default: null },
     subTotal: { type: Number, required: true },
     taxTotal: { type: Number, default: 0 },
     serviceChargeTotal: { type: Number, default: 0 },

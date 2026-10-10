@@ -64,7 +64,9 @@ export async function createOnlineOrder({
     throw err;
   }
 
-  let company = await CompanyBasicInfo.findOne({ restaurant: restaurantId })
+  let company = await CompanyBasicInfo.findOne({
+    $or: [{ restaurantId }, { restaurant: restaurantId }],
+  })
     .sort({ updatedAt: -1 })
     .lean();
   if (!company) {
@@ -73,16 +75,20 @@ export async function createOnlineOrder({
   const todayHours = getTodayRestaurantHours(
     normalizeRestaurantHours(company?.restaurantHours),
   );
-  if (todayHours.closed) {
+  // 24h restaurants stay open — never treat as pastClose.
+  if (todayHours.closed || (!todayHours.is24Hours && todayHours.pastClose)) {
     const err = new Error("Online pickup is closed for today");
     err.status = 400;
     throw err;
   }
+  const closeMin = timeToMinutes(todayHours.close);
   const pickupOpts = todayHours.is24Hours
     ? { is24Hours: true, openMinutes: 0, endMinutes: 23 * 60 + 45 }
     : {
         openMinutes: timeToMinutes(todayHours.open) ?? undefined,
-        endMinutes: timeToMinutes(todayHours.close) ?? undefined,
+        // Match public slot grid: last offerable slot is 15 min before close.
+        endMinutes:
+          closeMin != null ? Math.max(0, closeMin - 15) : undefined,
       };
   if (!isValidSameDayPickup(pickupTime, new Date(), undefined, pickupOpts)) {
     const err = new Error("Please choose a valid same-day pickup time");
@@ -92,7 +98,12 @@ export async function createOnlineOrder({
 
   const priced = await quoteOnlineOrder({ restaurantId, items });
 
-  const pickupPrefix = formatPickupNotePrefix(pickupTime);
+  const pickupPrefix = formatPickupNotePrefix(
+    pickupTime,
+    new Date(),
+    undefined,
+    pickupOpts,
+  );
   const noteBody = String(customerNote || "").trim();
   const specialNote = noteBody ? `${pickupPrefix} ${noteBody}` : pickupPrefix;
 

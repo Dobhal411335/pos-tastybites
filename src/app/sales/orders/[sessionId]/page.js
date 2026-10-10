@@ -402,6 +402,7 @@ function OrderPageContent() {
   const [customExtraModal, setCustomExtraModal] = useState(null);
   const [customExtraName, setCustomExtraName] = useState("");
   const [customExtraPrice, setCustomExtraPrice] = useState("");
+  const [customExtraQty, setCustomExtraQty] = useState("1");
   /** Cart line keys with Modified request inputs expanded */
   const [expandedModifiedRequestKeys, setExpandedModifiedRequestKeys] =
     useState(() => new Set());
@@ -1138,12 +1139,14 @@ function OrderPageContent() {
     });
     setCustomExtraName("");
     setCustomExtraPrice("");
+    setCustomExtraQty("1");
   };
 
   const closeCustomExtraModal = () => {
     setCustomExtraModal(null);
     setCustomExtraName("");
     setCustomExtraPrice("");
+    setCustomExtraQty("1");
   };
 
   const submitCustomExtraModal = () => {
@@ -1169,12 +1172,20 @@ function OrderPageContent() {
       toast.error("Enter a valid price");
       return;
     }
+    const qtyNum = Math.floor(Number(customExtraQty));
+    if (!Number.isFinite(qtyNum) || qtyNum < 1 || qtyNum > 99) {
+      toast.error("Enter a quantity between 1 and 99");
+      return;
+    }
     addCustomExtraToCartItem(customExtraModal.cartId, {
       name: rawName,
       price: priceNum,
+      qty: qtyNum,
     });
     closeCustomExtraModal();
-    toast.success(`Added ${rawName}`);
+    toast.success(
+      qtyNum > 1 ? `Added ${rawName} ×${qtyNum}` : `Added ${rawName}`,
+    );
   };
 
   const toggleOfferOption = (setter, item) => {
@@ -1195,16 +1206,12 @@ function OrderPageContent() {
     });
   };
 
-  const toggleCustomDataChoice = (groupIndex, optionIndex, value) => {
+  const toggleCustomDataChoice = (groupIndex, value) => {
     setSelectedCustomData((prev) => {
-      const group = prev[groupIndex] || {};
-      const current = group[optionIndex] || [];
-      const next = current.includes(value)
-        ? current.filter((item) => item !== value)
-        : [...current, value];
+      const current = prev[groupIndex] || "";
       return {
         ...prev,
-        [groupIndex]: { ...group, [optionIndex]: next },
+        [groupIndex]: current === value ? "" : value,
       };
     });
   };
@@ -1331,27 +1338,20 @@ function OrderPageContent() {
               <div className="mt-1.5 space-y-1.5">
                 {normalizeCustomDataSelections(item.customDataSelections).map(
                   (group) => (
-                    <div key={`custom-${group.name}`} className="space-y-1.5">
+                    <div key={`custom-${group.name}`} className="space-y-1">
                       <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-wide">
                         {group.name}
                       </p>
-                      {group.subChoices.map((option) => (
-                        <div key={`${group.name}-${option.name}`} className="pl-0.5">
-                          <p className="text-[10px] font-semibold text-zinc-600">
-                            {option.name}
-                          </p>
-                          <div className="flex flex-wrap gap-1 mt-1">
-                            {option.choices.map((choice) => (
-                              <span
-                                key={`${group.name}-${option.name}-${choice}`}
-                                className="inline-flex items-center rounded-full border border-violet-100 bg-violet-50 px-2 py-0.5 text-[10px] font-semibold text-violet-800"
-                              >
-                                {choice}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      ))}
+                      <div className="flex flex-wrap gap-1">
+                        {group.subChoices.map((choice) => (
+                          <span
+                            key={`${group.name}-${choice}`}
+                            className="inline-flex items-center rounded-full border border-violet-100 bg-violet-50 px-2 py-0.5 text-[10px] font-semibold text-violet-800"
+                          >
+                            {choice}
+                          </span>
+                        ))}
+                      </div>
                     </div>
                   ),
                 )}
@@ -1410,32 +1410,39 @@ function OrderPageContent() {
             normalizeCustomExtras(item.customExtras).length > 0 ? (
               <div className="mt-1.5 space-y-1">
                 {normalizeCustomExtras(item.customExtras).map(
-                  (extra, extraIdx) => (
-                    <div
-                      key={`${extra.name}-${extraIdx}`}
-                      className="flex items-center justify-between gap-2"
-                    >
-                      <p className="text-[11px] font-semibold text-zinc-600">
-                        + {extra.name}{" "}
-                        <span className="text-zinc-500">
-                          (+${Number(extra.price).toFixed(2)})
-                        </span>
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          removeCustomExtraFromCartItem(
-                            item.cartId || item.id,
-                            extraIdx,
-                          )
-                        }
-                        className="text-[10px] font-bold text-zinc-400 hover:text-red-500"
-                        aria-label={`Remove ${extra.name}`}
+                  (extra, extraIdx) => {
+                    const extraLine =
+                      Math.round(
+                        Number(extra.price) * Number(extra.qty) * 100,
+                      ) / 100;
+                    return (
+                      <div
+                        key={`${extra.name}-${extraIdx}`}
+                        className="flex items-center justify-between gap-2"
                       >
-                        Remove
-                      </button>
-                    </div>
-                  ),
+                        <p className="text-[11px] font-semibold text-zinc-600">
+                          + {extra.name}
+                          {extra.qty > 1 ? ` ×${extra.qty}` : ""}{" "}
+                          <span className="text-zinc-500">
+                            (+${extraLine.toFixed(2)})
+                          </span>
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            removeCustomExtraFromCartItem(
+                              item.cartId || item.id,
+                              extraIdx,
+                            )
+                          }
+                          className="text-[10px] font-bold text-zinc-400 hover:text-red-500"
+                          aria-label={`Remove ${extra.name}`}
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    );
+                  },
                 )}
               </div>
             ) : null}
@@ -1716,15 +1723,13 @@ function OrderPageContent() {
       .filter((group) => group.subChoices.length > 0);
 
     const customDataSelections = normalizeCustomData(selectedProduct.customData)
-      .map((group, groupIndex) => ({
-        name: group.name,
-        subChoices: group.subChoices
-          .map((option, optionIndex) => ({
-            name: option.name,
-            choices: selectedCustomData[groupIndex]?.[optionIndex] || [],
-          }))
-          .filter((option) => option.choices.length > 0),
-      }))
+      .map((group, groupIndex) => {
+        const picked = String(selectedCustomData[groupIndex] || "").trim();
+        return {
+          name: group.name,
+          subChoices: picked ? [picked] : [],
+        };
+      })
       .filter((group) => group.subChoices.length > 0);
 
     const newLines = [];
@@ -3720,52 +3725,37 @@ function OrderPageContent() {
                               <AccordionContent
                                 className={accordionContentClass}
                               >
-                                <div className="space-y-4">
-                                  {group.subChoices.map((option, optionIndex) => (
-                                    <div
-                                      key={`${group.name}-${option.name}`}
-                                      className="space-y-2"
-                                    >
-                                      <p className="text-[12px] font-bold uppercase tracking-wide text-zinc-500">
-                                        {option.name}
-                                      </p>
-                                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                                        {option.choices.map((choice) => {
-                                          const selected = (
-                                            selectedCustomData[groupIndex]?.[
-                                              optionIndex
-                                            ] || []
-                                          ).includes(choice);
-                                          return (
-                                            <label
-                                              key={`${group.name}-${option.name}-${choice}`}
-                                              className={`flex items-center border p-3 rounded-lg cursor-pointer transition-colors ${
-                                                selected
-                                                  ? "border-violet-500 bg-violet-50/30"
-                                                  : "border-zinc-200 hover:border-violet-300"
-                                              }`}
-                                            >
-                                              <div className="flex-1 flex items-center gap-3 text-[14px] font-bold text-zinc-800">
-                                                <input
-                                                  type="checkbox"
-                                                  checked={selected}
-                                                  onChange={() =>
-                                                    toggleCustomDataChoice(
-                                                      groupIndex,
-                                                      optionIndex,
-                                                      choice,
-                                                    )
-                                                  }
-                                                  className="w-4 h-4 accent-violet-500"
-                                                />
-                                                <span>{choice}</span>
-                                              </div>
-                                            </label>
-                                          );
-                                        })}
-                                      </div>
-                                    </div>
-                                  ))}
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                  {group.subChoices.map((choice) => {
+                                    const selected =
+                                      selectedCustomData[groupIndex] === choice;
+                                    return (
+                                      <label
+                                        key={`${group.name}-${choice}`}
+                                        className={`flex items-center border p-3 rounded-lg cursor-pointer transition-colors ${
+                                          selected
+                                            ? "border-violet-500 bg-violet-50/30"
+                                            : "border-zinc-200 hover:border-violet-300"
+                                        }`}
+                                      >
+                                        <div className="flex-1 flex items-center gap-3 text-[14px] font-bold text-zinc-800">
+                                          <input
+                                            type="radio"
+                                            name={`custom-data-${groupIndex}-${group.name}`}
+                                            checked={selected}
+                                            onChange={() =>
+                                              toggleCustomDataChoice(
+                                                groupIndex,
+                                                choice,
+                                              )
+                                            }
+                                            className="w-4 h-4 accent-violet-500"
+                                          />
+                                          <span>{choice}</span>
+                                        </div>
+                                      </label>
+                                    );
+                                  })}
                                 </div>
                               </AccordionContent>
                             </AccordionItem>
@@ -4066,24 +4056,68 @@ function OrderPageContent() {
                   autoFocus
                 />
               </div>
-              <div className="space-y-1.5">
-                <label
-                  htmlFor="pos-cart-custom-extra-price"
-                  className="text-[12px] font-bold text-zinc-700 block"
-                >
-                  Price <span className="text-red-500">*</span>
-                </label>
-                <Input
-                  id="pos-cart-custom-extra-price"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={customExtraPrice}
-                  onChange={(e) => setCustomExtraPrice(e.target.value)}
-                  placeholder="0.00"
-                  className="h-11 bg-white"
-                />
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <label
+                    htmlFor="pos-cart-custom-extra-price"
+                    className="text-[12px] font-bold text-zinc-700 block"
+                  >
+                    Price <span className="text-red-500">*</span>
+                  </label>
+                  <Input
+                    id="pos-cart-custom-extra-price"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={customExtraPrice}
+                    onChange={(e) => setCustomExtraPrice(e.target.value)}
+                    placeholder="0.00"
+                    className="h-11 bg-white"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label
+                    htmlFor="pos-cart-custom-extra-qty"
+                    className="text-[12px] font-bold text-zinc-700 block"
+                  >
+                    Qty <span className="text-red-500">*</span>
+                  </label>
+                  <Input
+                    id="pos-cart-custom-extra-qty"
+                    type="number"
+                    min="1"
+                    max="99"
+                    step="1"
+                    value={customExtraQty}
+                    onChange={(e) => setCustomExtraQty(e.target.value)}
+                    placeholder="1"
+                    className="h-11 bg-white"
+                  />
+                </div>
               </div>
+              {(() => {
+                const unit = Number(customExtraPrice);
+                const qty = Math.floor(Number(customExtraQty));
+                const hasUnit = Number.isFinite(unit) && unit >= 0 && customExtraPrice !== "";
+                const hasQty = Number.isFinite(qty) && qty >= 1;
+                if (!hasUnit || !hasQty) return null;
+                const total = Math.round(unit * qty * 100) / 100;
+                const nameLabel =
+                  String(customExtraName || "").trim() || "Custom item";
+                return (
+                  <div className="rounded-xl border border-orange-100 bg-orange-50/80 px-3 py-2.5 text-sm">
+                    <p className="font-semibold text-zinc-800 truncate">
+                      {nameLabel}
+                    </p>
+                    <p className="mt-0.5 text-zinc-600 font-medium">
+                      ${unit.toFixed(2)} × {qty} ={" "}
+                      <span className="font-bold text-zinc-900">
+                        ${total.toFixed(2)}
+                      </span>
+                    </p>
+                  </div>
+                );
+              })()}
             </div>
             <div className="p-4 bg-zinc-50 border-t border-zinc-100 flex gap-3">
               <Button

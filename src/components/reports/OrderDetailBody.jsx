@@ -207,12 +207,18 @@ function ItemRows({ items, startIndex = 0 }) {
           {money(itemLineTotal(item))}
           {Array.isArray(item.customExtras) && item.customExtras.length > 0 ? (
             <div className="mt-1 space-y-0.5 text-[10px] font-normal text-zinc-500">
-              {item.customExtras.map((extra, extraIdx) => (
-                <div key={`${extra.name}-${extraIdx}`}>
-                  + {extra.name}
-                  {Number(extra.price) > 0 ? ` (${money(extra.price)})` : ""}
-                </div>
-              ))}
+              {item.customExtras.map((extra, extraIdx) => {
+                const qty = Math.max(1, Math.floor(Number(extra.qty) || 1));
+                const line =
+                  Math.round((Number(extra.price) || 0) * qty * 100) / 100;
+                return (
+                  <div key={`${extra.name}-${extraIdx}`}>
+                    + {extra.name}
+                    {qty > 1 ? ` ×${qty}` : ""}
+                    {line > 0 ? ` (${money(line)})` : ""}
+                  </div>
+                );
+              })}
             </div>
           ) : null}
         </TableCell>

@@ -20,7 +20,12 @@ import {
   DEFAULT_RESTAURANT_TIMEZONE,
   todayRestaurantISO,
 } from "@/lib/restaurantTime";
-import { businessDateBounds } from "@/lib/eod/eodHelpers";
+import { businessDateBounds, r2 } from "@/lib/eod/eodHelpers";
+import { healReceiptPrintJobsAfterCashRemoval } from "@/lib/orders/orderLifecycle";
+import {
+  isCashOnlyReceiptPrintMeta,
+  stripCashFromReceiptMetadata,
+} from "@/lib/orders/orderDeleteEligibility";
 
 /** Floor staff + admins — Electron print agent needs job detail for ESC/POS. */
 const PRINT_JOB_READ_ROLES = [
@@ -54,7 +59,7 @@ export const GET = withAuth(async (request, { params }) => {
     }
 
     // Fetch Order (with populated references) and Restaurant concurrently in parallel
-    const [order, restaurant] = await Promise.all([
+    let [order, restaurant] = await Promise.all([
       job.orderId
         ? Order.findById(job.orderId)
             .populate("tableSession", "guestCount")
@@ -66,6 +71,53 @@ export const GET = withAuth(async (request, { params }) => {
         .select("name phone address email")
         .lean(),
     ]);
+
+    // Self-heal: if order cash was stripped, hide cash-only slips / scrub mixed
+    // metadata so print previews no longer show deleted cash.
+    const orderCashGone =
+      order &&
+      (Boolean(order.cashTenderRemovedAt) ||
+        (r2(order.cashAmount) <= 0 &&
+          (r2(order.cardAmount) > 0 || r2(order.giftcardUsedAmount) > 0)));
+    const metaStillHasCash =
+      job.printType === "RECEIPT" &&
+      (isCashOnlyReceiptPrintMeta(job.metadata) ||
+        Boolean(stripCashFromReceiptMetadata(job.metadata)));
+
+    if (orderCashGone && metaStillHasCash && job.orderId) {
+      await healReceiptPrintJobsAfterCashRemoval({
+        restaurantId: request.restaurant,
+        orderId: job.orderId,
+      });
+      const refreshed = await PrintJob.findById(id)
+        .populate("requestedBy", "firstName lastName name")
+        .populate("parentPrintJobId", "status printType createdAt attemptCount")
+        .populate(
+          "printerId",
+          "name target connectionType systemPrinterName host port location enabled"
+        )
+        .lean();
+      if (!refreshed || refreshed.isActive === false) {
+        return sendError(new Error("Not Found"), "Print job not found", 404);
+      }
+      Object.assign(job, refreshed);
+    }
+
+    // Heal stale metadata.orderNumber after business-day renumber.
+    if (
+      order?.orderNumber &&
+      job.metadata?.orderNumber &&
+      String(job.metadata.orderNumber) !== String(order.orderNumber)
+    ) {
+      await PrintJob.updateOne(
+        { _id: job._id },
+        { $set: { "metadata.orderNumber": order.orderNumber } }
+      );
+      job.metadata = {
+        ...(job.metadata || {}),
+        orderNumber: order.orderNumber,
+      };
+    }
 
     let guestCount = job.metadata?.guestCount ?? null;
     if (guestCount == null && order?.tableSession) {
@@ -112,15 +164,32 @@ export const GET = withAuth(async (request, { params }) => {
       }
     }
 
+    const isSplitReceipt = Boolean(job.metadata?.isSplitReceipt);
+    const splitPartyName = String(
+      job.metadata?.splitName ||
+        job.metadata?.partyName ||
+        job.metadata?.guestName ||
+        "",
+    ).trim();
+
     const orderWithFloor = order
       ? {
           ...order,
           floorName: floorName || null,
-          partyName:
-            order.partyName ||
-            job.metadata?.partyName ||
-            order.guestName ||
-            null,
+          // Split receipts must show the payer name from this job, not the
+          // order-level party (table/seat default or a later payer's name).
+          partyName: isSplitReceipt
+            ? splitPartyName ||
+              order.partyName ||
+              order.guestName ||
+              null
+            : order.partyName ||
+              job.metadata?.partyName ||
+              order.guestName ||
+              null,
+          guestName: isSplitReceipt
+            ? splitPartyName || order.guestName || order.partyName || null
+            : order.guestName || order.partyName || null,
           paymentMethod:
             order.paymentMethod ||
             job.metadata?.paymentMethod ||

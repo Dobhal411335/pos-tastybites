@@ -29,7 +29,9 @@ export default function ShortDirectProductsPage() {
 
   // Modal State
   const [isAddHeadOpen, setIsAddHeadOpen] = useState(false);
+  const [isEditHeadOpen, setIsEditHeadOpen] = useState(false);
   const [newHeadName, setNewHeadName] = useState("");
+  const [editHeadName, setEditHeadName] = useState("");
   const [isHeadSubmitting, setIsHeadSubmitting] = useState(false);
   const [uploadingHeadImage, setUploadingHeadImage] = useState(false);
 
@@ -93,6 +95,44 @@ export default function ShortDirectProductsPage() {
       }
     } catch (error) {
       toast.error("Failed to create head.");
+    } finally {
+      setIsHeadSubmitting(false);
+    }
+  };
+
+  const openEditHeadDialog = () => {
+    if (!selectedHeadId) return toast.error("Please select a head first.");
+    const head = heads.find((h) => h._id === selectedHeadId);
+    if (!head) return toast.error("Selected head not found.");
+    setEditHeadName(head.name || "");
+    setIsEditHeadOpen(true);
+  };
+
+  const handleUpdateHeadName = async (e) => {
+    e.preventDefault();
+    if (!selectedHeadId) return toast.error("Please select a head first.");
+    if (!editHeadName.trim()) return toast.error("Head name is required.");
+    try {
+      setIsHeadSubmitting(true);
+      const res = await fetch("/api/menu/heads", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ _id: selectedHeadId, name: editHeadName.trim() }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        toast.success(json.message || "Head name updated!");
+        setHeads((prev) =>
+          prev.map((h) =>
+            h._id === selectedHeadId ? { ...h, name: editHeadName.trim() } : h,
+          ),
+        );
+        setIsEditHeadOpen(false);
+      } else {
+        toast.error(json.message);
+      }
+    } catch (error) {
+      toast.error("Failed to update head name.");
     } finally {
       setIsHeadSubmitting(false);
     }
@@ -306,8 +346,8 @@ export default function ShortDirectProductsPage() {
           </CardHeader>
           <CardContent className="space-y-6">
             {/* Section 1: Head Selection */}
-            <div className="flex items-end gap-4">
-              <div className="flex-1 space-y-2">
+            <div className="flex items-end gap-3 flex-wrap">
+              <div className="flex-1 min-w-[200px] space-y-2">
                 <label className="text-sm font-semibold">Select Head <span className="text-red-500">*</span></label>
                 <Select value={selectedHeadId} onValueChange={handleSelectHead}>
                   <SelectTrigger className="h-11">
@@ -320,6 +360,30 @@ export default function ShortDirectProductsPage() {
                   </SelectContent>
                 </Select>
               </div>
+              <Button
+                type="button"
+                variant="outline"
+                className="h-11 px-3"
+                disabled={!selectedHeadId}
+                onClick={openEditHeadDialog}
+                title="Edit head name"
+              >
+                <Edit className="w-4 h-4 mr-2" /> Edit Name
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="h-11 px-3 text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
+                disabled={!selectedHeadId}
+                onClick={() => {
+                  if (!selectedHeadId) return;
+                  setHeadToDelete(selectedHeadId);
+                  setIsDeleteDialogOpen(true);
+                }}
+                title="Delete head"
+              >
+                <Trash className="w-4 h-4 mr-2" /> Delete
+              </Button>
               <Dialog open={isAddHeadOpen} onOpenChange={setIsAddHeadOpen}>
                 <DialogTrigger asChild>
                   <Button className="h-11 px-4" style={{ backgroundColor: PALETTE.accent, color: "white" }}>
@@ -354,6 +418,35 @@ export default function ShortDirectProductsPage() {
                 </DialogContent>
               </Dialog>
             </div>
+
+            <Dialog open={isEditHeadOpen} onOpenChange={setIsEditHeadOpen}>
+              <DialogContent>
+                <form onSubmit={handleUpdateHeadName}>
+                  <DialogHeader>
+                    <DialogTitle>Edit Head Name</DialogTitle>
+                    <DialogDescription>Update the display name for this head.</DialogDescription>
+                  </DialogHeader>
+                  <div className="py-4">
+                    <div className="space-y-2">
+                      <label className="text-sm font-semibold">Head Name</label>
+                      <Input
+                        placeholder="e.g. Lunch Specials"
+                        value={editHeadName}
+                        onChange={(e) => setEditHeadName(e.target.value)}
+                        autoFocus
+                      />
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <Button type="button" variant="outline" onClick={() => setIsEditHeadOpen(false)}>Cancel</Button>
+                    <Button type="submit" disabled={isHeadSubmitting} style={{ backgroundColor: PALETTE.accent, color: "white" }}>
+                      {isHeadSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                      Update Name
+                    </Button>
+                  </DialogFooter>
+                </form>
+              </DialogContent>
+            </Dialog>
 
             {selectedHeadId && (
               <div className="space-y-2">

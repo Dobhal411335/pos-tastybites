@@ -12,15 +12,10 @@ const ChoiceOptionSchema = new mongoose.Schema({
   subChoices: [{ type: String, trim: true }],
 });
 
-/** Nested custom fields: group → option → many inner choice names */
-const CustomDataSubChoiceSchema = new mongoose.Schema({
-  name: { type: String, required: true, trim: true },
-  choices: [{ type: String, trim: true }],
-});
-
+/** Custom data: group name → flat option strings (radio single-select at order time) */
 const CustomDataSchema = new mongoose.Schema({
   name: { type: String, required: true, trim: true },
-  subChoices: { type: [CustomDataSubChoiceSchema], default: [] },
+  subChoices: [{ type: String, trim: true }],
 });
 
 const AddonSchema = new mongoose.Schema({

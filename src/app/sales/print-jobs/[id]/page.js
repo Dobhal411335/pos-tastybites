@@ -250,7 +250,8 @@ export default function PrintJobDetailPage() {
       : job.metadata?.barItems || job.metadata?.kotItems || [];
 
   const isReprint = Boolean(job.parentPrintJobId || (job.attemptCount || 0) > 1 || job.metadata?.isReprint);
-  const orderNumber = job.metadata?.orderNumber || order?.orderNumber || "—";
+  // Prefer live Order number — metadata goes stale after business-day renumber.
+  const orderNumber = order?.orderNumber || job.metadata?.orderNumber || "—";
   const printer = job.printerId;
   const seatFilter = resolveSplitReceiptSeatFilter(job.metadata, order);
   const seatLabel = printJobSeatLabel(job.metadata, seatFilter);
@@ -795,7 +796,7 @@ export default function PrintJobDetailPage() {
                 <div style={{ width: "80mm" }} className="bg-white">
                   {isKot ? (
                     <KitchenOrderTicket
-                      order={order || { orderNumber: job.metadata?.orderNumber }}
+                      order={order || { orderNumber }}
                       kotItems={ticketItems}
                       restaurantName={
                         job.metadata?.restaurantName || restaurant?.name
@@ -809,7 +810,7 @@ export default function PrintJobDetailPage() {
                     <BarReceipt
                       order={
                         order || {
-                          orderNumber: job.metadata?.orderNumber,
+                          orderNumber,
                           tableNo: job.metadata?.tableNo,
                           guestName: job.metadata?.guestName,
                           partyName: job.metadata?.partyName,

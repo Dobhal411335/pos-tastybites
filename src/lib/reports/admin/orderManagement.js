@@ -20,7 +20,9 @@ import {
   TENDER_STAGES,
 } from "@/lib/reports/financial/metrics";
 import {
-  isCashOnlyDeletable,
+  canDeleteOrder,
+  getDeleteMode,
+  hasRemovedCashTender,
   paymentDisplayLabel,
 } from "@/lib/orders/orderDeleteEligibility";
 import { getOrderPaidAmount } from "@/lib/orders/seatHelpers";
@@ -43,25 +45,41 @@ function buildListMatch({
     createdAt: { $gte: start, $lt: end },
   };
 
+  const and = [];
+
   if (view === "deleted") {
-    match.isActive = false;
+    // Full soft-deletes OR soft-removed cash on still-active mixed orders.
+    and.push({
+      $or: [
+        { isActive: false },
+        { cashTenderRemovedAt: { $exists: true, $ne: null } },
+      ],
+    });
   } else {
     match.isActive = { $ne: false };
   }
 
   if (search) {
     const s = escapeRegex(search);
-    match.$or = [
-      { orderNumber: { $regex: s, $options: "i" } },
-      { originalOrderNumber: { $regex: s, $options: "i" } },
-      { invoiceNumber: { $regex: s, $options: "i" } },
-      { originalInvoiceNumber: { $regex: s, $options: "i" } },
-      { tableNo: { $regex: s, $options: "i" } },
-      { partyName: { $regex: s, $options: "i" } },
-      { guestName: { $regex: s, $options: "i" } },
-      { paymentMethod: { $regex: s, $options: "i" } },
-      { giftcardCode: { $regex: s, $options: "i" } },
-    ];
+    and.push({
+      $or: [
+        { orderNumber: { $regex: s, $options: "i" } },
+        { originalOrderNumber: { $regex: s, $options: "i" } },
+        { invoiceNumber: { $regex: s, $options: "i" } },
+        { originalInvoiceNumber: { $regex: s, $options: "i" } },
+        { tableNo: { $regex: s, $options: "i" } },
+        { partyName: { $regex: s, $options: "i" } },
+        { guestName: { $regex: s, $options: "i" } },
+        { paymentMethod: { $regex: s, $options: "i" } },
+        { giftcardCode: { $regex: s, $options: "i" } },
+      ],
+    });
+  }
+
+  if (and.length === 1) {
+    Object.assign(match, and[0]);
+  } else if (and.length > 1) {
+    match.$and = and;
   }
 
   return match;
@@ -100,6 +118,18 @@ function mapRow(order, tz, view) {
       ? order.originalInvoiceNumber
       : null;
 
+  const isCashTenderRemoval =
+    Boolean(order.cashTenderRemovedAt) && order.isActive !== false;
+  const deletionKind =
+    view === "deleted"
+      ? isCashTenderRemoval
+        ? "cash_tender"
+        : "full"
+      : null;
+
+  // Deleted view: always prefer first-assigned (original) numbers so a cash-removed
+  // split that was renumbered (e.g. 0033→0032) does not collide with a soft-deleted
+  // peer that still displays original 0032.
   const orderNumberDisplay =
     view === "deleted"
       ? displayRefNumber(order.orderNumber, originalOrderNumber)
@@ -113,9 +143,21 @@ function mapRow(order, tz, view) {
         )
       : order.invoiceNumber || null;
 
+  // For deleted-view cash strips, show snapshot cash label context when useful.
+  const paymentLabelForRow =
+    view === "deleted" && isCashTenderRemoval
+      ? "Cash removed"
+      : paymentLabel;
+
+  const liveOrderNumber =
+    order.orderNumber && !isPlaceholderNumber(order.orderNumber)
+      ? order.orderNumber
+      : null;
+
   return {
     id: String(order._id),
     orderNumber: orderNumberDisplay,
+    liveOrderNumber,
     originalOrderNumber: originalOrderNumber || orderNumberDisplay,
     invoiceNumber: invoiceNumberDisplay,
     originalInvoiceNumber: originalInvoiceNumber || invoiceNumberDisplay,
@@ -141,7 +183,7 @@ function mapRow(order, tz, view) {
     tip: r2(order.tipAmount),
     tipMethod: order.tipMethod || null,
     paymentMethod: order.paymentMethod || null,
-    paymentLabel,
+    paymentLabel: paymentLabelForRow,
     tenders: {
       cash: tenders.cash,
       card: tenders.card,
@@ -159,11 +201,25 @@ function mapRow(order, tz, view) {
     status: order.status,
     guest: order.partyName || order.guestName || null,
     guestCount: order.guestCount == null ? null : Number(order.guestCount),
-    canDelete: view !== "deleted" && isCashOnlyDeletable(order),
+    canDelete:
+      view !== "deleted" &&
+      !hasRemovedCashTender(order) &&
+      canDeleteOrder(order),
+    deleteMode:
+      view !== "deleted" && !hasRemovedCashTender(order)
+        ? getDeleteMode(order)
+        : null,
+    hasRemovedCash: hasRemovedCashTender(order),
+    canRestoreCash: hasRemovedCashTender(order),
+    deletionKind,
+    cashTenderRemovedAt: order.cashTenderRemovedAt || null,
     isActive: order.isActive !== false,
-    deletedAt: order.deletedAt || null,
-    deletedByName: order.deletedByName || null,
-    deletionReason: order.deletionReason || null,
+    deletedAt:
+      order.deletedAt || order.cashTenderRemovedAt || null,
+    deletedByName:
+      order.deletedByName || order.cashTenderRemovedByName || null,
+    deletionReason:
+      order.deletionReason || order.cashTenderRemovalReason || null,
     restoredAt: order.restoredAt || null,
   };
 }
@@ -178,10 +234,40 @@ const DELETED_BY_LOOKUP = [
     },
   },
   {
+    $lookup: {
+      from: "employees",
+      localField: "cashTenderRemovedBy",
+      foreignField: "_id",
+      as: "_cashTenderRemovedBy",
+    },
+  },
+  {
     $addFields: {
       deletedByName: {
         $let: {
           vars: { e: { $arrayElemAt: ["$_deletedBy", 0] } },
+          in: {
+            $cond: [
+              { $ifNull: ["$$e", false] },
+              {
+                $trim: {
+                  input: {
+                    $concat: [
+                      { $ifNull: ["$$e.firstName", ""] },
+                      " ",
+                      { $ifNull: ["$$e.lastName", ""] },
+                    ],
+                  },
+                },
+              },
+              null,
+            ],
+          },
+        },
+      },
+      cashTenderRemovedByName: {
+        $let: {
+          vars: { e: { $arrayElemAt: ["$_cashTenderRemovedBy", 0] } },
           in: {
             $cond: [
               { $ifNull: ["$$e", false] },

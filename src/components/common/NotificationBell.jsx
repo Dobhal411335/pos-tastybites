@@ -74,11 +74,20 @@ function notificationHref(n) {
   return "/sales/notifications";
 }
 
-export default function NotificationBell({ viewAllHref = "/sales/notifications", showViewAll = true }) {
+export default function NotificationBell({
+  viewAllHref = "/sales/notifications",
+  showViewAll = true,
+  /** Types that still appear in the list but skip toast/sound (e.g. login page). */
+  suppressAlertTypes = [],
+}) {
   const router = useRouter();
   const { socket } = useSocket();
   const { user } = useAuth();
   const currentUserId = String(user?._id || user?.id || "");
+  const suppressAlertSet = useMemo(
+    () => new Set(suppressAlertTypes || []),
+    [suppressAlertTypes],
+  );
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [notifications, setNotifications] = useState([]);
@@ -121,7 +130,15 @@ export default function NotificationBell({ viewAllHref = "/sales/notifications",
       setUnreadCount((c) => c + 1);
     }
 
-    if (playSound) {
+    const isOwnClockIn =
+      incoming.type === "EMPLOYEE_LOGIN" &&
+      currentUserId &&
+      incoming.employeeId &&
+      String(incoming.employeeId) === currentUserId;
+    const alertsSuppressed =
+      suppressAlertSet.has(incoming.type) || isOwnClockIn;
+
+    if (playSound && !alertsSuppressed) {
       playNotificationSound(incoming);
       showSystemNotification(incoming);
       // Toast for high-priority ops alerts, and for employee clock-in so staff notice
@@ -133,7 +150,7 @@ export default function NotificationBell({ viewAllHref = "/sales/notifications",
         toast.message(incoming.title, { description: incoming.message });
       }
     }
-  }, [currentUserId]);
+  }, [currentUserId, suppressAlertSet]);
 
   const fetchNotifications = useCallback(async ({ silent = false } = {}) => {
     if (!silent) setLoading(true);
