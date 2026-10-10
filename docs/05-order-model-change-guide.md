@@ -40,7 +40,7 @@ Update every relevant file in this guide (Web Sales, Admin, Mobile, EOD, reports
 | `orderNumber` / `originalOrderNumber` | Unique among **active** orders |
 | `invoiceNumber` / `originalInvoiceNumber` | Unique among **active** orders |
 | `isActive`, `deletedAt`, `deletedBy`, `deletionReason` | Soft delete (full order) |
-| `cashTenderRemovedAt`, `cashTenderRemovedBy`, `cashTenderRemovalReason`, `removedCashSnapshot` | Soft-remove cash from mixed cash+card/gift; order stays active |
+| `cashTenderRemovedAt`, `cashTenderRemovedBy`, `cashTenderRemovalReason`, `removedCashSnapshot` | Soft-remove **pure cash seat(s)** from a split that still has card/gift; order stays active. Snapshot holds original `paymentSplits` / `items` / totals plus `removedCashEntries[]` (one entry per deleted cash seat: split, seats, items, amounts, `entryId`, print-job ids). Card and cash+card seats are never stripped. |
 | `restoredAt`, `restoredBy` | Restore |
 | `permanentlyDeletedAt`, `permanentlyDeletedBy` | Hard-delete audit |
 | `status` | `PENDING` \| `CONFIRMED` \| `COMPLETED` \| `PAID` \| `CANCELLED` \| `WAIVED` |
@@ -184,7 +184,8 @@ When updating Order-related data, walk these trees (and the files under them):
 | Employee POS API | `Web/src/app/api/orders/employee/route.js` |
 | Staff / admin APIs | `Web/src/app/api/orders/staff/route.js`, `.../staff/[id]/route.js`, `.../admin/route.js`, `.../admin/[id]/route.js` |
 | Generic order | `Web/src/app/api/orders/[id]/route.js`, `.../stats/route.js` |
-| Lifecycle / soft-delete | `Web/src/lib/orders/orderLifecycle.js`, `ensureOrderSoftDeleteIndexes.js`, `renumberOrdersForBusinessDay.js`, `sessionTables.js` |
+| Lifecycle / soft-delete | `Web/src/lib/orders/orderLifecycle.js`, `orderDeleteEligibility.js`, `ensureOrderSoftDeleteIndexes.js`, `renumberOrdersForBusinessDay.js`, `sessionTables.js` |
+| Admin cash APIs | `Web/src/app/api/admin/orders/[id]/soft-delete`, `restore-cash`, `permanent-cash` (body may include `splitIndices` / `entryIds`) |
 | Online public | `Web/src/lib/public/createOnlineOrder.js`, `findPublicOnlineOrder.js` |
 
 ### 2) Sales web — POS cart, payment, thank-you, today
@@ -225,6 +226,35 @@ When updating Order-related data, walk these trees (and the files under them):
 | EOD UI | `Web/src/components/eod/EodReportPage.jsx`, `EodReportPreview.jsx`, `EodEmailDialog.jsx` |
 | EOD lib | `Web/src/lib/eod/buildEodReport.js`, `buildTaxBreakdown.js`, `exportEodPdf.js`, `exportEodExcel.js`, `getEodReportForDate.js`, `reconcileEod.js`, `eodHelpers.js` |
 | EOD APIs | `Web/src/app/api/eod/route.js`, `pdf/route.js`, `excel/route.js`, `email/route.js`, `history/route.js`, `save/route.js` |
+
+**Cash soft-delete vs pure-cash seat strip (reports / EOD):**
+
+**Rules (admin Order Management):**
+
+- Full soft-delete: cash-only orders only (no card/gift on the order).
+- Cash seat strip: only when the order has **named `paymentSplits`**, at least one **pure cash** seat (`cash > 0`, card/gift `0` on that seat), and card and/or gift elsewhere so the order can stay active.
+- **Not deletable:** card-only seats, gift seats, **cash+card** seats (dialog shows them disabled).
+- Multiple pure cash seats: delete one-by-one (or select several); each removal appends a `removedCashEntries[]` entry. Deleted view shows **one row per removed cash seat**. Restore / permanent-cash accept `entryIds` for partial restore/clear.
+- Deleted detail uses `buildDeletedCashOrderDetailView` (cash seat snapshot only — not the live card-only order).
+
+| Action | Order stays in EOD? | Cash tender | Card/gift | Items / seats |
+| --- | --- | --- | --- | --- |
+| Full soft-delete (cash-only order) | No (`isActive: false`) | Removed with order | N/A | Hidden with order |
+| Soft-remove **pure cash** seat(s) on split | Yes (active) | That seat’s cash dropped from live `cashAmount` / `paymentSplits`; remaining pure cash (if any) stays | Kept (incl. cash+card seats untouched) | Pure-cash seat items removed; `subTotal` / `tax` / `totalAmount` recalculated to remaining seats |
+| Soft-remove when only cash+card / card left | N/A — not allowed | — | — | — |
+| Restore cash (`entryIds` optional) | Yes | Selected seats merged back from snapshot (all remaining entries if omitted) | Unchanged | Selected seat items/totals restored; if any entries remain removed, `cashTenderRemovedAt` stays set |
+| Permanent cash (`entryIds` optional) | Yes | Live order unchanged (cash already stripped) | Unchanged | Snapshot entries cleared; print-job history for those seats deleted |
+
+**EOD / financial reports:** Web Sales EOD, Admin EOD, and Mobile EOD all use the same `/api/eod` → `buildEodReport.js` (`ACTIVE_ORDER_FILTER`, `resolveTenders`, `paymentTypeContributions`, `resolveCashTipAmount`). EOD has **no write-off line and no deleted-cash evidence** — it only reads live active order fields. After a pure-cash seat strip, that seat’s items/cash/tips are removed from the live order so EOD shows remaining tenders and sales only (as if that cash seat was never there). Full soft-deletes (`isActive: false`) are excluded entirely.
+
+Surfaces that read live order / snapshot for admin delete UX:
+
+- Admin Order Management (`OrderManagementSection.jsx`, `orderManagement.js`, `orderDeleteEligibility.js`)
+- Shared `OrderDetailBody.jsx` (active = live; Deleted cash row = snapshot via `buildDeletedCashOrderDetailView`)
+- Financial / guest / employee / today shapers that use `resolveTenders` / `paymentSplits`
+- Print jobs / notifications healed on strip (`orderLifecycle.js`)
+
+**Optional (not required for EOD correctness):** cash write-off line on EOD; adjust `guestCount` when seats are stripped; re-save a previously saved EOD after mid-day cash deletes.
 
 ### 5) Admin reports (app pages + libs)
 

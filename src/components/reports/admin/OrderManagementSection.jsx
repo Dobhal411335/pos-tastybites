@@ -48,6 +48,7 @@ import OrderDetailBody, {
   formatDateTime,
 } from "@/components/reports/OrderDetailBody";
 import {
+  buildDeletedCashOrderDetailView,
   CASH_ONLY_DELETE_ERROR,
   DELETE_MODE_CASH_TENDER,
 } from "@/lib/orders/orderDeleteEligibility";
@@ -81,6 +82,22 @@ function PaymentBadge({ label }) {
       {label || "—"}
     </Badge>
   );
+}
+
+function splitTypeLabel(split) {
+  const cash = Number(split?.cashAmount) || 0;
+  const card = Number(split?.cardAmount) || 0;
+  const gift = Number(split?.giftCard) || 0;
+  if (cash > 0 && (card > 0 || gift > 0)) return "Cash + Card";
+  if (cash > 0) return "Cash";
+  if (gift > 0) return "Gift Card";
+  if (card > 0) return "Card";
+  const method = String(split?.method || "").trim();
+  if (/cash/i.test(method) && /card/i.test(method)) return "Cash + Card";
+  if (/gift/i.test(method)) return "Gift Card";
+  if (/cash/i.test(method)) return "Cash";
+  if (/card/i.test(method)) return "Card";
+  return method || "—";
 }
 
 export default function OrderManagementSection() {
@@ -173,7 +190,7 @@ export default function OrderManagementSection() {
     }
   }, [buildParams]);
 
-  const openOrder = async (id) => {
+  const openOrder = async (id, row = null) => {
     setOrderId(id);
     setOrderDetail(null);
     setDetailLoading(true);
@@ -183,25 +200,136 @@ export default function OrderManagementSection() {
         credentials: "include",
       });
       const json = await res.json();
-      if (json.success) setOrderDetail(json.data);
+      if (json.success) {
+        const raw = json.data;
+        const showCashSnapshot =
+          view === "deleted" &&
+          (row?.deletionKind === "cash_tender" ||
+            Boolean(raw?.cashTenderRemovedAt && raw?.isActive !== false));
+        setOrderDetail(
+          showCashSnapshot
+            ? buildDeletedCashOrderDetailView(raw, {
+                entryId: row?.cashEntryId || null,
+              })
+            : raw
+        );
+      }
     } finally {
       setDetailLoading(false);
     }
   };
 
+  const openCashDeleteConfirm = (row) => {
+    const splits = Array.isArray(row.removableCashSplits)
+      ? row.removableCashSplits
+      : [];
+    const cashIndexes = splits
+      .filter((s) => s.canRemoveCash)
+      .map((s) => s.index);
+    setConfirm({
+      type: "soft-delete",
+      row,
+      selectedSplitIndices:
+        row.deleteMode === DELETE_MODE_CASH_TENDER && splits.length > 0
+          ? cashIndexes
+          : null,
+    });
+  };
+
+  const toggleCashSplitSelection = (index, checked) => {
+    setConfirm((prev) => {
+      if (!prev || prev.type !== "soft-delete") return prev;
+      const current = new Set(prev.selectedSplitIndices || []);
+      if (checked) current.add(index);
+      else current.delete(index);
+      return { ...prev, selectedSplitIndices: [...current] };
+    });
+  };
+
+  const toggleCashEntrySelection = (entryId, checked) => {
+    setConfirm((prev) => {
+      if (
+        !prev ||
+        (prev.type !== "restore-cash" && prev.type !== "permanent-cash")
+      ) {
+        return prev;
+      }
+      const current = new Set(prev.selectedEntryIds || []);
+      if (checked) current.add(entryId);
+      else current.delete(entryId);
+      return { ...prev, selectedEntryIds: [...current] };
+    });
+  };
+
+  const openRestoreCashConfirm = (row) => {
+    const entries = Array.isArray(row.removedCashEntries)
+      ? row.removedCashEntries
+      : [];
+    const defaultIds =
+      row.cashEntryId
+        ? [row.cashEntryId]
+        : entries.map((e) => e.entryId).filter(Boolean);
+    setConfirm({
+      type: "restore-cash",
+      row,
+      selectedEntryIds: defaultIds.length ? defaultIds : null,
+    });
+  };
+
+  const openPermanentCashConfirm = (row) => {
+    const entries = Array.isArray(row.removedCashEntries)
+      ? row.removedCashEntries
+      : [];
+    const defaultIds =
+      row.cashEntryId
+        ? [row.cashEntryId]
+        : entries.map((e) => e.entryId).filter(Boolean);
+    setConfirm({
+      type: "permanent-cash",
+      row,
+      selectedEntryIds: defaultIds.length ? defaultIds : null,
+    });
+  };
+
   const runAction = async () => {
     if (!confirm) return;
-    const { type, row } = confirm;
-    setBusyId(row.id);
+    const { type, row, selectedSplitIndices, selectedEntryIds } = confirm;
+    if (
+      type === "soft-delete" &&
+      row.deleteMode === DELETE_MODE_CASH_TENDER &&
+      Array.isArray(selectedSplitIndices) &&
+      selectedSplitIndices.length === 0
+    ) {
+      setActionError("Select at least one cash payment to remove.");
+      return;
+    }
+    if (
+      (type === "restore-cash" || type === "permanent-cash") &&
+      Array.isArray(selectedEntryIds) &&
+      selectedEntryIds.length === 0
+    ) {
+      setActionError("Select at least one cash seat.");
+      return;
+    }
+    const busyKey = row.rowKey || row.id;
+    setBusyId(busyKey);
     setActionError(null);
     try {
       let res;
       if (type === "soft-delete") {
+        const body = {};
+        if (
+          row.deleteMode === DELETE_MODE_CASH_TENDER &&
+          Array.isArray(selectedSplitIndices) &&
+          selectedSplitIndices.length > 0
+        ) {
+          body.splitIndices = selectedSplitIndices;
+        }
         res = await fetch(`/api/admin/orders/${row.id}/soft-delete`, {
           method: "POST",
           credentials: "include",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({}),
+          body: JSON.stringify(body),
         });
       } else if (type === "restore") {
         res = await fetch(`/api/admin/orders/${row.id}/restore`, {
@@ -209,9 +337,17 @@ export default function OrderManagementSection() {
           credentials: "include",
         });
       } else if (type === "restore-cash") {
+        const body = {};
+        if (Array.isArray(selectedEntryIds) && selectedEntryIds.length > 0) {
+          body.entryIds = selectedEntryIds;
+        } else if (row.cashEntryId) {
+          body.entryIds = [row.cashEntryId];
+        }
         res = await fetch(`/api/admin/orders/${row.id}/restore-cash`, {
           method: "POST",
           credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
         });
       } else if (type === "permanent") {
         res = await fetch(`/api/admin/orders/${row.id}/permanent`, {
@@ -219,9 +355,17 @@ export default function OrderManagementSection() {
           credentials: "include",
         });
       } else if (type === "permanent-cash") {
+        const body = {};
+        if (Array.isArray(selectedEntryIds) && selectedEntryIds.length > 0) {
+          body.entryIds = selectedEntryIds;
+        } else if (row.cashEntryId) {
+          body.entryIds = [row.cashEntryId];
+        }
         res = await fetch(`/api/admin/orders/${row.id}/permanent-cash`, {
           method: "DELETE",
           credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
         });
       }
       const json = await res.json();
@@ -386,7 +530,7 @@ export default function OrderManagementSection() {
               <Table>
                 <TableHeader className="sticky top-0 z-10">
                   <TableRow>
-                    <TableHead className={TH_CLASS}>Order #</TableHead>
+                    <TableHead className={TH_CLASS}>#Order</TableHead>
                     <TableHead className={TH_CLASS}>Invoice</TableHead>
                     <TableHead className={TH_CLASS}>Date</TableHead>
                     <TableHead className={TH_CLASS}>Table</TableHead>
@@ -412,7 +556,7 @@ export default function OrderManagementSection() {
                 <TableBody>
                   {(data.rows || []).map((row) => (
                     <TableRow
-                      key={row.id}
+                      key={row.rowKey || row.id}
                       className={cn(
                         "h-14 hover:bg-orange-50/50",
                         isDeletedView && "bg-zinc-50/80 text-zinc-600"
@@ -420,19 +564,19 @@ export default function OrderManagementSection() {
                     >
                       <TableCell
                         className={`${TD_CLASS} whitespace-nowrap font-medium cursor-pointer`}
-                        onClick={() => openOrder(row.id)}
+                        onClick={() => openOrder(row.id, row)}
                       >
-                        {row.orderNumber || "—"}
+                        # {row.orderNumber || "—"}
                       </TableCell>
                       <TableCell
                         className={`${TD_CLASS} whitespace-nowrap cursor-pointer`}
-                        onClick={() => openOrder(row.id)}
+                        onClick={() => openOrder(row.id, row)}
                       >
                         {row.invoiceNumber || "—"}
                       </TableCell>
                       <TableCell
                         className={`${TD_CLASS} whitespace-nowrap cursor-pointer`}
-                        onClick={() => openOrder(row.id)}
+                        onClick={() => openOrder(row.id, row)}
                       >
                         <div className="leading-tight">
                           <div>{row.date}</div>
@@ -443,20 +587,20 @@ export default function OrderManagementSection() {
                       </TableCell>
                       <TableCell
                         className={`${TD_CLASS} max-w-[140px] truncate cursor-pointer`}
-                        onClick={() => openOrder(row.id)}
+                        onClick={() => openOrder(row.id, row)}
                         title={row.table}
                       >
                         {row.table}
                       </TableCell>
                       <TableCell
                         className={`${TD_CLASS} max-w-[120px] truncate cursor-pointer`}
-                        onClick={() => openOrder(row.id)}
+                        onClick={() => openOrder(row.id, row)}
                       >
                         {row.server}
                       </TableCell>
                       <TableCell
                         className={`${TD_CLASS} cursor-pointer`}
-                        onClick={() => openOrder(row.id)}
+                        onClick={() => openOrder(row.id, row)}
                       >
                         <OrderSourceBadge
                           source={row.source}
@@ -469,13 +613,20 @@ export default function OrderManagementSection() {
                       </TableCell>
                       <TableCell
                         className={`${TD_CLASS} text-right tabular-nums font-medium cursor-pointer`}
-                        onClick={() => openOrder(row.id)}
+                        onClick={() => openOrder(row.id, row)}
                       >
                         {money(row.total)}
                       </TableCell>
                       <TableCell className={TD_CLASS}>
                         <div className="flex flex-col items-start gap-1">
                           <PaymentBadge label={row.paymentLabel} />
+                          {isDeletedView &&
+                          row.deletionKind === "cash_tender" &&
+                          row.seatSummary ? (
+                            <span className="text-[10px] text-zinc-500">
+                              {row.seatSummary}
+                            </span>
+                          ) : null}
                           {isDeletedView &&
                           row.deletionKind === "cash_tender" &&
                           row.liveOrderNumber &&
@@ -486,6 +637,13 @@ export default function OrderManagementSection() {
                               Active as #{row.liveOrderNumber}
                             </span>
                           ) : null}
+                          {/* {!isDeletedView &&
+                          row.hasRemovedCash &&
+                          row.tenders?.card > 0 ? (
+                            <span className="text-[10px] text-zinc-500">
+                              Card {money(row.tenders.card)}
+                            </span>
+                          ) : null} */}
                           {row.paymentStatus === "PARTIAL" ? (
                             <Badge
                               variant="outline"
@@ -502,6 +660,10 @@ export default function OrderManagementSection() {
                           {row.hasSplits && row.splitCount > 1 ? (
                             <span className="text-[10px] text-zinc-500">
                               {row.splitCount} payers
+                            </span>
+                          ) : row.hasSplits && row.splitCount === 1 ? (
+                            <span className="text-[10px] text-zinc-500">
+                              1 payer
                             </span>
                           ) : null}
                         </div>
@@ -537,74 +699,59 @@ export default function OrderManagementSection() {
                       <TableCell className={`${TD_CLASS} text-center`}>
                         <div className="inline-flex flex-wrap justify-end items-center gap-1.5">
                           {!isDeletedView ? (
-                            row.hasRemovedCash ? (
-                              // Cash already stripped — card/gift must not look deletable.
-                              // Restore / permanent cash live in Deleted Orders.
-                              <Button
-                                type="button"
-                                size="icon"
-                                variant="outline"
-                                disabled
-                                className="h-8 w-8 border-zinc-200 text-zinc-300"
-                                title="Cash payment already removed. Open Deleted Orders to restore cash or permanently clear it. Card/gift cannot be deleted."
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setActionError(
-                                    "Cash was already removed from this order. Use Deleted Orders to restore cash. Card/gift payments cannot be deleted."
-                                  );
-                                }}
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </Button>
-                            ) : (
-                              <Button
-                                type="button"
-                                size="icon"
-                                variant="outline"
-                                disabled={!row.canDelete || busyId === row.id}
-                                className={cn(
-                                  "h-8 w-8",
-                                  row.canDelete
-                                    ? "border-red-200 text-red-700 hover:bg-red-50"
-                                    : "border-zinc-200 text-zinc-300"
-                                )}
+                            <Button
+                              type="button"
+                              size="icon"
+                              variant="outline"
+                              disabled={!row.canDelete || busyId === row.id}
+                              className={cn(
+                                "h-8 w-8",
+                                row.canDelete
+                                  ? "border-red-200 text-red-700 hover:bg-red-50"
+                                  : "border-zinc-200 text-zinc-300"
+                              )}
                                 title={
-                                  row.canDelete
-                                    ? row.deleteMode === DELETE_MODE_CASH_TENDER
-                                      ? "Remove cash payment only (keep card/gift)"
-                                      : row.hasSplits
-                                        ? "Delete cash-only split order"
-                                        : "Delete cash-only order"
-                                    : "Only cash-only orders, or cash on mixed tenders, can be deleted"
+                                row.canDelete
+                                  ? row.deleteMode === DELETE_MODE_CASH_TENDER
+                                    ? "Remove pure cash seat(s) only — card and cash+card cannot be deleted"
+                                    : row.hasSplits
+                                      ? "Delete cash-only split order"
+                                      : "Delete cash-only order"
+                                  : row.hasRemovedCash
+                                    ? "No more pure cash seats to remove. Open Deleted Orders to restore cash. Card and cash+card cannot be deleted."
+                                    : "Only cash-only orders, or pure cash seats on a split with card/gift, can be deleted"
+                              }
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (!row.canDelete) {
+                                  setActionError(
+                                    row.hasRemovedCash
+                                      ? "Cash was already removed from this order. Use Deleted Orders to restore cash. Card/gift payments cannot be deleted."
+                                      : CASH_ONLY_DELETE_ERROR
+                                  );
+                                  return;
                                 }
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  if (!row.canDelete) {
-                                    setActionError(CASH_ONLY_DELETE_ERROR);
-                                    return;
-                                  }
-                                  setConfirm({ type: "soft-delete", row });
-                                }}
-                              >
-                                {busyId === row.id ? (
-                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                ) : (
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                )}
-                              </Button>
-                            )
+                                openCashDeleteConfirm(row);
+                              }}
+                            >
+                              {busyId === row.id ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <Trash2 className="h-3.5 w-3.5" />
+                              )}
+                            </Button>
                           ) : row.deletionKind === "cash_tender" ? (
                             <>
                               <Button
                                 type="button"
                                 size="sm"
                                 variant="outline"
-                                disabled={busyId === row.id}
+                                disabled={busyId === (row.rowKey || row.id)}
                                 className="h-8 border-emerald-200 text-emerald-800 hover:bg-emerald-50"
-                                title="Restore removed cash payment"
+                                title="Restore removed cash seat(s)"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  setConfirm({ type: "restore-cash", row });
+                                  openRestoreCashConfirm(row);
                                 }}
                               >
                                 <RotateCcw className="h-3.5 w-3.5 mr-1" />
@@ -614,12 +761,12 @@ export default function OrderManagementSection() {
                                 type="button"
                                 size="icon"
                                 variant="outline"
-                                disabled={busyId === row.id}
+                                disabled={busyId === (row.rowKey || row.id)}
                                 className="h-8 w-8 border-red-300 text-red-800 hover:bg-red-50"
-                                title="Permanently delete cash payment history"
+                                title="Permanently delete cash seat history"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  setConfirm({ type: "permanent-cash", row });
+                                  openPermanentCashConfirm(row);
                                 }}
                               >
                                 <Trash2 className="h-3.5 w-3.5" />
@@ -691,9 +838,11 @@ export default function OrderManagementSection() {
                   : ""}
             </SheetTitle>
             <SheetDescription>
-              {isDeletedView
-                ? "Soft-deleted order. Invoice number is preserved."
-                : "Active order record. Totals are stored POS values."}
+              {orderDetail?._viewingRemovedCashSnapshot
+                ? "Removed cash seat(s) only. Card/gift seats stay on the active order."
+                : isDeletedView
+                  ? "Soft-deleted order. Invoice number is preserved."
+                  : "Active order record. Totals are stored POS values."}
             </SheetDescription>
           </SheetHeader>
           {detailLoading ? (
@@ -702,6 +851,28 @@ export default function OrderManagementSection() {
             </div>
           ) : orderDetail ? (
             <div className="space-y-4 mt-2">
+              {orderDetail._viewingRemovedCashSnapshot ? (
+                <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-3 text-sm">
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-red-700">
+                    Cash payment removed
+                  </p>
+                  <div className="mt-1.5 space-y-0.5 text-zinc-700">
+                    {orderDetail.cashTenderRemovedAt ? (
+                      <div>
+                        Removed at:{" "}
+                        {formatDateTime(orderDetail.cashTenderRemovedAt)}
+                      </div>
+                    ) : null}
+                    {orderDetail.cashTenderRemovalReason ? (
+                      <div>Reason: {orderDetail.cashTenderRemovalReason}</div>
+                    ) : null}
+                    <div>
+                      Showing only the cash seat(s) / cash tender that were
+                      removed from the split payment.
+                    </div>
+                  </div>
+                </div>
+              ) : null}
               {orderDetail.isActive === false ? (
                 <div className="rounded-lg border border-zinc-300 bg-zinc-50 px-3 py-3 text-sm">
                   <p className="text-[11px] font-bold uppercase tracking-wider text-zinc-600">
@@ -719,22 +890,6 @@ export default function OrderManagementSection() {
                         Previously restored: {formatDateTime(orderDetail.restoredAt)}
                       </div>
                     ) : null}
-                  </div>
-                </div>
-              ) : null}
-              {orderDetail.cashTenderRemovedAt ? (
-                <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-3 text-sm">
-                  <p className="text-[11px] font-bold uppercase tracking-wider text-amber-800">
-                    Cash payment removed
-                  </p>
-                  <div className="mt-1.5 space-y-0.5 text-amber-900">
-                    <div>
-                      Removed at: {formatDateTime(orderDetail.cashTenderRemovedAt)}
-                    </div>
-                    {orderDetail.cashTenderRemovalReason ? (
-                      <div>Reason: {orderDetail.cashTenderRemovalReason}</div>
-                    ) : null}
-                    <div>Showing card/gift payment data only.</div>
                   </div>
                 </div>
               ) : null}
@@ -769,43 +924,228 @@ export default function OrderManagementSection() {
                       ? "Permanently Delete Cash?"
                       : "Permanent Delete"}
             </AlertDialogTitle>
-            <AlertDialogDescription>
-              {confirm?.type === "soft-delete" &&
-              confirm?.row?.deleteMode === DELETE_MODE_CASH_TENDER ? (
-                <>
-                  Remove the cash payment from Order #
-                  {confirm?.row?.orderNumber} only. Card/gift stays. The order
-                  remains active and will show card payment data only. You can
-                  restore cash later until permanently deleted.
-                </>
-              ) : confirm?.type === "soft-delete" ? (
-                <>
-                  Are you sure you want to delete Order #
-                  {confirm?.row?.orderNumber}? This order will be removed from
-                  active reports and moved to Deleted Orders.
-                </>
-              ) : confirm?.type === "restore" ? (
-                <>
-                  Restoring this order will return it to the active order list
-                  and update the order-number sequence for that business day.
-                </>
-              ) : confirm?.type === "restore-cash" ? (
-                <>
-                  Restore the previously removed cash payment on Order #
-                  {confirm?.row?.orderNumber}? Card/gift amounts are unchanged.
-                </>
-              ) : confirm?.type === "permanent-cash" ? (
-                <>
-                  Permanently delete the removed cash payment history for Order
-                  #{confirm?.row?.orderNumber}? This cannot be undone. The order
-                  stays active with card/gift only.
-                </>
-              ) : (
-                <>
-                  Are you sure you want to permanently delete this order? This
-                  action cannot be undone.
-                </>
-              )}
+            <AlertDialogDescription asChild>
+              <div className="text-sm text-muted-foreground space-y-3">
+                {confirm?.type === "soft-delete" &&
+                confirm?.row?.deleteMode === DELETE_MODE_CASH_TENDER ? (
+                  <>
+                    <p>
+                      Remove pure cash seat(s) from Order #
+                      {confirm?.row?.orderNumber}. Card and cash+card seats
+                      cannot be deleted. The order stays active; you can restore
+                      cash later until permanently deleted.
+                    </p>
+                    {Array.isArray(confirm?.row?.removableCashSplits) &&
+                    confirm.row.removableCashSplits.length > 0 ? (
+                      <div className="space-y-2 rounded-lg border border-zinc-200 bg-zinc-50 p-3 text-zinc-800">
+                        <p className="text-[11px] font-bold uppercase tracking-wider text-zinc-600">
+                          Select pure cash seats to remove
+                        </p>
+                        {confirm.row.removableCashSplits.map((split) => {
+                          const selected =
+                            Array.isArray(confirm.selectedSplitIndices) &&
+                            confirm.selectedSplitIndices.includes(split.index);
+                          const seats =
+                            Array.isArray(split.seatNumbers) &&
+                            split.seatNumbers.length
+                              ? `Seat ${split.seatNumbers.join(", ")}`
+                              : null;
+                          const blockedReason = split.canRemoveCash
+                            ? null
+                            : split.cashAmount > 0 &&
+                                (split.cardAmount > 0 || split.giftCard > 0)
+                              ? "Cannot delete (cash + card)"
+                              : split.giftCard > 0
+                                ? "Cannot delete (gift card)"
+                                : "Cannot delete (card)";
+                          return (
+                            <label
+                              key={split.index}
+                              className={cn(
+                                "flex items-start gap-3 rounded-md border px-3 py-2",
+                                split.canRemoveCash
+                                  ? "border-zinc-200 bg-white cursor-pointer"
+                                  : "border-zinc-100 bg-zinc-100/80 opacity-70 pointer-events-none"
+                              )}
+                            >
+                              {split.canRemoveCash ? (
+                                <input
+                                  type="checkbox"
+                                  className="mt-1 h-4 w-4 accent-red-600"
+                                  checked={Boolean(selected)}
+                                  onChange={(e) =>
+                                    toggleCashSplitSelection(
+                                      split.index,
+                                      e.target.checked
+                                    )
+                                  }
+                                />
+                              ) : (
+                                <input
+                                  type="checkbox"
+                                  className="mt-1 h-4 w-4"
+                                  checked={false}
+                                  disabled
+                                  readOnly
+                                  aria-disabled="true"
+                                />
+                              )}
+                              <span className="min-w-0 flex-1">
+                                <span className="flex flex-wrap items-center gap-2">
+                                  <span className="font-medium text-zinc-900">
+                                    {split.name || `Payer ${split.index + 1}`}
+                                  </span>
+                                  <PaymentBadge label={splitTypeLabel(split)} />
+                                </span>
+                                <span className="mt-0.5 block text-[12px] text-zinc-500">
+                                  {[
+                                    seats,
+                                    money(
+                                      split.amount ||
+                                        split.cashAmount ||
+                                        split.cardAmount ||
+                                        0
+                                    ),
+                                    blockedReason,
+                                  ]
+                                    .filter(Boolean)
+                                    .join(" · ")}
+                                </span>
+                              </span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    ) : null}
+                  </>
+                ) : confirm?.type === "soft-delete" ? (
+                  <p>
+                    Are you sure you want to delete Order #
+                    {confirm?.row?.orderNumber}? This order will be removed from
+                    active reports and moved to Deleted Orders.
+                  </p>
+                ) : confirm?.type === "restore" ? (
+                  <p>
+                    Restoring this order will return it to the active order list
+                    and update the order-number sequence for that business day.
+                  </p>
+                ) : confirm?.type === "restore-cash" ? (
+                  <>
+                    <p>
+                      Restore cash seat(s) on Order #
+                      {confirm?.row?.orderNumber}? Card/gift amounts are
+                      unchanged.
+                    </p>
+                    {Array.isArray(confirm?.row?.removedCashEntries) &&
+                    confirm.row.removedCashEntries.length > 0 ? (
+                      <div className="space-y-2 rounded-lg border border-zinc-200 bg-zinc-50 p-3 text-zinc-800">
+                        <p className="text-[11px] font-bold uppercase tracking-wider text-zinc-600">
+                          Select cash seats to restore
+                        </p>
+                        {confirm.row.removedCashEntries.map((entry) => {
+                          const selected =
+                            Array.isArray(confirm.selectedEntryIds) &&
+                            confirm.selectedEntryIds.includes(entry.entryId);
+                          const seats =
+                            Array.isArray(entry.seatNumbers) &&
+                            entry.seatNumbers.length
+                              ? `Seat ${entry.seatNumbers.join(", ")}`
+                              : entry.name || "Cash";
+                          return (
+                            <label
+                              key={entry.entryId}
+                              className="flex items-start gap-3 rounded-md border border-zinc-200 bg-white px-3 py-2 cursor-pointer"
+                            >
+                              <input
+                                type="checkbox"
+                                className="mt-1 h-4 w-4 accent-emerald-600"
+                                checked={Boolean(selected)}
+                                onChange={(e) =>
+                                  toggleCashEntrySelection(
+                                    entry.entryId,
+                                    e.target.checked
+                                  )
+                                }
+                              />
+                              <span className="min-w-0 flex-1">
+                                <span className="font-medium text-zinc-900">
+                                  {seats}
+                                </span>
+                                <span className="mt-0.5 block text-[12px] text-zinc-500">
+                                  Cash{" "}
+                                  {money(
+                                    entry.totalAmount ?? entry.removedCash ?? 0
+                                  )}
+                                </span>
+                              </span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    ) : null}
+                  </>
+                ) : confirm?.type === "permanent-cash" ? (
+                  <>
+                    <p>
+                      Permanently delete cash seat history for Order #
+                      {confirm?.row?.orderNumber}? This cannot be undone. The
+                      order stays active with remaining payments.
+                    </p>
+                    {Array.isArray(confirm?.row?.removedCashEntries) &&
+                    confirm.row.removedCashEntries.length > 0 ? (
+                      <div className="space-y-2 rounded-lg border border-zinc-200 bg-zinc-50 p-3 text-zinc-800">
+                        <p className="text-[11px] font-bold uppercase tracking-wider text-zinc-600">
+                          Select cash seats to permanently delete
+                        </p>
+                        {confirm.row.removedCashEntries.map((entry) => {
+                          const selected =
+                            Array.isArray(confirm.selectedEntryIds) &&
+                            confirm.selectedEntryIds.includes(entry.entryId);
+                          const seats =
+                            Array.isArray(entry.seatNumbers) &&
+                            entry.seatNumbers.length
+                              ? `Seat ${entry.seatNumbers.join(", ")}`
+                              : entry.name || "Cash";
+                          return (
+                            <label
+                              key={entry.entryId}
+                              className="flex items-start gap-3 rounded-md border border-zinc-200 bg-white px-3 py-2 cursor-pointer"
+                            >
+                              <input
+                                type="checkbox"
+                                className="mt-1 h-4 w-4 accent-red-600"
+                                checked={Boolean(selected)}
+                                onChange={(e) =>
+                                  toggleCashEntrySelection(
+                                    entry.entryId,
+                                    e.target.checked
+                                  )
+                                }
+                              />
+                              <span className="min-w-0 flex-1">
+                                <span className="font-medium text-zinc-900">
+                                  {seats}
+                                </span>
+                                <span className="mt-0.5 block text-[12px] text-zinc-500">
+                                  Cash{" "}
+                                  {money(
+                                    entry.totalAmount ?? entry.removedCash ?? 0
+                                  )}
+                                </span>
+                              </span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    ) : null}
+                  </>
+                ) : (
+                  <p>
+                    Are you sure you want to permanently delete this order? This
+                    action cannot be undone.
+                  </p>
+                )}
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -813,7 +1153,17 @@ export default function OrderManagementSection() {
               Cancel
             </AlertDialogCancel>
             <AlertDialogAction
-              disabled={Boolean(busyId)}
+              disabled={
+                Boolean(busyId) ||
+                (confirm?.type === "soft-delete" &&
+                  confirm?.row?.deleteMode === DELETE_MODE_CASH_TENDER &&
+                  Array.isArray(confirm?.selectedSplitIndices) &&
+                  confirm.selectedSplitIndices.length === 0) ||
+                ((confirm?.type === "restore-cash" ||
+                  confirm?.type === "permanent-cash") &&
+                  Array.isArray(confirm?.selectedEntryIds) &&
+                  confirm.selectedEntryIds.length === 0)
+              }
               className={
                 confirm?.type === "restore" || confirm?.type === "restore-cash"
                   ? "bg-emerald-600 hover:bg-emerald-700"
@@ -828,7 +1178,10 @@ export default function OrderManagementSection() {
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : confirm?.type === "soft-delete" ? (
                 confirm?.row?.deleteMode === DELETE_MODE_CASH_TENDER
-                  ? "Remove Cash"
+                  ? Array.isArray(confirm?.selectedSplitIndices) &&
+                    confirm.selectedSplitIndices.length === 1
+                    ? "Remove Selected Cash"
+                    : "Remove Cash"
                   : "Delete Order"
               ) : confirm?.type === "restore" ? (
                 "Restore Order"

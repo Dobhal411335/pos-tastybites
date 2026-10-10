@@ -15,11 +15,6 @@ export default function AdminOrderManagementPage() {
             Order Management
           </h1>
         </div>
-        <p className="text-sm sm:text-base text-zinc-500">
-          Review active orders, soft-delete cash-only tickets (including
-          multi-payer cash splits), and restore from Deleted Orders.
-          Soft-deleted orders are excluded from all active reports.
-        </p>
       </div>
       <OrderManagementSection />
     </div>

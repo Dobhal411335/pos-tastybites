@@ -23,6 +23,8 @@ import {
   canDeleteOrder,
   getDeleteMode,
   hasRemovedCashTender,
+  listRemovableCashSplits,
+  listRemovedCashEntries,
   paymentDisplayLabel,
 } from "@/lib/orders/orderDeleteEligibility";
 import { getOrderPaidAmount } from "@/lib/orders/seatHelpers";
@@ -201,14 +203,10 @@ function mapRow(order, tz, view) {
     status: order.status,
     guest: order.partyName || order.guestName || null,
     guestCount: order.guestCount == null ? null : Number(order.guestCount),
-    canDelete:
-      view !== "deleted" &&
-      !hasRemovedCashTender(order) &&
-      canDeleteOrder(order),
-    deleteMode:
-      view !== "deleted" && !hasRemovedCashTender(order)
-        ? getDeleteMode(order)
-        : null,
+    canDelete: view !== "deleted" && canDeleteOrder(order),
+    deleteMode: view !== "deleted" ? getDeleteMode(order) : null,
+    removableCashSplits:
+      view !== "deleted" ? listRemovableCashSplits(order) : [],
     hasRemovedCash: hasRemovedCashTender(order),
     canRestoreCash: hasRemovedCashTender(order),
     deletionKind,
@@ -221,7 +219,63 @@ function mapRow(order, tz, view) {
     deletionReason:
       order.deletionReason || order.cashTenderRemovalReason || null,
     restoredAt: order.restoredAt || null,
+    removedCashEntries:
+      view === "deleted" && isCashTenderRemoval
+        ? listRemovedCashEntries(order)
+        : [],
+    cashEntryId: null,
+    rowKey: String(order._id),
+    seatSummary: null,
   };
+}
+
+/** One Deleted row per removed pure-cash seat when multiple were stripped. */
+function expandDeletedCashRows(baseRow) {
+  if (baseRow.deletionKind !== "cash_tender") return [baseRow];
+  const entries = Array.isArray(baseRow.removedCashEntries)
+    ? baseRow.removedCashEntries
+    : [];
+  if (entries.length <= 1) {
+    const entry = entries[0] || null;
+    const seats = entry?.seatNumbers?.length
+      ? `Seat ${entry.seatNumbers.join(", ")}`
+      : null;
+    return [
+      {
+        ...baseRow,
+        cashEntryId: entry?.entryId || null,
+        seatSummary: seats,
+        total:
+          entry?.totalAmount != null
+            ? r2(entry.totalAmount)
+            : entry?.removedCash != null
+              ? r2(entry.removedCash)
+              : baseRow.total,
+        deletedAt: entry?.removedAt || baseRow.deletedAt,
+        rowKey: entry?.entryId
+          ? `${baseRow.id}:${entry.entryId}`
+          : baseRow.id,
+      },
+    ];
+  }
+  return entries.map((entry) => {
+    const seats = Array.isArray(entry.seatNumbers) && entry.seatNumbers.length
+      ? `Seat ${entry.seatNumbers.join(", ")}`
+      : null;
+    return {
+      ...baseRow,
+      cashEntryId: entry.entryId,
+      seatSummary: seats || entry.name || "Cash",
+      paymentLabel: "Cash removed",
+      total:
+        entry.totalAmount != null
+          ? r2(entry.totalAmount)
+          : r2(entry.removedCash),
+      tip: r2(entry.tipAmount),
+      deletedAt: entry.removedAt || baseRow.deletedAt,
+      rowKey: `${baseRow.id}:${entry.entryId}`,
+    };
+  });
 }
 
 const DELETED_BY_LOOKUP = [
@@ -352,9 +406,10 @@ export async function buildOrderManagement({
 
   const kpis = roundKpis(facet?.kpis?.[0] || emptyKpis());
   const total = facet?.total?.[0]?.count || 0;
-  const rows = (facet?.rows || []).map((row) =>
-    mapRow(row, tz, activeView)
-  );
+  const rows = (facet?.rows || []).flatMap((row) => {
+    const mapped = mapRow(row, tz, activeView);
+    return activeView === "deleted" ? expandDeletedCashRows(mapped) : [mapped];
+  });
 
   return {
     meta: {

@@ -14,6 +14,17 @@ import {
   getItemLineTotal,
 } from "@/utils/productChoices";
 
+function formatTime12h(timeStr) {
+  if (!timeStr || typeof timeStr !== "string") return timeStr;
+  const match = timeStr.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
+  if (!match) return timeStr;
+  const h = parseInt(match[1], 10);
+  const m = match[2];
+  const ampm = h >= 12 ? "PM" : "AM";
+  const h12 = h % 12 || 12;
+  return `${h12}:${m} ${ampm}`;
+}
+
 function OrderContent() {
   const params = useParams();
   const searchParams = useSearchParams();
@@ -145,7 +156,7 @@ function OrderContent() {
                   <p className="text-zinc-500 text-xs uppercase tracking-widest font-bold">Pickup</p>
                   <p className="font-semibold">
                     {order.pickup
-                      ? `${order.pickup.date} · ${order.pickup.time}`
+                      ? `${order.pickup.date} · ${formatTime12h(order.pickup.time)}`
                       : "Same-day pickup"}
                   </p>
                 </div>

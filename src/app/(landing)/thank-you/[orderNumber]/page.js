@@ -28,6 +28,17 @@ function money(n) {
   return `$${Number(n || 0).toFixed(2)}`;
 }
 
+function formatTime12h(timeStr) {
+  if (!timeStr || typeof timeStr !== "string") return timeStr;
+  const match = timeStr.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
+  if (!match) return timeStr;
+  const h = parseInt(match[1], 10);
+  const m = match[2];
+  const ampm = h >= 12 ? "PM" : "AM";
+  const h12 = h % 12 || 12;
+  return `${h12}:${m} ${ampm}`;
+}
+
 function ThankYouContent() {
   const params = useParams();
   const searchParams = useSearchParams();
@@ -126,7 +137,7 @@ function ThankYouContent() {
   }`;
 
   const pickupLabel = order?.pickup
-    ? `${order.pickup.date || "Today"} · ${order.pickup.time || order.pickup.label || ""}`.trim()
+    ? `${order.pickup.date || "Today"} · ${formatTime12h(order.pickup.time || order.pickup.label || "")}`.trim()
     : "Same-day pickup";
 
   if (loading && !order) {

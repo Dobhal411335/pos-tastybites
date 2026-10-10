@@ -17,10 +17,24 @@ export const POST = withAuth(async (request, { params }) => {
       return sendError(new Error("Unauthorized"), "Actor required", 401);
     }
 
+    let entryIds = null;
+    try {
+      const body = await request.json();
+      if (Array.isArray(body?.entryIds)) {
+        entryIds = body.entryIds.map(String).filter(Boolean);
+        if (!entryIds.length) entryIds = null;
+      } else if (body?.entryId) {
+        entryIds = [String(body.entryId)];
+      }
+    } catch {
+      // no body — restore all
+    }
+
     const result = await restoreCashTender({
       restaurantId: request.restaurant,
       orderId: id,
       actor,
+      entryIds,
     });
 
     return sendSuccess(result, "Cash payment restored on order");

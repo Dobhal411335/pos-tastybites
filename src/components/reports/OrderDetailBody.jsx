@@ -23,6 +23,7 @@ import {
   getOrderTypeBadgeClass,
   getOrderTypeLabel,
 } from "@/utils/orderDisplay";
+import { countryCodes } from "@/utils/countryCodes";
 
 export const STATUS_BADGE = {
   PAID: "bg-blue-50 text-blue-700 border-blue-200",
@@ -57,6 +58,47 @@ export function formatDateTime(value) {
 export function dash(value) {
   if (value == null || value === "") return "—";
   return value;
+}
+
+export function formatPhone(contactNumber, countryCode) {
+  let code = (countryCode || "").trim();
+  let num = (contactNumber || "").trim();
+  if (!num) return "—";
+
+  if (code && num.startsWith(code)) {
+    num = num.slice(code.length).trim();
+  } else if (!code && num.startsWith("+")) {
+    const matchedCode = countryCodes.find((c) => num.startsWith(c.code));
+    if (matchedCode) {
+      code = matchedCode.code;
+      num = num.slice(code.length).trim();
+    }
+  }
+
+  // Only format as US number if the country code is +1 or empty
+  const digits = num.replace(/\D/g, "");
+  if (!code || code === "+1") {
+    if (digits.length === 10) {
+      num = `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+    } else if (digits.length === 11 && digits.startsWith("1")) {
+      num = `(${digits.slice(1, 4)}) ${digits.slice(4, 7)}-${digits.slice(7)}`;
+    }
+  }
+
+  if (code) {
+    return `${code} ${num}`;
+  }
+  return num;
+}
+
+export function formatSpecialNote(note) {
+  if (!note) return note;
+  return note.replace(/\b([01]?\d|2[0-3]):([0-5]\d)\b/g, (match, h, m) => {
+    const hours = parseInt(h, 10);
+    const ampm = hours >= 12 ? "PM" : "AM";
+    const h12 = hours % 12 || 12;
+    return `${h12}:${m} ${ampm}`;
+  });
 }
 
 export function DetailItem({ label, value, highlight = false }) {
@@ -162,12 +204,7 @@ function ItemRows({ items, startIndex = 0 }) {
             ) : null}
             {item.name}
             {item.size && item.size !== "Standard" ? (
-              <span className="text-zinc-500 font-normal"> ({item.size})</span>
-            ) : null}
-            {extra ? (
-              <span className="ml-1.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700">
-                Extra
-              </span>
+              <span className="text-red-500 font-semibold"> ({item.size})</span>
             ) : null}
             {item.isOffer ? (
               <span className="ml-1.5 text-[10px] font-semibold uppercase tracking-wide text-violet-700">
@@ -386,7 +423,7 @@ export default function OrderDetailBody({ order }) {
           {order.contactNumber ? (
             <DetailItem
               label="Phone"
-              value={`${order.guestCountryCode || ""} ${order.contactNumber}`.trim()}
+              value={formatPhone(order.contactNumber, order.guestCountryCode)}
             />
           ) : null}
           {order.guestEmail ? <DetailItem label="Email" value={order.guestEmail} /> : null}
@@ -403,7 +440,7 @@ export default function OrderDetailBody({ order }) {
             <DetailItem label="Waive reason" value={order.waiveReason} highlight />
           ) : null}
           {order.specialNote ? (
-            <DetailItem label="Note" value={order.specialNote} />
+            <DetailItem label="Note" value={formatSpecialNote(order.specialNote)} />
           ) : null}
         </div>
       </div>
@@ -506,9 +543,28 @@ export default function OrderDetailBody({ order }) {
             <p className="text-[10px] font-bold uppercase tracking-wider text-violet-700">
               Named splits
             </p>
-            {paymentSplits.map((split, idx) => {
+            {paymentSplits
+              .filter((split) => {
+                // Hide empty / cash-stripped rows with no remaining tender.
+                const c = Number(split.cashAmount) || 0;
+                const d = Number(split.cardAmount) || 0;
+                const g =
+                  Number(split.giftAmount || split.tenders?.giftCard) || 0;
+                const amt = Number(split.amount) || 0;
+                if (c <= 0 && d <= 0 && g <= 0 && amt <= 0) return false;
+                return true;
+              })
+              .map((split, idx) => {
               const seats = seatLabel(split);
               const splitTip = Number(split.tipAmount) || 0;
+              const cashAmt = Number(split.cashAmount) || 0;
+              const cardAmt = Number(split.cardAmount) || 0;
+              const giftAmt =
+                Number(split.giftAmount || split.tenders?.giftCard) || 0;
+              const amountToShow =
+                Number(split.amount) > 0
+                  ? Number(split.amount)
+                  : Math.max(0, cardAmt + giftAmt + cashAmt - splitTip);
               return (
                 <div
                   key={`od-split-${idx}`}
@@ -527,7 +583,7 @@ export default function OrderDetailBody({ order }) {
                       {seats ? ` · ${seats}` : ""}
                     </span>
                     <span className="font-semibold tabular-nums shrink-0">
-                      {money(split.amount)}
+                      {money(amountToShow)}
                     </span>
                   </div>
                   {splitTip > 0 ? (
@@ -539,21 +595,16 @@ export default function OrderDetailBody({ order }) {
                       <span className="tabular-nums">{money(splitTip)}</span>
                     </div>
                   ) : null}
-                  {(Number(split.cashAmount) > 0 ||
-                    Number(split.cardAmount) > 0 ||
-                    Number(split.giftAmount) > 0 ||
-                    Number(split.tenders?.giftCard) > 0) ? (
+                  {cashAmt > 0 || cardAmt > 0 || giftAmt > 0 ? (
                     <div className="flex flex-wrap gap-x-3 text-[11px] text-zinc-500">
-                      {Number(split.cashAmount) > 0 ? (
-                        <span>Cash {money(split.cashAmount)}</span>
+                      {cashAmt > 0 ? (
+                        <span>Cash {money(cashAmt)}</span>
                       ) : null}
-                      {Number(split.cardAmount) > 0 ? (
-                        <span>Card {money(split.cardAmount)}</span>
+                      {cardAmt > 0 ? (
+                        <span>Card {money(cardAmt)}</span>
                       ) : null}
-                      {Number(split.giftAmount || split.tenders?.giftCard) > 0 ? (
-                        <span>
-                          Gift {money(split.giftAmount || split.tenders?.giftCard)}
-                        </span>
+                      {giftAmt > 0 ? (
+                        <span>Gift {money(giftAmt)}</span>
                       ) : null}
                     </div>
                   ) : null}

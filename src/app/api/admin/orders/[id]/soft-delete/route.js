@@ -22,9 +22,16 @@ export const POST = withAuth(async (request, { params }) => {
   try {
     const { id } = await params;
     let reason = null;
+    let splitIndices = null;
     try {
       const body = await request.json();
       reason = body?.reason || null;
+      if (Array.isArray(body?.splitIndices)) {
+        splitIndices = body.splitIndices
+          .map((n) => Number(n))
+          .filter((n) => Number.isFinite(n) && n >= 0);
+        if (!splitIndices.length) splitIndices = null;
+      }
     } catch {
       // no body
     }
@@ -52,6 +59,7 @@ export const POST = withAuth(async (request, { params }) => {
         orderId: id,
         actor,
         reason,
+        splitIndices,
       });
       return sendSuccess(result, "Cash payment removed from order");
     }

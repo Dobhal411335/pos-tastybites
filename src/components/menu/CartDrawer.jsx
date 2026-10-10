@@ -28,6 +28,7 @@ import {
   getAddonChoiceDetailLines,
 } from "@/utils/productChoices";
 import { buildModifiedRequestRemark } from "@/utils/modifiedRequestRemark";
+import { countryCodes } from "@/utils/countryCodes";
 
 function lineNoteParts(item) {
   if (item.isOffer) {
@@ -252,6 +253,7 @@ export default function CartDrawer({ open = false, onOpenChange, mode = "drawer"
           items,
           fullName: pendingGuest.fullName,
           phone: pendingGuest.phone,
+          guestCountryCode: pendingGuest.countryCode,
           email: pendingGuest.email,
           pickupTime: pendingGuest.pickupTime,
           customerNote: pendingGuest.message || "",
@@ -264,7 +266,9 @@ export default function CartDrawer({ open = false, onOpenChange, mode = "drawer"
       }
       const placed = json.data;
       const orderNumber = placed?.orderNumber;
-      const phone = String(pendingGuest.phone || placed?.contactNumber || "")
+      
+      const fullPhone = `${pendingGuest.countryCode || ""}${pendingGuest.phone}`;
+      const phoneOnlyDigits = String(fullPhone || placed?.contactNumber || "")
         .replace(/\D/g, "");
       try {
         sessionStorage.setItem(
@@ -281,7 +285,7 @@ export default function CartDrawer({ open = false, onOpenChange, mode = "drawer"
       if (orderNumber) {
         router.push(
           `/thank-you/${encodeURIComponent(orderNumber)}${
-            phone ? `?phone=${encodeURIComponent(phone)}` : ""
+            phoneOnlyDigits ? `?phone=${encodeURIComponent(phoneOnlyDigits)}` : ""
           }`,
         );
       }
@@ -760,6 +764,7 @@ function CheckoutFlowModal({
   } = useForm({
     defaultValues: {
       fullName: "",
+      countryCode: "+1",
       phone: "",
       email: "",
       pickupTime: "",
@@ -775,6 +780,7 @@ function CheckoutFlowModal({
     if (!open) {
       reset({
         fullName: "",
+        countryCode: "+1",
         phone: "",
         email: "",
         pickupTime: "",
@@ -787,6 +793,7 @@ function CheckoutFlowModal({
     if (step === 1 && guest) {
       reset({
         fullName: guest.fullName || "",
+        countryCode: guest.countryCode || "+1",
         phone: guest.phone || "",
         email: guest.email || "",
         pickupTime: guest.pickupTime || "",
@@ -883,13 +890,14 @@ function CheckoutFlowModal({
                   <span className="block text-xs font-bold uppercase text-[var(--customer-muted)]">
                     Contact Information
                   </span>
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div className="grid grid-cols-1 gap-3">
                     <div>
                       <label className="mb-1 block text-xs font-semibold" htmlFor="co-name">
                         Full Name *
                       </label>
                       <input
                         id="co-name"
+                        placeholder="Enter your full name"
                         className="w-full rounded-lg bg-[var(--customer-surface-low)] px-3.5 py-2.5 text-sm focus:bg-white focus:outline-none focus:shadow-[0_0_0_2px_var(--primary)]"
                         {...register("fullName", { required: "Name is required" })}
                       />
@@ -897,24 +905,38 @@ function CheckoutFlowModal({
                         <p className="mt-1 text-xs text-red-600">{errors.fullName.message}</p>
                       ) : null}
                     </div>
+                  </div>
                     <div>
                       <label className="mb-1 block text-xs font-semibold" htmlFor="co-phone">
                         Phone *
                       </label>
-                      <input
-                        id="co-phone"
-                        type="tel"
-                        className="w-full rounded-lg bg-[var(--customer-surface-low)] px-3.5 py-2.5 text-sm focus:bg-white focus:outline-none focus:shadow-[0_0_0_2px_var(--primary)]"
-                        {...register("phone", {
-                          required: "Phone is required",
-                          minLength: { value: 10, message: "Enter a valid phone" },
-                        })}
-                      />
+                      <div className="flex gap-2">
+                        <select
+                          placeholder="Select your country code"
+                          className="w-1/3 rounded-lg bg-[var(--customer-surface-low)] px-3.5 py-2.5 text-sm focus:bg-white focus:outline-none focus:shadow-[0_0_0_2px_var(--primary)]"
+                          {...register("countryCode", { required: "Required" })}
+                        >
+                          {countryCodes.map((c) => (
+                            <option key={c.code} value={c.code}>
+                              {c.code} ({c.country})
+                            </option>
+                          ))}
+                        </select>
+                        <input
+                          id="co-phone"
+                          type="tel"
+                          placeholder="Enter your phone number"
+                          className="w-2/3 rounded-lg bg-[var(--customer-surface-low)] px-3.5 py-2.5 text-sm focus:bg-white focus:outline-none focus:shadow-[0_0_0_2px_var(--primary)]"
+                          {...register("phone", {
+                            required: "Phone is required",
+                            minLength: { value: 10, message: "Enter a valid phone" },
+                          })}
+                        />
+                      </div>
                       {errors.phone ? (
                         <p className="mt-1 text-xs text-red-600">{errors.phone.message}</p>
                       ) : null}
                     </div>
-                  </div>
                   <div>
                     <label className="mb-1 block text-xs font-semibold" htmlFor="co-email">
                       Email (for OTP &amp; receipt) *
@@ -922,6 +944,7 @@ function CheckoutFlowModal({
                     <input
                       id="co-email"
                       type="email"
+                      placeholder="Enter your email"
                       className="w-full rounded-lg bg-[var(--customer-surface-low)] px-3.5 py-2.5 text-sm focus:bg-white focus:outline-none focus:shadow-[0_0_0_2px_var(--primary)]"
                       {...register("email", {
                         required: "Email is required for verification",
@@ -973,6 +996,7 @@ function CheckoutFlowModal({
                   <textarea
                     id="co-note"
                     rows={2}
+                    placeholder="Enter your special instructions (Optional)"
                     className="w-full rounded-lg bg-[var(--customer-surface-low)] px-3.5 py-2.5 text-sm focus:outline-none focus:shadow-[0_0_0_2px_var(--primary)]"
                     {...register("message")}
                   />

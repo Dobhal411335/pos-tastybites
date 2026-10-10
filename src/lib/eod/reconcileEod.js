@@ -1,5 +1,6 @@
 /**
  * Soft reconciliation: payments should ≈ net + tax + service charges + tips − refunds ± rounding.
+ * EOD reads live active order fields only (cash seat strips update those fields in place).
  */
 import { r2 } from "./eodHelpers.js";
 

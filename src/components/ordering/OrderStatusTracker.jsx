@@ -7,12 +7,14 @@ const STEPS = [
   { key: "PENDING", label: "Order Received" },
   { key: "CONFIRMED", label: "Preparing" },
   { key: "READY", label: "Ready for Pickup" },
+  { key: "PAID", label: "Payment Done" },
 ];
 
 function stepIndex(status, paymentStatus) {
   const s = String(status || "").toUpperCase();
   if (s === "CANCELLED" || s === "WAIVED") return -1;
-  if (s === "COMPLETED" || s === "PAID" || paymentStatus === "PAID") return 2;
+  if (s === "COMPLETED" || s === "PAID" || paymentStatus === "PAID") return 3;
+  if (s === "READY") return 2;
   if (s === "CONFIRMED") return 1;
   return 0; // PENDING
 }

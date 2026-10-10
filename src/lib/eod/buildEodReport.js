@@ -9,6 +9,7 @@ import Restaurant from "@/models/Restaurant";
 import Giftcard from "@/models/menu/Giftcard";
 import { buildWorkingHoursSummaryPipeline } from "@/lib/payEstimate";
 import { ACTIVE_ORDER_FILTER } from "@/lib/orders/activeOrderFilter";
+import { toActiveOrderReportView } from "@/lib/orders/orderDeleteEligibility";
 import { paidRevenueOrderMatch } from "@/lib/reports/financial/match";
 import { getItemLineTotal } from "@/utils/productChoices";
 import {
@@ -257,7 +258,9 @@ export async function buildEodReport({
     return categoryMap.get(name);
   };
 
-  for (const order of paidOrders) {
+  for (const rawOrder of paidOrders) {
+    // Cash seat deletes: report only remaining live tenders/items (no write-off evidence).
+    const order = toActiveOrderReportView(rawOrder);
     const sub = r2(order.subTotal);
     const disc = r2(order.discountTotal);
     const tax = r2(order.taxTotal);
