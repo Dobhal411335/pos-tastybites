@@ -18,6 +18,7 @@ import {
   normalizeCustomExtras,
   customExtrasUnitTotal,
   validateAddonChoiceSelectionsAgainstLineQty,
+  resolveProductChoiceCatalog,
 } from "@/utils/productChoices";
 
 const r2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
@@ -307,7 +308,7 @@ export async function repricePosCartItems({
         productType = normalizeProductType(product.productType);
         choiceSelections = filterProductChoiceSelections(
           item.choiceSelections,
-          product.choiceOptions,
+          resolveProductChoiceCatalog(product, item.size || sizes?.[0]),
         );
         customDataSelections = filterCustomDataSelections(
           item.customDataSelections,

@@ -99,6 +99,7 @@ import {
   getVisibleCartModifier,
   isStandaloneExtraLine,
   isRedundantStandaloneExtraOption,
+  mergeChoiceSelections,
 } from "@/utils/productChoices";
 import { buildModifiedRequestRemark } from "@/utils/modifiedRequestRemark";
 
@@ -397,7 +398,9 @@ function OrderPageContent() {
   const [selectedOfferDrinks, setSelectedOfferDrinks] = useState([]);
   const [selectedOfferInclusions, setSelectedOfferInclusions] = useState([]);
   const [selectedProductChoices, setSelectedProductChoices] = useState({});
-  /** { [groupIndex]: { [optionIndex]: string[] } } */
+  /** { [variantKey]: { [groupIndex]: string[] } } */
+  const [selectedVariantChoices, setSelectedVariantChoices] = useState({});
+  /** { [groupIndex]: string } single-select radio per custom-data group */
   const [selectedCustomData, setSelectedCustomData] = useState({});
   const [customExtraModal, setCustomExtraModal] = useState(null);
   const [customExtraName, setCustomExtraName] = useState("");
@@ -1099,6 +1102,7 @@ function OrderPageContent() {
     setSelectedOfferDrinks([]);
     setSelectedOfferInclusions([]);
     setSelectedProductChoices({});
+    setSelectedVariantChoices({});
     setSelectedCustomData({});
   };
 
@@ -1112,6 +1116,7 @@ function OrderPageContent() {
     setSelectedOfferDrinks([]);
     setSelectedOfferInclusions([]);
     setSelectedProductChoices({});
+    setSelectedVariantChoices({});
     setSelectedCustomData({});
     setIsOptionsModalOpen(true);
   };
@@ -1128,6 +1133,7 @@ function OrderPageContent() {
     setSelectedOfferChoices(choices.length === 1 ? choices : []);
     setSelectedOfferDrinks(drinks.length === 1 ? drinks : []);
     setSelectedProductChoices({});
+    setSelectedVariantChoices({});
     setSelectedCustomData({});
     setIsOptionsModalOpen(true);
   };
@@ -1196,6 +1202,11 @@ function OrderPageContent() {
     );
   };
 
+  /** Choices / drinks are single-select (radio). Always store 0–1 values. */
+  const selectOfferSingleOption = (setter, item) => {
+    setter([item]);
+  };
+
   const toggleProductSubChoice = (groupIndex, value) => {
     setSelectedProductChoices((prev) => {
       const current = prev[groupIndex] || [];
@@ -1203,6 +1214,17 @@ function OrderPageContent() {
         ? current.filter((item) => item !== value)
         : [...current, value];
       return { ...prev, [groupIndex]: next };
+    });
+  };
+
+  /** Per-variant choice groups are single-select (radio). */
+  const selectVariantSubChoice = (variantKey, groupIndex, value) => {
+    setSelectedVariantChoices((prev) => {
+      const groupMap = prev[variantKey] || {};
+      return {
+        ...prev,
+        [variantKey]: { ...groupMap, [groupIndex]: [value] },
+      };
     });
   };
 
@@ -1631,8 +1653,9 @@ function OrderPageContent() {
     const inclusions = cleanOfferList(
       selection.inclusions ?? offer.inclusions,
     );
-    const choices = cleanOfferList(selection.choices);
-    const drinks = cleanOfferList(selection.drinks);
+    // Choices & drinks: at most one each
+    const choices = cleanOfferList(selection.choices).slice(0, 1);
+    const drinks = cleanOfferList(selection.drinks).slice(0, 1);
     const extras = buildOfferOptions({ inclusions, choices, drinks });
     const modifier = buildOfferCartModifier({ inclusions, choices, drinks });
     const notes = String(selection.notes ?? "").trim();
@@ -1685,10 +1708,12 @@ function OrderPageContent() {
     if (!selectedProduct) return;
 
     if (isOfferItem(selectedProduct)) {
+      const offerChoices = cleanOfferList(selectedProduct.choices);
+      const offerDrinks = cleanOfferList(selectedProduct.drinks);
       const added = addOfferToCart(selectedProduct, {
         inclusions: selectedOfferInclusions,
-        choices: selectedOfferChoices,
-        drinks: selectedOfferDrinks,
+        choices: selectedOfferChoices.slice(0, 1),
+        drinks: selectedOfferDrinks.slice(0, 1),
         notes: "",
       });
       if (added) closeOptionsModal();
@@ -1713,7 +1738,7 @@ function OrderPageContent() {
       return;
     }
 
-    const choiceSelections = normalizeChoiceOptions(
+    const productChoiceSelections = normalizeChoiceOptions(
       selectedProduct.choiceOptions,
     )
       .map((group, index) => ({
@@ -1732,6 +1757,16 @@ function OrderPageContent() {
       })
       .filter((group) => group.subChoices.length > 0);
 
+    const buildVariantChoiceSelections = (variantKey, variant) =>
+      normalizeChoiceOptions(variant?.choiceOptions)
+        .map((group, index) => ({
+          name: group.name,
+          subChoices: (
+            selectedVariantChoices[variantKey]?.[index] || []
+          ).slice(0, 1),
+        }))
+        .filter((group) => group.subChoices.length > 0);
+
     const newLines = [];
 
     if (hasVariants) {
@@ -1745,6 +1780,10 @@ function OrderPageContent() {
         if (selectedPreparationStyle) options.push(selectedPreparationStyle);
         const parts = [`Size: ${size}`];
         if (selectedPreparationStyle) parts.push(selectedPreparationStyle);
+        const choiceSelections = mergeChoiceSelections(
+          productChoiceSelections,
+          buildVariantChoiceSelections(variantKey, variant),
+        );
 
         newLines.push({
           id: selectedProduct._id,
@@ -1789,7 +1828,7 @@ function OrderPageContent() {
         options,
         productType: selectedProduct.productType === "BAR" ? "BAR" : "KITCHEN",
         modifier: selectedPreparationStyle || undefined,
-        choiceSelections,
+        choiceSelections: productChoiceSelections,
         customDataSelections,
         noteWithout: "",
         noteAdd: "",
@@ -2547,7 +2586,7 @@ function OrderPageContent() {
         className={`relative flex flex-col items-stretch overflow-hidden rounded-xl border-2 text-left shadow-sm transition-colors ${theme.bg}`}
       >
         {imageUrl ? (
-          <span className="relative block w-full aspect-[16/15] shrink-0 bg-zinc-100 border-b border-zinc-200/80">
+          <span className="relative block w-full aspect-[16/11] shrink-0 bg-zinc-100 border-b border-zinc-200/80">
             <Image
               src={imageUrl}
               alt=""
@@ -2570,16 +2609,16 @@ function OrderPageContent() {
           <span className="text-[13px] font-extrabold text-zinc-900 text-center leading-snug line-clamp-2">
             {offer.name}
           </span>
-          <div className="flex items-center justify-between gap-2">
+          <div className="flex w-full items-center justify-between gap-2">
             <span className="text-base font-black tabular-nums text-orange-600">
               ${totalPrice.toFixed(2)}
             </span>
             {hasOptions ? (
-              <span className="rounded-md bg-orange-500 border border-zinc-200 px-2 py-0.5 text-[10px] font-bold text-white">
+              <span className="rounded-lg bg-orange-500 border border-orange-600 px-3 py-1.5 text-xs font-bold text-white shadow-sm">
                 Options
               </span>
             ) : (
-              <span className="rounded-md bg-orange-500 px-2 py-0.5 text-[10px] font-bold text-white">
+              <span className="rounded-lg bg-orange-500 px-3 py-1.5 text-xs font-bold text-white shadow-sm">
                 Add
               </span>
             )}
@@ -3320,7 +3359,7 @@ function OrderPageContent() {
                 </h2>
                 <p className="text-sm font-medium text-zinc-500 mt-0.5">
                   {isOfferItem(selectedProduct)
-                    ? "Select inclusions, choices and drinks"
+                    ? "Select inclusions, one choice and one drink"
                     : "Select variations and extras"}
                 </p>
               </div>
@@ -3448,29 +3487,28 @@ function OrderPageContent() {
                             <AccordionTrigger
                               className={accordionTriggerClass}
                             >
-                              Choices
+                              Choices (pick one)
                             </AccordionTrigger>
                             <AccordionContent
                               className={accordionContentClass}
                             >
-                              <div className="grid gap-2">
+                              <div className="grid gap-2" role="radiogroup" aria-label="Offer choices">
                                 {offerChoices.map((choice) => (
                                   <label
                                     key={choice}
                                     className={`flex items-center border p-3 rounded-lg cursor-pointer transition-colors ${
-                                      selectedOfferChoices.includes(choice)
+                                      selectedOfferChoices[0] === choice
                                         ? "border-orange-500 bg-orange-50/30"
                                         : "border-zinc-200 hover:border-orange-300"
                                     }`}
                                   >
                                     <div className="flex-1 flex items-center gap-3 text-[14px] font-bold text-zinc-800">
                                       <input
-                                        type="checkbox"
-                                        checked={selectedOfferChoices.includes(
-                                          choice,
-                                        )}
+                                        type="radio"
+                                        name="offer-choice"
+                                        checked={selectedOfferChoices[0] === choice}
                                         onChange={() =>
-                                          toggleOfferOption(
+                                          selectOfferSingleOption(
                                             setSelectedOfferChoices,
                                             choice,
                                           )
@@ -3494,29 +3532,28 @@ function OrderPageContent() {
                             <AccordionTrigger
                               className={accordionTriggerClass}
                             >
-                              Drinks
+                              Drinks (pick one)
                             </AccordionTrigger>
                             <AccordionContent
                               className={accordionContentClass}
                             >
-                              <div className="grid gap-2">
+                              <div className="grid gap-2" role="radiogroup" aria-label="Offer drinks">
                                 {offerDrinks.map((drink) => (
                                   <label
                                     key={drink}
                                     className={`flex items-center border p-3 rounded-lg cursor-pointer transition-colors ${
-                                      selectedOfferDrinks.includes(drink)
+                                      selectedOfferDrinks[0] === drink
                                         ? "border-orange-500 bg-orange-50/30"
                                         : "border-zinc-200 hover:border-orange-300"
                                     }`}
                                   >
                                     <div className="flex-1 flex items-center gap-3 text-[14px] font-bold text-zinc-800">
                                       <input
-                                        type="checkbox"
-                                        checked={selectedOfferDrinks.includes(
-                                          drink,
-                                        )}
+                                        type="radio"
+                                        name="offer-drink"
+                                        checked={selectedOfferDrinks[0] === drink}
                                         onChange={() =>
-                                          toggleOfferOption(
+                                          selectOfferSingleOption(
                                             setSelectedOfferDrinks,
                                             drink,
                                           )
@@ -3642,6 +3679,74 @@ function OrderPageContent() {
                                         ingredients={v.ingredients}
                                         label="Includes"
                                       />
+                                      {(() => {
+                                        const variantChoiceGroups =
+                                          normalizeChoiceOptions(
+                                            v.choiceOptions,
+                                          );
+                                        if (!variantChoiceGroups.length)
+                                          return null;
+                                        return (
+                                          <div className="mt-3 space-y-3 border-t border-zinc-100 pt-3">
+                                            <div className="text-[11px] font-bold uppercase tracking-wider text-zinc-500">
+                                              Choice Options
+                                            </div>
+                                            {variantChoiceGroups.map(
+                                              (group, groupIndex) => {
+                                                const selected =
+                                                  selectedVariantChoices[
+                                                    variantKey
+                                                  ]?.[groupIndex] || [];
+                                                return (
+                                                  <div
+                                                    key={`variant-${variantKey}-choice-${groupIndex}`}
+                                                    className="space-y-2"
+                                                    role="radiogroup"
+                                                    aria-label={group.name}
+                                                  >
+                                                    <div className="text-[13px] font-semibold text-zinc-800">
+                                                      {group.name}
+                                                    </div>
+                                                    <div className="grid gap-2 sm:grid-cols-2">
+                                                      {(
+                                                        group.subChoices || []
+                                                      ).map((sub) => {
+                                                        const checked =
+                                                          selected[0] === sub;
+                                                        return (
+                                                          <label
+                                                            key={sub}
+                                                            className={`flex cursor-pointer items-center gap-3 rounded-lg border p-2.5 text-sm font-semibold ${
+                                                              checked
+                                                                ? "border-orange-500 bg-orange-50/30"
+                                                                : "border-zinc-200"
+                                                            }`}
+                                                          >
+                                                            <input
+                                                              type="radio"
+                                                              name={`variant-${variantKey}-choice-${groupIndex}`}
+                                                              checked={checked}
+                                                              onChange={() =>
+                                                                selectVariantSubChoice(
+                                                                  variantKey,
+                                                                  groupIndex,
+                                                                  sub,
+                                                                )
+                                                              }
+                                                              className="h-4 w-4 accent-orange-500"
+                                                            />
+                                                            {sub}
+                                                          </label>
+                                                        );
+                                                      })}
+                                                    </div>
+                                                  </div>
+                                                );
+                                              },
+                                            )}
+                                          </div>
+                                        );
+                                      })()}
                                     </div>
                                   );
                                 })}

@@ -50,18 +50,23 @@ export const GET = withAuth(async (request) => {
       const today = todayLocalISO();
       const pendingCount = await TableReservation.countDocuments({
         restaurantId,
-        date: today,
+        date: { $gte: today },
         status: "PENDING",
       });
       return sendSuccess({ pendingCount }, "Pending reservation count");
     }
 
-    const todayOnly = searchParams.get("today") !== "false";
+    // Default: upcoming bookings (today + future). Pass today=true for same-day only.
+    const todayOnly = searchParams.get("today") === "true";
+    const upcoming = searchParams.get("upcoming") !== "false" && !todayOnly;
     const status = String(searchParams.get("status") || "").toUpperCase();
     const query = { restaurantId };
+    const today = todayLocalISO();
 
     if (todayOnly) {
-      query.date = todayLocalISO();
+      query.date = today;
+    } else if (upcoming) {
+      query.date = { $gte: today };
     }
     if (
       status &&
@@ -73,7 +78,7 @@ export const GET = withAuth(async (request) => {
     }
 
     const rows = await TableReservation.find(query)
-      .sort({ status: 1, time: 1, createdAt: -1 })
+      .sort({ date: 1, status: 1, time: 1, createdAt: -1 })
       .limit(200)
       .lean();
 

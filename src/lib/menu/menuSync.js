@@ -84,6 +84,7 @@ function normalizeVariant(raw) {
     price: Number(raw.price) || 0,
     status: raw.status != null ? String(raw.status) : undefined,
     ingredients: normalizeIngredients(raw.ingredients),
+    choiceOptions: normalizeChoiceOptions(raw.choiceOptions),
   };
 }
 

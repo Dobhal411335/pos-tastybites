@@ -8,6 +8,8 @@ export function tableReservationStatusTemplate({
   date,
   timeLabel,
   guests,
+  reasonForVisit,
+  specialRequest,
   assignedTableNo,
   address,
 }) {
@@ -18,18 +20,24 @@ export function tableReservationStatusTemplate({
   const tableLine = assignedTableNo
     ? `<p style="margin:0 0 6px;font-size:14px;color:#4b5563;"><strong style="color:#111827;">Table:</strong> ${String(assignedTableNo)}</p>`
     : "";
+  const reasonLine = reasonForVisit
+    ? `<p style="margin:0 0 6px;font-size:14px;color:#4b5563;"><strong style="color:#111827;">Reason for visit:</strong> ${String(reasonForVisit)}</p>`
+    : "";
+  const requestLine = specialRequest
+    ? `<p style="margin:0 0 6px;font-size:14px;color:#4b5563;"><strong style="color:#111827;">Special request:</strong> ${String(specialRequest)}</p>`
+    : "";
 
   const copy =
     type === "declined"
       ? {
           eyebrow: "Booking update",
           title: "We couldn't hold this table",
-          intro: `Hi ${hello}, unfortunately <strong>${brand}</strong> could not accept your table request for <strong>${timeLabel}</strong>. Please call the restaurant if you'd like to try another time.`,
+          intro: `Hi ${hello}, unfortunately <strong>${brand}</strong> could not accept your table request for <strong>${timeLabel}</strong>${date ? ` on <strong>${date}</strong>` : ""}. Please call the restaurant if you'd like to try another time.`,
         }
       : {
           eyebrow: "Table confirmed",
           title: "Your table is booked",
-          intro: `Good news ${hello} — <strong>${brand}</strong> accepted your same-day table booking. We look forward to seeing you.`,
+          intro: `Good news ${hello} — <strong>${brand}</strong> accepted your table booking. We look forward to seeing you.`,
         };
 
   return `
@@ -70,6 +78,8 @@ export function tableReservationStatusTemplate({
               : ""
           }
           <p style="margin:0 0 6px;font-size:14px;color:#4b5563;"><strong style="color:#111827;">Guests:</strong> ${party}</p>
+          ${reasonLine}
+          ${requestLine}
           ${tableLine}
           ${
             address
@@ -79,7 +89,7 @@ export function tableReservationStatusTemplate({
         </div>
 
         <div style="background:#fafafa;border-left:4px solid #f97316;padding:16px 18px;border-radius:12px;color:#4b5563;font-size:14px;line-height:22px;">
-          Same-day seating only. If you're running late, please call the restaurant so we can hold your spot.
+          If you're running late, please call the restaurant so we can hold your spot.
         </div>
       </div>
 

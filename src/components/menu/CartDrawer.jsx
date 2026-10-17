@@ -29,14 +29,64 @@ import {
 } from "@/utils/productChoices";
 import { buildModifiedRequestRemark } from "@/utils/modifiedRequestRemark";
 import { countryCodes } from "@/utils/countryCodes";
+import {
+  getOfferDetailLines,
+  isOfferItem,
+} from "@/utils/offerDetails";
+import { todayRestaurantISO } from "@/lib/restaurantTime";
+
+function toDateOnly(value) {
+  if (!value) return null;
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value.trim())) {
+    return value.trim();
+  }
+  try {
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return null;
+    return d.toISOString().slice(0, 10);
+  } catch {
+    return null;
+  }
+}
+
+function formatSlotLabel(hours, minutes) {
+  const period = hours >= 12 ? "PM" : "AM";
+  const h12 = hours % 12 || 12;
+  return `${h12}:${String(minutes).padStart(2, "0")} ${period}`;
+}
+
+function buildFutureDaySlots(todayHours) {
+  const openRaw = String(todayHours?.open || "09:00");
+  const closeRaw = String(todayHours?.close || "22:00");
+  const parseMin = (t) => {
+    const m = String(t).match(/^(\d{1,2}):(\d{2})$/);
+    if (!m) return null;
+    return Number(m[1]) * 60 + Number(m[2]);
+  };
+  let openMin = parseMin(openRaw) ?? 9 * 60;
+  let closeMin = parseMin(closeRaw) ?? 22 * 60;
+  if (todayHours?.is24Hours) {
+    openMin = 0;
+    closeMin = 23 * 60 + 45;
+  } else {
+    closeMin = Math.max(openMin, closeMin - 15);
+  }
+  const aligned = Math.ceil(openMin / 15) * 15;
+  const slots = [];
+  for (let mins = aligned; mins <= closeMin; mins += 15) {
+    const hours = Math.floor(mins / 60);
+    const minutes = mins % 60;
+    if (hours > 23) break;
+    const value = `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+    slots.push({ value, label: formatSlotLabel(hours, minutes) });
+  }
+  return slots;
+}
 
 function lineNoteParts(item) {
-  if (item.isOffer) {
-    const offer =
-      item.modifier ||
-      [item.inclusions, item.choices, item.drinks].flat().filter(Boolean).join(", ") ||
-      "Offer";
-    return [offer];
+  if (isOfferItem(item)) {
+    // Structured offer lines are rendered separately in the bag UI.
+    return [];
   }
   const parts = [];
   if (item.size === "Extra" || item.selectedSize === "Extra") {
@@ -102,8 +152,25 @@ export default function CartDrawer({ open = false, onOpenChange, mode = "drawer"
   const quoteActive = isMenuMode || open;
 
   const brandName = restaurant?.name || "Tasty Bites";
-  const slots = restaurant?.pickupSlots || [];
+  const todaySlots = restaurant?.pickupSlots || [];
   const address = restaurant?.address || "";
+  const todayISO = useMemo(() => todayRestaurantISO(), []);
+
+  const cartIsOfferOnly = useMemo(() => {
+    if (!cartItems.length) return false;
+    return cartItems.every((item) => isOfferItem(item));
+  }, [cartItems]);
+
+  const offerMaxDate = useMemo(() => {
+    let min = null;
+    for (const item of cartItems) {
+      if (!isOfferItem(item)) continue;
+      const day = toDateOnly(item.validTo);
+      if (!day) continue;
+      if (!min || day < min) min = day;
+    }
+    return min && min >= todayISO ? min : todayISO;
+  }, [cartItems, todayISO]);
 
   // Notes don't affect price — exclude them so typing remarks doesn't re-quote.
   const quoteSignature = useMemo(
@@ -256,6 +323,9 @@ export default function CartDrawer({ open = false, onOpenChange, mode = "drawer"
           guestCountryCode: pendingGuest.countryCode,
           email: pendingGuest.email,
           pickupTime: pendingGuest.pickupTime,
+          offerFulfillmentDate: cartIsOfferOnly
+            ? pendingGuest.offerFulfillmentDate || todayISO
+            : undefined,
           customerNote: pendingGuest.message || "",
           otp: otpCode,
         }),
@@ -365,23 +435,53 @@ export default function CartDrawer({ open = false, onOpenChange, mode = "drawer"
                     <h4 className="text-sm font-bold leading-snug text-[var(--customer-ink)]">
                       {item.name}
                     </h4>
-                    {(() => {
-                      const parts = lineNoteParts(item);
-                      if (!parts.length) return null;
-                      return (
-                        <div className="mt-1 space-y-0.5">
-                          {parts.map((part, partIdx) => (
-                            <p
-                              key={`${item.cartKey}-note-${partIdx}`}
-                              className="text-xs leading-relaxed text-[var(--customer-muted)]"
-                            >
-                              {part}
-                            </p>
-                          ))}
-                        </div>
-                      );
-                    })()}
-                    <span className="mt-1.5 inline-block text-xs font-bold tabular-nums text-primary">
+                    {isOfferItem(item) ? (
+                      (() => {
+                        const offerLines = getOfferDetailLines(item);
+                        if (!offerLines.length) return null;
+                        return (
+                          <div className="mt-1.5 space-y-1.5 text-xs text-[var(--customer-muted)]">
+                            {offerLines.map((line) => (
+                              <div key={`${item.cartKey}-${line.label}`}>
+                                <p className="font-bold text-[var(--customer-ink)]">
+                                  {line.label}
+                                </p>
+                                <ul className="mt-0.5 list-disc space-y-0.5 pl-4">
+                                  {(line.values || [line.value]).map((value) => (
+                                    <li key={`${item.cartKey}-${line.label}-${value}`}>
+                                      {value}
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            ))}
+                          </div>
+                        );
+                      })()
+                    ) : (
+                      (() => {
+                        const parts = lineNoteParts(item);
+                        if (!parts.length) return null;
+                        return (
+                          <div className="mt-1.5 space-y-1">
+                            {parts.map((part, partIdx) => (
+                              <p
+                                key={`${item.cartKey}-note-${partIdx}`}
+                                className="text-xs leading-relaxed text-[var(--customer-muted)]"
+                              >
+                                {part}
+                              </p>
+                            ))}
+                          </div>
+                        );
+                      })()
+                    )}
+                    {isOfferItem(item) && cartIsOfferOnly ? (
+                      <p className="mt-1.5 text-[11px] font-semibold text-[var(--customer-ink)]">
+                        Book for a date at checkout (today–{offerMaxDate})
+                      </p>
+                    ) : null}
+                    <span className="mt-1.5 inline-block text-md font-bold tabular-nums text-primary">
                       ${(item.price * item.quantity).toFixed(2)}
                     </span>
                   </div>
@@ -598,7 +698,11 @@ export default function CartDrawer({ open = false, onOpenChange, mode = "drawer"
       onOrderAgain={handleOrderAgain}
       submitting={sendingOtp}
       placing={placing}
-      slots={slots}
+      slots={todaySlots}
+      todayISO={todayISO}
+      cartIsOfferOnly={cartIsOfferOnly}
+      offerMaxDate={offerMaxDate}
+      todayHours={restaurant?.todayHours}
       cartItems={cartItems}
       totals={totals}
       quoting={quoting}
@@ -747,6 +851,10 @@ function CheckoutFlowModal({
   submitting,
   placing,
   slots,
+  todayISO,
+  cartIsOfferOnly,
+  offerMaxDate,
+  todayHours,
   cartItems,
   totals,
   quoting,
@@ -759,6 +867,8 @@ function CheckoutFlowModal({
   const {
     register,
     handleSubmit,
+    watch,
+    setValue,
     formState: { errors },
     reset,
   } = useForm({
@@ -767,6 +877,7 @@ function CheckoutFlowModal({
       countryCode: "+1",
       phone: "",
       email: "",
+      offerFulfillmentDate: todayISO || "",
       pickupTime: "",
       message: "",
     },
@@ -775,6 +886,25 @@ function CheckoutFlowModal({
   const [digits, setDigits] = useState(["", "", "", ""]);
   const inputsRef = useRef([]);
   const [seconds, setSeconds] = useState(42);
+  const watchedOfferDate = watch("offerFulfillmentDate");
+  const watchedPickupTime = watch("pickupTime");
+
+  const activeSlots = useMemo(() => {
+    if (!cartIsOfferOnly) return slots || [];
+    const dateStr = watchedOfferDate || todayISO;
+    if (!dateStr || dateStr === todayISO) return slots || [];
+    return buildFutureDaySlots(todayHours);
+  }, [cartIsOfferOnly, watchedOfferDate, todayISO, slots, todayHours]);
+
+  // Keep pickup time valid when switching between today and a future offer date.
+  useEffect(() => {
+    if (!open || step !== 1) return;
+    if (!watchedPickupTime) return;
+    const stillValid = activeSlots.some((s) => s.value === watchedPickupTime);
+    if (!stillValid) {
+      setValue("pickupTime", "");
+    }
+  }, [open, step, activeSlots, watchedPickupTime, setValue]);
 
   useEffect(() => {
     if (!open) {
@@ -783,6 +913,7 @@ function CheckoutFlowModal({
         countryCode: "+1",
         phone: "",
         email: "",
+        offerFulfillmentDate: todayISO || "",
         pickupTime: "",
         message: "",
       });
@@ -796,11 +927,13 @@ function CheckoutFlowModal({
         countryCode: guest.countryCode || "+1",
         phone: guest.phone || "",
         email: guest.email || "",
+        offerFulfillmentDate:
+          guest.offerFulfillmentDate || todayISO || "",
         pickupTime: guest.pickupTime || "",
         message: guest.message || "",
       });
     }
-  }, [open, step, guest, reset]);
+  }, [open, step, guest, reset, todayISO]);
 
   useEffect(() => {
     if (!open || step !== 2) return undefined;
@@ -843,7 +976,12 @@ function CheckoutFlowModal({
                 {step === 3 ? "Order Confirmed" : "Complete Your Pickup"}
               </h2>
               <span className="text-[11px] text-[var(--customer-muted)]">
-                {step === 1 && `Pay at ${brandName} · Same-day pickup`}
+                {step === 1 &&
+                  (cartIsOfferOnly &&
+                  watchedOfferDate &&
+                  watchedOfferDate !== todayISO
+                    ? `Pay at ${brandName} · Offer pickup ${watchedOfferDate}`
+                    : `Pay at ${brandName} · Same-day pickup`)}
                 {step === 2 && "Check your inbox for the verification code"}
                 {step === 3 && `Ticket #${order?.orderNumber || "—"}`}
               </span>
@@ -963,13 +1101,50 @@ function CheckoutFlowModal({
                   </div>
                 </div>
 
+                {cartIsOfferOnly ? (
+                  <div className="space-y-2">
+                    <label
+                      htmlFor="co-offer-date"
+                      className="block text-xs font-bold uppercase text-[var(--customer-muted)]"
+                    >
+                      Offer date
+                    </label>
+                    <input
+                      id="co-offer-date"
+                      type="date"
+                      min={todayISO}
+                      max={offerMaxDate || todayISO}
+                      className="w-full rounded-lg bg-[var(--customer-surface-low)] px-3.5 py-2.5 text-sm focus:outline-none focus:shadow-[0_0_0_2px_var(--primary)]"
+                      {...register("offerFulfillmentDate", {
+                        required: "Offer date is required",
+                      })}
+                    />
+                    <p className="text-[11px] text-[var(--customer-muted)]">
+                      Offer valid through ({offerMaxDate || todayISO})
+                    </p>
+                    {errors.offerFulfillmentDate ? (
+                      <p className="text-xs text-red-600">
+                        {errors.offerFulfillmentDate.message}
+                      </p>
+                    ) : null}
+                  </div>
+                ) : null}
+
                 <div className="space-y-3">
                   <span className="block text-xs font-bold uppercase text-[var(--customer-muted)]">
-                    Pickup Time Today
+                    {cartIsOfferOnly &&
+                    watchedOfferDate &&
+                    watchedOfferDate !== todayISO
+                      ? "Pickup time"
+                      : "Pickup Time Today"}
                   </span>
-                  {slots.length === 0 ? (
+                  {activeSlots.length === 0 ? (
                     <p className="rounded-lg border border-amber-100 bg-amber-50 px-3 py-3 text-sm text-amber-800">
-                      Online pickup is closed for today. Please try again during restaurant hours.
+                      {cartIsOfferOnly &&
+                      watchedOfferDate &&
+                      watchedOfferDate !== todayISO
+                        ? "No pickup times available for this date."
+                        : "Online pickup is closed for today. Please try again during restaurant hours."}
                     </p>
                   ) : (
                     <select
@@ -977,7 +1152,7 @@ function CheckoutFlowModal({
                       {...register("pickupTime", { required: "Pickup time is required" })}
                     >
                       <option value="">Select a time</option>
-                      {slots.map((slot) => (
+                      {activeSlots.map((slot) => (
                         <option key={slot.value} value={slot.value}>
                           {slot.label}
                         </option>
@@ -1009,7 +1184,11 @@ function CheckoutFlowModal({
                     <h3 className="text-sm font-bold text-[var(--customer-ink)]">
                       Order Summary ({cartItems.length})
                     </h3>
-                    <span className="text-[11px] font-semibold text-primary">Today · Pickup</span>
+                    <span className="text-[11px] font-semibold text-primary">
+                      {cartIsOfferOnly && watchedOfferDate
+                        ? `${watchedOfferDate} · Pickup`
+                        : "Today · Pickup"}
+                    </span>
                   </div>
                   <div className="max-h-48 space-y-2.5 overflow-y-auto py-2 text-sm">
                     {cartItems.map((item) => (
@@ -1017,8 +1196,35 @@ function CheckoutFlowModal({
                         <div className="min-w-0">
                           <span className="font-bold">{item.quantity}x</span> {item.name}
                           {(() => {
-                            const parts = lineNoteParts(item);
                             const notes = String(item.notes || "").trim();
+                            if (isOfferItem(item)) {
+                              const offerLines = getOfferDetailLines(item);
+                              if (!offerLines.length && !notes) return null;
+                              return (
+                                <div className="space-y-1.5 pl-4 pt-1">
+                                  {offerLines.map((line) => (
+                                    <div key={`${item.cartKey}-sum-${line.label}`}>
+                                      <p className="text-xs font-bold text-[var(--customer-ink)]">
+                                        {line.label}
+                                      </p>
+                                      <ul className="list-disc space-y-0.5 pl-4 text-xs text-[var(--customer-muted)]">
+                                        {(line.values || [line.value]).map((value) => (
+                                          <li key={`${item.cartKey}-sum-${line.label}-${value}`}>
+                                            {value}
+                                          </li>
+                                        ))}
+                                      </ul>
+                                    </div>
+                                  ))}
+                                  {notes ? (
+                                    <div className="text-xs font-medium italic text-amber-800">
+                                      Remark: {notes}
+                                    </div>
+                                  ) : null}
+                                </div>
+                              );
+                            }
+                            const parts = lineNoteParts(item);
                             if (!parts.length && !notes) return null;
                             return (
                               <div className="space-y-0.5 pl-4">
@@ -1074,7 +1280,12 @@ function CheckoutFlowModal({
                 <div className="space-y-2 pt-2">
                   <button
                     type="submit"
-                    disabled={submitting || slots.length === 0 || quoting || !totals.totalAmount}
+                    disabled={
+                      submitting ||
+                      activeSlots.length === 0 ||
+                      quoting ||
+                      !totals.totalAmount
+                    }
                     className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-3.5 text-sm font-bold text-white shadow-lg hover:bg-primary-hover disabled:opacity-60"
                   >
                     <Mail className="h-5 w-5" />

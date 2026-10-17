@@ -23,6 +23,7 @@ import {
   getItemLineTotal,
   getReceiptModifierLines,
 } from "@/utils/productChoices";
+import { getOfferDetailLines, isOfferItem } from "@/utils/offerDetails";
 
 function money(n) {
   return `$${Number(n || 0).toFixed(2)}`;
@@ -136,9 +137,13 @@ function ThankYouContent() {
         : ""
   }`;
 
+  const fulfillmentDate =
+    order?.offerFulfillmentDate || order?.pickup?.date || null;
   const pickupLabel = order?.pickup
-    ? `${order.pickup.date || "Today"} · ${formatTime12h(order.pickup.time || order.pickup.label || "")}`.trim()
-    : "Same-day pickup";
+    ? `${fulfillmentDate || "Today"} · ${formatTime12h(order.pickup.time || order.pickup.label || "")}`.trim()
+    : fulfillmentDate
+      ? `${fulfillmentDate} · Pickup`
+      : "Same-day pickup";
 
   if (loading && !order) {
     return (
@@ -337,17 +342,26 @@ function ThankYouContent() {
                 </p>
                 <ul className="space-y-3">
                   {order.items.map((item, idx) => {
-                    const modifierLines = getReceiptModifierLines(item);
+                    const offer = isOfferItem(item);
+                    const offerLines = offer ? getOfferDetailLines(item) : [];
+                    const modifierLines = offer
+                      ? []
+                      : getReceiptModifierLines(item);
                     return (
                       <li
                         key={idx}
                         className="rounded-xl border border-zinc-100 bg-[var(--customer-surface-low)]/60 px-3.5 py-3 text-left text-sm"
                       >
                         <div className="flex justify-between gap-3">
-                          <span>
+                          <span className="min-w-0">
+                            {offer ? (
+                              <span className="mb-1 mr-1.5 inline-block rounded border border-violet-200 bg-violet-50 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-violet-700">
+                                Offer
+                              </span>
+                            ) : null}
                             <span className="font-extrabold">{item.qty}×</span>{" "}
                             <span className="font-bold">{item.name}</span>
-                            {item.size && item.size !== "Standard"
+                            {!offer && item.size && item.size !== "Standard"
                               ? ` (${item.size})`
                               : ""}
                           </span>
@@ -355,6 +369,24 @@ function ThankYouContent() {
                             {money(getItemLineTotal(item))}
                           </span>
                         </div>
+                        {offerLines.length > 0 ? (
+                          <div className="mt-2 space-y-2 border-t border-zinc-100/80 pt-2 text-xs text-[var(--customer-muted)]">
+                            {offerLines.map((line) => (
+                              <div key={`${idx}-${line.label}`}>
+                                <p className="font-bold text-[var(--customer-ink)]">
+                                  {line.label}
+                                </p>
+                                <ul className="mt-0.5 list-disc space-y-0.5 pl-5">
+                                  {(line.values || [line.value]).map((value) => (
+                                    <li key={`${idx}-${line.label}-${value}`}>
+                                      {value}
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            ))}
+                          </div>
+                        ) : null}
                         {modifierLines.length > 0 ? (
                           <ul className="mt-1 space-y-0.5 pl-5 text-xs text-[var(--customer-muted)]">
                             {modifierLines.map((line, lineIdx) => (
@@ -363,6 +395,11 @@ function ThankYouContent() {
                               </li>
                             ))}
                           </ul>
+                        ) : null}
+                        {item.notes ? (
+                          <p className="mt-1.5 text-xs font-medium italic text-amber-800">
+                            Remark: {item.notes}
+                          </p>
                         ) : null}
                       </li>
                     );

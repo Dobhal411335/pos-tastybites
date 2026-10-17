@@ -124,6 +124,82 @@ export function isValidSameDayPickup(
 }
 
 /**
+ * Build all 15-min slots for a future calendar day (no lead from "now").
+ * Used for offer-only bookings scheduled after today.
+ */
+export function buildPickupSlotsForDate(
+  dateStr,
+  timeZone = onlineOrderingTimezone(),
+  options = {}
+) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(dateStr || ""))) return [];
+  const [y, m, d] = String(dateStr).split("-").map(Number);
+  const openFloor = Number.isFinite(options.openMinutes)
+    ? Math.max(0, Number(options.openMinutes))
+    : 0;
+  const endMinutes = Number.isFinite(options.endMinutes)
+    ? Math.min(23 * 60 + 45, Math.max(0, Number(options.endMinutes)))
+    : options.is24Hours
+      ? 23 * 60 + 45
+      : 22 * 60 + 45;
+  const aligned = Math.ceil(openFloor / 15) * 15;
+  const slots = [];
+  for (let mins = aligned; mins <= endMinutes; mins += 15) {
+    const hours = Math.floor(mins / 60);
+    const minutes = mins % 60;
+    if (hours > 23) break;
+    const value = `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+    slots.push({
+      value,
+      label: formatSlotLabel(hours, minutes),
+      isoLocal: `${dateStr} ${value}`,
+      date: dateStr,
+    });
+  }
+  return slots;
+}
+
+/**
+ * Validate pickup HH:mm for a specific fulfillment date.
+ * Today → same-day lead rules; future → any slot in that day's grid.
+ */
+export function isValidPickupForDate(
+  pickupTime,
+  dateStr,
+  now = new Date(),
+  timeZone = onlineOrderingTimezone(),
+  options = {}
+) {
+  const normalized = normalizePickupTime(pickupTime);
+  if (!normalized || !/^\d{4}-\d{2}-\d{2}$/.test(String(dateStr || ""))) {
+    return false;
+  }
+
+  const local = getLocalParts(now, timeZone);
+  const todayStr = `${local.year}-${String(local.month).padStart(2, "0")}-${String(local.day).padStart(2, "0")}`;
+
+  if (dateStr === todayStr) {
+    return isValidSameDayPickup(pickupTime, now, timeZone, options);
+  }
+  if (dateStr < todayStr) return false;
+
+  return buildPickupSlotsForDate(dateStr, timeZone, options).some(
+    (s) => s.value === normalized,
+  );
+}
+
+export function formatPickupNotePrefixForDate(pickupTime, dateStr) {
+  const normalized = normalizePickupTime(pickupTime);
+  if (!normalized) {
+    throw Object.assign(new Error("Invalid pickup time"), { status: 400 });
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(dateStr || ""))) {
+    throw Object.assign(new Error("Invalid pickup date"), { status: 400 });
+  }
+  return `[PICKUP ${dateStr} ${normalized}]`;
+}
+
+/**
  * Resolve the calendar date for a pickup HH:mm (today, or next day for 24h).
  */
 export function resolvePickupSlotDate(

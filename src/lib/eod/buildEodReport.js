@@ -12,6 +12,7 @@ import { ACTIVE_ORDER_FILTER } from "@/lib/orders/activeOrderFilter";
 import { toActiveOrderReportView } from "@/lib/orders/orderDeleteEligibility";
 import { paidRevenueOrderMatch } from "@/lib/reports/financial/match";
 import { getItemLineTotal } from "@/utils/productChoices";
+import { businessDayOrderTimeClause } from "@/lib/public/offerFulfillment";
 import {
   businessCalendarDate,
   businessDateBounds,
@@ -73,7 +74,12 @@ export async function buildEodReport({
     issuedGiftCards,
   ] = await Promise.all([
       Order.find(
-        paidRevenueOrderMatch({ restaurantId: rid, start, end })
+        paidRevenueOrderMatch({
+          restaurantId: rid,
+          start,
+          end,
+          businessDate,
+        })
       )
         .populate("processedBy", "firstName lastName name")
         .populate("table", "section tableNumber")
@@ -82,10 +88,7 @@ export async function buildEodReport({
         restaurantId: rid,
         ...ACTIVE_ORDER_FILTER,
         status: "CANCELLED",
-        $or: [
-          { updatedAt: { $gte: start, $lt: end } },
-          { createdAt: { $gte: start, $lt: end } },
-        ],
+        ...businessDayOrderTimeClause(businessDate, start, end),
       })
         .select("totalAmount subTotal")
         .lean(),
@@ -115,10 +118,7 @@ export async function buildEodReport({
           $match: {
             restaurantId: rid,
             ...ACTIVE_ORDER_FILTER,
-            $or: [
-              { updatedAt: { $gte: start, $lt: end } },
-              { createdAt: { $gte: start, $lt: end } },
-            ],
+            ...businessDayOrderTimeClause(businessDate, start, end),
           },
         },
         {
@@ -134,10 +134,7 @@ export async function buildEodReport({
           $match: {
             restaurantId: rid,
             ...ACTIVE_ORDER_FILTER,
-            $or: [
-              { updatedAt: { $gte: start, $lt: end } },
-              { createdAt: { $gte: start, $lt: end } },
-            ],
+            ...businessDayOrderTimeClause(businessDate, start, end),
           },
         },
         {

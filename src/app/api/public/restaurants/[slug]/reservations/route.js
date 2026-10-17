@@ -14,7 +14,7 @@ import { normalizeGuestPhone } from "@/lib/public/cartPayload";
 import { assertAndConsumeEmailVerified } from "@/lib/public/orderEmailOtp";
 
 /**
- * Public same-day table booking.
+ * Public table booking (today or future dates).
  * Requires a recently verified email OTP. Rate-limited per IP and phone.
  */
 export async function POST(request, { params }) {
@@ -68,11 +68,13 @@ export async function POST(request, { params }) {
       restaurantName: profile.name,
       guestName: body?.name || body?.guestName,
       phone: body?.phone,
+      countryCode: body?.countryCode,
       email,
       date: body?.date,
       time: body?.time,
       guests: body?.guests,
-      notes: body?.notes || body?.message,
+      reasonForVisit: body?.reasonForVisit || body?.reason,
+      specialRequest: body?.specialRequest || body?.notes || body?.message,
     });
 
     return sendSuccess(

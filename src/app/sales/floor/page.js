@@ -20,6 +20,7 @@ import {
   ShoppingBag,
   UserRound,
   Globe,
+  Gift,
   ArrowRight,
   RefreshCw,
 } from "lucide-react";
@@ -136,6 +137,7 @@ export default function SalesFloorPage() {
     takeAwayUnpaid: 0,
     staffUnpaid: 0,
     onlineOpen: 0,
+    upcomingOffers: 0,
   });
   const [scale, setScale] = useState(1);
   const floorViewportRef = React.useRef(null);
@@ -181,9 +183,13 @@ export default function SalesFloorPage() {
 
   const loadOrderAttention = useCallback(async () => {
     try {
-      const res = await employeeFetch("/api/orders/employee?today=true");
-      const json = await res.json();
-      if (!res.ok || !json.success) return;
+      const [todayRes, upcomingRes] = await Promise.all([
+        employeeFetch("/api/orders/employee?today=true"),
+        employeeFetch("/api/sales/upcoming-offers?pendingCount=true"),
+      ]);
+      const json = await todayRes.json();
+      const upcomingJson = await upcomingRes.json();
+      if (!todayRes.ok || !json.success) return;
       const orders = Array.isArray(json.data) ? json.data : [];
       let takeAwayUnpaid = 0;
       let staffUnpaid = 0;
@@ -195,7 +201,15 @@ export default function SalesFloorPage() {
         else if (source === "STAFF") staffUnpaid += 1;
         else if (source === "ONLINE") onlineOpen += 1;
       }
-      setOrderAttention({ takeAwayUnpaid, staffUnpaid, onlineOpen });
+      setOrderAttention({
+        takeAwayUnpaid,
+        staffUnpaid,
+        onlineOpen,
+        upcomingOffers:
+          upcomingRes.ok && upcomingJson.success
+            ? Number(upcomingJson.data?.pendingCount || 0)
+            : 0,
+      });
     } catch {
       /* non-blocking */
     }
@@ -1096,6 +1110,14 @@ export default function SalesFloorPage() {
                 tone: "border-sky-200 bg-sky-50 text-sky-900",
                 badge: "bg-sky-600",
               },
+              {
+                href: "/sales/upcoming-offers",
+                label: "Upcoming Offers",
+                count: orderAttention.upcomingOffers,
+                Icon: Gift,
+                tone: "border-violet-200 bg-violet-50 text-violet-900",
+                badge: "bg-violet-600",
+              },
             ].map((item) => (
               <button
                 key={item.href}
@@ -1124,12 +1146,13 @@ export default function SalesFloorPage() {
 
             {orderAttention.takeAwayUnpaid +
               orderAttention.staffUnpaid +
-              orderAttention.onlineOpen ===
+              orderAttention.onlineOpen +
+              orderAttention.upcomingOffers ===
             0 ? (
               <div className="flex items-start gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5">
                 <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
                 <p className="text-xs font-semibold text-emerald-800">
-                  All clear — no unpaid takeaway, staff, or open online orders.
+                  All clear — no unpaid takeaway, staff, open online, or upcoming offer orders.
                 </p>
               </div>
             ) : null}

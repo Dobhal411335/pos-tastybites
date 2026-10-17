@@ -80,6 +80,7 @@ Update every relevant file in this guide (Web Sales, Admin, Mobile, EOD, reports
 | --- | --- |
 | `staffFor`, `staffOrderReason` | Staff meals |
 | `onlineApprovedAt/By`, `onlineKotSentAt/By`, `onlineReadyAt/By` | Online pickup workflow |
+| `offerFulfillmentDate` | Online offer-only booking day (`YYYY-MM-DD`); null for mixed/non-offer. Future dates → Upcoming Offers; exclude from day-close / today’s EOD until that day |
 | `waiveReason`, `waivedAt`, `waivedBy` | Waive flow |
 | `specialNote` | Order-level note |
 
@@ -108,7 +109,7 @@ Update every relevant file in this guide (Web Sales, Admin, Mobile, EOD, reports
 | `tax`, `serviceCharge` | Per-unit tax often stored; line tax × qty in some reports |
 | `productType` | `KITCHEN` \| `BAR` |
 | `isOffer`, `inclusions`, `choices`, `drinks` | Offers |
-| `choiceSelections[]` | `{ name, subChoices[] }` |
+| `choiceSelections[]` | `{ name, subChoices[] }` — product-level **and** per-variant catalog picks (merged; see variant choiceOptions) |
 | `customDataSelections[]` | `{ name, subChoices[] }` — **one** selected option string per group (radio) |
 | `addonChoiceSelections[]` | Addon breakdown; qty labels like `"Ranch ×3"` |
 | `options`, `preparationStyle`, `notes` | Modifiers / remarks |
@@ -351,6 +352,35 @@ Copy this into the PR / agent task:
 - [ ] Mobile payment `ReceiptPreview` / `PaymentSummary` + print-jobs / today paths
 - [ ] Report shaping + `OrderDetailBody` (pass-through; display via `getReceiptModifierLines`)
 - [ ] Re-save products that still have legacy nested `{ name, choices }` under `subChoices`
+
+---
+
+## Checklist: changing variant `choiceOptions` / product `choiceSelections`
+
+- [ ] Product catalog: `variants[].choiceOptions[]` = `{ name, subChoices: string[] }` (same shape as product-level `choiceOptions` and addon nested choices)
+- [ ] Order item: still `choiceSelections[]` — **no new field**; merge product-level + that size’s variant picks (`mergeChoiceSelections`; variant wins on group-name clash)
+- [ ] Product PUT `sanitizeVariants` + admin Pricing & Sizes editor (`AddonChoiceOptionsEditor` per variant)
+- [ ] Public map + POS menu sync pass `variants[].choiceOptions`
+- [ ] `resolveProductChoiceCatalog(product, size)` + `filterProductChoiceSelections` in `repricePosCartItems` (Web; Mobile helper mirror)
+- [ ] Sales POS: Choice Options under each Variants pricing row + per-line merge on confirm
+- [ ] Online `ProductConfigModal`: Choice Options under each variant row + per-line merge
+- [ ] Mobile `ModifierModal` + `ProductVariant` type + menu normalize
+- [ ] Display verify only (cart / CartDrawer / receipts / KOT / ESC/POS / today) — they already read `item.choiceSelections`
+
+---
+
+## Last known variant choiceOptions contract (reference)
+
+```text
+Catalog product:  choiceOptions[]           // product-wide groups
+Catalog variant:  variants[].choiceOptions[] // per size/price
+Select (order):   product groups (existing UI) + size groups under that pricing row
+Persist:          item.choiceSelections = product picks ∪ variant picks
+Allowlist:        resolveProductChoiceCatalog(product, item.size)
+Cart/receipt:     same as existing choiceSelections (getReceiptModifierLines / detail lines)
+```
+
+Update this section when the contract changes so the next handoff stays accurate.
 
 ---
 

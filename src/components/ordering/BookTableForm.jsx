@@ -6,6 +6,8 @@ import {
   CheckCircle2,
   Clock3,
   Mail,
+  MessageSquareText,
+  PartyPopper,
   Phone,
   ShieldCheck,
   User,
@@ -14,12 +16,15 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { useRestaurantPublic } from "@/context/RestaurantPublicContext";
 import { publicApiBase, getPublicRestaurantSlug } from "@/lib/public/clientConfig";
 import { todayRestaurantISO } from "@/lib/restaurantTime";
+import { countryCodes } from "@/utils/countryCodes";
+import { REASON_FOR_VISIT_OPTIONS } from "@/lib/public/reservationOptions";
 
-function formatTodayLabel(iso) {
+function formatDateLabel(iso) {
   try {
     return new Date(`${iso}T12:00:00`).toLocaleDateString("en-CA", {
       weekday: "long",
@@ -32,6 +37,26 @@ function formatTodayLabel(iso) {
   }
 }
 
+const emptyForm = (today) => ({
+  firstName: "",
+  lastName: "",
+  countryCode: "+1",
+  phone: "",
+  email: "",
+  date: today,
+  time: "",
+  guests: "2",
+  reasonForVisit: "",
+  specialRequest: "",
+});
+
+function fullNameFromForm(form) {
+  return [form.firstName, form.lastName]
+    .map((part) => String(part || "").trim())
+    .filter(Boolean)
+    .join(" ");
+}
+
 export default function BookTableForm() {
   const { restaurant, slug: ctxSlug } = useRestaurantPublic();
   const slug = ctxSlug || getPublicRestaurantSlug();
@@ -42,14 +67,7 @@ export default function BookTableForm() {
   const [otpSent, setOtpSent] = useState(false);
   const [emailVerified, setEmailVerified] = useState(false);
   const [otp, setOtp] = useState("");
-  const [form, setForm] = useState({
-    name: "",
-    phone: "",
-    email: "",
-    date: today,
-    time: "",
-    guests: "2",
-  });
+  const [form, setForm] = useState(() => emptyForm(today));
 
   const update = (key) => (e) => {
     const value = e.target.value;
@@ -73,7 +91,7 @@ export default function BookTableForm() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           email: form.email.trim(),
-          name: form.name.trim(),
+          name: fullNameFromForm(form),
         }),
       });
       const json = await res.json();
@@ -125,8 +143,18 @@ export default function BookTableForm() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.name.trim() || !form.phone.trim() || !form.time) {
-      toast.error("Please fill in name, phone, and arrival time.");
+    const fullName = fullNameFromForm(form);
+    if (!form.firstName.trim() || !form.lastName.trim() || !form.phone.trim() || !form.time) {
+      toast.error("Please fill in first name, last name, phone, and arrival time.");
+      return;
+    }
+    if (!form.reasonForVisit) {
+      toast.error("Please select a reason for visit.");
+      return;
+    }
+    const guestCount = Number(form.guests);
+    if (!Number.isFinite(guestCount) || guestCount < 1) {
+      toast.error("Please enter at least 1 guest.");
       return;
     }
     if (!emailVerified) {
@@ -140,12 +168,15 @@ export default function BookTableForm() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: form.name.trim(),
+          name: fullName,
+          countryCode: form.countryCode || "+1",
           phone: form.phone.trim(),
           email: form.email.trim(),
           date: form.date || today,
           time: form.time,
-          guests: Number(form.guests) || 2,
+          guests: guestCount,
+          reasonForVisit: form.reasonForVisit,
+          specialRequest: form.specialRequest.trim() || undefined,
         }),
       });
       const json = await res.json();
@@ -155,14 +186,7 @@ export default function BookTableForm() {
       toast.success(
         "Reservation sent! The restaurant will confirm shortly."
       );
-      setForm({
-        name: "",
-        phone: "",
-        email: "",
-        time: "",
-        guests: "2",
-        date: today,
-      });
+      setForm(emptyForm(today));
       setOtp("");
       setOtpSent(false);
       setEmailVerified(false);
@@ -176,6 +200,7 @@ export default function BookTableForm() {
   const brandName = restaurant?.name || "Tasty Bites";
   const fieldClass =
     "h-12 rounded-lg border border-[var(--border)]/40 bg-[var(--customer-surface-low)] text-[var(--customer-ink)] placeholder:text-[var(--customer-muted)] focus-visible:border-primary focus-visible:ring-primary/20";
+  const selectClass = `flex w-full px-3 text-sm ${fieldClass}`;
 
   return (
     <section
@@ -197,8 +222,8 @@ export default function BookTableForm() {
                 Book a table at {brandName}
               </h2>
               <p className="text-sm leading-relaxed text-white/70">
-                Same-day seating only. Verify your email, then we&apos;ll hold
-                your request for the sales desk to confirm.
+                Reserve for today or a future date. Verify your email, then
+                we&apos;ll hold your request for the sales desk to confirm.
               </p>
               <ul className="mt-2 space-y-2 text-xs text-white/60">
                 <li className="flex items-center gap-2">
@@ -219,23 +244,41 @@ export default function BookTableForm() {
               <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label
-                    htmlFor="reserve-name"
+                    htmlFor="reserve-first-name"
                     className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-primary"
                   >
                     <User className="h-3.5 w-3.5" aria-hidden />
-                    Your name
+                    First name
                   </Label>
                   <Input
-                    id="reserve-name"
-                    value={form.name}
-                    onChange={update("name")}
-                    placeholder="John Doe"
+                    id="reserve-first-name"
+                    value={form.firstName}
+                    onChange={update("firstName")}
+                    placeholder="John"
                     className={fieldClass}
-                    autoComplete="name"
+                    autoComplete="given-name"
                   />
                 </div>
 
                 <div className="space-y-2">
+                  <Label
+                    htmlFor="reserve-last-name"
+                    className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-primary"
+                  >
+                    <User className="h-3.5 w-3.5" aria-hidden />
+                    Last name
+                  </Label>
+                  <Input
+                    id="reserve-last-name"
+                    value={form.lastName}
+                    onChange={update("lastName")}
+                    placeholder="Doe"
+                    className={fieldClass}
+                    autoComplete="family-name"
+                  />
+                </div>
+
+                <div className="space-y-2 sm:col-span-2">
                   <Label
                     htmlFor="reserve-phone"
                     className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-primary"
@@ -243,15 +286,30 @@ export default function BookTableForm() {
                     <Phone className="h-3.5 w-3.5" aria-hidden />
                     Phone number
                   </Label>
-                  <Input
-                    id="reserve-phone"
-                    type="tel"
-                    value={form.phone}
-                    onChange={update("phone")}
-                    placeholder="(519) 000-0000"
-                    className={fieldClass}
-                    autoComplete="tel"
-                  />
+                  <div className="flex min-w-0 items-stretch gap-2">
+                    <select
+                      id="reserve-country-code"
+                      value={form.countryCode}
+                      onChange={update("countryCode")}
+                      className={`w-[7.75rem] shrink-0 truncate px-2 text-sm sm:w-[9.5rem] sm:px-3 ${fieldClass}`}
+                      aria-label="Country code"
+                    >
+                      {countryCodes.map((c) => (
+                        <option key={c.code} value={c.code}>
+                          {c.code} ({c.country})
+                        </option>
+                      ))}
+                    </select>
+                    <Input
+                      id="reserve-phone"
+                      type="tel"
+                      value={form.phone}
+                      onChange={update("phone")}
+                      placeholder="Phone number"
+                      className={`${fieldClass} w-auto min-w-0 flex-1`}
+                      autoComplete="tel-national"
+                    />
+                  </div>
                 </div>
 
                 <div className="space-y-2 sm:col-span-2">
@@ -344,12 +402,12 @@ export default function BookTableForm() {
                     type="date"
                     value={form.date}
                     min={today}
-                    max={today}
-                    readOnly
+                    onChange={update("date")}
                     className={fieldClass}
+                    required
                   />
                   <p className="text-[11px] text-[var(--customer-muted)]">
-                    Today only · {formatTodayLabel(today)}
+                    Today or later · {formatDateLabel(form.date || today)}
                   </p>
                 </div>
 
@@ -371,7 +429,7 @@ export default function BookTableForm() {
                   />
                 </div>
 
-                <div className="space-y-2 sm:col-span-2">
+                <div className="space-y-2">
                   <Label
                     htmlFor="reserve-guests"
                     className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-primary"
@@ -379,18 +437,62 @@ export default function BookTableForm() {
                     <Users className="h-3.5 w-3.5" aria-hidden />
                     Total guests
                   </Label>
-                  <select
+                  <Input
                     id="reserve-guests"
+                    type="number"
+                    min={1}
+                    max={50}
+                    step={1}
                     value={form.guests}
                     onChange={update("guests")}
-                    className={`flex w-full px-3 text-sm ${fieldClass}`}
+                    className={fieldClass}
+                    required
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label
+                    htmlFor="reserve-reason"
+                    className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-primary"
                   >
-                    {Array.from({ length: 12 }, (_, i) => i + 1).map((n) => (
-                      <option key={n} value={String(n)}>
-                        {n} {n === 1 ? "guest" : "guests"}
+                    <PartyPopper className="h-3.5 w-3.5" aria-hidden />
+                    Reason for visit
+                  </Label>
+                  <select
+                    id="reserve-reason"
+                    value={form.reasonForVisit}
+                    onChange={update("reasonForVisit")}
+                    className={selectClass}
+                    required
+                  >
+                    <option value="">Select a reason</option>
+                    {REASON_FOR_VISIT_OPTIONS.map((reason) => (
+                      <option key={reason} value={reason}>
+                        {reason}
                       </option>
                     ))}
                   </select>
+                </div>
+
+                <div className="space-y-2 sm:col-span-2">
+                  <Label
+                    htmlFor="reserve-special"
+                    className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-primary"
+                  >
+                    <MessageSquareText className="h-3.5 w-3.5" aria-hidden />
+                    Special request{" "}
+                    <span className="font-medium normal-case tracking-normal text-[var(--customer-muted)]">
+                      (optional)
+                    </span>
+                  </Label>
+                  <Textarea
+                    id="reserve-special"
+                    value={form.specialRequest}
+                    onChange={update("specialRequest")}
+                    placeholder="Allergies, high chair, quiet table, celebration cake…"
+                    rows={3}
+                    className="min-h-[88px] rounded-lg border border-[var(--border)]/40 bg-[var(--customer-surface-low)] text-[var(--customer-ink)] placeholder:text-[var(--customer-muted)] focus-visible:border-primary focus-visible:ring-primary/20"
+                  />
                 </div>
               </div>
 

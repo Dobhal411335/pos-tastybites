@@ -6,6 +6,8 @@ import { clearEmployeeAuthCookies } from "@/lib/employeeAuthCookies";
 import Order from "@/models/Order";
 import TableSession from "@/models/floor/TableSession";
 import { joinTableNumbers } from "@/utils/orderDisplay";
+import { todayBusinessDate } from "@/lib/eod/eodHelpers";
+import { futureOfferFulfillmentExclusion } from "@/lib/public/offerFulfillment";
 
 function personName(person) {
   if (!person) return "Unassigned";
@@ -23,11 +25,16 @@ const UNSETTLED_ORDER_FILTER = {
 };
 
 async function getCloseBlockers(restaurantId) {
-  const orderQuery = { restaurantId, ...UNSETTLED_ORDER_FILTER };
+  const todayStr = todayBusinessDate();
+  const orderQuery = {
+    restaurantId,
+    ...UNSETTLED_ORDER_FILTER,
+    ...futureOfferFulfillmentExclusion(todayStr),
+  };
 
   const [pendingOrders, pendingOrderCount, openSessions] = await Promise.all([
     Order.find(orderQuery)
-      .select("orderNumber status paymentStatus tableNo source partyName")
+      .select("orderNumber status paymentStatus tableNo source partyName offerFulfillmentDate")
       .sort({ createdAt: -1 })
       .limit(20)
       .lean(),

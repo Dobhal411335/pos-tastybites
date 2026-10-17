@@ -6,18 +6,39 @@ import { createNotification } from "@/lib/notifications/notificationService";
 import { cartItemsToRepricePayload, normalizeGuestPhone } from "@/lib/public/cartPayload";
 import {
   formatPickupNotePrefix,
+  formatPickupNotePrefixForDate,
+  isValidPickupForDate,
   isValidSameDayPickup,
   parsePickupFromSpecialNote,
   stripPickupPrefix,
+  onlineOrderingTimezone,
 } from "@/lib/public/pickup";
 import {
   getTodayRestaurantHours,
   normalizeRestaurantHours,
   timeToMinutes,
 } from "@/lib/public/restaurantHours";
+import {
+  cartItemsAreOfferOnly,
+  minOfferValidToDate,
+  probeDateFromISO,
+  toOfferDateOnly,
+} from "@/lib/public/offerFulfillment";
+import { todayBusinessDate } from "@/lib/eod/eodHelpers";
 import CompanyBasicInfo from "@/models/Web/CompanyBasicInfo";
 import { logger } from "@/utils/logger";
 import { sendOnlineOrderStatusEmail } from "@/lib/brevo/sendOnlineOrderStatusEmail";
+
+function pickupOptsFromHours(dayHours) {
+  const closeMin = timeToMinutes(dayHours.close);
+  if (dayHours.is24Hours) {
+    return { is24Hours: true, openMinutes: 0, endMinutes: 23 * 60 + 45 };
+  }
+  return {
+    openMinutes: timeToMinutes(dayHours.open) ?? undefined,
+    endMinutes: closeMin != null ? Math.max(0, closeMin - 15) : undefined,
+  };
+}
 
 export async function quoteOnlineOrder({ restaurantId, items }) {
   const payload = cartItemsToRepricePayload(items);
@@ -49,6 +70,7 @@ export async function createOnlineOrder({
   guestEmail = null,
   pickupTime,
   customerNote = "",
+  offerFulfillmentDate = null,
 }) {
   const name = String(partyName || "").trim();
   if (!name) {
@@ -72,40 +94,102 @@ export async function createOnlineOrder({
   if (!company) {
     company = await CompanyBasicInfo.findOne().sort({ updatedAt: -1 }).lean();
   }
-  const todayHours = getTodayRestaurantHours(
-    normalizeRestaurantHours(company?.restaurantHours),
-  );
-  // 24h restaurants stay open — never treat as pastClose.
-  if (todayHours.closed || (!todayHours.is24Hours && todayHours.pastClose)) {
+
+  const hoursConfig = normalizeRestaurantHours(company?.restaurantHours);
+  const tz = onlineOrderingTimezone();
+  const todayStr = todayBusinessDate(tz);
+  const offerOnly = cartItemsAreOfferOnly(items);
+
+  let fulfillmentDate = null;
+  if (offerOnly) {
+    const requested =
+      toOfferDateOnly(offerFulfillmentDate, tz) || todayStr;
+    const maxDate = minOfferValidToDate(items, tz) || todayStr;
+    if (requested < todayStr) {
+      const err = new Error("Offer date cannot be in the past");
+      err.status = 400;
+      throw err;
+    }
+    if (requested > maxDate) {
+      const err = new Error(
+        "Offer date cannot be after the offer expiry date",
+      );
+      err.status = 400;
+      throw err;
+    }
+    fulfillmentDate = requested;
+  }
+
+  // Use real "now" for today (pastClose / lead slots); probe noon only for future weekdays.
+  const dayProbe =
+    fulfillmentDate && fulfillmentDate !== todayStr
+      ? probeDateFromISO(fulfillmentDate)
+      : new Date();
+  const dayHours = getTodayRestaurantHours(hoursConfig, dayProbe, tz);
+
+  if (dayHours.closed) {
+    const err = new Error(
+      fulfillmentDate && fulfillmentDate !== todayStr
+        ? "Online pickup is closed on the selected offer date"
+        : "Online pickup is closed for today",
+    );
+    err.status = 400;
+    throw err;
+  }
+
+  // Same-day (or non-offer) orders: block after close. Future offer bookings skip this.
+  if (
+    (!fulfillmentDate || fulfillmentDate === todayStr) &&
+    !dayHours.is24Hours &&
+    dayHours.pastClose
+  ) {
     const err = new Error("Online pickup is closed for today");
     err.status = 400;
     throw err;
   }
-  const closeMin = timeToMinutes(todayHours.close);
-  const pickupOpts = todayHours.is24Hours
-    ? { is24Hours: true, openMinutes: 0, endMinutes: 23 * 60 + 45 }
-    : {
-        openMinutes: timeToMinutes(todayHours.open) ?? undefined,
-        // Match public slot grid: last offerable slot is 15 min before close.
-        endMinutes:
-          closeMin != null ? Math.max(0, closeMin - 15) : undefined,
-      };
-  if (!isValidSameDayPickup(pickupTime, new Date(), undefined, pickupOpts)) {
-    const err = new Error("Please choose a valid same-day pickup time");
-    err.status = 400;
-    throw err;
+
+  const pickupOpts = pickupOptsFromHours(dayHours);
+
+  let specialNote;
+  if (fulfillmentDate) {
+    if (
+      !isValidPickupForDate(
+        pickupTime,
+        fulfillmentDate,
+        new Date(),
+        tz,
+        pickupOpts,
+      )
+    ) {
+      const err = new Error(
+        fulfillmentDate === todayStr
+          ? "Please choose a valid same-day pickup time"
+          : "Please choose a valid pickup time for the selected offer date",
+      );
+      err.status = 400;
+      throw err;
+    }
+    specialNote = formatPickupNotePrefixForDate(pickupTime, fulfillmentDate);
+  } else {
+    if (!isValidSameDayPickup(pickupTime, new Date(), tz, pickupOpts)) {
+      const err = new Error("Please choose a valid same-day pickup time");
+      err.status = 400;
+      throw err;
+    }
+    specialNote = formatPickupNotePrefix(
+      pickupTime,
+      new Date(),
+      tz,
+      pickupOpts,
+    );
+  }
+
+  const noteBody = String(customerNote || "").trim();
+  if (noteBody) {
+    specialNote = `${specialNote} ${noteBody}`;
   }
 
   const priced = await quoteOnlineOrder({ restaurantId, items });
-
-  const pickupPrefix = formatPickupNotePrefix(
-    pickupTime,
-    new Date(),
-    undefined,
-    pickupOpts,
-  );
-  const noteBody = String(customerNote || "").trim();
-  const specialNote = noteBody ? `${pickupPrefix} ${noteBody}` : pickupPrefix;
 
   const orderNumber = await getNextOrderNumber(restaurantId);
   const invoiceNumber = await getNextInvoiceNumber(restaurantId);
@@ -135,19 +219,26 @@ export async function createOnlineOrder({
     status: "PENDING",
     paymentStatus: "UNPAID",
     source: "ONLINE",
+    offerFulfillmentDate: fulfillmentDate,
   });
 
   try {
     await createNotification({
       restaurantId,
       type: "NEW_ORDER",
-      title: "New Online Order",
-      message: `Online pickup order #${orderNumber} for ${name}`,
+      title:
+        fulfillmentDate && fulfillmentDate > todayStr
+          ? "New Upcoming Offer Order"
+          : "New Online Order",
+      message: `Online pickup order #${orderNumber} for ${name}${
+        fulfillmentDate ? ` · ${fulfillmentDate}` : ""
+      }`,
       orderId: order._id,
       metadata: {
         orderNumber,
         source: "ONLINE",
         pickupTime,
+        offerFulfillmentDate: fulfillmentDate,
         actorName: name,
       },
     });
@@ -162,6 +253,7 @@ export async function createOnlineOrder({
         orderId: order._id,
         orderNumber: order.orderNumber,
         source: "ONLINE",
+        offerFulfillmentDate: fulfillmentDate,
         restaurantName: restaurantName || null,
       });
     }
@@ -209,6 +301,7 @@ export function serializePublicOrder(order) {
     totalAmount: order.totalAmount,
     specialNote: stripPickupPrefix(specialNote),
     pickup,
+    offerFulfillmentDate: order.offerFulfillmentDate || null,
     orderType: "PICKUP",
     items: (order.items || []).map((item) => ({
       name: item.name,
@@ -221,6 +314,10 @@ export function serializePublicOrder(order) {
       addonChoiceSelections: item.addonChoiceSelections || [],
       notes: item.notes || "",
       tax: item.tax || 0,
+      isOffer: Boolean(item.isOffer),
+      inclusions: item.inclusions || [],
+      choices: item.choices || [],
+      drinks: item.drinks || [],
     })),
     createdAt: order.createdAt,
     updatedAt: order.updatedAt,

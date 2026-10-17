@@ -51,9 +51,27 @@ export function getOfferDetailLines(item) {
   const drinks = cleanOfferList(item?.drinks);
   const lines = [];
 
-  if (inclusions.length) lines.push({ label: "Includes", value: inclusions.join(", ") });
-  if (choices.length) lines.push({ label: "Choices", value: choices.join(", ") });
-  if (drinks.length) lines.push({ label: "Drinks", value: drinks.join(", ") });
+  if (inclusions.length) {
+    lines.push({
+      label: "Includes",
+      value: inclusions.join(", "),
+      values: inclusions,
+    });
+  }
+  if (choices.length) {
+    lines.push({
+      label: "Choices",
+      value: choices.join(", "),
+      values: choices,
+    });
+  }
+  if (drinks.length) {
+    lines.push({
+      label: "Drinks",
+      value: drinks.join(", "),
+      values: drinks,
+    });
+  }
   if (lines.length) return lines;
 
   return (item?.options || [])
@@ -62,10 +80,13 @@ export function getOfferDetailLines(item) {
     .filter((opt) => /^(includes|choices|drinks)\s*:/i.test(opt))
     .map((opt) => {
       const idx = opt.indexOf(":");
-      return {
-        label: opt.slice(0, idx).trim(),
-        value: opt.slice(idx + 1).trim(),
-      };
+      const label = opt.slice(0, idx).trim();
+      const value = opt.slice(idx + 1).trim();
+      const values = value
+        .split(/\s*,\s*/)
+        .map((part) => part.trim())
+        .filter(Boolean);
+      return { label, value, values: values.length ? values : [value] };
     })
     .filter((line) => line.value);
 }

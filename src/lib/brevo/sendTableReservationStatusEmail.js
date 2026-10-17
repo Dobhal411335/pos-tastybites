@@ -49,14 +49,18 @@ export async function sendTableReservationStatusEmail({
       date: reservation.date,
       timeLabel,
       guests: reservation.guests,
+      reasonForVisit: reservation.reasonForVisit || null,
+      specialRequest:
+        reservation.specialRequest || reservation.notes || null,
       assignedTableNo: reservation.assignedTableNo,
       address: address || null,
     });
 
+    const datePart = reservation.date ? ` on ${reservation.date}` : "";
     const subject =
       type === "declined"
         ? `Table booking update — ${brand}`
-        : `Table confirmed for ${timeLabel} — ${brand}`;
+        : `Table confirmed for ${timeLabel}${datePart} — ${brand}`;
 
     await sendEmail({
       to,

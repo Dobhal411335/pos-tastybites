@@ -28,6 +28,7 @@ import {
   businessDateBounds,
   todayBusinessDate,
 } from "@/lib/eod/eodHelpers";
+import { todaySalesOrdersOrClause } from "@/lib/public/offerFulfillment";
 import {
   normalizeSeatNumber,
   seatKey,
@@ -945,13 +946,14 @@ export const GET = withAuth(async (request) => {
 
     // Unpaid open-order count for employee topnav badge
     if (searchParams.get("unpaidCount") === "true") {
-      const { start, end } = businessDateBounds(todayBusinessDate());
+      const todayStr = todayBusinessDate();
+      const { start, end } = businessDateBounds(todayStr);
       const unpaidCount = await Order.countDocuments({
         restaurantId: request.restaurant,
         isActive: { $ne: false },
-        createdAt: { $gte: start, $lt: end },
         paymentStatus: { $ne: "PAID" },
         status: { $nin: ["CANCELLED", "WAIVED", "PAID"] },
+        ...todaySalesOrdersOrClause(todayStr, start, end),
       });
       return sendSuccess({ unpaidCount }, "Unpaid order count");
     }
@@ -967,8 +969,9 @@ export const GET = withAuth(async (request) => {
     let query = { restaurantId, isActive: { $ne: false } };
     
     if (today === "true") {
-      const { start, end } = businessDateBounds(todayBusinessDate());
-      query.createdAt = { $gte: start, $lt: end };
+      const todayStr = todayBusinessDate();
+      const { start, end } = businessDateBounds(todayStr);
+      Object.assign(query, todaySalesOrdersOrClause(todayStr, start, end));
     } else {
       query.processedBy = employeeId;
       if (startDate || endDate) {

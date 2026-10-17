@@ -10,12 +10,15 @@ const TableReservationSchema = new mongoose.Schema(
     },
     guestName: { type: String, required: true, trim: true },
     phone: { type: String, required: true, trim: true },
+    countryCode: { type: String, default: "+1", trim: true },
     email: { type: String, default: null, trim: true, lowercase: true },
-    /** YYYY-MM-DD (restaurant local same-day) */
+    /** YYYY-MM-DD (restaurant local) */
     date: { type: String, required: true, index: true },
     /** HH:mm 24h */
     time: { type: String, required: true },
-    guests: { type: Number, required: true, min: 1, max: 20 },
+    guests: { type: Number, required: true, min: 1, max: 50 },
+    reasonForVisit: { type: String, default: null, trim: true },
+    specialRequest: { type: String, default: null, trim: true },
     status: {
       type: String,
       enum: ["PENDING", "ACCEPTED", "DECLINED", "SEATED", "CANCELLED", "NO_SHOW"],

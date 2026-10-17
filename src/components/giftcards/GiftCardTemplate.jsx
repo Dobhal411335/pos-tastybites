@@ -2,15 +2,28 @@
 
 import Image from "next/image";
 import React from "react";
-// import QRCode from "react-qr-code";
+import { format } from "date-fns";
 import { Yellowtail } from "next/font/google";
 
 const yellowtail = Yellowtail({
   subsets: ["latin"],
   weight: "400",
 });
-export default function GiftCardTemplate({ card, index }) {
-  const amountStr = `$${parseFloat(card.value).toFixed(2)}`;
+
+function formatCardDate(value) {
+  if (!value) return "";
+  try {
+    return format(new Date(value), "MMM d, yyyy");
+  } catch {
+    return "";
+  }
+}
+
+export default function GiftCardTemplate({ card }) {
+  const amountStr = `$${parseFloat(card.value || 0).toFixed(2)}`;
+  const dateStr = formatCardDate(card.issueDate || card.createdAt);
+  const forName = String(card.recipientName || "").trim();
+
   return (
     <div className="flex w-full h-full bg-white text-black font-sans box-border overflow-hidden rounded shadow-sm border border-gray-300 relative print:border-none print:shadow-none">
 
@@ -29,11 +42,28 @@ export default function GiftCardTemplate({ card, index }) {
 
         {/* Middle Body */}
         <div className="flex-1 bg-white p-2 flex flex-col justify-between text-[10px] leading-tight font-bold text-black border-r-2 border-dashed border-[#FFD700]">
-          <div className="flex items-end"><span className="w-8">Date:</span> <span className="border-b-2 border-black border-dotted flex-1 text-center font-normal"></span></div>
-          <div className="flex items-end gap-1"><span className="w-6">For:</span> <span className="border-b-2 border-black border-dotted flex-1"></span></div>
+          <div className="flex items-end">
+            <span className="w-8">Date:</span>{" "}
+            <span className="border-b-2 border-black border-dotted flex-1 text-center font-normal">
+              {dateStr}
+            </span>
+          </div>
+          <div className="flex items-end gap-1">
+            <span className="w-6">For:</span>{" "}
+            <span className="border-b-2 border-black border-dotted flex-1 font-normal truncate">
+              {forName}
+            </span>
+          </div>
           <div className="border-b-2 border-black border-dotted w-full h-px"></div>
-          <div className="flex items-end gap-1"><span className="w-12">Amount:</span> <span className="border-b-2 border-black border-dotted flex-1 text-center text-[12px] font-normal">{amountStr}</span></div>
-          <div className="flex items-end gap-1"><span className="w-12 whitespace-nowrap">Signature:</span> <span className="border-b-2 border-black border-dotted flex-1"></span>
+          <div className="flex items-end gap-1">
+            <span className="w-12">Amount:</span>{" "}
+            <span className="border-b-2 border-black border-dotted flex-1 text-center text-[12px] font-normal">
+              {amountStr}
+            </span>
+          </div>
+          <div className="flex items-end gap-1">
+            <span className="w-12 whitespace-nowrap">Signature:</span>{" "}
+            <span className="border-b-2 border-black border-dotted flex-1"></span>
           </div>
         </div>
 
@@ -47,7 +77,6 @@ export default function GiftCardTemplate({ card, index }) {
 
         {/* Ribbon Image (Absolute) */}
         <div className="absolute top-0 right-0 w-40 h-44 z-10 pointer-events-none translate-x-[10%] -translate-y-[1%]">
-          {/* Using a highly stylized internet image for the rosette/ribbon */}
           <Image
             width={500}
             height={500}
@@ -80,25 +109,25 @@ export default function GiftCardTemplate({ card, index }) {
             <div className="flex-1 flex flex-col gap-2.5 text-[12px] font-bold">
               <div className="flex items-end gap-2">
                 <span className="w-8">Date:</span>
-                <span className="border-b-2 border-black border-dotted flex-1 font-normal text-center"></span>
+                <span className="border-b-2 border-black border-dotted flex-1 font-normal text-center">
+                  {dateStr}
+                </span>
                 <span className="w-12 ml-4">Amount:</span>
-                <span className="bg-[#FFD700] border-2 border-black min-w-[80px] h-6 flex items-center justify-center font-bold print:!bg-[#FFD700] print:border-black">{amountStr}</span>
+                <span className="bg-[#FFD700] border-2 border-black min-w-[80px] h-6 flex items-center justify-center font-bold print:!bg-[#FFD700] print:border-black">
+                  {amountStr}
+                </span>
               </div>
               <div className="flex items-end gap-2">
                 <span className="w-8">For:</span>
-                <span className="border-b-2 border-black border-dotted flex-1 pb-1"></span>
+                <span className="border-b-2 border-black border-dotted flex-1 pb-1 font-normal truncate">
+                  {forName}
+                </span>
               </div>
               <div className="flex items-end gap-2">
                 <span className="whitespace-nowrap">Authorised Signature:</span>
                 <span className="border-b-2 border-black border-dotted flex-1 pb-1"></span>
               </div>
             </div>
-
-            {/* QR Code (Temporarily disabled)
-            <div className="w-16 h-16 bg-white p-1 border border-gray-200 mt-1 flex-shrink-0 relative z-0">
-              <QRCode value={qrData} size={64} style={{ width: "100%", height: "100%" }} />
-            </div>
-            */}
           </div>
         </div>
 

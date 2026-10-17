@@ -1,15 +1,16 @@
 import mongoose from 'mongoose';
 
+const ChoiceOptionSchema = new mongoose.Schema({
+  name: { type: String, required: true, trim: true },
+  subChoices: [{ type: String, trim: true }],
+});
+
 const VariantSchema = new mongoose.Schema({
   size: { type: String, required: true },
   price: { type: Number, required: true },
   status: { type: Boolean, default: true },
   ingredients: { type: [String], default: [] },
-});
-
-const ChoiceOptionSchema = new mongoose.Schema({
-  name: { type: String, required: true, trim: true },
-  subChoices: [{ type: String, trim: true }],
+  choiceOptions: { type: [ChoiceOptionSchema], default: [] },
 });
 
 /** Custom data: group name → flat option strings (radio single-select at order time) */

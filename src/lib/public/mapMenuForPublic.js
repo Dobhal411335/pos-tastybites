@@ -14,6 +14,13 @@ function normalizeIngredientList(ingredients = []) {
   ];
 }
 
+function mapChoiceOptions(choiceOptions = []) {
+  return (Array.isArray(choiceOptions) ? choiceOptions : []).map((c) => ({
+    name: c.name,
+    subChoices: c.subChoices || [],
+  }));
+}
+
 function activeVariants(variants = []) {
   return (Array.isArray(variants) ? variants : [])
     .filter((v) => v && v.status !== false)
@@ -21,6 +28,7 @@ function activeVariants(variants = []) {
       size: v.size,
       price: Number(v.price) || 0,
       ingredients: normalizeIngredientList(v.ingredients),
+      choiceOptions: mapChoiceOptions(v.choiceOptions),
     }));
 }
 
@@ -31,19 +39,9 @@ function activeAddons(addons = []) {
       name: a.name,
       price: Number(a.price) || 0,
       size: a.size || "Regular",
-      choiceOptions: (a.choiceOptions || []).map((c) => ({
-        name: c.name,
-        subChoices: c.subChoices || [],
-      })),
+      choiceOptions: mapChoiceOptions(a.choiceOptions),
       ingredients: normalizeIngredientList(a.ingredients),
     }));
-}
-
-function mapChoiceOptions(choiceOptions = []) {
-  return (Array.isArray(choiceOptions) ? choiceOptions : []).map((c) => ({
-    name: c.name,
-    subChoices: c.subChoices || [],
-  }));
 }
 
 function mapCustomData(customData = []) {
@@ -102,6 +100,7 @@ export function mapProductForPublic(product, categoryMap = new Map()) {
       absolutePrice: v.price,
       tax: 0,
       ingredients: v.ingredients || [],
+      choiceOptions: v.choiceOptions || [],
     })),
     addons: addons.map((a) => ({
       name: a.name,
@@ -118,6 +117,7 @@ export function mapProductForPublic(product, categoryMap = new Map()) {
       addons.length > 0 ||
       customData.length > 0 ||
       choiceOptions.length > 0 ||
+      variants.some((v) => (v.choiceOptions || []).length > 0) ||
       (product.preparationStyles || []).length > 0,
   };
 }

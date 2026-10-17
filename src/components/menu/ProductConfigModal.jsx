@@ -21,6 +21,7 @@ import {
   sumAddonChoiceQtyMap,
   buildAddonChoiceSelectionsFromQtyMaps,
   validateAddonNestedChoiceQtys,
+  mergeChoiceSelections,
 } from "@/utils/productChoices";
 import { cn } from "@/lib/utils";
 import IngredientChips from "@/components/menu/IngredientChips";
@@ -81,9 +82,10 @@ export default function ProductConfigModal({ isOpen, onClose, product }) {
             ? s.absolutePrice
             : (product.price || 0) + (s.price || 0),
         ingredients: Array.isArray(s.ingredients) ? s.ingredients : [],
+        choiceOptions: Array.isArray(s.choiceOptions) ? s.choiceOptions : [],
       }));
     }
-    return [{ size: "Standard", price: Number(product?.price) || 0, ingredients: [] }];
+    return [{ size: "Standard", price: Number(product?.price) || 0, ingredients: [], choiceOptions: [] }];
   }, [product]);
 
   const addons = useMemo(
@@ -105,9 +107,11 @@ export default function ProductConfigModal({ isOpen, onClose, product }) {
 
   const [variantQtyBySize, setVariantQtyBySize] = useState({});
   const [addonQtyById, setAddonQtyById] = useState({});
-  /** { [groupName]: { [optionName]: string[] } } */
+  /** { [groupName]: string } single-select radio per custom-data group */
   const [customDataSelections, setCustomDataSelections] = useState({});
   const [choiceSelections, setChoiceSelections] = useState({});
+  /** { [variantKey]: { [groupName]: string[] } } */
+  const [variantChoiceSelections, setVariantChoiceSelections] = useState({});
   const [preparationStyle, setPreparationStyle] = useState("");
   const [configuredProductId, setConfiguredProductId] = useState(null);
 
@@ -122,6 +126,7 @@ export default function ProductConfigModal({ isOpen, onClose, product }) {
     setAddonQtyById({});
     setCustomDataSelections({});
     setChoiceSelections({});
+    setVariantChoiceSelections({});
     setPreparationStyle(prepStyles[0] || "");
   }
 
@@ -243,6 +248,28 @@ export default function ProductConfigModal({ isOpen, onClose, product }) {
     });
   };
 
+  /** Per-variant choice groups are single-select (radio). */
+  const selectVariantChoice = (variantKey, groupName, subChoice) => {
+    setVariantChoiceSelections((prev) => {
+      const groupMap = prev[variantKey] || {};
+      return {
+        ...prev,
+        [variantKey]: { ...groupMap, [groupName]: [subChoice] },
+      };
+    });
+  };
+
+  const buildVariantChoicePayload = (variantKey, variant) => {
+    const groups = normalizeChoiceOptions(variant?.choiceOptions);
+    const selected = variantChoiceSelections[variantKey] || {};
+    return groups
+      .map((group) => ({
+        name: group.name,
+        subChoices: (selected[group.name] || []).slice(0, 1),
+      }))
+      .filter((group) => group.subChoices.length > 0);
+  };
+
   const toggleCustomDataChoice = (groupName, choice) => {
     setCustomDataSelections((prev) => {
       const current = prev[groupName] || "";
@@ -314,7 +341,6 @@ export default function ProductConfigModal({ isOpen, onClose, product }) {
       }
     }
 
-    const choiceKey = cartChoiceSelectionsKey(productChoicePayload);
     const customDataKey = cartCustomDataSelectionsKey(productCustomDataPayload);
     const prep = preparationStyle || "";
 
@@ -322,6 +348,11 @@ export default function ProductConfigModal({ isOpen, onClose, product }) {
       const variant = variants[Number(key)];
       if (!variant) return;
       const sizeName = variant.size || "Standard";
+      const lineChoiceSelections = mergeChoiceSelections(
+        productChoicePayload,
+        buildVariantChoicePayload(key, variant),
+      );
+      const choiceKey = cartChoiceSelectionsKey(lineChoiceSelections);
       const cartKey = buildCartKey([
         product.id,
         sizeName,
@@ -343,7 +374,7 @@ export default function ProductConfigModal({ isOpen, onClose, product }) {
           sizes: sizeName && !/^standard$/i.test(sizeName) ? [sizeName] : [],
           selectedAddons: [],
           options: prep ? [prep] : [],
-          choiceSelections: productChoicePayload,
+          choiceSelections: lineChoiceSelections,
           customDataSelections: productCustomDataPayload,
           addonChoiceSelections: [],
           preparationStyle: prep || null,
@@ -518,6 +549,72 @@ export default function ProductConfigModal({ isOpen, onClose, product }) {
                                 ingredients={v.ingredients}
                                 label="Includes"
                               />
+                              {(() => {
+                                const variantChoiceGroups =
+                                  normalizeChoiceOptions(v.choiceOptions);
+                                if (!variantChoiceGroups.length) return null;
+                                return (
+                                  <div className="mt-3 space-y-3 border-t border-zinc-100 pt-3">
+                                    <div className="text-[12px] font-bold uppercase tracking-wide text-zinc-500">
+                                      Choice Options
+                                    </div>
+                                    {variantChoiceGroups.map(
+                                      (group, groupIndex) => {
+                                        const selected =
+                                          variantChoiceSelections[key]?.[
+                                            group.name
+                                          ] || [];
+                                        return (
+                                          <div
+                                            key={`variant-${key}-choice-${groupIndex}-${group.name}`}
+                                            className="space-y-2"
+                                            role="radiogroup"
+                                            aria-label={group.name}
+                                          >
+                                            <div className="text-[13px] font-semibold text-zinc-800">
+                                              {group.name}
+                                            </div>
+                                            <div className="grid gap-2 sm:grid-cols-2">
+                                              {(group.subChoices || []).map(
+                                                (sub) => {
+                                                  const checked =
+                                                    selected[0] === sub;
+                                                  return (
+                                                    <label
+                                                      key={sub}
+                                                      className={cn(
+                                                        "flex cursor-pointer items-center gap-3 rounded-lg border p-2.5 text-sm font-semibold",
+                                                        checked
+                                                          ? "border-primary bg-primary/5"
+                                                          : "border-zinc-200",
+                                                      )}
+                                                    >
+                                                      <input
+                                                        type="radio"
+                                                        name={`variant-${key}-choice-${group.name}`}
+                                                        checked={checked}
+                                                        onChange={() =>
+                                                          selectVariantChoice(
+                                                            key,
+                                                            group.name,
+                                                            sub,
+                                                          )
+                                                        }
+                                                        className="h-4 w-4 accent-orange-600"
+                                                      />
+                                                      {sub}
+                                                    </label>
+                                                  );
+                                                },
+                                              )}
+                                            </div>
+                                          </div>
+                                        );
+                                      },
+                                    )}
+                                  </div>
+                                );
+                              })()}
                             </div>
                           );
                         })}

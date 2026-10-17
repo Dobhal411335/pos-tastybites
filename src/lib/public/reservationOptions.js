@@ -1,0 +1,15 @@
+export const REASON_FOR_VISIT_OPTIONS = [
+  "Birthday Celebration",
+  "Wedding Anniversary",
+  "Romantic Dinner / Date Night",
+  "Family Dining",
+  "Friends Gathering",
+  "Business Meeting",
+  "Corporate Lunch / Dinner",
+  "Family Get-Together",
+  "Special Occasion",
+  "Festival Celebration",
+  "Casual Dining",
+  "Tourist / Guest Visit",
+  "Other",
+];

@@ -6,6 +6,7 @@ import {
   formatRestaurantDateWithDay,
   formatRestaurantTime,
 } from "@/lib/reports/financial/format";
+import { reportDateRangeOrderTimeClause } from "@/lib/public/offerFulfillment";
 import {
   dateRangeBounds,
   escapeRegex,
@@ -42,16 +43,20 @@ function buildListMatch({
 }) {
   const rid = toObjectId(restaurantId);
   const { start, end } = dateRangeBounds(dateFrom, dateTo);
+  const timeClause = reportDateRangeOrderTimeClause(
+    dateFrom,
+    dateTo,
+    start,
+    end,
+  );
   const match = {
     restaurantId: rid,
-    createdAt: { $gte: start, $lt: end },
+    $and: [timeClause],
   };
-
-  const and = [];
 
   if (view === "deleted") {
     // Full soft-deletes OR soft-removed cash on still-active mixed orders.
-    and.push({
+    match.$and.push({
       $or: [
         { isActive: false },
         { cashTenderRemovedAt: { $exists: true, $ne: null } },
@@ -63,7 +68,7 @@ function buildListMatch({
 
   if (search) {
     const s = escapeRegex(search);
-    and.push({
+    match.$and.push({
       $or: [
         { orderNumber: { $regex: s, $options: "i" } },
         { originalOrderNumber: { $regex: s, $options: "i" } },
@@ -76,12 +81,6 @@ function buildListMatch({
         { giftcardCode: { $regex: s, $options: "i" } },
       ],
     });
-  }
-
-  if (and.length === 1) {
-    Object.assign(match, and[0]);
-  } else if (and.length > 1) {
-    match.$and = and;
   }
 
   return match;

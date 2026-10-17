@@ -28,23 +28,29 @@ export default function OfferConfigModal({ isOpen, onClose, offer }) {
   const drinks = cleanOfferList(offer?.drinks);
 
   const [selectedInclusions, setSelectedInclusions] = useState(inclusions);
-  const [selectedChoices, setSelectedChoices] = useState([]);
-  const [selectedDrinks, setSelectedDrinks] = useState([]);
+  // Single-select for choices / drinks (radio) — store as string or ""
+  const [selectedChoice, setSelectedChoice] = useState("");
+  const [selectedDrink, setSelectedDrink] = useState("");
   const [itemNotes, setItemNotes] = useState("");
+  const [showFullDescription, setShowFullDescription] = useState(false);
 
   useEffect(() => {
     if (!offer) return;
+    const nextChoices = cleanOfferList(offer.choices);
+    const nextDrinks = cleanOfferList(offer.drinks);
     setSelectedInclusions(cleanOfferList(offer.inclusions));
-    setSelectedChoices([]);
-    setSelectedDrinks([]);
+    setSelectedChoice(nextChoices.length === 1 ? nextChoices[0] : "");
+    setSelectedDrink(nextDrinks.length === 1 ? nextDrinks[0] : "");
     setItemNotes("");
+    setShowFullDescription(false);
   }, [offer]);
 
   if (!offer) return null;
 
   const handleAdd = () => {
     const hasAnyOptions = inclusions.length > 0 || choices.length > 0 || drinks.length > 0;
-    const hasAnySelection = selectedInclusions.length > 0 || selectedChoices.length > 0 || selectedDrinks.length > 0;
+    const hasAnySelection =
+      selectedInclusions.length > 0 || Boolean(selectedChoice) || Boolean(selectedDrink);
 
     if (hasAnyOptions && !hasAnySelection) {
       toast.error("Please select at least one option.");
@@ -52,8 +58,9 @@ export default function OfferConfigModal({ isOpen, onClose, offer }) {
     }
 
     const inc = selectedInclusions;
-    const ch = selectedChoices;
-    const dr = selectedDrinks;
+    // Send only one choice / drink each
+    const ch = selectedChoice ? [selectedChoice] : [];
+    const dr = selectedDrink ? [selectedDrink] : [];
     const notes = String(itemNotes || "").trim();
     const noteKey = notes
       ? notes.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 40)
@@ -64,8 +71,8 @@ export default function OfferConfigModal({ isOpen, onClose, offer }) {
       "offer",
       offer.id,
       inc.join("+"),
-      ch.join("+"),
-      dr.join("+"),
+      ch[0] || "",
+      dr[0] || "",
       noteKey ? `note-${noteKey}` : "",
     ]
       .filter(Boolean)
@@ -94,6 +101,8 @@ export default function OfferConfigModal({ isOpen, onClose, offer }) {
         drinks: dr,
         notes,
         productType: "KITCHEN",
+        validFrom: offer.validFrom || null,
+        validTo: offer.validTo || null,
       },
       1
     );
@@ -139,12 +148,29 @@ export default function OfferConfigModal({ isOpen, onClose, offer }) {
           </div>
         </div>
 
-        <div className="flex-1 space-y-5 overflow-y-auto px-5 py-4">
+        <div className="flex-1 space-y-5 overflow-y-auto px-5 py-1">
           {offer.description ? (
-            <p className="text-sm leading-relaxed text-[var(--customer-muted)]">
-              {offer.description}
-            </p>
+            <>
+              <p
+                className={cn(
+                  "text-sm leading-relaxed text-[var(--customer-muted)]",
+                  !showFullDescription ? "line-clamp-3" : ""
+                )}
+              >
+                {offer.description}
+              </p>
+              {offer.description.length > 120 && (
+                <button
+                  type="button"
+                  onClick={() => setShowFullDescription((prev) => !prev)}
+                  className="mt-1 text-xs font-semibold text-primary underline"
+                >
+                  {showFullDescription ? "Show less" : "Read more"}
+                </button>
+              )}
+            </>
           ) : null}
+     
 
           {inclusions.length > 0 && (
             <fieldset className="space-y-3">
@@ -181,11 +207,11 @@ export default function OfferConfigModal({ isOpen, onClose, offer }) {
           {choices.length > 0 && (
             <fieldset className="space-y-3">
               <legend className="text-xs font-bold uppercase tracking-widest text-zinc-500">
-                Choices 
+                Choices (pick one)
               </legend>
-              <div className="space-y-2">
+              <div className="space-y-2" role="radiogroup" aria-label="Offer choices">
                 {choices.map((item) => {
-                  const checked = selectedChoices.includes(item);
+                  const checked = selectedChoice === item;
                   return (
                     <label
                       key={item}
@@ -195,11 +221,10 @@ export default function OfferConfigModal({ isOpen, onClose, offer }) {
                       )}
                     >
                       <input
-                        type="checkbox"
+                        type="radio"
+                        name="offer-config-choice"
                         checked={checked}
-                        onChange={() =>
-                          setSelectedChoices((prev) => toggleValue(prev, item))
-                        }
+                        onChange={() => setSelectedChoice(item)}
                         className="h-4 w-4 accent-orange-600"
                       />
                       {item}
@@ -213,11 +238,11 @@ export default function OfferConfigModal({ isOpen, onClose, offer }) {
           {drinks.length > 0 && (
             <fieldset className="space-y-3">
               <legend className="text-xs font-bold uppercase tracking-widest text-zinc-500">
-                Drinks
+                Drinks (pick one)
               </legend>
-              <div className="space-y-2">
+              <div className="space-y-2" role="radiogroup" aria-label="Offer drinks">
                 {drinks.map((item) => {
-                  const checked = selectedDrinks.includes(item);
+                  const checked = selectedDrink === item;
                   return (
                     <label
                       key={item}
@@ -227,11 +252,10 @@ export default function OfferConfigModal({ isOpen, onClose, offer }) {
                       )}
                     >
                       <input
-                        type="checkbox"
+                        type="radio"
+                        name="offer-config-drink"
                         checked={checked}
-                        onChange={() =>
-                          setSelectedDrinks((prev) => toggleValue(prev, item))
-                        }
+                        onChange={() => setSelectedDrink(item)}
                         className="h-4 w-4 accent-orange-600"
                       />
                       {item}

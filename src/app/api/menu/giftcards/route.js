@@ -219,8 +219,36 @@ export const GET = withAuth(async (request) => {
     }
 
     if (view === "flat") {
+      const search = String(searchParams.get("search") || searchParams.get("q") || "").trim();
+      const match = {
+        restaurant: new mongoose.Types.ObjectId(request.restaurant),
+        isIssued: true,
+      };
+
+      if (search) {
+        const escaped = search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        const searchDigits = search.replace(/\D/g, "");
+        const or = [
+          { code: { $regex: escaped, $options: "i" } },
+          { recipientName: { $regex: escaped, $options: "i" } },
+          { recipientEmail: { $regex: escaped, $options: "i" } },
+          { recipientPhone: { $regex: escaped, $options: "i" } },
+        ];
+        // Digits-only match so "5190000000" hits "+1 519-000-0000"
+        if (searchDigits.length >= 3) {
+          const digitPattern = searchDigits
+            .split("")
+            .map((d) => d.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+            .join("\\D*");
+          or.push({
+            recipientPhone: { $regex: digitPattern, $options: "i" },
+          });
+        }
+        match.$or = or;
+      }
+
       const pipeline = [
-        { $match: { restaurant: new mongoose.Types.ObjectId(request.restaurant), isIssued: true } },
+        { $match: match },
         { $sort: { createdAt: -1 } },
         {
           $facet: {

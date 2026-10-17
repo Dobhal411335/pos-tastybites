@@ -72,7 +72,47 @@ export function normalizeCustomDataSelections(list) {
 }
 
 export function productHasChoiceOptions(product) {
-  return normalizeChoiceOptions(product?.choiceOptions).length > 0;
+  if (normalizeChoiceOptions(product?.choiceOptions).length > 0) return true;
+  const variants = Array.isArray(product?.variants) ? product.variants : [];
+  return variants.some((v) => normalizeChoiceOptions(v?.choiceOptions).length > 0);
+}
+
+/**
+ * Product-level choiceOptions ∪ matching variant choiceOptions (by size).
+ * On group-name clash, variant groups win.
+ */
+export function resolveProductChoiceCatalog(product, size) {
+  const productGroups = normalizeChoiceOptions(product?.choiceOptions);
+  const sizeKey = String(size || "").trim().toLowerCase();
+  const variants = Array.isArray(product?.variants) ? product.variants : [];
+  const matched = sizeKey
+    ? variants.find(
+        (v) => String(v?.size || "").trim().toLowerCase() === sizeKey,
+      )
+    : null;
+  const variantGroups = normalizeChoiceOptions(matched?.choiceOptions);
+  if (!variantGroups.length) return productGroups;
+  if (!productGroups.length) return variantGroups;
+
+  const byName = new Map();
+  for (const group of productGroups) {
+    byName.set(group.name.toLowerCase(), group);
+  }
+  for (const group of variantGroups) {
+    byName.set(group.name.toLowerCase(), group);
+  }
+  return [...byName.values()];
+}
+
+/** Merge choice selection arrays; later entries win on group-name clash. */
+export function mergeChoiceSelections(...lists) {
+  const byName = new Map();
+  for (const list of lists) {
+    for (const group of normalizeChoiceSelections(list)) {
+      byName.set(group.name.toLowerCase(), group);
+    }
+  }
+  return [...byName.values()];
 }
 
 export function productHasCustomData(product) {
@@ -367,7 +407,10 @@ export function getReceiptModifierLines(item) {
 
   if (isOfferItem(item)) {
     for (const line of getOfferDetailLines(item)) {
-      lines.push({ kind: "offer", text: `${line.label}: ${line.value}` });
+      lines.push({ kind: "offer", text: `${line.label}:` });
+      for (const value of line.values || [line.value]) {
+        if (value) lines.push({ kind: "offer-item", text: `• ${value}` });
+      }
     }
     return lines;
   }

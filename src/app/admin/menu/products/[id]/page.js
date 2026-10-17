@@ -73,6 +73,7 @@ export default function ProductDetailsConfigPage() {
           (p.variants || []).map((variant) => ({
             ...variant,
             ingredients: Array.isArray(variant.ingredients) ? variant.ingredients : [],
+            choiceOptions: normalizeAddonChoiceOptionsForForm(variant.choiceOptions),
           }))
         );
         setAddons(
@@ -359,6 +360,7 @@ export default function ProductDetailsConfigPage() {
             ...v,
             price: parseFloat(v.price) || 0,
             ingredients: Array.isArray(v.ingredients) ? v.ingredients : [],
+            choiceOptions: serializeAddonChoiceOptions(v.choiceOptions),
           })),
           addons: addons.filter(a => a.name).map(a => ({
             ...a,
@@ -1008,6 +1010,15 @@ export default function ProductDetailsConfigPage() {
                               </div>
                             )}
                           </div>
+
+                          <AddonChoiceOptionsEditor
+                            choiceOptions={variant.choiceOptions || []}
+                            onChange={(choiceOptions) => {
+                              const newVariants = [...variants];
+                              newVariants[index] = { ...newVariants[index], choiceOptions };
+                              setVariants(newVariants);
+                            }}
+                          />
                         </div>
                       ))}
                       <div className="mt-4 flex justify-end">
@@ -1015,7 +1026,7 @@ export default function ProductDetailsConfigPage() {
                           type="button"
                           variant="secondary"
                           className="h-9"
-                          onClick={() => setVariants([...variants, { price: "", size: sizesList[0] || "Regular", status: true, ingredients: [] }])}
+                          onClick={() => setVariants([...variants, { price: "", size: sizesList[0] || "Regular", status: true, ingredients: [], choiceOptions: [] }])}
                         >
                           Add More Variants
                         </Button>
@@ -1304,7 +1315,14 @@ export default function ProductDetailsConfigPage() {
                       {variants.length > 0 ? variants.map((det, index) => (
                         <TableRow key={index} className="h-16 hover:bg-zinc-50 transition-colors">
                           <TableCell className="px-6">
-                            <span className="text-[15px] font-semibold text-zinc-900">{det.size}</span>
+                            <div className="flex flex-col">
+                              <span className="text-[15px] font-semibold text-zinc-900">{det.size}</span>
+                              {serializeAddonChoiceOptions(det.choiceOptions).length > 0 && (
+                                <span className="text-[11px] text-zinc-400 mt-1">
+                                  {serializeAddonChoiceOptions(det.choiceOptions).length} choice group(s)
+                                </span>
+                              )}
+                            </div>
                           </TableCell>
                           <TableCell className="px-6 text-center font-bold text-[15px] text-[#F97316]">
                             ${Number(det.price || 0).toFixed(2)}

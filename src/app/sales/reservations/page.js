@@ -51,6 +51,26 @@ function formatTimeLabel(time) {
   return `${h12}:${min} ${period}`;
 }
 
+function formatDateLabel(iso) {
+  if (!iso) return "—";
+  try {
+    return new Date(`${iso}T12:00:00`).toLocaleDateString("en-CA", {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+    });
+  } catch {
+    return iso;
+  }
+}
+
+function formatPhone(phone, countryCode) {
+  const code = String(countryCode || "").trim();
+  const digits = String(phone || "").trim();
+  if (!digits) return "—";
+  return code ? `${code} ${digits}` : digits;
+}
+
 export default function SalesReservationsPage() {
   const router = useRouter();
   const { socket } = useSocket();
@@ -66,7 +86,7 @@ export default function SalesReservationsPage() {
     if (silent) setRefreshing(true);
     else setLoading(true);
     try {
-      const res = await employeeFetch("/api/sales/reservations?today=true");
+      const res = await employeeFetch("/api/sales/reservations");
       const json = await res.json();
       if (!res.ok || !json.success) {
         throw new Error(json.message || "Failed to load bookings");
@@ -127,7 +147,7 @@ export default function SalesReservationsPage() {
     const q = search.trim().toLowerCase();
     if (q) {
       list = list.filter((r) =>
-        `${r.guestName} ${r.phone} ${r.email || ""} ${r.time} ${r.status} ${r.assignedTableNo || ""}`
+        `${r.guestName} ${r.phone} ${r.email || ""} ${r.date || ""} ${r.time} ${r.status} ${r.assignedTableNo || ""} ${r.reasonForVisit || ""} ${r.specialRequest || r.notes || ""}`
           .toLowerCase()
           .includes(q)
       );
@@ -136,6 +156,8 @@ export default function SalesReservationsPage() {
     return list.sort((a, b) => {
       if (a.status === "PENDING" && b.status !== "PENDING") return -1;
       if (b.status === "PENDING" && a.status !== "PENDING") return 1;
+      const dateCmp = String(a.date || "").localeCompare(String(b.date || ""));
+      if (dateCmp !== 0) return dateCmp;
       return String(a.time).localeCompare(String(b.time));
     });
   }, [rows, tab, search]);
@@ -185,7 +207,7 @@ export default function SalesReservationsPage() {
                 Table Bookings
               </h1>
               <p className="text-xs text-zinc-500">
-                Today · {counts.PENDING} waiting for a decision
+                Upcoming · {counts.PENDING} waiting for a decision
               </p>
             </div>
           </div>
@@ -206,7 +228,7 @@ export default function SalesReservationsPage() {
             { label: "Accepted", value: counts.ACCEPTED, tone: "text-emerald-700 bg-emerald-50 border-emerald-100" },
             { label: "Seated", value: counts.SEATED, tone: "text-sky-700 bg-sky-50 border-sky-100" },
             { label: "Closed", value: counts.DONE, tone: "text-zinc-600 bg-zinc-50 border-zinc-200" },
-            { label: "Today total", value: counts.ALL, tone: "text-orange-700 bg-orange-50 border-orange-100 hidden lg:flex" },
+            { label: "Upcoming", value: counts.ALL, tone: "text-orange-700 bg-orange-50 border-orange-100 hidden lg:flex" },
           ].map((stat) => (
             <div
               key={stat.label}
@@ -285,10 +307,10 @@ export default function SalesReservationsPage() {
                   className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm"
                 >
                   <div className="flex flex-col gap-4 p-4 lg:flex-row lg:items-stretch">
-                    <div className="flex shrink-0 flex-row items-center gap-3 lg:w-28 lg:flex-col lg:items-start lg:justify-center lg:border-r lg:border-zinc-100 lg:pr-4">
+                    <div className="flex shrink-0 flex-row items-center gap-3 lg:w-32 lg:flex-col lg:items-start lg:justify-center lg:border-r lg:border-zinc-100 lg:pr-4">
                       <div className="rounded-xl bg-orange-50 px-3 py-2 text-center">
                         <p className="text-[10px] font-bold uppercase tracking-wide text-orange-600">
-                          Arrival
+                          {formatDateLabel(r.date)}
                         </p>
                         <p className="text-lg font-black tabular-nums text-orange-800">
                           {formatTimeLabel(r.time)}
@@ -312,7 +334,7 @@ export default function SalesReservationsPage() {
                         </span>
                         <span className="inline-flex items-center gap-1.5 tabular-nums">
                           <Phone className="h-3.5 w-3.5 text-zinc-400" />
-                          {r.phone}
+                          {formatPhone(r.phone, r.countryCode)}
                         </span>
                         {r.email ? (
                           <span className="inline-flex items-center gap-1.5">
@@ -327,7 +349,18 @@ export default function SalesReservationsPage() {
                           </span>
                         ) : null}
                       </div>
-                     
+                      {r.reasonForVisit ? (
+                        <p className="text-sm text-zinc-700">
+                          <span className="font-semibold text-zinc-900">Reason:</span>{" "}
+                          {r.reasonForVisit}
+                        </p>
+                      ) : null}
+                      {r.specialRequest || r.notes ? (
+                        <p className="text-sm text-zinc-600">
+                          <span className="font-semibold text-zinc-800">Special request:</span>{" "}
+                          {r.specialRequest || r.notes}
+                        </p>
+                      ) : null}
                     </div>
 
                     <div className="flex w-full flex-col gap-2 lg:w-56">

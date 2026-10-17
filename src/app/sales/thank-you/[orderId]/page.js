@@ -31,6 +31,11 @@ import {
   seatsFromSplit,
   splitDisplayName,
 } from "@/utils/receiptSlips";
+import {
+  getItemLineTotal,
+  getReceiptModifierLines,
+} from "@/utils/productChoices";
+import { getOfferDetailLines, isOfferItem } from "@/utils/offerDetails";
 
 function money(n) {
   return `$${Number(n || 0).toFixed(2)}`;
@@ -531,6 +536,84 @@ export default function SalesPaymentThankYouPage() {
                     </p>
                   </li>
                 ))}
+              </ul>
+            </div>
+          ) : null}
+
+          {Array.isArray(order?.items) && order.items.length > 0 ? (
+            <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
+              <p className="mb-3 text-[11px] font-extrabold uppercase tracking-widest text-zinc-400">
+                Order items
+              </p>
+              {order.offerFulfillmentDate ? (
+                <p className="mb-3 rounded-lg border border-violet-100 bg-violet-50 px-3 py-2 text-xs font-semibold text-violet-800">
+                  Offer date · {order.offerFulfillmentDate}
+                </p>
+              ) : null}
+              <ul className="space-y-2.5">
+                {order.items.map((item, idx) => {
+                  const offer = isOfferItem(item);
+                  const offerLines = offer ? getOfferDetailLines(item) : [];
+                  const modifierLines = offer
+                    ? []
+                    : getReceiptModifierLines(item);
+                  return (
+                    <li
+                      key={item.cartId || `${item.name}-${idx}`}
+                      className="rounded-xl border border-zinc-100 bg-zinc-50/80 px-3.5 py-3 text-sm"
+                    >
+                      <div className="flex justify-between gap-3">
+                        <span className="min-w-0">
+                          {offer ? (
+                            <span className="mb-1 mr-1.5 inline-block rounded border border-violet-200 bg-violet-50 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-violet-700">
+                              Offer
+                            </span>
+                          ) : null}
+                          <span className="font-extrabold">{item.qty}×</span>{" "}
+                          <span className="font-bold text-zinc-900">
+                            {item.name}
+                          </span>
+                          {!offer && item.size && item.size !== "Standard"
+                            ? ` (${item.size})`
+                            : ""}
+                        </span>
+                        <span className="shrink-0 font-black tabular-nums text-zinc-900">
+                          {money(getItemLineTotal(item))}
+                        </span>
+                      </div>
+                      {offerLines.length > 0 ? (
+                        <div className="mt-2 space-y-2 border-t border-zinc-100 pt-2 text-xs text-zinc-600">
+                          {offerLines.map((line) => (
+                            <div key={`${idx}-${line.label}`}>
+                              <p className="font-bold text-zinc-800">
+                                {line.label}
+                              </p>
+                              <ul className="mt-0.5 list-disc space-y-0.5 pl-5">
+                                {(line.values || [line.value]).map((value) => (
+                                  <li key={`${idx}-${line.label}-${value}`}>
+                                    {value}
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
+                      {modifierLines.length > 0 ? (
+                        <ul className="mt-1 space-y-0.5 pl-4 text-xs text-zinc-500">
+                          {modifierLines.map((line, lineIdx) => (
+                            <li key={`${line.kind}-${lineIdx}`}>{line.text}</li>
+                          ))}
+                        </ul>
+                      ) : null}
+                      {item.notes ? (
+                        <p className="mt-1.5 text-xs font-medium italic text-amber-800">
+                          Remark: {item.notes}
+                        </p>
+                      ) : null}
+                    </li>
+                  );
+                })}
               </ul>
             </div>
           ) : null}

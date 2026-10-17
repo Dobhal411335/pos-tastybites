@@ -155,6 +155,12 @@ const OrderSchema = new mongoose.Schema(
     /** Online pickup: marked ready for guest pickup. */
     onlineReadyAt: { type: Date, default: null },
     onlineReadyBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee', default: null },
+    /**
+     * Online offer-only booking day (restaurant-local YYYY-MM-DD).
+     * Null for POS / walk-in / staff / mixed or non-offer online orders.
+     * Future dates appear under Upcoming Offers until this day arrives.
+     */
+    offerFulfillmentDate: { type: String, default: null, index: true },
   },
   { timestamps: true }
 );
@@ -184,5 +190,11 @@ OrderSchema.index({ restaurantId: 1, processedBy: 1, createdAt: -1 });
 OrderSchema.index({ restaurantId: 1, updatedAt: 1, paymentStatus: 1 });
 OrderSchema.index({ restaurantId: 1, updatedAt: 1, status: 1 });
 OrderSchema.index({ restaurantId: 1, processedBy: 1, updatedAt: 1 });
+OrderSchema.index({
+  restaurantId: 1,
+  source: 1,
+  offerFulfillmentDate: 1,
+  status: 1,
+});
 
 export default mongoose.models.Order || mongoose.model('Order', OrderSchema);

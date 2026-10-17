@@ -95,6 +95,7 @@ export async function POST(request, { params }) {
       guestEmail,
       email,
       pickupTime,
+      offerFulfillmentDate,
       specialNote,
       customerNote,
       message,
@@ -127,6 +128,7 @@ export async function POST(request, { params }) {
       guestCountryCode: guestCountryCode || "+1",
       guestEmail: orderEmail,
       pickupTime,
+      offerFulfillmentDate: offerFulfillmentDate || null,
       customerNote: customerNote || specialNote || message || "",
     });
 

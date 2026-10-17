@@ -76,6 +76,8 @@ export default function OfferCard({ offer, highlighted = false }) {
         choices,
         drinks,
         productType: "KITCHEN",
+        validFrom: offer.validFrom || null,
+        validTo: offer.validTo || null,
       },
       1
     );

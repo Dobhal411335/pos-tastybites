@@ -16,6 +16,7 @@ import {
   ChevronDown,
   AlertTriangle,
   CalendarDays,
+  Gift,
   Settings2,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -50,6 +51,12 @@ const PRIMARY_NAV = [
     href: "/sales/reservations",
     icon: CalendarDays,
     showBookingBadge: true,
+  },
+  {
+    label: "Upcoming Offers",
+    href: "/sales/upcoming-offers",
+    icon: Gift,
+    showUpcomingOffersBadge: true,
   },
 ];
 
@@ -123,6 +130,7 @@ export default function EmployeeTopNav({
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [unpaidCount, setUnpaidCount] = React.useState(0);
   const [pendingBookings, setPendingBookings] = React.useState(0);
+  const [upcomingOffersCount, setUpcomingOffersCount] = React.useState(0);
   const { socket } = useSocket();
 
   const refreshUnpaidCount = React.useCallback(async () => {
@@ -153,14 +161,38 @@ export default function EmployeeTopNav({
     }
   }, []);
 
+  const refreshUpcomingOffers = React.useCallback(async () => {
+    try {
+      const res = await employeeFetch(
+        "/api/sales/upcoming-offers?pendingCount=true"
+      );
+      if (!res.ok) return;
+      const json = await res.json();
+      if (json?.success) {
+        setUpcomingOffersCount(Number(json.data?.pendingCount) || 0);
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
   React.useEffect(() => {
     refreshUnpaidCount();
     refreshPendingBookings();
-  }, [refreshUnpaidCount, refreshPendingBookings, pathname]);
+    refreshUpcomingOffers();
+  }, [
+    refreshUnpaidCount,
+    refreshPendingBookings,
+    refreshUpcomingOffers,
+    pathname,
+  ]);
 
   React.useEffect(() => {
     if (!socket) return undefined;
-    const onOrderChange = () => refreshUnpaidCount();
+    const onOrderChange = () => {
+      refreshUnpaidCount();
+      refreshUpcomingOffers();
+    };
     const onBookingChange = () => refreshPendingBookings();
     socket.on("order:created", onOrderChange);
     socket.on("order:updated", onOrderChange);
@@ -174,7 +206,12 @@ export default function EmployeeTopNav({
       socket.off("reservation:created", onBookingChange);
       socket.off("reservation:updated", onBookingChange);
     };
-  }, [socket, refreshUnpaidCount, refreshPendingBookings]);
+  }, [
+    socket,
+    refreshUnpaidCount,
+    refreshPendingBookings,
+    refreshUpcomingOffers,
+  ]);
 
   const showCloseBlockers = (blockers) => {
     setCloseBlockers(blockers || null);
@@ -297,7 +334,9 @@ export default function EmployeeTopNav({
               ? unpaidCount
               : item.showBookingBadge
                 ? pendingBookings
-                : 0;
+                : item.showUpcomingOffersBadge
+                  ? upcomingOffersCount
+                  : 0;
             return (
               <Link
                 key={item.href}
@@ -452,7 +491,9 @@ export default function EmployeeTopNav({
             ? unpaidCount
             : item.showBookingBadge
               ? pendingBookings
-              : 0;
+              : item.showUpcomingOffersBadge
+                ? upcomingOffersCount
+                : 0;
           return (
             <Link
               key={item.href}
@@ -487,7 +528,7 @@ export default function EmployeeTopNav({
             </AlertDialogTitle>
             <AlertDialogDescription>
               Settle every pending order and release every booked table before
-              day close.
+              day close. Future-dated online offer bookings do not block close.
             </AlertDialogDescription>
           </AlertDialogHeader>
 

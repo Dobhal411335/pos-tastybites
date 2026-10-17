@@ -34,10 +34,16 @@ export default function GiftcardDetailsPage() {
   const [orderNumberById, setOrderNumberById] = useState({});
   const [resolvingOrderIds, setResolvingOrderIds] = useState(false);
 
-  const fetchGiftcards = async () => {
+  const fetchGiftcards = async (search = "") => {
     try {
       setFetching(true);
-      const res = await fetch("/api/menu/giftcards?view=flat&limit=100");
+      const params = new URLSearchParams({
+        view: "flat",
+        limit: "100",
+      });
+      const q = String(search || "").trim();
+      if (q) params.set("search", q);
+      const res = await fetch(`/api/menu/giftcards?${params.toString()}`);
       if (res.ok) {
         const data = await res.json();
         if (data.success) {
@@ -52,16 +58,27 @@ export default function GiftcardDetailsPage() {
   };
 
   useEffect(() => {
-    fetchGiftcards();
-  }, []);
+    const delay = searchTerm.trim() ? 300 : 0;
+    const handle = setTimeout(() => {
+      fetchGiftcards(searchTerm);
+    }, delay);
+    return () => clearTimeout(handle);
+  }, [searchTerm]);
 
   const filteredGiftcards = useMemo(() => {
+    const search = searchTerm.trim().toLowerCase();
+    if (!search) return giftcards;
+    const searchDigits = search.replace(/\D/g, "");
     return giftcards.filter((gc) => {
-      const search = searchTerm.toLowerCase();
       const codeMatch = gc.code?.toLowerCase().includes(search);
       const nameMatch = gc.recipientName?.toLowerCase().includes(search);
       const emailMatch = gc.recipientEmail?.toLowerCase().includes(search);
-      return codeMatch || nameMatch || emailMatch;
+      const phoneRaw = String(gc.recipientPhone || "").toLowerCase();
+      const phoneDigits = phoneRaw.replace(/\D/g, "");
+      const phoneMatch =
+        phoneRaw.includes(search) ||
+        (searchDigits.length > 0 && phoneDigits.includes(searchDigits));
+      return codeMatch || nameMatch || emailMatch || phoneMatch;
     });
   }, [giftcards, searchTerm]);
 
@@ -165,7 +182,7 @@ export default function GiftcardDetailsPage() {
           <div className="relative w-full md:w-96">
             <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
             <Input
-              placeholder="Search by code, name, or email..."
+              placeholder="Search by code, name, email, or phone..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-9 w-full bg-gray-50 border-gray-200 focus-visible:ring-blue-500"
@@ -213,6 +230,9 @@ export default function GiftcardDetailsPage() {
                     <TableCell>
                       <div className="font-medium text-gray-900">{gc.recipientName}</div>
                       <div className="text-xs text-gray-500">{gc.recipientEmail}</div>
+                      {gc.recipientPhone ? (
+                        <div className="text-xs text-gray-500">{gc.recipientPhone}</div>
+                      ) : null}
                     </TableCell>
                     <TableCell>${gc.value?.toFixed(2)}</TableCell>
                     <TableCell>

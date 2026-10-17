@@ -10,6 +10,17 @@ import { markCategoryAddons, mergeAddons, normalizeAddons, normalizeIngredients,
 import { recordMenuDeletion } from "@/lib/menu/recordMenuDeletion";
 import { emitMenuStale } from "@/lib/menu/menuStale";
 
+function sanitizeChoiceOptions(choiceOptions = []) {
+  return (Array.isArray(choiceOptions) ? choiceOptions : [])
+    .map((group) => ({
+      name: String(group?.name || "").trim(),
+      subChoices: (Array.isArray(group?.subChoices) ? group.subChoices : [])
+        .map((value) => String(value || "").trim())
+        .filter(Boolean),
+    }))
+    .filter((group) => group.name && group.subChoices.length > 0);
+}
+
 function sanitizeVariants(variants = []) {
   return (Array.isArray(variants) ? variants : [])
     .filter((v) => v && String(v.size || "").trim())
@@ -19,6 +30,7 @@ function sanitizeVariants(variants = []) {
       price: Number(v.price) || 0,
       status: v.status !== false,
       ingredients: normalizeIngredients(v.ingredients),
+      choiceOptions: sanitizeChoiceOptions(v.choiceOptions),
     }));
 }
 export const GET = withAuth(async (request, { params }) => {
@@ -130,14 +142,7 @@ export const PUT = withAuth(async (request, { params }) => {
         .filter((group) => group.name && group.subChoices.length > 0);
     }
     if (choiceOptions !== undefined) {
-      updateData.choiceOptions = (Array.isArray(choiceOptions) ? choiceOptions : [])
-        .map((group) => ({
-          name: String(group?.name || "").trim(),
-          subChoices: (Array.isArray(group?.subChoices) ? group.subChoices : [])
-            .map((value) => String(value || "").trim())
-            .filter(Boolean),
-        }))
-        .filter((group) => group.name && group.subChoices.length > 0);
+      updateData.choiceOptions = sanitizeChoiceOptions(choiceOptions);
     }
 
     const updateObj = { $set: updateData };

@@ -54,6 +54,8 @@ export function cartItemsToRepricePayload(cartItems = []) {
       choices: item.choices || [],
       drinks: item.drinks || [],
       notes: String(item.notes || "").trim(),
+      validFrom: item.validFrom || null,
+      validTo: item.validTo || null,
       category: item.isOffer
         ? "Offers"
         : item.categoryName || item.category || "",
