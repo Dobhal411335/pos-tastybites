@@ -4,11 +4,15 @@ import {
   parsePickupFromSpecialNote,
   stripPickupPrefix,
 } from "@/lib/public/pickup";
+import { todayRestaurantISO } from "@/lib/restaurantTime";
 import Restaurant from "@/models/Restaurant";
 import { logger } from "@/utils/logger";
 
 const SUBJECTS = {
-  placed: (n, brand) => `Thank you! Order #${n} received — ${brand}`,
+  placed: (n, brand, { isUpcomingOffer, offerDateLabel } = {}) =>
+    isUpcomingOffer
+      ? `Offer booked for ${offerDateLabel || "coming date"} — Order #${n} · ${brand}`
+      : `Thank you! Order #${n} received — ${brand}`,
   approved: (n, brand) => `Order #${n} accepted — ${brand} is preparing`,
   ready: (n, brand) => `Order #${n} is ready for pickup — ${brand}`,
   paid: (n, brand) => `Receipt for order #${n} — thanks from ${brand}`,
@@ -20,13 +24,75 @@ function publicBaseUrl() {
     .replace(/\/$/, "");
 }
 
+function formatOfferDateLabel(iso) {
+  if (!iso || !/^\d{4}-\d{2}-\d{2}$/.test(String(iso))) return iso || "";
+  try {
+    return new Date(`${iso}T12:00:00`).toLocaleDateString("en-CA", {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  } catch {
+    return String(iso);
+  }
+}
+
+function formatRestaurantPhone({ phone, phoneCode, phoneDisplay } = {}) {
+  if (phoneDisplay) {
+    const code = String(phoneCode || "").trim();
+    return code ? `${code} ${phoneDisplay}` : phoneDisplay;
+  }
+  const digits = String(phone || "").replace(/\D/g, "");
+  if (!digits) return null;
+  if (digits.length === 10) {
+    return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+  }
+  return digits;
+}
+
 function formatPickupLabel(order) {
   const pickup = parsePickupFromSpecialNote(order?.specialNote);
-  if (!pickup) return "Same-day pickup";
-  const [hh, mm] = String(pickup.time || "00:00").split(":").map(Number);
-  const period = hh >= 12 ? "PM" : "AM";
-  const h12 = hh % 12 || 12;
-  return `${pickup.date} · ${h12}:${String(mm).padStart(2, "0")} ${period}`;
+  const offerDate = order?.offerFulfillmentDate || pickup?.date || null;
+  const timeRaw = pickup?.time || null;
+  let timeLabel = "";
+  if (timeRaw) {
+    const [hh, mm] = String(timeRaw || "00:00").split(":").map(Number);
+    const period = hh >= 12 ? "PM" : "AM";
+    const h12 = hh % 12 || 12;
+    timeLabel = `${h12}:${String(mm).padStart(2, "0")} ${period}`;
+  }
+  if (offerDate && timeLabel) return `${offerDate} · ${timeLabel}`;
+  if (offerDate) return `${offerDate} · Pickup`;
+  if (pickup && timeLabel) return `${pickup.date} · ${timeLabel}`;
+  return "Same-day pickup";
+}
+
+function getOfferBookingMeta(order) {
+  const fulfillmentDate = order?.offerFulfillmentDate
+    ? String(order.offerFulfillmentDate)
+    : null;
+  const hasOfferItems = (order?.items || []).some(
+    (item) =>
+      Boolean(item?.isOffer) ||
+      /^offers?$/i.test(String(item?.category || "")),
+  );
+  if (!hasOfferItems || !fulfillmentDate) {
+    return {
+      isOfferBooking: false,
+      isUpcomingOffer: false,
+      offerFulfillmentDate: null,
+      offerDateLabel: null,
+    };
+  }
+  const today = todayRestaurantISO();
+  const isUpcomingOffer = fulfillmentDate > today;
+  return {
+    isOfferBooking: true,
+    isUpcomingOffer,
+    offerFulfillmentDate: fulfillmentDate,
+    offerDateLabel: formatOfferDateLabel(fulfillmentDate),
+  };
 }
 
 function cleanStringList(list = []) {
@@ -137,6 +203,9 @@ export async function sendOnlineOrderStatusEmail({
   order,
   restaurantName,
   address,
+  phone: restaurantPhoneRaw,
+  phoneCode: restaurantPhoneCode,
+  phoneDisplay: restaurantPhoneDisplay,
 }) {
   try {
     if (!process.env.BREVO_API_KEY) {
@@ -162,12 +231,22 @@ export async function sendOnlineOrderStatusEmail({
     const trackUrl = base ? `${base}/order/${encodeURIComponent(ticket)}` : null;
     const orderAgainUrl = base ? `${base}/menu` : null;
     const customerNote = stripPickupPrefix(order?.specialNote || "");
+    const offerMeta = getOfferBookingMeta(order);
 
-    const phone = String(order.contactNumber || "").replace(/\D/g, "");
-    const phoneDisplay =
-      phone.length === 10
-        ? `(${phone.slice(0, 3)}) ${phone.slice(3, 6)}-${phone.slice(6)}`
-        : phone || null;
+    const guestPhoneDigits = String(order.contactNumber || "").replace(
+      /\D/g,
+      "",
+    );
+    const guestPhoneDisplay =
+      guestPhoneDigits.length === 10
+        ? `(${guestPhoneDigits.slice(0, 3)}) ${guestPhoneDigits.slice(3, 6)}-${guestPhoneDigits.slice(6)}`
+        : guestPhoneDigits || null;
+
+    const restaurantPhone = formatRestaurantPhone({
+      phone: restaurantPhoneRaw,
+      phoneCode: restaurantPhoneCode,
+      phoneDisplay: restaurantPhoneDisplay,
+    });
 
     const htmlContent = onlineOrderStatusTemplate({
       type,
@@ -180,6 +259,7 @@ export async function sendOnlineOrderStatusEmail({
       trackUrl,
       orderAgainUrl,
       address: address || null,
+      restaurantPhone,
       status:
         order.status ||
         (type === "placed" ? "PENDING" : type === "paid" ? "PAID" : null),
@@ -193,7 +273,7 @@ export async function sendOnlineOrderStatusEmail({
       serviceChargeTotal: order.serviceChargeTotal,
       serviceChargeName: order.serviceChargeName || null,
       customerNote: customerNote || null,
-      guestPhone: phoneDisplay,
+      guestPhone: guestPhoneDisplay,
       guestEmail: to,
       paymentMethod: order.paymentMethod || null,
       tipAmount: order.tipAmount,
@@ -202,12 +282,16 @@ export async function sendOnlineOrderStatusEmail({
       cardAmount: order.cardAmount,
       giftcardUsedAmount: order.giftcardUsedAmount,
       giftcardCode: order.giftcardCode || null,
+      isOfferBooking: offerMeta.isOfferBooking,
+      isUpcomingOffer: offerMeta.isUpcomingOffer,
+      offerFulfillmentDate: offerMeta.offerFulfillmentDate,
+      offerDateLabel: offerMeta.offerDateLabel,
     });
 
     const subjectFn = SUBJECTS[type] || SUBJECTS.placed;
     await sendEmail({
       to,
-      subject: subjectFn(ticket, brand),
+      subject: subjectFn(ticket, brand, offerMeta),
       htmlContent,
     });
 
@@ -234,14 +318,28 @@ export async function maybeSendOnlineOrderPaidEmail(order) {
     }
 
     const restaurant = await Restaurant.findById(order.restaurantId)
-      .select("name address")
+      .select("name address slug")
       .lean();
+    let profile = null;
+    try {
+      if (restaurant?.slug) {
+        const { getPublicRestaurantProfile } = await import(
+          "@/lib/public/resolveRestaurant"
+        );
+        profile = await getPublicRestaurantProfile(restaurant.slug);
+      }
+    } catch {
+      profile = null;
+    }
 
     return await sendOnlineOrderStatusEmail({
       type: "paid",
       order,
-      restaurantName: restaurant?.name,
-      address: restaurant?.address || null,
+      restaurantName: profile?.name || restaurant?.name,
+      address: profile?.address || restaurant?.address || null,
+      phone: profile?.phone || null,
+      phoneCode: profile?.phoneCode || null,
+      phoneDisplay: profile?.phoneDisplay || null,
     });
   } catch (err) {
     logger?.error?.("Failed to send online order paid email", err);

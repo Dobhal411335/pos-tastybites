@@ -336,7 +336,15 @@ export default function CartDrawer({ open = false, onOpenChange, mode = "drawer"
       }
       const placed = json.data;
       const orderNumber = placed?.orderNumber;
-      
+      const bookedOfferDate =
+        placed?.offerFulfillmentDate ||
+        (cartIsOfferOnly && pendingGuest?.offerFulfillmentDate
+          ? String(pendingGuest.offerFulfillmentDate)
+          : null);
+      const isUpcomingOfferBooking =
+        Boolean(bookedOfferDate) &&
+        String(bookedOfferDate) > String(todayISO);
+
       const fullPhone = `${pendingGuest.countryCode || ""}${pendingGuest.phone}`;
       const phoneOnlyDigits = String(fullPhone || placed?.contactNumber || "")
         .replace(/\D/g, "");
@@ -351,7 +359,13 @@ export default function CartDrawer({ open = false, onOpenChange, mode = "drawer"
       clearCart();
       resetFlow();
       onOpenChange?.(false);
-      toast.success("Order placed! Pay at the restaurant when you pick up.");
+      toast.success(
+        isUpcomingOfferBooking
+          ? `Offer booked for coming date (${bookedOfferDate}). Pay at the restaurant on pickup.`
+          : bookedOfferDate
+            ? "Offer booked for today! Pay at the restaurant when you pick up."
+            : "Order placed! Pay at the restaurant when you pick up.",
+      );
       if (orderNumber) {
         router.push(
           `/thank-you/${encodeURIComponent(orderNumber)}${

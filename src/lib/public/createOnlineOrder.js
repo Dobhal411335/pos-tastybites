@@ -63,6 +63,9 @@ export async function createOnlineOrder({
   restaurantId,
   restaurantName,
   restaurantAddress,
+  restaurantPhone = null,
+  restaurantPhoneCode = null,
+  restaurantPhoneDisplay = null,
   items,
   partyName,
   contactNumber,
@@ -267,6 +270,9 @@ export async function createOnlineOrder({
       order,
       restaurantName,
       address: restaurantAddress || null,
+      phone: restaurantPhone || null,
+      phoneCode: restaurantPhoneCode || null,
+      phoneDisplay: restaurantPhoneDisplay || null,
     });
   } catch (emailErr) {
     logger.error("Failed to send order-placed email", emailErr);

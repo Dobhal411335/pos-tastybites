@@ -35,6 +35,7 @@ export async function sendOrderEmailOtp({
   email,
   guestName,
   restaurantName,
+  restaurantPhone = null,
 }) {
   const normalized = normalizeEmail(email);
   if (!normalized || !normalized.includes("@")) {
@@ -73,6 +74,7 @@ export async function sendOrderEmailOtp({
       await sendOTP(normalized, code, {
         guestName,
         restaurantName,
+        restaurantPhone,
         expiresInMinutes,
       });
       emailed = true;

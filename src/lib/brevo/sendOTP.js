@@ -8,13 +8,19 @@ import { orderPickupOtpTemplate } from "./templates/orderPickupOtpTemplate";
 export const sendOTP = async (
   to,
   otpCode,
-  { guestName, restaurantName, expiresInMinutes = 10 } = {}
+  {
+    guestName,
+    restaurantName,
+    restaurantPhone = null,
+    expiresInMinutes = 10,
+  } = {}
 ) => {
   const brand = restaurantName || process.env.BREVO_SENDER_NAME || "Tasty Bites";
   const htmlContent = orderPickupOtpTemplate({
     otpCode,
     guestName,
     restaurantName: brand,
+    restaurantPhone,
     expiresInMinutes,
   });
 

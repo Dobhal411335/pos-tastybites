@@ -66,6 +66,10 @@ export async function POST(request, { params }) {
     const reservation = await createTableReservation({
       restaurantId: profile.id,
       restaurantName: profile.name,
+      restaurantAddress: profile.address || null,
+      restaurantPhone: profile.phone || null,
+      restaurantPhoneCode: profile.phoneCode || null,
+      restaurantPhoneDisplay: profile.phoneDisplay || null,
       guestName: body?.name || body?.guestName,
       phone: body?.phone,
       countryCode: body?.countryCode,

@@ -692,17 +692,32 @@ export default function SalesFloorPage() {
       maxX = Math.max(maxX, (Number(t.x) || 0) + (Number(t.width) || 80));
       maxY = Math.max(maxY, (Number(t.y) || 0) + (Number(t.height) || 80));
     });
-    const offsetX = Math.max(0, minX - pad);
-    const offsetY = Math.max(0, minY - pad);
-    return {
-      width: Math.max(maxX - offsetX + pad, 320),
-      height: Math.max(maxY - offsetY + pad, 240),
-      offsetX,
-      offsetY,
-    };
+
+    const clusterW = maxX - minX + pad * 2;
+    const clusterH = maxY - minY + pad * 2;
+
+    // Sparse layouts (e.g. a single table) must keep a real floor footprint.
+    // Otherwise a tiny crop gets scaled up and one table fills the screen.
+    const minW = Math.min(floorWidth, Math.max(640, floorWidth * 0.45));
+    const minH = Math.min(floorHeight, Math.max(480, floorHeight * 0.45));
+    const width = Math.min(floorWidth, Math.max(clusterW, minW));
+    const height = Math.min(floorHeight, Math.max(clusterH, minH));
+
+    const extraX = Math.max(0, width - clusterW);
+    const extraY = Math.max(0, height - clusterH);
+    const offsetX = Math.max(
+      0,
+      Math.min(minX - pad - extraX / 2, floorWidth - width),
+    );
+    const offsetY = Math.max(
+      0,
+      Math.min(minY - pad - extraY / 2, floorHeight - height),
+    );
+
+    return { width, height, offsetX, offsetY };
   }, [floorData.tables, floorWidth, floorHeight]);
 
-  // Fit the table cluster to the viewport (ignore unused floor whitespace)
+  // Fit the table cluster to the viewport (shrink only — never enlarge past design size)
   useEffect(() => {
     const el = floorViewportRef.current;
     if (!el || !contentBounds.width || !contentBounds.height) return;
@@ -715,7 +730,8 @@ export default function SalesFloorPage() {
         availW / contentBounds.width,
         availH / contentBounds.height,
       );
-      setScale(Math.min(Math.max(next, 0.35), 3.2));
+      // Cap at 1 so one/few tables stay at admin-designed size instead of blowing up
+      setScale(Math.min(Math.max(next, 0.35), 1));
     };
 
     fit();

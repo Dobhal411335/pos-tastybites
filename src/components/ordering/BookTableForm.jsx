@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   CalendarDays,
   CheckCircle2,
@@ -20,7 +20,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { useRestaurantPublic } from "@/context/RestaurantPublicContext";
 import { publicApiBase, getPublicRestaurantSlug } from "@/lib/public/clientConfig";
-import { todayRestaurantISO } from "@/lib/restaurantTime";
+import { getTodayRestaurantHours } from "@/lib/public/restaurantHours";
+import {
+  getRestaurantTimezone,
+  todayRestaurantISO,
+} from "@/lib/restaurantTime";
 import { countryCodes } from "@/utils/countryCodes";
 import { REASON_FOR_VISIT_OPTIONS } from "@/lib/public/reservationOptions";
 
@@ -35,6 +39,52 @@ function formatDateLabel(iso) {
   } catch {
     return iso;
   }
+}
+
+/** Same slot labels as CartDrawer / online order modal. */
+function formatSlotLabel(hours, minutes) {
+  const period = hours >= 12 ? "PM" : "AM";
+  const h12 = hours % 12 || 12;
+  return `${h12}:${String(minutes).padStart(2, "0")} ${period}`;
+}
+
+/**
+ * 15-min slots from a day's open/close hours (future dates).
+ * Matches CartDrawer.buildFutureDaySlots.
+ */
+function buildDaySlots(dayHours) {
+  if (dayHours?.closed) return [];
+  const openRaw = String(dayHours?.open || "09:00");
+  const closeRaw = String(dayHours?.close || "22:00");
+  const parseMin = (t) => {
+    const m = String(t).match(/^(\d{1,2}):(\d{2})$/);
+    if (!m) return null;
+    return Number(m[1]) * 60 + Number(m[2]);
+  };
+  let openMin = parseMin(openRaw) ?? 9 * 60;
+  let closeMin = parseMin(closeRaw) ?? 22 * 60;
+  if (dayHours?.is24Hours) {
+    openMin = 0;
+    closeMin = 23 * 60 + 45;
+  } else {
+    closeMin = Math.max(openMin, closeMin - 15);
+  }
+  const aligned = Math.ceil(openMin / 15) * 15;
+  const slots = [];
+  for (let mins = aligned; mins <= closeMin; mins += 15) {
+    const hours = Math.floor(mins / 60);
+    const minutes = mins % 60;
+    if (hours > 23) break;
+    const value = `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+    slots.push({ value, label: formatSlotLabel(hours, minutes) });
+  }
+  return slots;
+}
+
+/** Midday probe so weekday resolves correctly in the restaurant timezone. */
+function dateProbeFromISO(iso) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(iso || ""))) return new Date();
+  return new Date(`${iso}T12:00:00`);
 }
 
 const emptyForm = (today) => ({
@@ -68,6 +118,54 @@ export default function BookTableForm() {
   const [emailVerified, setEmailVerified] = useState(false);
   const [otp, setOtp] = useState("");
   const [form, setForm] = useState(() => emptyForm(today));
+  /** Bump to remount the form DOM after a successful booking (clears autofill too). */
+  const [formKey, setFormKey] = useState(0);
+
+  const resetBookingForm = () => {
+    setForm(emptyForm(todayRestaurantISO()));
+    setOtp("");
+    setOtpSent(false);
+    setEmailVerified(false);
+    setFormKey((k) => k + 1);
+  };
+
+  const todaySlots = restaurant?.pickupSlots || [];
+  const todayHours = restaurant?.todayHours || null;
+  const hoursConfig = restaurant?.restaurantHours || null;
+
+  // Today → live pickup slots; future → that weekday's restaurant hours (same idea as order modal).
+  const activeSlots = useMemo(() => {
+    const dateStr = form.date || today;
+    if (!dateStr || dateStr === today) return todaySlots;
+    const dayHours = hoursConfig
+      ? getTodayRestaurantHours(
+          hoursConfig,
+          dateProbeFromISO(dateStr),
+          getRestaurantTimezone(),
+        )
+      : todayHours;
+    return buildDaySlots(dayHours);
+  }, [form.date, today, todaySlots, todayHours, hoursConfig]);
+
+  const selectedDayHours = useMemo(() => {
+    const dateStr = form.date || today;
+    if (!dateStr || dateStr === today) return todayHours;
+    if (!hoursConfig) return todayHours;
+    return getTodayRestaurantHours(
+      hoursConfig,
+      dateProbeFromISO(dateStr),
+      getRestaurantTimezone(),
+    );
+  }, [form.date, today, todayHours, hoursConfig]);
+
+  // Keep arrival time valid when switching dates (slots change).
+  useEffect(() => {
+    if (!form.time) return;
+    const stillValid = activeSlots.some((s) => s.value === form.time);
+    if (!stillValid) {
+      setForm((prev) => ({ ...prev, time: "" }));
+    }
+  }, [activeSlots, form.time]);
 
   const update = (key) => (e) => {
     const value = e.target.value;
@@ -186,10 +284,7 @@ export default function BookTableForm() {
       toast.success(
         "Reservation sent! The restaurant will confirm shortly."
       );
-      setForm(emptyForm(today));
-      setOtp("");
-      setOtpSent(false);
-      setEmailVerified(false);
+      resetBookingForm();
     } catch (err) {
       toast.error(err.message || "Failed to book a table");
     } finally {
@@ -238,8 +333,10 @@ export default function BookTableForm() {
             </div>
 
             <form
+              key={formKey}
               onSubmit={handleSubmit}
               className="p-6 sm:p-8 lg:col-span-7 lg:p-10"
+              autoComplete="off"
             >
               <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
                 <div className="space-y-2">
@@ -417,16 +514,41 @@ export default function BookTableForm() {
                     className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-primary"
                   >
                     <Clock3 className="h-3.5 w-3.5" aria-hidden />
-                    Time for arrival
+                    {form.date && form.date !== today
+                      ? "Arrival time"
+                      : "Arrival time today"}
                   </Label>
-                  <Input
-                    id="reserve-time"
-                    type="time"
-                    value={form.time}
-                    onChange={update("time")}
-                    className={fieldClass}
-                    required
-                  />
+                  {activeSlots.length === 0 ? (
+                    <p className="rounded-lg border border-amber-100 bg-amber-50 px-3 py-3 text-sm text-amber-800">
+                      {form.date && form.date !== today
+                        ? selectedDayHours?.closed
+                          ? "Restaurant is closed on this date. Please pick another day."
+                          : "No arrival times available for this date."
+                        : "Online booking is closed for today. Please try a future date or restaurant hours."}
+                    </p>
+                  ) : (
+                    <select
+                      id="reserve-time"
+                      value={form.time}
+                      onChange={update("time")}
+                      className={selectClass}
+                      required
+                    >
+                      <option value="">Select a time</option>
+                      {activeSlots.map((slot) => (
+                        <option key={slot.value} value={slot.value}>
+                          {slot.label}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  {selectedDayHours?.label && activeSlots.length > 0 ? (
+                    <p className="text-[11px] text-[var(--customer-muted)]">
+                      {form.date && form.date !== today
+                        ? `${selectedDayHours.dayLabel || "Hours"} · ${selectedDayHours.label}`
+                        : `Today · ${selectedDayHours.label}`}
+                    </p>
+                  ) : null}
                 </div>
 
                 <div className="space-y-2">

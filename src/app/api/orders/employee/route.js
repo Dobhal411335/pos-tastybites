@@ -13,6 +13,7 @@ import { createKotPrintJob, createBarReceiptPrintJob } from "@/lib/printing/prin
 import { createNotification } from "@/lib/notifications/notificationService";
 import { getSocketServer } from "@/lib/socketServer";
 import { sendOnlineOrderStatusEmail } from "@/lib/brevo/sendOnlineOrderStatusEmail";
+import { getPublicRestaurantProfile } from "@/lib/public/resolveRestaurant";
 import Table from "@/models/floor/Table";
 import Floor from "@/models/floor/Floor";
 import { repricePosCartItems } from "@/lib/orders/repricePosCartItems";
@@ -1053,13 +1054,19 @@ export const PATCH = withAuth(async (request) => {
 
       try {
         const restaurant = await Restaurant.findById(restaurantId)
-          .select("name address")
+          .select("name address slug")
           .lean();
+        const profile = restaurant?.slug
+          ? await getPublicRestaurantProfile(restaurant.slug)
+          : null;
         await sendOnlineOrderStatusEmail({
           type: "approved",
           order,
-          restaurantName: restaurant?.name,
-          address: restaurant?.address || null,
+          restaurantName: profile?.name || restaurant?.name,
+          address: profile?.address || restaurant?.address || null,
+          phone: profile?.phone || null,
+          phoneCode: profile?.phoneCode || null,
+          phoneDisplay: profile?.phoneDisplay || null,
         });
       } catch (emailErr) {
         logger.error("Failed to send online approve email", emailErr);
@@ -1136,13 +1143,19 @@ export const PATCH = withAuth(async (request) => {
 
       try {
         const restaurant = await Restaurant.findById(restaurantId)
-          .select("name address")
+          .select("name address slug")
           .lean();
+        const profile = restaurant?.slug
+          ? await getPublicRestaurantProfile(restaurant.slug)
+          : null;
         await sendOnlineOrderStatusEmail({
           type: "ready",
           order,
-          restaurantName: restaurant?.name,
-          address: restaurant?.address || null,
+          restaurantName: profile?.name || restaurant?.name,
+          address: profile?.address || restaurant?.address || null,
+          phone: profile?.phone || null,
+          phoneCode: profile?.phoneCode || null,
+          phoneDisplay: profile?.phoneDisplay || null,
         });
       } catch (emailErr) {
         logger.error("Failed to send online ready email", emailErr);

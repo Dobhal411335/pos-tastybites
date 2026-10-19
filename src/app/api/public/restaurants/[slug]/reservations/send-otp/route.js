@@ -50,11 +50,16 @@ export async function POST(request, { params }) {
       }
     }
 
+    const restaurantPhone = profile.phoneDisplay
+      ? `${profile.phoneCode ? `${profile.phoneCode} ` : ""}${profile.phoneDisplay}`
+      : null;
+
     const result = await sendOrderEmailOtp({
       restaurantId: profile.id,
       email,
       guestName,
       restaurantName: profile.name,
+      restaurantPhone,
     });
 
     return sendSuccess(

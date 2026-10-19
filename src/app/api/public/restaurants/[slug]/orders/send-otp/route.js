@@ -15,11 +15,16 @@ export async function POST(request, { params }) {
     const email = body?.email || body?.guestEmail;
     const guestName = body?.fullName || body?.partyName || body?.guestName;
 
+    const restaurantPhone = profile.phoneDisplay
+      ? `${profile.phoneCode ? `${profile.phoneCode} ` : ""}${profile.phoneDisplay}`
+      : null;
+
     const result = await sendOrderEmailOtp({
       restaurantId: profile.id,
       email,
       guestName,
       restaurantName: profile.name,
+      restaurantPhone,
     });
 
     return sendSuccess(

@@ -164,6 +164,9 @@ export default function CheckoutPage() {
 
       const orderNumber = json.data.orderNumber;
       const phone = String(pendingGuest.phone).replace(/\D/g, "");
+      const bookedOfferDate = json.data?.offerFulfillmentDate
+        ? String(json.data.offerFulfillmentDate)
+        : null;
       try {
         sessionStorage.setItem(
           `online-thankyou-${String(orderNumber).replace(/^#/, "")}`,
@@ -173,7 +176,11 @@ export default function CheckoutPage() {
         /* ignore */
       }
       clearCart();
-      // toast.success("Order placed! Pay at the restaurant when you pick up.");
+      if (bookedOfferDate) {
+        toast.success(
+          `Offer booked${bookedOfferDate ? ` for ${bookedOfferDate}` : ""}. Pay at the restaurant on pickup.`,
+        );
+      }
       router.push(
         `/thank-you/${encodeURIComponent(orderNumber)}?phone=${encodeURIComponent(phone)}`,
       );

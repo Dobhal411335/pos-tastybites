@@ -12,14 +12,30 @@ function formatTimeLabel(time) {
   return `${h12}:${min} ${period}`;
 }
 
+function formatRestaurantPhone({ phone, phoneCode, phoneDisplay } = {}) {
+  if (phoneDisplay) {
+    const code = String(phoneCode || "").trim();
+    return code ? `${code} ${phoneDisplay}` : phoneDisplay;
+  }
+  const digits = String(phone || "").replace(/\D/g, "");
+  if (!digits) return null;
+  if (digits.length === 10) {
+    return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+  }
+  return digits;
+}
+
 /**
- * @param {"accepted"|"declined"} type
+ * @param {"received"|"accepted"|"declined"} type
  */
 export async function sendTableReservationStatusEmail({
   type,
   reservation,
   restaurantName,
   address,
+  phone,
+  phoneCode,
+  phoneDisplay,
 }) {
   try {
     if (!process.env.BREVO_API_KEY) {
@@ -41,6 +57,11 @@ export async function sendTableReservationStatusEmail({
       process.env.BREVO_SENDER_NAME ||
       "Tasty Bites";
     const timeLabel = formatTimeLabel(reservation?.time);
+    const restaurantPhone = formatRestaurantPhone({
+      phone,
+      phoneCode,
+      phoneDisplay,
+    });
 
     const htmlContent = tableReservationStatusTemplate({
       type,
@@ -54,13 +75,16 @@ export async function sendTableReservationStatusEmail({
         reservation.specialRequest || reservation.notes || null,
       assignedTableNo: reservation.assignedTableNo,
       address: address || null,
+      phone: restaurantPhone,
     });
 
     const datePart = reservation.date ? ` on ${reservation.date}` : "";
     const subject =
       type === "declined"
         ? `Table booking update — ${brand}`
-        : `Table confirmed for ${timeLabel}${datePart} — ${brand}`;
+        : type === "received"
+          ? `We received your table request — ${brand}`
+          : `Table confirmed for ${timeLabel}${datePart} — ${brand}`;
 
     await sendEmail({
       to,

@@ -5,12 +5,15 @@ export function orderPickupOtpTemplate({
   otpCode,
   guestName,
   restaurantName,
+  restaurantPhone = null,
   expiresInMinutes = 10,
 }) {
   const currentYear = new Date().getFullYear();
   const brand = String(restaurantName || "Tasty Bites").trim() || "Tasty Bites";
   const helloName = String(guestName || "").trim() || "there";
   const code = String(otpCode || "").trim();
+  const phone = restaurantPhone ? String(restaurantPhone).trim() : "";
+  const phoneTel = phone.replace(/[^\d+]/g, "");
 
   return `
 <!DOCTYPE html>
@@ -60,6 +63,11 @@ export function orderPickupOtpTemplate({
 
       <div style="padding:22px 32px 30px;background:#fafafa;text-align:center;border-top:1px solid #e5e7eb;">
         <p style="margin:0 0 8px;font-weight:800;color:#111827;">${brand}</p>
+        ${
+          phone
+            ? `<p style="margin:0 0 8px;color:#6b7280;font-size:13px;"><a href="tel:${phoneTel}" style="color:#c2410c;font-weight:700;text-decoration:none;">${phone}</a></p>`
+            : ""
+        }
         <p style="margin:0;color:#6b7280;font-size:12px;line-height:20px;">
           Same-day pickup · Pay at the restaurant
         </p>

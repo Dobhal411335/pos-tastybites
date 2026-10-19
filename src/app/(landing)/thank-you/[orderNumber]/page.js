@@ -6,6 +6,7 @@ import { useParams, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import {
   ArrowLeft,
+  CalendarDays,
   Check,
   Clock,
   Loader2,
@@ -17,6 +18,12 @@ import {
 import Navbar from "@/components/sections/Navbar";
 import Footer from "@/components/sections/Footer";
 import { Button } from "@/components/ui/button";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 import { publicApiBase, getPublicRestaurantSlug } from "@/lib/public/clientConfig";
 import { useRestaurantPublic } from "@/context/RestaurantPublicContext";
 import {
@@ -24,6 +31,8 @@ import {
   getReceiptModifierLines,
 } from "@/utils/productChoices";
 import { getOfferDetailLines, isOfferItem } from "@/utils/offerDetails";
+import { todayRestaurantISO } from "@/lib/restaurantTime";
+import { cn } from "@/lib/utils";
 
 function money(n) {
   return `$${Number(n || 0).toFixed(2)}`;
@@ -38,6 +47,20 @@ function formatTime12h(timeStr) {
   const ampm = h >= 12 ? "PM" : "AM";
   const h12 = h % 12 || 12;
   return `${h12}:${m} ${ampm}`;
+}
+
+function formatOfferDateLabel(iso) {
+  if (!iso || !/^\d{4}-\d{2}-\d{2}$/.test(String(iso))) return iso || "";
+  try {
+    return new Date(`${iso}T12:00:00`).toLocaleDateString("en-CA", {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  } catch {
+    return iso;
+  }
 }
 
 function ThankYouContent() {
@@ -137,8 +160,15 @@ function ThankYouContent() {
         : ""
   }`;
 
+  const todayISO = todayRestaurantISO();
   const fulfillmentDate =
     order?.offerFulfillmentDate || order?.pickup?.date || null;
+  const hasOfferItems = (order?.items || []).some((item) => isOfferItem(item));
+  const isUpcomingOffer =
+    Boolean(hasOfferItems && fulfillmentDate) &&
+    String(fulfillmentDate) > String(todayISO);
+  const isOfferBooking = Boolean(hasOfferItems && fulfillmentDate);
+  const offerDateLabel = formatOfferDateLabel(fulfillmentDate);
   const pickupLabel = order?.pickup
     ? `${fulfillmentDate || "Today"} · ${formatTime12h(order.pickup.time || order.pickup.label || "")}`.trim()
     : fulfillmentDate
@@ -231,13 +261,17 @@ function ThankYouContent() {
               className="mt-5 space-y-1"
             >
               <p className="text-xs font-extrabold uppercase tracking-[0.2em] text-emerald-700">
-                Order confirmed
+                {isUpcomingOffer ? "Offer booked" : "Order confirmed"}
               </p>
               <h1 className="text-3xl font-black tracking-tight text-[var(--customer-ink)] sm:text-4xl">
                 Thank you
               </h1>
               <p className="text-sm font-semibold text-[var(--customer-muted)]">
-                The kitchen has your order. Pay at pickup.
+                {isUpcomingOffer
+                  ? "Your offer is booked for a coming date. Pay at the restaurant on pickup."
+                  : isOfferBooking
+                    ? "Your offer is booked for today. Pay at the restaurant on pickup."
+                    : "The kitchen has your order. Pay at pickup."}
               </p>
             </motion.div>
           </div>
@@ -248,6 +282,23 @@ function ThankYouContent() {
             transition={{ delay: 0.32, duration: 0.4 }}
             className="mt-8 space-y-4"
           >
+            {isUpcomingOffer ? (
+              <div className="flex items-start gap-3 rounded-2xl border border-violet-200 bg-violet-50 px-4 py-3.5 text-left shadow-sm">
+                <CalendarDays className="mt-0.5 h-5 w-5 shrink-0 text-violet-700" />
+                <div className="min-w-0">
+                  <p className="text-sm font-extrabold uppercase tracking-wide text-violet-800">
+                    Offer Booked For Coming Date
+                  </p>
+                  <p className="mt-1 text-sm font-semibold text-violet-900">
+                    Offer date: {offerDateLabel || fulfillmentDate}
+                    {order?.pickup?.time
+                      ? ` · ${formatTime12h(order.pickup.time)}`
+                      : ""}
+                  </p>
+                </div>
+              </div>
+            ) : null}
+
             <div className="rounded-2xl border border-[var(--border)]/20 bg-white p-5 shadow-sm">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
@@ -281,7 +332,7 @@ function ThankYouContent() {
                   <Clock className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
                   <div>
                     <p className="text-xs font-bold uppercase tracking-wide text-[var(--customer-muted)]">
-                      Pickup
+                      {isOfferBooking ? "Offer pickup" : "Pickup"}
                     </p>
                     <p className="text-sm font-bold text-[var(--customer-ink)]">
                       {pickupLabel}
@@ -340,71 +391,100 @@ function ThankYouContent() {
                 <p className="mb-3 text-[11px] font-extrabold uppercase tracking-widest text-primary">
                   Your order
                 </p>
-                <ul className="space-y-3">
+                <p className="mb-3 text-[11px] font-medium text-[var(--customer-muted)]">
+                  Tap an item to view details
+                </p>
+                <Accordion type="multiple" className="space-y-2">
                   {order.items.map((item, idx) => {
                     const offer = isOfferItem(item);
                     const offerLines = offer ? getOfferDetailLines(item) : [];
                     const modifierLines = offer
                       ? []
                       : getReceiptModifierLines(item);
+                    const hasDetails =
+                      offerLines.length > 0 ||
+                      modifierLines.length > 0 ||
+                      Boolean(item.notes) ||
+                      (!offer && item.size && item.size !== "Standard");
+                    const itemKey = `item-${idx}`;
+
                     return (
-                      <li
-                        key={idx}
-                        className="rounded-xl border border-zinc-100 bg-[var(--customer-surface-low)]/60 px-3.5 py-3 text-left text-sm"
+                      <AccordionItem
+                        key={itemKey}
+                        value={itemKey}
+                        className="overflow-hidden rounded-xl border border-zinc-100 bg-[var(--customer-surface-low)]/60 px-0"
                       >
-                        <div className="flex justify-between gap-3">
-                          <span className="min-w-0">
+                        <AccordionTrigger className="px-3.5 py-3 text-sm hover:no-underline [&[data-state=open]]:bg-zinc-50/80">
+                          <span className="flex min-w-0 flex-1 items-center gap-2 pr-2 text-left">
                             {offer ? (
-                              <span className="mb-1 mr-1.5 inline-block rounded border border-violet-200 bg-violet-50 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-violet-700">
+                              <span className="shrink-0 rounded border border-violet-200 bg-violet-50 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-violet-700">
                                 Offer
                               </span>
                             ) : null}
-                            <span className="font-extrabold">{item.qty}×</span>{" "}
-                            <span className="font-bold">{item.name}</span>
-                            {!offer && item.size && item.size !== "Standard"
-                              ? ` (${item.size})`
-                              : ""}
+                            <span className="min-w-0 truncate">
+                              <span className="font-extrabold tabular-nums">
+                                {item.qty}×
+                              </span>{" "}
+                              <span className="font-bold">{item.name}</span>
+                            </span>
+                            <span className="ml-auto shrink-0 font-black tabular-nums text-[var(--customer-ink)]">
+                              {money(getItemLineTotal(item))}
+                            </span>
                           </span>
-                          <span className="shrink-0 font-black tabular-nums">
-                            {money(getItemLineTotal(item))}
-                          </span>
-                        </div>
-                        {offerLines.length > 0 ? (
-                          <div className="mt-2 space-y-2 border-t border-zinc-100/80 pt-2 text-xs text-[var(--customer-muted)]">
-                            {offerLines.map((line) => (
-                              <div key={`${idx}-${line.label}`}>
-                                <p className="font-bold text-[var(--customer-ink)]">
-                                  {line.label}
-                                </p>
-                                <ul className="mt-0.5 list-disc space-y-0.5 pl-5">
-                                  {(line.values || [line.value]).map((value) => (
-                                    <li key={`${idx}-${line.label}-${value}`}>
-                                      {value}
-                                    </li>
-                                  ))}
-                                </ul>
-                              </div>
-                            ))}
-                          </div>
-                        ) : null}
-                        {modifierLines.length > 0 ? (
-                          <ul className="mt-1 space-y-0.5 pl-5 text-xs text-[var(--customer-muted)]">
-                            {modifierLines.map((line, lineIdx) => (
-                              <li key={`${line.kind}-${lineIdx}`}>
-                                {line.text}
-                              </li>
-                            ))}
-                          </ul>
-                        ) : null}
-                        {item.notes ? (
-                          <p className="mt-1.5 text-xs font-medium italic text-amber-800">
-                            Remark: {item.notes}
-                          </p>
-                        ) : null}
-                      </li>
+                        </AccordionTrigger>
+                        <AccordionContent className="border-t border-zinc-100/80 px-3.5 pb-3 pt-2 text-xs text-[var(--customer-muted)]">
+                          {!hasDetails ? (
+                            <p className="italic">No extra details for this item.</p>
+                          ) : null}
+                          {!offer && item.size && item.size !== "Standard" ? (
+                            <p className={cn(hasDetails && "mb-2")}>
+                              <span className="font-bold text-[var(--customer-ink)]">
+                                Size:
+                              </span>{" "}
+                              {item.size}
+                            </p>
+                          ) : null}
+                          {offerLines.length > 0 ? (
+                            <div className="space-y-2">
+                              {offerLines.map((line) => (
+                                <div key={`${itemKey}-${line.label}`}>
+                                  <p className="font-bold text-[var(--customer-ink)]">
+                                    {line.label}
+                                  </p>
+                                  <ul className="mt-0.5 list-disc space-y-0.5 pl-5">
+                                    {(line.values || [line.value]).map(
+                                      (value) => (
+                                        <li
+                                          key={`${itemKey}-${line.label}-${value}`}
+                                        >
+                                          {value}
+                                        </li>
+                                      ),
+                                    )}
+                                  </ul>
+                                </div>
+                              ))}
+                            </div>
+                          ) : null}
+                          {modifierLines.length > 0 ? (
+                            <ul className="mt-1 space-y-0.5 pl-5">
+                              {modifierLines.map((line, lineIdx) => (
+                                <li key={`${line.kind}-${lineIdx}`}>
+                                  {line.text}
+                                </li>
+                              ))}
+                            </ul>
+                          ) : null}
+                          {item.notes ? (
+                            <p className="mt-2 font-medium italic text-amber-800">
+                              Remark: {item.notes}
+                            </p>
+                          ) : null}
+                        </AccordionContent>
+                      </AccordionItem>
                     );
                   })}
-                </ul>
+                </Accordion>
                 {order.specialNote ? (
                   <p className="mt-4 border-t border-zinc-100 pt-3 text-sm text-[var(--customer-muted)]">
                     <span className="font-bold text-[var(--customer-ink)]">

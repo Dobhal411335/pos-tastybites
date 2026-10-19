@@ -386,6 +386,7 @@ export function onlineOrderStatusTemplate({
   totalAmount,
   trackUrl,
   address,
+  restaurantPhone = null,
   status,
   paymentStatus,
   items = [],
@@ -406,6 +407,10 @@ export function onlineOrderStatusTemplate({
   giftcardUsedAmount,
   giftcardCode,
   orderAgainUrl,
+  isOfferBooking = false,
+  isUpcomingOffer = false,
+  offerFulfillmentDate = null,
+  offerDateLabel = null,
 }) {
   const brand = String(restaurantName || "Tasty Bites").trim() || "Tasty Bites";
   const hello = escapeHtml(String(guestName || "").trim() || "there");
@@ -417,17 +422,40 @@ export function onlineOrderStatusTemplate({
     isPaidType || String(paymentStatus || "").toUpperCase() === "PAID"
       ? "Paid"
       : "Pay at restaurant";
+  const offerDateDisplay = escapeHtml(
+    offerDateLabel || offerFulfillmentDate || "a coming date",
+  );
 
   const copy = {
-    placed: {
-      eyebrow: "Thank you for your order",
-      title: "We've received your order",
-      intro: `Thanks ${hello}! Your pickup order <strong>#${ticket}</strong> at <strong>${escapeHtml(brand)}</strong> is confirmed on our side.`,
-      nextStep:
-        "The kitchen will review and accept your order shortly. You'll get another email when they start preparing it.",
-      cta: "Track your order",
-      ctaUrl: trackUrl,
-    },
+    placed: isUpcomingOffer
+      ? {
+          eyebrow: "Offer booked for coming date",
+          title: "Your offer is booked for an upcoming date",
+          intro: `Thanks ${hello}! Your offer order <strong>#${ticket}</strong> at <strong>${escapeHtml(brand)}</strong> is booked for <strong>${offerDateDisplay}</strong>.`,
+          nextStep:
+            "This is an upcoming offer booking — the kitchen will prepare it on your selected offer date.",
+          cta: "Track your order",
+          ctaUrl: trackUrl,
+        }
+      : isOfferBooking
+        ? {
+            eyebrow: "Offer booked for today",
+            title: "We've received your offer order",
+            intro: `Thanks ${hello}! Your offer pickup order <strong>#${ticket}</strong> at <strong>${escapeHtml(brand)}</strong> is confirmed for <strong>${offerDateDisplay}</strong>.`,
+            nextStep:
+              "The kitchen will review and accept your offer order shortly. You'll get another email when they start preparing it.",
+            cta: "Track your order",
+            ctaUrl: trackUrl,
+          }
+        : {
+            eyebrow: "Thank you for your order",
+            title: "We've received your order",
+            intro: `Thanks ${hello}! Your pickup order <strong>#${ticket}</strong> at <strong>${escapeHtml(brand)}</strong> is confirmed on our side.`,
+            nextStep:
+              "The kitchen will review and accept your order shortly. You'll get another email when they start preparing it.",
+            cta: "Track your order",
+            ctaUrl: trackUrl,
+          },
     approved: {
       eyebrow: "Order accepted",
       title: "Kitchen is preparing your order",
@@ -499,6 +527,22 @@ export function onlineOrderStatusTemplate({
           <span style="font-size:12px;color:#6b7280;"> · ${escapeHtml(meta.hint)}</span>
         </div>
 
+        ${
+          isUpcomingOffer
+            ? `<div style="background:#f5f3ff;border:1px solid #ddd6fe;border-radius:16px;padding:18px 20px;margin:0 0 22px;">
+          <p style="margin:0 0 8px;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:1.2px;color:#6d28d9;">
+            Offer Booked For Coming Date
+          </p>
+          <p style="margin:0 0 6px;font-size:15px;font-weight:800;color:#4c1d95;">
+            Offer date: ${offerDateDisplay}
+          </p>
+          <p style="margin:0;font-size:13px;line-height:20px;color:#6d28d9;">
+            This offer is booked for an upcoming date. Kitchen prep starts on your selected offer day — not today.
+          </p>
+        </div>`
+            : ""
+        }
+
         <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:16px;padding:18px 20px;margin-bottom:22px;">
           <p style="margin:0 0 8px;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:1.2px;color:#c2410c;">Order #${ticket}</p>
           ${
@@ -507,8 +551,13 @@ export function onlineOrderStatusTemplate({
               : ""
           }
           ${
+            isOfferBooking && offerFulfillmentDate
+              ? `<p style="margin:0 0 6px;font-size:14px;color:#4b5563;"><strong style="color:#111827;">Offer date:</strong> ${offerDateDisplay}</p>`
+              : ""
+          }
+          ${
             pickupLabel
-              ? `<p style="margin:0 0 6px;font-size:14px;color:#4b5563;"><strong style="color:#111827;">Pickup:</strong> ${escapeHtml(pickupLabel)}</p>`
+              ? `<p style="margin:0 0 6px;font-size:14px;color:#4b5563;"><strong style="color:#111827;">${isOfferBooking ? "Offer pickup" : "Pickup"}:</strong> ${escapeHtml(pickupLabel)}</p>`
               : ""
           }
           <p style="margin:0 0 6px;font-size:14px;color:#4b5563;"><strong style="color:#111827;">Payment:</strong> ${escapeHtml(payLabel)}</p>
@@ -520,6 +569,11 @@ export function onlineOrderStatusTemplate({
           ${
             guestEmail
               ? `<p style="margin:0 0 6px;font-size:14px;color:#4b5563;"><strong style="color:#111827;">Email:</strong> ${escapeHtml(guestEmail)}</p>`
+              : ""
+          }
+          ${
+            restaurantPhone
+              ? `<p style="margin:0 0 6px;font-size:14px;color:#4b5563;"><strong style="color:#111827;">Restaurant phone:</strong> <a href="tel:${escapeHtml(String(restaurantPhone).replace(/[^\d+]/g, ""))}" style="color:#c2410c;font-weight:700;text-decoration:none;">${escapeHtml(restaurantPhone)}</a></p>`
               : ""
           }
           ${
@@ -583,13 +637,20 @@ export function onlineOrderStatusTemplate({
           ${
             isPaidType
               ? "Thanks for choosing us. Skip the wait next time — place your next pickup order online."
-              : "Same-day pickup only. Payment is collected at the restaurant when you collect your order."
+              : isUpcomingOffer
+                ? "Upcoming offer booking. Payment is collected at the restaurant when you collect your offer on the booked date."
+                : "Same-day pickup only. Payment is collected at the restaurant when you collect your order."
           }
         </p>
       </div>
 
       <div style="padding:22px 32px 30px;background:#fafafa;text-align:center;border-top:1px solid #e5e7eb;">
         <p style="margin:0 0 8px;font-weight:800;color:#111827;">${escapeHtml(brand)}</p>
+        ${
+          restaurantPhone
+            ? `<p style="margin:0 0 8px;color:#6b7280;font-size:13px;"><a href="tel:${escapeHtml(String(restaurantPhone).replace(/[^\d+]/g, ""))}" style="color:#c2410c;font-weight:700;text-decoration:none;">${escapeHtml(restaurantPhone)}</a></p>`
+            : ""
+        }
         <p style="margin:0;color:#6b7280;font-size:12px;">© ${year} ${escapeHtml(brand)}. All rights reserved.</p>
       </div>
     </div>

@@ -27,16 +27,33 @@ async function restaurantLabel(restaurantId) {
     const doc = await Restaurant.findById(restaurantId)
       .select("name address slug")
       .lean();
-    if (!doc) return { name: "Tasty Bites", address: null };
+    if (!doc) {
+      return {
+        name: "Tasty Bites",
+        address: null,
+        phone: null,
+        phoneCode: null,
+        phoneDisplay: null,
+      };
+    }
     const profile = doc.slug
       ? await getPublicRestaurantProfile(doc.slug)
       : null;
     return {
       name: profile?.name || doc.name || "Tasty Bites",
       address: profile?.address || doc.address || null,
+      phone: profile?.phone || null,
+      phoneCode: profile?.phoneCode || null,
+      phoneDisplay: profile?.phoneDisplay || null,
     };
   } catch {
-    return { name: "Tasty Bites", address: null };
+    return {
+      name: "Tasty Bites",
+      address: null,
+      phone: null,
+      phoneCode: null,
+      phoneDisplay: null,
+    };
   }
 }
 
@@ -135,6 +152,9 @@ export const PATCH = withAuth(async (request) => {
         reservation,
         restaurantName: label.name,
         address: label.address,
+        phone: label.phone,
+        phoneCode: label.phoneCode,
+        phoneDisplay: label.phoneDisplay,
       });
     } else if (action === "decline") {
       if (reservation.status !== "PENDING") {
@@ -156,6 +176,9 @@ export const PATCH = withAuth(async (request) => {
         reservation,
         restaurantName: label.name,
         address: label.address,
+        phone: label.phone,
+        phoneCode: label.phoneCode,
+        phoneDisplay: label.phoneDisplay,
       });
     } else if (action === "seat") {
       if (!["ACCEPTED", "PENDING"].includes(reservation.status)) {

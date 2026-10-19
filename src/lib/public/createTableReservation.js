@@ -1,6 +1,7 @@
 import TableReservation from "@/models/TableReservation";
 import { createNotification } from "@/lib/notifications/notificationService";
 import { getSocketServer } from "@/lib/socketServer";
+import { sendTableReservationStatusEmail } from "@/lib/brevo/sendTableReservationStatusEmail";
 import { normalizeGuestPhone } from "@/lib/public/cartPayload";
 import { onlineOrderingTimezone } from "@/lib/public/pickup";
 import { logger } from "@/utils/logger";
@@ -78,6 +79,10 @@ export function serializeReservation(doc) {
 export async function createTableReservation({
   restaurantId,
   restaurantName,
+  restaurantAddress,
+  restaurantPhone,
+  restaurantPhoneCode,
+  restaurantPhoneDisplay,
   guestName,
   phone,
   countryCode,
@@ -203,6 +208,20 @@ export async function createTableReservation({
     });
   } catch (socketErr) {
     logger.error("Failed to emit reservation socket", socketErr);
+  }
+
+  try {
+    await sendTableReservationStatusEmail({
+      type: "received",
+      reservation,
+      restaurantName,
+      address: restaurantAddress || null,
+      phone: restaurantPhone || null,
+      phoneCode: restaurantPhoneCode || null,
+      phoneDisplay: restaurantPhoneDisplay || null,
+    });
+  } catch (emailErr) {
+    logger.error("Failed to send reservation-received email", emailErr);
   }
 
   logger.info(

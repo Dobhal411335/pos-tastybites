@@ -57,17 +57,68 @@ function loadFlowerDataUri() {
   return `data:image/png;base64,${b64}`;
 }
 
+let cachedFontCss = null;
+
+/**
+ * Embed Noto Sans so sharp/librsvg can render text on Linux (Vercel).
+ * Without this, missing Helvetica/Georgia shows as □□□ tofu blocks.
+ */
+function loadEmbeddedFontCss() {
+  if (cachedFontCss !== null) return cachedFontCss;
+  try {
+    const fontsDir = path.join(process.cwd(), "public", "fonts");
+    const regularPath = path.join(fontsDir, "NotoSans-Regular.ttf");
+    const boldPath = path.join(fontsDir, "NotoSans-Bold.ttf");
+    if (!fs.existsSync(regularPath) || !fs.existsSync(boldPath)) {
+      console.warn(
+        "Gift card fonts missing under public/fonts — text may render as boxes",
+      );
+      cachedFontCss = "";
+      return cachedFontCss;
+    }
+    const regular = fs.readFileSync(regularPath).toString("base64");
+    const bold = fs.readFileSync(boldPath).toString("base64");
+    cachedFontCss = `
+  <defs>
+    <style type="text/css"><![CDATA[
+      @font-face {
+        font-family: 'GiftCardSans';
+        font-weight: 400;
+        font-style: normal;
+        src: url('data:font/ttf;charset=utf-8;base64,${regular}') format('truetype');
+      }
+      @font-face {
+        font-family: 'GiftCardSans';
+        font-weight: 700;
+        font-style: normal;
+        src: url('data:font/ttf;charset=utf-8;base64,${bold}') format('truetype');
+      }
+      @font-face {
+        font-family: 'GiftCardSans';
+        font-weight: 800;
+        font-style: normal;
+        src: url('data:font/ttf;charset=utf-8;base64,${bold}') format('truetype');
+      }
+    ]]></style>
+  </defs>`;
+    return cachedFontCss;
+  } catch (err) {
+    console.warn("Failed to load gift card fonts:", err?.message || err);
+    cachedFontCss = "";
+    return cachedFontCss;
+  }
+}
+
 /** Truncate long strings so they fit on the certificate lines. */
 function clip(str, max) {
   const s = String(str || "");
   if (s.length <= max) return s;
-  return `${s.slice(0, Math.max(0, max - 1))}…`;
+  return `${s.slice(0, Math.max(0, max - 1))}...`;
 }
 
 /**
  * Build print-style gift certificate as SVG (matches GiftCardTemplate layout).
- * Uses inline fill/font attributes — sharp/librsvg often ignores CSS classes,
- * which previously left the email attachment looking blank.
+ * Uses embedded Noto Sans — system Helvetica/Georgia are often missing on servers.
  */
 export function buildGiftCardSvg({
   code,
@@ -86,7 +137,7 @@ export function buildGiftCardSvg({
 
   const amountStr = escapeXml(fmtMoney(value));
   const codeStr = escapeXml(clip(code || "", 22));
-  const forName = escapeXml(clip(recipientName || "", 36));
+  const forName = escapeXml(clip(String(recipientName || "").trim() || "Guest", 36));
   const dateStr = escapeXml(fmtDate(issueDate) || fmtDate(new Date()));
   const phone = escapeXml(fmtPhone(companyInfo?.contactNumbers?.[0]));
   const address = escapeXml(
@@ -96,13 +147,16 @@ export function buildGiftCardSvg({
     companyInfo?.website || "www.tastybitesrestaurant.com",
   );
   const flowerUri = loadFlowerDataUri();
+  const fontCss = loadEmbeddedFontCss();
 
-  const brand = `font-family="Georgia, 'Times New Roman', serif" font-style="italic" fill="#E3B12F"`;
-  const white = `font-family="Helvetica, Arial, sans-serif" fill="#ffffff"`;
-  const black = `font-family="Helvetica, Arial, sans-serif" fill="#000000"`;
+  // Prefer embedded GiftCardSans; keep system fallbacks for local previews.
+  const brand = `font-family="GiftCardSans, Georgia, 'Times New Roman', serif" font-style="italic" font-weight="700" fill="#E3B12F"`;
+  const white = `font-family="GiftCardSans, Helvetica, Arial, sans-serif" fill="#ffffff"`;
+  const black = `font-family="GiftCardSans, Helvetica, Arial, sans-serif" fill="#000000"`;
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
+  ${fontCss}
   <!-- Outer border -->
   <rect x="0.5" y="0.5" width="${W - 1}" height="${H - 1}" fill="#ffffff" stroke="#A1A1AA" stroke-width="1"/>
 
