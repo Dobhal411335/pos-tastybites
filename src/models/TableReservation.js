@@ -33,6 +33,11 @@ const TableReservationSchema = new mongoose.Schema(
       default: null,
     },
     assignedTableNo: { type: String, default: null },
+    tableSessionId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "TableSession",
+      default: null,
+    },
     handledBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Employee",

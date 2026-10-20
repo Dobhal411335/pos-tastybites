@@ -2,8 +2,8 @@
 
 import React, { useState, useEffect, useCallback, useMemo, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { 
-  Search, Clock, ChevronRight, X, 
+import {
+  Search, Clock, ChevronRight, X,
   Receipt, ShoppingBag, Loader2, ArrowLeft, RefreshCw,
   DollarSign, Wallet, CreditCard, Banknote, Gift, User, Users, UtensilsCrossed
 } from "lucide-react";
@@ -24,6 +24,7 @@ import {
   getReceiptModifierLines,
   getItemLineTotal,
 } from "@/utils/productChoices";
+import { isOfferItem } from "@/utils/offerDetails";
 import { resolveTenders } from "@/lib/eod/eodHelpers";
 
 const STATUSES = ["All", "PENDING", "CONFIRMED", "CANCELLED", "WAIVED", "PAID", "ONLINE"];
@@ -510,14 +511,14 @@ function TodayOrdersPageContent() {
         setSelectedOrder((prev) =>
           prev
             ? {
-                ...prev,
-                isSessionOpen: false,
-                sessionStatus: "RELEASED",
-                tableSession:
-                  typeof prev.tableSession === "object"
-                    ? { ...prev.tableSession, isSessionOpen: false, status: "RELEASED" }
-                    : prev.tableSession,
-              }
+              ...prev,
+              isSessionOpen: false,
+              sessionStatus: "RELEASED",
+              tableSession:
+                typeof prev.tableSession === "object"
+                  ? { ...prev.tableSession, isSessionOpen: false, status: "RELEASED" }
+                  : prev.tableSession,
+            }
             : null,
         );
         await fetchOrders({ silent: true });
@@ -529,14 +530,14 @@ function TodayOrdersPageContent() {
           setSelectedOrder((prev) =>
             prev
               ? {
-                  ...prev,
-                  isSessionOpen: false,
-                  sessionStatus: "RELEASED",
-                  tableSession:
-                    typeof prev.tableSession === "object"
-                      ? { ...prev.tableSession, isSessionOpen: false, status: "RELEASED" }
-                      : prev.tableSession,
-                }
+                ...prev,
+                isSessionOpen: false,
+                sessionStatus: "RELEASED",
+                tableSession:
+                  typeof prev.tableSession === "object"
+                    ? { ...prev.tableSession, isSessionOpen: false, status: "RELEASED" }
+                    : prev.tableSession,
+              }
               : null,
           );
           await fetchOrders({ silent: true });
@@ -765,10 +766,10 @@ function TodayOrdersPageContent() {
 
   return (
     <div className="h-full min-h-0 flex overflow-hidden bg-zinc-50 font-sans">
-      
+
       {/* MAIN LIST AREA */}
       <div className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden">
-        
+
         {/* HEADER & FILTERS */}
         <div className="bg-white px-4 py-3 border-b border-zinc-200 shrink-0 z-10 space-y-3">
           <div className="flex items-center justify-between gap-3">
@@ -778,7 +779,7 @@ function TodayOrdersPageContent() {
               </Button>
               <h1 className="text-xl font-bold text-zinc-900 leading-none truncate py-1">Today&apos;s Orders</h1>
             </div>
-            
+
             <div className="flex gap-2 items-center shrink-0">
               <Button
                 variant="outline"
@@ -791,8 +792,8 @@ function TodayOrdersPageContent() {
               </Button>
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
-                <Input 
-                  placeholder="Search ID, name, table..." 
+                <Input
+                  placeholder="Search ID, name, table..."
                   className="pl-9 w-40 md:w-56 bg-zinc-50 border border-orange-500 font-semibold rounded-xl h-10 text-sm focus-visible:ring-1 focus-visible:ring-orange-500"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
@@ -837,11 +838,10 @@ function TodayOrdersPageContent() {
                 key={status}
                 type="button"
                 onClick={() => selectTab(status)}
-                className={`px-4 py-2 rounded-xl text-sm font-bold whitespace-nowrap transition-colors ${
-                  activeTab === status 
-                    ? "bg-zinc-900 text-white shadow-sm" 
+                className={`px-4 py-2 rounded-xl text-sm font-bold whitespace-nowrap transition-colors ${activeTab === status
+                    ? "bg-zinc-900 text-white shadow-sm"
                     : "bg-zinc-200 text-zinc-900 border hover:bg-zinc-300"
-                }`}
+                  }`}
               >
                 {status}
               </button>
@@ -871,15 +871,16 @@ function TodayOrdersPageContent() {
                 const orderTypeLabel = getOrderTypeLabel(order);
                 const partyLabel = getOrderPartyLabel(order);
                 const locationLabel = getOrderLocationLabel(order);
+                const offerItems = (order.items || []).filter(isOfferItem);
+                const firstOfferName = offerItems.length > 0 ? offerItems[0].name : null;
                 return (
-                  <div 
+                  <div
                     key={order._id}
                     onClick={() => setSelectedOrder(order)}
-                    className={`bg-white p-4 rounded-2xl border transition-all cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-4 group ${
-                      selectedOrder?._id === order._id 
-                        ? "border-orange-500 ring-1 ring-orange-500 shadow-md" 
+                    className={`bg-white p-4 rounded-2xl border transition-all cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-4 group ${selectedOrder?._id === order._id
+                        ? "border-orange-500 ring-1 ring-orange-500 shadow-md"
                         : "border-zinc-200 hover:border-orange-300 hover:shadow-sm"
-                    }`}
+                      }`}
                   >
                     <div className="flex items-center gap-4">
                       <div className={`w-12 h-12 rounded-xl text-white flex items-center justify-center shrink-0 ${getTypeIconBg(order)}`}>
@@ -889,10 +890,16 @@ function TodayOrdersPageContent() {
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-bold text-zinc-900">Order #{order.orderNumber}</span>
                           <span
-                            className={`inline-flex items-center px-2 py-0.5 rounded-md border text-[10px] font-bold uppercase tracking-wider ${getOrderTypeBadgeClass(order)}`}
+                            className={`inline-flex items-center px-2 py-0.5 rounded-md border text-[12px] font-bold uppercase tracking-wider ${getOrderTypeBadgeClass(order)}`}
                           >
                             {orderTypeLabel}
                           </span>
+                          {firstOfferName && (
+                            <span className="inline-flex items-center gap-0.5 px-2 py-1 rounded-md border border-orange-300 bg-orange-50 text-[12px] font-bold uppercase tracking-wider text-orange-700">
+                              <Gift className="w-3 h-3" />
+                              Offer
+                            </span>
+                          )}
                         </div>
                         <div className="flex items-center gap-2 flex-wrap mt-0.5">
                           <span className="font-bold text-zinc-600">{locationLabel}</span>
@@ -944,10 +951,9 @@ function TodayOrdersPageContent() {
         />
       )}
 
-      <div 
-        className={`fixed top-16 bottom-0 right-0 w-[400px] xl:w-[450px] bg-white border-l border-zinc-200 shadow-2xl transition-transform duration-300 z-30 flex flex-col ${
-          selectedOrder ? "translate-x-0" : "translate-x-full"
-        }`}
+      <div
+        className={`fixed top-16 bottom-0 right-0 w-[400px] xl:w-[450px] bg-white border-l border-zinc-200 shadow-2xl transition-transform duration-300 z-30 flex flex-col ${selectedOrder ? "translate-x-0" : "translate-x-full"
+          }`}
         onClick={(e) => e.stopPropagation()}
       >
         {selectedOrder && (
@@ -1056,11 +1062,10 @@ function TodayOrdersPageContent() {
               <div>
                 <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-3">Payment</h3>
                 <div className="space-y-3 text-sm">
-                  <div className={`rounded-xl border-2 px-4 py-3 flex justify-between items-center ${
-                    orderStatusUpper === "WAIVED"
+                  <div className={`rounded-xl border-2 px-4 py-3 flex justify-between items-center ${orderStatusUpper === "WAIVED"
                       ? "bg-slate-100 text-slate-800 border-slate-200"
                       : getPaymentColor(selectedOrder.paymentStatus)
-                  }`}>
+                    }`}>
                     <span className="text-sm font-bold uppercase tracking-wide">Status</span>
                     <span className="text-md font-black uppercase tracking-tight">
                       {orderStatusUpper === "WAIVED"
@@ -1120,7 +1125,7 @@ function TodayOrdersPageContent() {
               </div>
 
               <div className="h-px bg-zinc-500"></div>
-              
+
               <div>
                 <h3 className="text-sm font-bold text-zinc-900 uppercase tracking-wider mb-4">Order Items</h3>
                 <div className="space-y-4">
@@ -1146,24 +1151,23 @@ function TodayOrdersPageContent() {
                             {modifierLines.map((line, lineIdx) => (
                               <span
                                 key={`${line.kind}-${lineIdx}`}
-                                className={`text-sm mt-1 font-semibold block ${
-                                  line.kind === "addon-choice-item" ||
-                                  line.kind === "choice-item" ||
-                                  line.kind === "custom-data-item"
+                                className={`text-sm mt-1 font-semibold block ${line.kind === "addon-choice-item" ||
+                                    line.kind === "choice-item" ||
+                                    line.kind === "custom-data-item"
                                     ? "pl-3 text-sky-800"
                                     : line.kind === "custom-data"
                                       ? "text-violet-900"
                                       : line.kind === "addon-choice" ||
-                                          line.kind === "choice"
+                                        line.kind === "choice"
                                         ? "text-sky-900"
                                         : line.kind === "custom-extra"
                                           ? "text-zinc-900"
                                           : "text-zinc-900 italic"
-                                }`}
+                                  }`}
                               >
                                 {line.text}
                                 {line.kind === "custom-extra" &&
-                                line.price != null ? (
+                                  line.price != null ? (
                                   <span className="text-zinc-600 font-bold">
                                     {" "}
                                     (+${Number(line.price).toFixed(2)})
@@ -1209,9 +1213,9 @@ function TodayOrdersPageContent() {
                     ? Number(selectedOrder.discountPercent)
                     : selectedOrder.subTotal > 0 && selectedOrder.discountTotal > 0
                       ? Math.round(
-                          (selectedOrder.discountTotal / selectedOrder.subTotal) *
-                            1000,
-                        ) / 10
+                        (selectedOrder.discountTotal / selectedOrder.subTotal) *
+                        1000,
+                      ) / 10
                       : null;
                 const discountLabel =
                   discountPct != null && discountPct > 0
@@ -1229,7 +1233,7 @@ function TodayOrdersPageContent() {
                   const taxableBase = Math.max(
                     0,
                     (selectedOrder.subTotal || 0) -
-                      (selectedOrder.discountTotal || 0),
+                    (selectedOrder.discountTotal || 0),
                   );
                   if (taxableBase > 0 && (selectedOrder.taxTotal || 0) > 0) {
                     return (
@@ -1270,7 +1274,7 @@ function TodayOrdersPageContent() {
                             {Math.max(
                               0,
                               (selectedOrder.subTotal || 0) -
-                                (selectedOrder.discountTotal || 0),
+                              (selectedOrder.discountTotal || 0),
                             ).toFixed(2)}
                           </span>
                         </div>
@@ -1279,13 +1283,13 @@ function TodayOrdersPageContent() {
                     {(Number(selectedOrder.taxTotal || 0) > 0 ||
                       (Number(selectedOrder.discountTotal || 0) > 0 &&
                         totalHstRate > 0)) && (
-                      <div className="flex justify-between text-zinc-500 font-medium">
-                        <span className="text-zinc-800">{hstLabel}</span>
-                        <span className="text-zinc-900">
-                          ${(selectedOrder.taxTotal || 0).toFixed(2)}
-                        </span>
-                      </div>
-                    )}
+                        <div className="flex justify-between text-zinc-500 font-medium">
+                          <span className="text-zinc-800">{hstLabel}</span>
+                          <span className="text-zinc-900">
+                            ${(selectedOrder.taxTotal || 0).toFixed(2)}
+                          </span>
+                        </div>
+                      )}
                     {Number(selectedOrder.serviceChargeTotal || 0) > 0 && (
                       <div className="flex justify-between text-zinc-500 font-medium">
                         <span className="text-zinc-800">
@@ -1345,11 +1349,10 @@ function TodayOrdersPageContent() {
                               <span>
                                 {split.name}
                                 {split.method
-                                  ? ` · ${
-                                      split.cardType
-                                        ? `Card - ${split.cardType}`
-                                        : split.method
-                                    }`
+                                  ? ` · ${split.cardType
+                                    ? `Card - ${split.cardType}`
+                                    : split.method
+                                  }`
                                   : ""}
                               </span>
                               <span className="font-semibold">

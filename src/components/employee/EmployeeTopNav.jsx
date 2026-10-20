@@ -47,7 +47,7 @@ const PRIMARY_NAV = [
   { label: "Floor", href: "/floor", icon: Grid2X2 },
   { label: "Orders", href: "/sales/today", icon: ShoppingBag, showUnpaidBadge: true },
   {
-    label: "Bookings",
+    label: "Table Bookings",
     href: "/sales/reservations",
     icon: CalendarDays,
     showBookingBadge: true,

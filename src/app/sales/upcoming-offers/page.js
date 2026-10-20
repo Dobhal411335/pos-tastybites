@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
   CalendarDays,
+  ChevronDown,
   Clock3,
   Gift,
   Loader2,
@@ -18,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { employeeFetch } from "@/lib/employeeFetch";
 import { useSocket } from "@/components/providers/SocketProvider";
 import { getOfferDetailLines } from "@/utils/offerDetails";
+import { cn } from "@/lib/utils";
 
 function formatTimeLabel(time) {
   const m = String(time || "").match(/^(\d{1,2}):(\d{2})$/);
@@ -58,6 +60,134 @@ function statusTone(status) {
     return "bg-emerald-50 text-emerald-800 ring-emerald-200";
   }
   return "bg-stone-100 text-stone-700 ring-stone-200";
+}
+
+function getItemPriceDisplay(item, orderTotal, isSingleItem) {
+  const qty = Math.max(1, Number(item?.qty) || 1);
+  const rawPrice =
+    item?.price != null && item?.price !== "" ? Number(item.price) : null;
+
+  if (rawPrice != null && !Number.isNaN(rawPrice)) {
+    const lineTotal = rawPrice * qty;
+    return {
+      lineTotal: `$${lineTotal.toFixed(2)}`,
+      unitPrice: qty > 1 ? `$${rawPrice.toFixed(2)}` : null,
+    };
+  }
+
+  if (
+    isSingleItem &&
+    orderTotal != null &&
+    !Number.isNaN(Number(orderTotal))
+  ) {
+    const total = Number(orderTotal);
+    const unit = total / qty;
+    return {
+      lineTotal: `$${total.toFixed(2)}`,
+      unitPrice: qty > 1 ? `$${unit.toFixed(2)}` : null,
+    };
+  }
+
+  return null;
+}
+
+function OfferItemAccordion({ item, orderTotal, isSingleItem }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const details = getOfferDetailLines(item);
+  const priceInfo = getItemPriceDisplay(item, orderTotal, isSingleItem);
+
+  return (
+    <div className="overflow-hidden rounded-xl border border-stone-200/80 bg-stone-50/70 transition-colors hover:border-stone-300">
+      <button
+        type="button"
+        onClick={() => setIsOpen((prev) => !prev)}
+        className="flex w-full items-center justify-between gap-3 px-3.5 py-3 text-left transition-colors hover:bg-stone-100/70"
+        aria-expanded={isOpen}
+      >
+        <div className="flex min-w-0 items-center gap-2.5">
+          <Gift className="h-4 w-4 shrink-0 text-orange-500" />
+          <p className="truncate text-sm font-extrabold text-stone-900">
+            {item.qty}× {item.name}
+          </p>
+        </div>
+
+        <div className="flex shrink-0 items-center gap-2 sm:gap-2.5">
+          {priceInfo ? (
+            <div className="flex items-baseline gap-1 text-right">
+              {priceInfo.unitPrice ? (
+                <span className="hidden text-[11px] font-semibold text-stone-400 sm:inline">
+                  ({priceInfo.unitPrice} each)
+                </span>
+              ) : null}
+              <span className="text-sm font-black tabular-nums text-stone-900">
+                {priceInfo.lineTotal}
+              </span>
+            </div>
+          ) : null}
+          <ChevronDown
+            className={cn(
+              "h-4 w-4 shrink-0 text-stone-400 transition-transform duration-200",
+              isOpen && "rotate-180 text-orange-600",
+            )}
+          />
+        </div>
+      </button>
+
+      {/* Animated content panel using CSS grid-rows trick */}
+      <div
+        className={cn(
+          "grid transition-[grid-template-rows] duration-300 ease-in-out",
+          isOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
+        )}
+      >
+        <div className="min-h-0 overflow-hidden">
+          <div
+            className={cn(
+              "border-t border-stone-200/70 bg-white/70 px-3.5 py-3 transition-opacity duration-300",
+              isOpen ? "opacity-100" : "opacity-0",
+            )}
+          >
+            {details.length ? (
+              <div className="space-y-2.5">
+                {details.map((line, lIdx) => (
+                  <div key={`${line.label}-${lIdx}`}>
+                    <p className="text-[11px] font-bold uppercase tracking-wide text-stone-800">
+                      {line.label}
+                    </p>
+                    <ul className="mt-1 space-y-0.5">
+                      {(line.values || [line.value]).map((value, vIdx) => (
+                        <li
+                          key={`${line.label}-${vIdx}`}
+                          className="flex gap-2 text-[13px] leading-snug text-stone-600"
+                        >
+                          <span className="mt-[0.45em] h-1 w-1 shrink-0 rounded-full bg-stone-800" />
+                          <span>{value}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            ) : !item.notes ? (
+              <p className="text-xs italic text-stone-400">
+                No additional choices or inclusions specified.
+              </p>
+            ) : null}
+
+            {item.notes ? (
+              <p
+                className={`${
+                  details.length ? "mt-2.5 border-t border-stone-100 pt-2" : ""
+                } text-xs font-medium italic text-amber-800`}
+              >
+                Remark: {item.notes}
+              </p>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export default function UpcomingOffersPage() {
@@ -252,53 +382,14 @@ export default function UpcomingOffersPage() {
                       </div>
 
                       <div className="mt-4 space-y-2.5">
-                        {lines.map((item, idx) => {
-                          const details = getOfferDetailLines(item);
-                          return (
-                            <div
-                              key={`${id}-item-${idx}`}
-                              className="rounded-xl bg-stone-50 px-3.5 py-3 ring-1 ring-stone-100"
-                            >
-                              <div className="flex items-start gap-2">
-                                <Gift className="mt-0.5 h-4 w-4 shrink-0 text-orange-500" />
-                                <div className="min-w-0 flex-1">
-                                  <p className="text-sm font-extrabold text-stone-900">
-                                    {item.qty}× {item.name}
-                                  </p>
-                                  {details.length ? (
-                                    <div className="mt-2 space-y-2">
-                                      {details.map((line) => (
-                                        <div key={`${idx}-${line.label}`}>
-                                          <p className="text-[11px] font-bold uppercase tracking-wide text-stone-400">
-                                            {line.label}
-                                          </p>
-                                          <ul className="mt-1 space-y-0.5">
-                                            {(
-                                              line.values || [line.value]
-                                            ).map((value) => (
-                                              <li
-                                                key={`${idx}-${line.label}-${value}`}
-                                                className="flex gap-2 text-[13px] leading-snug text-stone-600"
-                                              >
-                                                <span className="mt-[0.45em] h-1 w-1 shrink-0 rounded-full bg-stone-300" />
-                                                <span>{value}</span>
-                                              </li>
-                                            ))}
-                                          </ul>
-                                        </div>
-                                      ))}
-                                    </div>
-                                  ) : null}
-                                  {item.notes ? (
-                                    <p className="mt-2 text-xs font-medium italic text-amber-800">
-                                      Remark: {item.notes}
-                                    </p>
-                                  ) : null}
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })}
+                        {lines.map((item, idx) => (
+                          <OfferItemAccordion
+                            key={`${id}-item-${idx}`}
+                            item={item}
+                            orderTotal={order.totalAmount}
+                            isSingleItem={lines.length === 1}
+                          />
+                        ))}
                       </div>
 
                       {order.specialNote ? (

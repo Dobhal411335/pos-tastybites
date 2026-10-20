@@ -27,7 +27,7 @@ import {
 } from "@/lib/restaurantTime";
 import { countryCodes } from "@/utils/countryCodes";
 import { REASON_FOR_VISIT_OPTIONS } from "@/lib/public/reservationOptions";
-
+import Image from "next/image"
 function formatDateLabel(iso) {
   try {
     return new Date(`${iso}T12:00:00`).toLocaleDateString("en-CA", {
@@ -306,30 +306,15 @@ export default function BookTableForm() {
       <div className="mx-auto max-w-[1320px] px-5 lg:px-12">
         <div className="overflow-hidden rounded-2xl border border-[var(--border)]/20 bg-white shadow-xl">
           <div className="grid grid-cols-1 lg:grid-cols-12">
-            <div className="flex flex-col justify-center gap-4 bg-[var(--ink)] p-8 text-white sm:p-10 lg:col-span-5">
-              <span className="inline-flex self-start rounded-full bg-primary/20 px-3 py-1 text-[11px] font-bold uppercase tracking-widest text-primary">
-                Reservations
-              </span>
-              <h2
-                id="reserve-heading"
-                className="text-3xl font-extrabold leading-tight tracking-tight sm:text-4xl"
-              >
-                Book a table at {brandName}
-              </h2>
-              <p className="text-sm leading-relaxed text-white/70">
-                Reserve for today or a future date. Verify your email, then
-                we&apos;ll hold your request for the sales desk to confirm.
-              </p>
-              <ul className="mt-2 space-y-2 text-xs text-white/60">
-                <li className="flex items-center gap-2">
-                  <span className="h-1.5 w-1.5 rounded-full bg-primary" />
-                  Email verification required
-                </li>
-                <li className="flex items-center gap-2">
-                  <span className="h-1.5 w-1.5 rounded-full bg-primary" />
-                  Staff confirms — you get an email when accepted
-                </li>
-              </ul>
+            <div className="relative overflow-hidden lg:col-span-5">
+              <Image
+                width={500}
+                height={500}
+                src="/TableReservation.png"
+                alt="Book a table at the restaurant — elegant dining setup"
+                className="h-full w-full object-cover"
+                style={{ minHeight: '320px' }}
+              />
             </div>
 
             <form

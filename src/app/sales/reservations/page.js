@@ -14,13 +14,24 @@ import {
   Search,
   Users,
   X,
+  Armchair,
+  ShoppingBag,
+  ArrowRight,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { useSocket } from "@/components/providers/SocketProvider";
 import { employeeFetch } from "@/lib/employeeFetch";
+import { todayRestaurantISO } from "@/lib/restaurantTime";
 
 const FILTERS = [
   { id: "PENDING", label: "Pending" },
@@ -74,6 +85,7 @@ function formatPhone(phone, countryCode) {
 export default function SalesReservationsPage() {
   const router = useRouter();
   const { socket } = useSocket();
+  const todayISO = useMemo(() => todayRestaurantISO(), []);
   const [tab, setTab] = useState("PENDING");
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -81,6 +93,10 @@ export default function SalesReservationsPage() {
   const [search, setSearch] = useState("");
   const [actingId, setActingId] = useState(null);
   const [tableDrafts, setTableDrafts] = useState({});
+  const [floorTables, setFloorTables] = useState([]);
+  const [seatDialogReservation, setSeatDialogReservation] = useState(null);
+  const [selectedTableId, setSelectedTableId] = useState("");
+  const [seatingBusy, setSeatingBusy] = useState(false);
 
   const fetchRows = useCallback(async ({ silent = false } = {}) => {
     if (silent) setRefreshing(true);
@@ -100,20 +116,40 @@ export default function SalesReservationsPage() {
     }
   }, []);
 
+  const fetchTables = useCallback(async () => {
+    try {
+      const res = await employeeFetch("/api/sales/reservations?tables=true");
+      const json = await res.json();
+      if (res.ok && json.success && Array.isArray(json.data)) {
+        setFloorTables(json.data);
+      }
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
   useEffect(() => {
     fetchRows();
-  }, [fetchRows]);
+    fetchTables();
+  }, [fetchRows, fetchTables]);
 
   useEffect(() => {
     if (!socket) return undefined;
     const onChange = () => fetchRows({ silent: true });
+    const onTableChange = () => fetchTables();
     socket.on("reservation:created", onChange);
     socket.on("reservation:updated", onChange);
+    socket.on("table:assigned", onTableChange);
+    socket.on("table:updated", onTableChange);
+    socket.on("table:released", onTableChange);
     return () => {
       socket.off("reservation:created", onChange);
       socket.off("reservation:updated", onChange);
+      socket.off("table:assigned", onTableChange);
+      socket.off("table:updated", onTableChange);
+      socket.off("table:released", onTableChange);
     };
-  }, [socket, fetchRows]);
+  }, [socket, fetchRows, fetchTables]);
 
   const counts = useMemo(() => {
     const c = {
@@ -183,11 +219,94 @@ export default function SalesReservationsPage() {
           : json.message || "Updated"
       );
       await fetchRows({ silent: true });
+      await fetchTables();
     } catch (err) {
       toast.error(err.message || "Failed to update booking");
     } finally {
       setActingId(null);
     }
+  };
+
+  const openSeatDialog = (reservation) => {
+    setSeatDialogReservation(reservation);
+    const available = floorTables.filter((t) => !t.isOccupied);
+    const match = available.find(
+      (t) =>
+        (reservation.assignedTableId && t.id === reservation.assignedTableId) ||
+        (reservation.assignedTableNo && t.tableNumber === reservation.assignedTableNo)
+    );
+    if (match) {
+      setSelectedTableId(match.id);
+    } else {
+      const bestFit =
+        available.find((t) => Number(t.seats) >= Number(reservation.guests || 1)) ||
+        available[0];
+      setSelectedTableId(bestFit?.id || "");
+    }
+  };
+
+  const handleConfirmSeat = async () => {
+    if (!seatDialogReservation || !selectedTableId) return;
+    const chosenTable = floorTables.find((t) => t.id === selectedTableId);
+    setSeatingBusy(true);
+    try {
+      const res = await employeeFetch("/api/sales/reservations", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          reservationId: seatDialogReservation.id || seatDialogReservation._id,
+          action: "seat",
+          tableId: chosenTable?.id,
+          assignedTableNo: chosenTable?.tableNumber,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        throw new Error(json.message || "Failed to seat guest");
+      }
+      const updated = json.data;
+      toast.success(
+        `Guest seated at Table ${chosenTable?.tableNumber}! Floor plan booked for ${seatDialogReservation.guests} seats.`,
+      );
+      setSeatDialogReservation(null);
+      await fetchRows({ silent: true });
+      await fetchTables();
+    } catch (err) {
+      toast.error(err.message || "Could not seat guest");
+    } finally {
+      setSeatingBusy(false);
+    }
+  };
+
+  const handleMakeOrder = async (reservation) => {
+    if (reservation.tableSessionId) {
+      router.push(`/sales/orders/${reservation.tableSessionId}`);
+      return;
+    }
+    // Fallback: check if an active session exists for this table
+    if (reservation.assignedTableId || reservation.assignedTableNo) {
+      try {
+        const res = await employeeFetch("/api/sales/sessions");
+        const json = await res.json();
+        if (res.ok && json.success && Array.isArray(json.data)) {
+          const match = json.data.find((s) => {
+            const prim = s.primaryTable?._id || s.primaryTable?.id || s.primaryTable;
+            const tableNum = s.primaryTable?.tableNumber || s.tableNumbers;
+            return (
+              (reservation.assignedTableId && String(prim) === String(reservation.assignedTableId)) ||
+              (reservation.assignedTableNo && tableNum === reservation.assignedTableNo)
+            );
+          });
+          if (match && match._id) {
+            router.push(`/sales/orders/${match._id}`);
+            return;
+          }
+        }
+      } catch {
+        /* fallback */
+      }
+    }
+    router.push("/floor");
   };
 
   return (
@@ -301,6 +420,7 @@ export default function SalesReservationsPage() {
             {filtered.map((r) => {
               const id = r._id || r.id;
               const busy = actingId === id;
+              const isFuture = String(r.date || "") > todayISO;
               return (
                 <li
                   key={id}
@@ -366,39 +486,34 @@ export default function SalesReservationsPage() {
                     <div className="flex w-full flex-col gap-2 lg:w-56">
                       {r.status === "PENDING" ? (
                         <>
-                          <Input
-                            placeholder="Table note (optional)"
-                            value={tableDrafts[id] || ""}
-                            onChange={(e) =>
-                              setTableDrafts((prev) => ({
-                                ...prev,
-                                [id]: e.target.value,
-                              }))
-                            }
-                            className="h-9 rounded-lg text-sm"
-                          />
+                          {!isFuture ? (
+                            <Button
+                              disabled={busy}
+                              onClick={() =>
+                                patchReservation(id, "accept", {
+                                  assignedTableNo: tableDrafts[id] || undefined,
+                                })
+                              }
+                              className="h-10 bg-emerald-600 font-bold text-white hover:bg-emerald-700 shadow-sm"
+                            >
+                              {busy ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <>
+                                  <Check className="mr-1 h-4 w-4" /> Accept & email
+                                </>
+                              )}
+                            </Button>
+                          ) : null}
                           <Button
                             disabled={busy}
-                            onClick={() =>
-                              patchReservation(id, "accept", {
-                                assignedTableNo: tableDrafts[id] || undefined,
-                              })
-                            }
-                            className="h-10 bg-emerald-600 font-bold text-white hover:bg-emerald-700"
-                          >
-                            {busy ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              <>
-                                <Check className="mr-1 h-4 w-4" /> Accept & email
-                              </>
-                            )}
-                          </Button>
-                          <Button
-                            disabled={busy}
-                            variant="outline"
+                            variant={isFuture ? "default" : "outline"}
                             onClick={() => patchReservation(id, "decline")}
-                            className="h-10 border-zinc-300 font-bold"
+                            className={
+                              isFuture
+                                ? "h-10 bg-red-600 font-bold text-white hover:bg-red-700 shadow-sm"
+                                : "h-10 border-zinc-300 font-bold"
+                            }
                           >
                             <X className="mr-1 h-4 w-4" /> Decline
                           </Button>
@@ -407,28 +522,12 @@ export default function SalesReservationsPage() {
 
                       {r.status === "ACCEPTED" ? (
                         <>
-                          <Input
-                            placeholder="Table note"
-                            value={tableDrafts[id] || r.assignedTableNo || ""}
-                            onChange={(e) =>
-                              setTableDrafts((prev) => ({
-                                ...prev,
-                                [id]: e.target.value,
-                              }))
-                            }
-                            className="h-9 rounded-lg text-sm"
-                          />
                           <Button
                             disabled={busy}
-                            onClick={() =>
-                              patchReservation(id, "seat", {
-                                assignedTableNo:
-                                  tableDrafts[id] || r.assignedTableNo || undefined,
-                              })
-                            }
-                            className="h-10 bg-sky-600 font-bold text-white hover:bg-sky-700"
+                            onClick={() => openSeatDialog(r)}
+                            className="h-10 bg-sky-600 font-bold text-white hover:bg-sky-700 shadow-sm"
                           >
-                            Guest seated
+                            <Armchair className="mr-1.5 h-4 w-4" /> Seat Now
                           </Button>
                           <Button
                             disabled={busy}
@@ -440,6 +539,26 @@ export default function SalesReservationsPage() {
                           </Button>
                         </>
                       ) : null}
+
+                      {r.status === "SEATED" ? (
+                        <>
+                          <Button
+                            onClick={() => handleMakeOrder(r)}
+                            className="h-10 bg-orange-600 font-bold text-white hover:bg-orange-700 shadow-sm"
+                          >
+                            <ShoppingBag className="mr-1.5 h-4 w-4" /> Make Order
+                          </Button>
+                          <div className="flex items-center justify-between rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs font-semibold text-sky-800">
+                            <span className="flex items-center gap-1.5">
+                              <Armchair className="h-4 w-4 text-sky-600" />
+                              Table {r.assignedTableNo || "—"}
+                            </span>
+                            <span className="text-[11px] font-bold text-sky-700">
+                              {r.guests} seats
+                            </span>
+                          </div>
+                        </>
+                      ) : null}
                     </div>
                   </div>
                 </li>
@@ -448,6 +567,171 @@ export default function SalesReservationsPage() {
           </ul>
         )}
       </div>
+
+      {/* Dialog for selecting table and seating the guest */}
+      <Dialog
+        open={Boolean(seatDialogReservation)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSeatDialogReservation(null);
+            setSelectedTableId("");
+          }
+        }}
+      >
+        <DialogContent className="max-w-md bg-white p-6 rounded-2xl shadow-xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-lg font-bold text-zinc-900">
+              <Armchair className="h-5 w-5 text-sky-600" />
+              Seat Guest at Table
+            </DialogTitle>
+          </DialogHeader>
+
+          {seatDialogReservation && (
+            <div className="space-y-4 pt-2">
+              <div className="rounded-xl border border-sky-100 bg-sky-50/70 p-3.5 text-sm">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-zinc-900">
+                    {seatDialogReservation.guestName}
+                  </span>
+                  <Badge className="bg-sky-100 text-sky-800 border-sky-200 font-bold">
+                    {seatDialogReservation.guests} {seatDialogReservation.guests === 1 ? "Guest" : "Guests"}
+                  </Badge>
+                </div>
+                <div className="mt-1 flex items-center gap-3 text-xs text-zinc-600">
+                  <span>{formatDateLabel(seatDialogReservation.date)}</span>
+                  <span>·</span>
+                  <span>{formatTimeLabel(seatDialogReservation.time)}</span>
+                  {seatDialogReservation.phone ? (
+                    <>
+                      <span>·</span>
+                      <span className="tabular-nums">{seatDialogReservation.phone}</span>
+                    </>
+                  ) : null}
+                </div>
+                {seatDialogReservation.specialRequest || seatDialogReservation.reasonForVisit ? (
+                  <p className="mt-2 text-xs italic text-zinc-600 border-t border-sky-100/80 pt-1.5">
+                    Note: {seatDialogReservation.specialRequest || seatDialogReservation.reasonForVisit}
+                  </p>
+                ) : null}
+              </div>
+
+              <div className="space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold uppercase tracking-wider text-zinc-500">
+                    Available Floor Tables
+                  </label>
+                  <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-2.5 py-0.5">
+                    {floorTables.filter((t) => !t.isOccupied).length} Available
+                  </span>
+                </div>
+
+                {floorTables.filter((t) => !t.isOccupied).length === 0 ? (
+                  <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-center space-y-1">
+                    <p className="text-xs font-bold text-amber-900">
+                      No tables currently available on floor.
+                    </p>
+                    <p className="text-[11px] text-amber-700">
+                      All floor tables are occupied with active dining sessions. Free up a table on Floor to seat this party.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="max-h-60 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
+                    {floorTables
+                      .filter((t) => !t.isOccupied)
+                      .map((t) => {
+                        const isSelected = selectedTableId === t.id;
+                        const fitsCapacity =
+                          Number(t.seats) >= Number(seatDialogReservation.guests || 1);
+                        const isPreassigned =
+                          seatDialogReservation.assignedTableNo === t.tableNumber ||
+                          seatDialogReservation.assignedTableId === t.id;
+
+                        return (
+                          <div
+                            key={t.id}
+                            onClick={() => setSelectedTableId(t.id)}
+                            className={`flex items-center justify-between p-3 rounded-xl border-2 transition-all cursor-pointer ${
+                              isSelected
+                                ? "border-sky-600 bg-sky-50/70 shadow-sm"
+                                : "border-zinc-200 bg-white hover:border-zinc-300 hover:bg-zinc-50/60"
+                            }`}
+                          >
+                            <div className="flex items-center gap-3">
+                              <div
+                                className={`h-4 w-4 rounded-full border-2 flex items-center justify-center shrink-0 ${
+                                  isSelected ? "border-sky-600" : "border-zinc-300"
+                                }`}
+                              >
+                                {isSelected ? (
+                                  <div className="h-2 w-2 rounded-full bg-sky-600" />
+                                ) : null}
+                              </div>
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <span className="font-bold text-zinc-900 text-sm">
+                                    Table {t.tableNumber}
+                                  </span>
+                                  {isPreassigned ? (
+                                    <Badge className="bg-sky-100 text-sky-800 border-sky-200 text-[10px] px-1.5 py-0 font-bold">
+                                      Pre-assigned
+                                    </Badge>
+                                  ) : null}
+                                </div>
+                                <p className="text-xs text-zinc-500">
+                                  {t.floorName || "Main Floor"}
+                                  {t.section ? ` · ${t.section}` : ""}
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              {fitsCapacity ? (
+                                <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-md px-2 py-0.5">
+                                  {t.seats} seats · Fits
+                                </span>
+                              ) : (
+                                <span className="text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-2 py-0.5">
+                                  {t.seats} seats
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                  </div>
+                )}
+
+                <p className="text-[11px] text-zinc-500 pt-1">
+                  Assigning will book this table on the floor plan, set dining capacity to{" "}
+                  <strong className="text-zinc-800">{seatDialogReservation.guests} seats</strong>, and create an active session ready for orders.
+                </p>
+              </div>
+
+              <DialogFooter className="flex gap-2 sm:justify-end pt-3">
+                <Button
+                  variant="outline"
+                  onClick={() => setSeatDialogReservation(null)}
+                  disabled={seatingBusy}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleConfirmSeat}
+                  disabled={seatingBusy || !selectedTableId}
+                  className="bg-sky-600 hover:bg-sky-700 text-white font-bold shadow-sm"
+                >
+                  {seatingBusy ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Check className="mr-2 h-4 w-4" />
+                  )}
+                  Confirm &amp; Seat
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

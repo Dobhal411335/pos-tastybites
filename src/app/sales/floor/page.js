@@ -23,6 +23,8 @@ import {
   Gift,
   ArrowRight,
   RefreshCw,
+  
+  CalendarDays,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -138,6 +140,7 @@ export default function SalesFloorPage() {
     staffUnpaid: 0,
     onlineOpen: 0,
     upcomingOffers: 0,
+    pendingReservations: 0,
   });
   const [scale, setScale] = useState(1);
   const floorViewportRef = React.useRef(null);
@@ -183,12 +186,14 @@ export default function SalesFloorPage() {
 
   const loadOrderAttention = useCallback(async () => {
     try {
-      const [todayRes, upcomingRes] = await Promise.all([
+      const [todayRes, upcomingRes, resCountRes] = await Promise.all([
         employeeFetch("/api/orders/employee?today=true"),
         employeeFetch("/api/sales/upcoming-offers?pendingCount=true"),
+        employeeFetch("/api/sales/reservations?pendingCount=true"),
       ]);
       const json = await todayRes.json();
       const upcomingJson = await upcomingRes.json();
+      const resCountJson = await resCountRes.json();
       if (!todayRes.ok || !json.success) return;
       const orders = Array.isArray(json.data) ? json.data : [];
       let takeAwayUnpaid = 0;
@@ -208,6 +213,10 @@ export default function SalesFloorPage() {
         upcomingOffers:
           upcomingRes.ok && upcomingJson.success
             ? Number(upcomingJson.data?.pendingCount || 0)
+            : 0,
+        pendingReservations:
+          resCountRes.ok && resCountJson.success
+            ? Number(resCountJson.data?.pendingCount || 0)
             : 0,
       });
     } catch {
@@ -348,6 +357,8 @@ export default function SalesFloorPage() {
     socket.on("order:created", onOrderAttention);
     socket.on("order:updated", onOrderAttention);
     socket.on("payment:completed", onOrderAttention);
+    socket.on("reservation:created", onOrderAttention);
+    socket.on("reservation:updated", onOrderAttention);
     socket.on("NEW_PRINT_JOB", () => {
       toast.message("New print job queued", {
         description: "Open Print Jobs to preview / test.",
@@ -362,6 +373,8 @@ export default function SalesFloorPage() {
       socket.off("order:created", onOrderAttention);
       socket.off("order:updated", onOrderAttention);
       socket.off("payment:completed", onOrderAttention);
+      socket.off("reservation:created", onOrderAttention);
+      socket.off("reservation:updated", onOrderAttention);
       socket.off("NEW_PRINT_JOB");
     };
   }, [socket, scheduleSilentFloorReload, loadOrderAttention]);
@@ -1049,7 +1062,7 @@ export default function SalesFloorPage() {
                       <div className="flex shrink-0 items-center gap-0.5">
                         <Users className={`h-3.5 w-3.5 shrink-0 ${statusClass}`} />
                         <span className={`text-[11px] font-semibold ${statusClass}`}>
-                          {table.seats} seats
+                          {session.guestCount || session.effectiveSeatCount || table.seats} seats
                         </span>
                       </div>
                     </div>
@@ -1134,6 +1147,14 @@ export default function SalesFloorPage() {
                 tone: "border-violet-200 bg-violet-50 text-violet-900",
                 badge: "bg-violet-600",
               },
+              {
+                href: "/sales/reservations",
+                label: "Table Bookings",
+                count: orderAttention.pendingReservations,
+                Icon: CalendarDays,
+                tone: "border-amber-200 bg-amber-50 text-amber-900",
+                badge: "bg-amber-600",
+              },
             ].map((item) => (
               <button
                 key={item.href}
@@ -1163,12 +1184,13 @@ export default function SalesFloorPage() {
             {orderAttention.takeAwayUnpaid +
               orderAttention.staffUnpaid +
               orderAttention.onlineOpen +
-              orderAttention.upcomingOffers ===
+              orderAttention.upcomingOffers +
+              orderAttention.pendingReservations ===
             0 ? (
               <div className="flex items-start gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5">
                 <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
                 <p className="text-xs font-semibold text-emerald-800">
-                  All clear — no unpaid takeaway, staff, open online, or upcoming offer orders.
+                  All clear — no unpaid takeaway, staff, open online, upcoming offer, or pending bookings.
                 </p>
               </div>
             ) : null}

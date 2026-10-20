@@ -4,12 +4,17 @@ import { sendError } from "@/utils/errorHandler";
 import connectDB from "@/lib/db";
 import TableReservation from "@/models/TableReservation";
 import Restaurant from "@/models/Restaurant";
+import Floor from "@/models/floor/Floor";
+import Table from "@/models/floor/Table";
+import TableSession from "@/models/floor/TableSession";
+import { findOpenSessionForTable } from "@/lib/orders/sessionTables";
 import { serializeReservation } from "@/lib/public/createTableReservation";
 import { getSocketServer } from "@/lib/socketServer";
 import { logger } from "@/utils/logger";
 import { onlineOrderingTimezone } from "@/lib/public/pickup";
 import { sendTableReservationStatusEmail } from "@/lib/brevo/sendTableReservationStatusEmail";
 import { getPublicRestaurantProfile } from "@/lib/public/resolveRestaurant";
+import { v4 as uuidv4 } from "uuid";
 
 function todayLocalISO(timeZone = onlineOrderingTimezone()) {
   return new Intl.DateTimeFormat("en-CA", {
@@ -73,6 +78,81 @@ export const GET = withAuth(async (request) => {
       return sendSuccess({ pendingCount }, "Pending reservation count");
     }
 
+    if (searchParams.get("tables") === "true") {
+      const activeFloors = await Floor.find({
+        restaurant: restaurantId,
+        isActive: true,
+      })
+        .select("_id name")
+        .lean();
+
+      const activeFloorIds = activeFloors.map((f) => f._id);
+      const floorNameMap = new Map(
+        activeFloors.map((f) => [String(f._id), f.name || "Main Floor"])
+      );
+
+      const tables = await Table.find({
+        restaurant: restaurantId,
+        floor: { $in: activeFloorIds },
+      })
+        .select("_id tableNumber seats section status floor shape")
+        .lean();
+
+      const openSessions = await TableSession.find({
+        restaurant: restaurantId,
+        isSessionOpen: true,
+      })
+        .select("primaryTable linkedTables guestCount status")
+        .lean();
+
+      const occupiedTableIds = new Set();
+      const sessionByTable = new Map();
+      for (const s of openSessions) {
+        if (s.primaryTable) {
+          occupiedTableIds.add(String(s.primaryTable));
+          sessionByTable.set(String(s.primaryTable), String(s._id));
+        }
+        for (const lt of s.linkedTables || []) {
+          occupiedTableIds.add(String(lt));
+          sessionByTable.set(String(lt), String(s._id));
+        }
+      }
+
+      const availableOnly = searchParams.get("availableOnly") === "true";
+
+      let tableList = tables
+        .map((t) => {
+          const fid = t.floor ? String(t.floor) : null;
+          const isOccupied =
+            occupiedTableIds.has(String(t._id)) ||
+            t.status === "Occupied" ||
+            t.status === "Out_of_Service";
+          return {
+            id: String(t._id),
+            _id: String(t._id),
+            tableNumber: t.tableNumber,
+            seats: Number(t.seats) || 4,
+            section: t.section || "",
+            floorId: fid,
+            floorName: fid ? floorNameMap.get(fid) || "Main Floor" : "Main Floor",
+            isOccupied,
+            sessionId: sessionByTable.get(String(t._id)) || null,
+          };
+        })
+        .sort((a, b) => {
+          const numA = parseInt(a.tableNumber, 10);
+          const numB = parseInt(b.tableNumber, 10);
+          if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+          return a.tableNumber.localeCompare(b.tableNumber);
+        });
+
+      if (availableOnly) {
+        tableList = tableList.filter((t) => !t.isOccupied);
+      }
+
+      return sendSuccess(tableList, "Floor tables retrieved");
+    }
+
     // Default: upcoming bookings (today + future). Pass today=true for same-day only.
     const todayOnly = searchParams.get("today") === "true";
     const upcoming = searchParams.get("upcoming") !== "false" && !todayOnly;
@@ -99,10 +179,33 @@ export const GET = withAuth(async (request) => {
       .limit(200)
       .lean();
 
-    return sendSuccess(
-      rows.map((r) => serializeReservation(r)),
-      "Reservations retrieved"
-    );
+    const seatedTableIds = rows
+      .filter((r) => r.status === "SEATED" && r.assignedTableId && !r.tableSessionId)
+      .map((r) => r.assignedTableId);
+
+    let sessionMap = new Map();
+    if (seatedTableIds.length > 0) {
+      const openSessions = await TableSession.find({
+        restaurant: restaurantId,
+        isSessionOpen: true,
+        primaryTable: { $in: seatedTableIds },
+      })
+        .select("_id primaryTable")
+        .lean();
+      for (const s of openSessions) {
+        sessionMap.set(String(s.primaryTable), String(s._id));
+      }
+    }
+
+    const serialized = rows.map((r) => {
+      const data = serializeReservation(r);
+      if (!data.tableSessionId && r.assignedTableId && sessionMap.has(String(r.assignedTableId))) {
+        data.tableSessionId = sessionMap.get(String(r.assignedTableId));
+      }
+      return data;
+    });
+
+    return sendSuccess(serialized, "Reservations retrieved");
   } catch (error) {
     logger.error("Failed to list reservations", error);
     return sendError(error, "Failed to load reservations", 500);
@@ -188,12 +291,85 @@ export const PATCH = withAuth(async (request) => {
           400
         );
       }
+
+      let targetTable = null;
+      if (body.tableId) {
+        targetTable = await Table.findOne({ _id: body.tableId, restaurant: restaurantId });
+      } else if (assignedTableNo || reservation.assignedTableNo) {
+        const targetNo = String(assignedTableNo || reservation.assignedTableNo).trim();
+        targetTable = await Table.findOne({ tableNumber: targetNo, restaurant: restaurantId });
+      }
+
+      let session = null;
+      if (targetTable) {
+        // Update the table seats to the reservation guest count
+        if (reservation.guests && Number(reservation.guests) > 0) {
+          targetTable.seats = Number(reservation.guests);
+        }
+        targetTable.status = "Occupied";
+        await targetTable.save();
+
+        session = await findOpenSessionForTable(restaurantId, targetTable._id);
+        if (!session) {
+          session = await TableSession.create({
+            sessionId: `TS-${uuidv4().split("-")[0].toUpperCase()}-${Date.now().toString().slice(-4)}`,
+            restaurant: restaurantId,
+            floor: targetTable.floor,
+            primaryTable: targetTable._id,
+            assignedEmployee: employeeId,
+            openedBy: employeeId,
+            guestCount: Number(reservation.guests) || Number(targetTable.seats) || 1,
+            originalSeatCount: Number(targetTable.seats) || 1,
+            effectiveSeatCount: Number(reservation.guests) || Number(targetTable.seats) || 1,
+            notes: `Booking: ${reservation.guestName} (${reservation.guests} guests)${reservation.reasonForVisit ? ` · ${reservation.reasonForVisit}` : ""}${reservation.specialRequest ? ` · ${reservation.specialRequest}` : ""}`,
+            status: "ACTIVE",
+            isSessionOpen: true,
+          });
+        } else {
+          if (reservation.guests) {
+            session.guestCount = Number(reservation.guests);
+            session.effectiveSeatCount = Number(reservation.guests);
+            await session.save();
+          }
+        }
+
+        reservation.assignedTableId = targetTable._id;
+        reservation.assignedTableNo = targetTable.tableNumber;
+        reservation.tableSessionId = session._id;
+
+        // Emit socket events to update floor in real-time
+        try {
+          const io = getSocketServer();
+          if (io) {
+            io.to(`restaurant:${String(restaurantId)}`).emit("table:assigned", {
+              tableId: targetTable._id,
+              sessionId: session._id,
+            });
+            io.to(`restaurant:${String(restaurantId)}`).emit("table:updated", {
+              tableId: targetTable._id,
+              seats: targetTable.seats,
+            });
+            if (targetTable.floor) {
+              io.to(`floor:${String(targetTable.floor)}`).emit("table:assigned", {
+                tableId: targetTable._id,
+                sessionId: session._id,
+              });
+              io.to(`floor:${String(targetTable.floor)}`).emit("table:updated", {
+                tableId: targetTable._id,
+                seats: targetTable.seats,
+              });
+            }
+          }
+        } catch (socketErr) {
+          logger.error("Failed to emit floor table session socket event", socketErr);
+        }
+      } else if (assignedTableNo != null) {
+        reservation.assignedTableNo = String(assignedTableNo).trim() || null;
+      }
+
       reservation.status = "SEATED";
       reservation.handledBy = employeeId;
       reservation.handledAt = new Date();
-      if (assignedTableNo != null) {
-        reservation.assignedTableNo = String(assignedTableNo).trim() || null;
-      }
       await reservation.save();
     } else if (action === "no-show") {
       if (!["ACCEPTED", "PENDING"].includes(reservation.status)) {

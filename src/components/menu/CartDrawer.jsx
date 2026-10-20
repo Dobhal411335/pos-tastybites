@@ -14,6 +14,7 @@ import {
   Check,
   Store,
   Clock,
+  CalendarDays,
 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
@@ -33,7 +34,11 @@ import {
   getOfferDetailLines,
   isOfferItem,
 } from "@/utils/offerDetails";
-import { todayRestaurantISO } from "@/lib/restaurantTime";
+import {
+  getRestaurantTimezone,
+  todayRestaurantISO,
+} from "@/lib/restaurantTime";
+import { getTodayRestaurantHours } from "@/lib/public/restaurantHours";
 
 function toDateOnly(value) {
   if (!value) return null;
@@ -49,15 +54,35 @@ function toDateOnly(value) {
   }
 }
 
+function formatDateLabel(iso) {
+  try {
+    return new Date(`${iso}T12:00:00`).toLocaleDateString("en-CA", {
+      weekday: "long",
+      month: "long",
+      day: "numeric",
+      year: "numeric",
+    });
+  } catch {
+    return iso;
+  }
+}
+
+/** Midday probe so weekday resolves correctly in the restaurant timezone. */
+function dateProbeFromISO(iso) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(iso || ""))) return new Date();
+  return new Date(`${iso}T12:00:00`);
+}
+
 function formatSlotLabel(hours, minutes) {
   const period = hours >= 12 ? "PM" : "AM";
   const h12 = hours % 12 || 12;
   return `${h12}:${String(minutes).padStart(2, "0")} ${period}`;
 }
 
-function buildFutureDaySlots(todayHours) {
-  const openRaw = String(todayHours?.open || "09:00");
-  const closeRaw = String(todayHours?.close || "22:00");
+function buildDaySlots(dayHours) {
+  if (dayHours?.closed) return [];
+  const openRaw = String(dayHours?.open || "09:00");
+  const closeRaw = String(dayHours?.close || "22:00");
   const parseMin = (t) => {
     const m = String(t).match(/^(\d{1,2}):(\d{2})$/);
     if (!m) return null;
@@ -65,7 +90,7 @@ function buildFutureDaySlots(todayHours) {
   };
   let openMin = parseMin(openRaw) ?? 9 * 60;
   let closeMin = parseMin(closeRaw) ?? 22 * 60;
-  if (todayHours?.is24Hours) {
+  if (dayHours?.is24Hours) {
     openMin = 0;
     closeMin = 23 * 60 + 45;
   } else {
@@ -717,6 +742,7 @@ export default function CartDrawer({ open = false, onOpenChange, mode = "drawer"
       cartIsOfferOnly={cartIsOfferOnly}
       offerMaxDate={offerMaxDate}
       todayHours={restaurant?.todayHours}
+      hoursConfig={restaurant?.restaurantHours}
       cartItems={cartItems}
       totals={totals}
       quoting={quoting}
@@ -869,6 +895,7 @@ function CheckoutFlowModal({
   cartIsOfferOnly,
   offerMaxDate,
   todayHours,
+  hoursConfig,
   cartItems,
   totals,
   quoting,
@@ -903,12 +930,40 @@ function CheckoutFlowModal({
   const watchedOfferDate = watch("offerFulfillmentDate");
   const watchedPickupTime = watch("pickupTime");
 
+  const selectedDayHours = useMemo(() => {
+    const dateStr = cartIsOfferOnly ? watchedOfferDate || todayISO : todayISO;
+    if (!dateStr || dateStr === todayISO) {
+      if (todayHours) return todayHours;
+      if (hoursConfig) {
+        return getTodayRestaurantHours(
+          hoursConfig,
+          dateProbeFromISO(todayISO),
+          getRestaurantTimezone(),
+        );
+      }
+      return null;
+    }
+    if (!hoursConfig) return todayHours;
+    return getTodayRestaurantHours(
+      hoursConfig,
+      dateProbeFromISO(dateStr),
+      getRestaurantTimezone(),
+    );
+  }, [cartIsOfferOnly, watchedOfferDate, todayISO, todayHours, hoursConfig]);
+
   const activeSlots = useMemo(() => {
     if (!cartIsOfferOnly) return slots || [];
     const dateStr = watchedOfferDate || todayISO;
     if (!dateStr || dateStr === todayISO) return slots || [];
-    return buildFutureDaySlots(todayHours);
-  }, [cartIsOfferOnly, watchedOfferDate, todayISO, slots, todayHours]);
+    const dayHours = hoursConfig
+      ? getTodayRestaurantHours(
+          hoursConfig,
+          dateProbeFromISO(dateStr),
+          getRestaurantTimezone(),
+        )
+      : todayHours;
+    return buildDaySlots(dayHours);
+  }, [cartIsOfferOnly, watchedOfferDate, todayISO, slots, todayHours, hoursConfig]);
 
   // Keep pickup time valid when switching between today and a future offer date.
   useEffect(() => {
@@ -1119,8 +1174,9 @@ function CheckoutFlowModal({
                   <div className="space-y-2">
                     <label
                       htmlFor="co-offer-date"
-                      className="block text-xs font-bold uppercase text-[var(--customer-muted)]"
+                      className="flex items-center gap-1.5 text-xs font-bold uppercase text-[var(--customer-muted)]"
                     >
+                      <CalendarDays className="h-3.5 w-3.5 text-primary" aria-hidden />
                       Offer date
                     </label>
                     <input
@@ -1134,7 +1190,7 @@ function CheckoutFlowModal({
                       })}
                     />
                     <p className="text-[11px] text-[var(--customer-muted)]">
-                      Offer valid through ({offerMaxDate || todayISO})
+                      Offer valid through ({offerMaxDate || todayISO}) · {formatDateLabel(watchedOfferDate || todayISO)}
                     </p>
                     {errors.offerFulfillmentDate ? (
                       <p className="text-xs text-red-600">
@@ -1145,7 +1201,8 @@ function CheckoutFlowModal({
                 ) : null}
 
                 <div className="space-y-3">
-                  <span className="block text-xs font-bold uppercase text-[var(--customer-muted)]">
+                  <span className="flex items-center gap-1.5 text-xs font-bold uppercase text-[var(--customer-muted)]">
+                    <Clock className="h-3.5 w-3.5 text-primary" aria-hidden />
                     {cartIsOfferOnly &&
                     watchedOfferDate &&
                     watchedOfferDate !== todayISO
@@ -1157,7 +1214,9 @@ function CheckoutFlowModal({
                       {cartIsOfferOnly &&
                       watchedOfferDate &&
                       watchedOfferDate !== todayISO
-                        ? "No pickup times available for this date."
+                        ? selectedDayHours?.closed
+                          ? "Restaurant is closed on this date. Please pick another day."
+                          : "No pickup times available for this date."
                         : "Online pickup is closed for today. Please try again during restaurant hours."}
                     </p>
                   ) : (
@@ -1175,6 +1234,15 @@ function CheckoutFlowModal({
                   )}
                   {errors.pickupTime ? (
                     <p className="text-xs text-red-600">{errors.pickupTime.message}</p>
+                  ) : null}
+                  {selectedDayHours?.label && activeSlots.length > 0 ? (
+                    <p className="text-[11px] text-[var(--customer-muted)]">
+                      {cartIsOfferOnly &&
+                      watchedOfferDate &&
+                      watchedOfferDate !== todayISO
+                        ? `${selectedDayHours.dayLabel || "Hours"} · ${selectedDayHours.label}`
+                        : `Today · ${selectedDayHours.label}`}
+                    </p>
                   ) : null}
                 </div>
 
