@@ -20,7 +20,6 @@ export default function UsersModuleLayout({ children }) {
         { label: "Navbar Section", href: "/admin/web/navbar-section" },
         { label: "Manage Footer", href: "/admin/web/manage-footer" },
         { label: "Create WebPages", href: "/admin/web/create-webpages" },
-        { label: "Manage WebPages", href: "/admin/web/manage-webpages" },
       ],
     },
 
