@@ -17,10 +17,10 @@ export default function UsersModuleLayout({ children }) {
         { label: "Manage Banner", href: "/admin/web/manage-banners" },
         { label: "Gallery Section", href: "/admin/web/gallery-section" },
         { label: "Customer Reviews", href: "/admin/web/customer-reviews" },
-        // { label: "Offer Details", href: "/admin/web/offer-details" },
         { label: "Navbar Section", href: "/admin/web/navbar-section" },
+        { label: "Manage Footer", href: "/admin/web/manage-footer" },
         { label: "Create WebPages", href: "/admin/web/create-webpages" },
-        // { label: "Manage WebPages", href: "/admin/web/manage-webpages" },
+        { label: "Manage WebPages", href: "/admin/web/manage-webpages" },
       ],
     },
 

@@ -89,16 +89,50 @@ export async function getPublicRestaurantProfile(slug) {
     getRestaurantTimezone(),
   );
 
+  const officeAddresses =
+    Array.isArray(company?.officeAddresses) &&
+    company.officeAddresses.filter(Boolean).length > 0
+      ? company.officeAddresses.filter(Boolean)
+      : address
+        ? [address]
+        : [];
+
+  const contactNumbers =
+    Array.isArray(company?.contactNumbers) && company.contactNumbers.length > 0
+      ? company.contactNumbers
+          .map((c) => (typeof c === "object" && c ? c.number || c.label : c))
+          .filter(Boolean)
+      : phoneDigits
+        ? [phoneDigits]
+        : [];
+
+  const emails =
+    Array.isArray(company?.emails) && company.emails.filter(Boolean).length > 0
+      ? company.emails.filter(Boolean)
+      : (restaurant.email || company?.emails?.[0])
+        ? [restaurant.email || company?.emails?.[0]]
+        : [];
+
+  const googleHref =
+    company?.googleLink?.trim() ||
+    company?.googleUrl?.trim() ||
+    company?.googleMapLink?.trim() ||
+    "";
+
   return {
     id: String(restaurant._id),
     slug: restaurant.slug,
     name: displayName,
     email: restaurant.email || company?.emails?.[0] || "",
+    emails,
     phone: phoneDigits,
     phoneCode,
     phoneDisplay: formatPhoneDisplay(phoneDigits),
+    contactNumbers,
     address,
+    officeAddresses,
     googleMapLink: company?.googleMapLink || "",
+    googleHref,
     logos: {
       main: company?.mainLogo?.url || "",
       footer: company?.footerLogo?.url || "",
@@ -108,6 +142,7 @@ export async function getPublicRestaurantProfile(slug) {
       facebook: company?.facebookLink || "",
       instagram: company?.instagramLink || "",
       youtube: company?.youtubeLink || "",
+      google: googleHref,
     },
     seo: {
       title: company?.titleTagForMainLandingPage || "",

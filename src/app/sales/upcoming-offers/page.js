@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
@@ -34,7 +34,13 @@ function formatTimeLabel(time) {
 function splitDateParts(iso) {
   if (!iso) return { weekday: "—", monthDay: "—", year: "" };
   try {
-    const d = new Date(`${iso}T12:00:00`);
+    const cleanIso = String(iso).includes("T")
+      ? String(iso).split("T")[0]
+      : String(iso);
+    const d = new Date(`${cleanIso}T12:00:00`);
+    if (Number.isNaN(d.getTime())) {
+      return { weekday: "—", monthDay: String(iso), year: "" };
+    }
     return {
       weekday: d.toLocaleDateString("en-CA", { weekday: "short" }),
       monthDay: d.toLocaleDateString("en-CA", {
@@ -44,8 +50,66 @@ function splitDateParts(iso) {
       year: d.toLocaleDateString("en-CA", { year: "numeric" }),
     };
   } catch {
-    return { weekday: "—", monthDay: iso, year: "" };
+    return { weekday: "—", monthDay: String(iso), year: "" };
   }
+}
+
+function getOrderDate(order) {
+  const raw = order?.offerFulfillmentDate || order?.pickup?.date;
+  if (!raw) return "";
+  if (typeof raw === "string" && /^\d{4}-\d{2}-\d{2}$/.test(raw.trim())) {
+    return raw.trim();
+  }
+  try {
+    const clean = String(raw).includes("T")
+      ? String(raw).split("T")[0]
+      : String(raw);
+    const d = new Date(`${clean}T12:00:00`);
+    if (!Number.isNaN(d.getTime())) {
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      return `${year}-${month}-${day}`;
+    }
+  } catch {
+    // fallback
+  }
+  return String(raw || "");
+}
+
+function getOrderPickupTime(order) {
+  const time = order?.pickup?.time;
+  if (!time) return "99:99";
+  const m = String(time).match(/^(\d{1,2}):(\d{2})/);
+  if (m) {
+    return `${m[1].padStart(2, "0")}:${m[2]}`;
+  }
+  return String(time);
+}
+
+function sortUpcomingOffers(list) {
+  return [...list].sort((a, b) => {
+    const dateA = getOrderDate(a);
+    const dateB = getOrderDate(b);
+
+    if (dateA !== dateB) {
+      if (!dateA) return 1;
+      if (!dateB) return -1;
+      return dateA.localeCompare(dateB);
+    }
+
+    const timeA = getOrderPickupTime(a);
+    const timeB = getOrderPickupTime(b);
+    if (timeA !== timeB) {
+      return timeA.localeCompare(timeB);
+    }
+
+    return String(a?.orderNumber || "").localeCompare(
+      String(b?.orderNumber || ""),
+      undefined,
+      { numeric: true },
+    );
+  });
 }
 
 function statusTone(status) {
@@ -197,6 +261,8 @@ export default function UpcomingOffersPage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
+  const sortedRows = useMemo(() => sortUpcomingOffers(rows), [rows]);
+
   const fetchRows = useCallback(async ({ silent = false } = {}) => {
     if (silent) setRefreshing(true);
     else setLoading(true);
@@ -249,7 +315,7 @@ export default function UpcomingOffersPage() {
                 </h1>
                 <span className="inline-flex items-center gap-1 rounded-full bg-orange-50 px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-orange-700 ring-1 ring-orange-200">
                   <Gift className="h-3 w-3" />
-                  {rows.length} scheduled
+                  {sortedRows.length} scheduled
                 </span>
               </div>
               <p className="mt-0.5 text-xs font-medium text-stone-500">
@@ -278,7 +344,7 @@ export default function UpcomingOffersPage() {
             <Loader2 className="mr-2 h-5 w-5 animate-spin" />
             Loading upcoming offers…
           </div>
-        ) : rows.length === 0 ? (
+        ) : sortedRows.length === 0 ? (
           <div className="mx-auto max-w-lg rounded-3xl border border-dashed border-stone-300 bg-white px-6 py-16 text-center shadow-sm">
             <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-orange-50 text-orange-500">
               <CalendarDays className="h-7 w-7" />
@@ -293,7 +359,7 @@ export default function UpcomingOffersPage() {
           </div>
         ) : (
           <ul className="mx-auto grid max-w-3xl gap-4">
-            {rows.map((order) => {
+            {sortedRows.map((order) => {
               const id = order._id || order.id;
               const offerItems = (order.items || []).filter(
                 (item) =>
@@ -304,7 +370,9 @@ export default function UpcomingOffersPage() {
               const lines = offerItems.length
                 ? offerItems
                 : order.items || [];
-              const dateParts = splitDateParts(order.offerFulfillmentDate);
+              const dateParts = splitDateParts(
+                order.offerFulfillmentDate || order.pickup?.date,
+              );
               const status = String(order.status || "PENDING").toUpperCase();
 
               return (

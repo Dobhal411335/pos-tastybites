@@ -11,6 +11,13 @@ function serializeReview(doc) {
     stars: Number(doc.stars) || 1,
     active: Boolean(doc.active),
     order: Number(doc.order) || 0,
+    image:
+      typeof doc.image === "string"
+        ? { url: doc.image, key: "" }
+        : {
+            url: doc.image?.url || "",
+            key: doc.image?.key || "",
+          },
     createdAt: doc.createdAt,
     updatedAt: doc.updatedAt,
   };
@@ -43,12 +50,21 @@ export async function createCustomerReview(input = {}) {
   if (!review) throw new Error("Review is required");
   if (!stars) throw new Error("Stars must be a number from 1 to 5");
 
+  const image =
+    typeof input.image === "string"
+      ? { url: input.image, key: "" }
+      : {
+          url: input.image?.url || "",
+          key: input.image?.key || "",
+        };
+
   await connectDB();
   const created = await CustomerReview.create({
     name,
     designation,
     review,
     stars,
+    image,
     active: typeof input.active === "boolean" ? input.active : true,
     order: Number.isFinite(Number(input.order)) ? Number(input.order) : 0,
   });
@@ -77,6 +93,15 @@ export async function updateCustomerReview(id, input = {}) {
     const stars = sanitizeStars(input.stars);
     if (!stars) throw new Error("Stars must be a number from 1 to 5");
     update.stars = stars;
+  }
+  if (input.image !== undefined) {
+    update.image =
+      typeof input.image === "string"
+        ? { url: input.image, key: "" }
+        : {
+            url: input.image?.url || "",
+            key: input.image?.key || "",
+          };
   }
   if (typeof input.active === "boolean") {
     update.active = input.active;

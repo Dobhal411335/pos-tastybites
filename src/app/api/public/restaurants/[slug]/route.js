@@ -7,6 +7,7 @@ import { getRestaurantTimezone } from "@/lib/restaurantTime";
 import OfferDetails from "@/models/Web/OfferDetails";
 import PopupBanner from "@/models/Web/popupBanner";
 import ManageBanner from "@/models/Web/ManageBanners";
+import FooterSection from "@/models/Web/FooterSection";
 import connectDB from "@/lib/db";
 
 export async function GET(_request, { params }) {
@@ -18,7 +19,7 @@ export async function GET(_request, { params }) {
     }
 
     await connectDB();
-    const [offerDetails, popupBanners, heroBanners] = await Promise.all([
+    const [offerDetails, popupBanners, heroBanners, footerDoc] = await Promise.all([
       OfferDetails.findOne({ restaurant: profile.id }).lean(),
       PopupBanner.find({ restaurant: profile.id }).sort({ createdAt: -1 }).limit(5).lean(),
       ManageBanner.find({
@@ -29,6 +30,7 @@ export async function GET(_request, { params }) {
         .sort({ createdAt: -1 })
         .select("image link title")
         .lean(),
+      FooterSection.findOne({ restaurant: profile.id }).lean(),
     ]);
 
     const todayHours = profile.todayHours || null;
@@ -87,6 +89,23 @@ export async function GET(_request, { params }) {
           link: b.link || "",
           title: b.title || "",
         })),
+        footer: footerDoc
+          ? {
+              thankYou: footerDoc.thankYou || "Thank you for visiting",
+              description: footerDoc.description || "",
+              columns: (footerDoc.columns || []).map((col) => ({
+                title: col.title || "",
+                order: col.order || 0,
+                active: col.active ?? true,
+                links: (col.links || []).map((lnk) => ({
+                  label: lnk.label || "",
+                  url: lnk.url || "#",
+                  order: lnk.order || 0,
+                  active: lnk.active ?? true,
+                })),
+              })),
+            }
+          : null,
       },
       "Restaurant retrieved",
       200,

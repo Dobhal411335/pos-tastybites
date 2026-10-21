@@ -76,12 +76,33 @@ export const GET = withAuth(async (request) => {
     }
 
     const rows = await Order.find(baseQuery)
-      .sort({ offerFulfillmentDate: 1, createdAt: -1 })
+      .sort({ offerFulfillmentDate: 1, createdAt: 1 })
       .limit(200)
       .lean();
 
+    const serialized = rows.map(serializeUpcoming);
+    serialized.sort((a, b) => {
+      const dateA = a.offerFulfillmentDate || a.pickup?.date || "";
+      const dateB = b.offerFulfillmentDate || b.pickup?.date || "";
+      if (dateA !== dateB) {
+        if (!dateA) return 1;
+        if (!dateB) return -1;
+        return dateA.localeCompare(dateB);
+      }
+      const timeA = a.pickup?.time || "99:99";
+      const timeB = b.pickup?.time || "99:99";
+      if (timeA !== timeB) {
+        return timeA.localeCompare(timeB);
+      }
+      return String(a.orderNumber || "").localeCompare(
+        String(b.orderNumber || ""),
+        undefined,
+        { numeric: true },
+      );
+    });
+
     return sendSuccess(
-      rows.map(serializeUpcoming),
+      serialized,
       "Upcoming offer orders retrieved",
     );
   } catch (error) {

@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Loader2, Pencil, Plus, Star, Trash2 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Loader2, Pencil, Plus, Star, Trash2, UploadCloud, User, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,7 @@ const EMPTY_FORM = {
   designation: "",
   review: "",
   stars: 5,
+  image: { url: "", key: "" },
 };
 
 const CustomerReviewsAdminPage = () => {
@@ -22,7 +23,9 @@ const CustomerReviewsAdminPage = () => {
   const [editingId, setEditingId] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
+  const fileInputRef = useRef(null);
 
   const fetchReviews = async () => {
     try {
@@ -47,16 +50,70 @@ const CustomerReviewsAdminPage = () => {
   const resetForm = () => {
     setForm(EMPTY_FORM);
     setEditingId(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
   };
 
   const handleEdit = (item) => {
     setEditingId(item._id);
+    const imageUrl =
+      typeof item.image === "string"
+        ? item.image
+        : item.image?.url || "";
+    const imageKey = item.image?.key || "";
+
     setForm({
       name: item.name || "",
       designation: item.designation || "",
       review: item.review || "",
       stars: Number(item.stars) || 5,
+      image: { url: imageUrl, key: imageKey },
     });
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  const handleImageChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploadingImage(true);
+    const formDataUpload = new FormData();
+    formDataUpload.append("file", file);
+    formDataUpload.append("folder", "customer_reviews");
+
+    try {
+      const res = await fetch("/api/cloudinary", {
+        method: "POST",
+        body: formDataUpload,
+      });
+      const data = await res.json();
+      if (res.ok && data.url) {
+        setForm((prev) => ({
+          ...prev,
+          image: { url: data.url, key: data.key || "" },
+        }));
+        toast.success("Image uploaded successfully");
+      } else {
+        toast.error(data.error || "Failed to upload image");
+      }
+    } catch (err) {
+      toast.error(err.message || "Failed to upload image");
+    } finally {
+      setIsUploadingImage(false);
+    }
+  };
+
+  const handleRemoveImage = () => {
+    setForm((prev) => ({
+      ...prev,
+      image: { url: "", key: "" },
+    }));
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
   };
 
   const handleSubmit = async (event) => {
@@ -78,6 +135,7 @@ const CustomerReviewsAdminPage = () => {
         designation: form.designation.trim(),
         review: form.review.trim(),
         stars: Number(form.stars),
+        image: form.image?.url ? form.image : { url: "", key: "" },
       };
 
       const res = await fetch("/api/web/customerReviews", {
@@ -136,7 +194,7 @@ const CustomerReviewsAdminPage = () => {
           Customer Reviews
         </h1>
         <p className="font-body text-sm text-muted">
-          Add customer name, designation, review text, and a star rating (1–5)
+          Add customer photo, name, designation, review text, and a star rating (1–5)
           for the homepage carousel.
         </p>
       </div>
@@ -154,6 +212,71 @@ const CustomerReviewsAdminPage = () => {
               Cancel edit
             </Button>
           ) : null}
+        </div>
+
+        {/* Customer Photo Upload */}
+        <div className="space-y-2">
+          <Label>Customer Photo (Optional)</Label>
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="relative flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-dashed border-border bg-muted/30">
+              {form.image?.url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={form.image.url}
+                  alt="Customer avatar preview"
+                  className="size-full object-cover"
+                />
+              ) : (
+                <User className="size-8 text-muted" />
+              )}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleImageChange}
+                className="hidden"
+                id="customer-image-input"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={isUploadingImage}
+                onClick={() => fileInputRef.current?.click()}
+                className="gap-2"
+              >
+                {isUploadingImage ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <UploadCloud className="size-4" />
+                )}
+                {isUploadingImage
+                  ? "Uploading..."
+                  : form.image?.url
+                    ? "Change Photo"
+                    : "Upload Photo"}
+              </Button>
+
+              {form.image?.url ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleRemoveImage}
+                  className="gap-1 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                >
+                  <X className="size-4" />
+                  Remove
+                </Button>
+              ) : null}
+            </div>
+          </div>
+          <p className="text-xs text-muted">
+            Square photo recommended. Will be shown as a full-circle avatar in the reviews section.
+          </p>
         </div>
 
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -254,66 +377,89 @@ const CustomerReviewsAdminPage = () => {
           <p className="font-body text-sm text-muted">No reviews yet.</p>
         ) : (
           <div className="space-y-3">
-            {reviews.map((item) => (
-              <div
-                key={item._id}
-                className="flex flex-col gap-4 rounded-xl border border-border/60 p-4 md:flex-row md:items-start md:justify-between"
-              >
-                <div className="space-y-2">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-semibold text-heading">
-                      {item.name}
-                    </span>
-                    {item.designation ? (
-                      <span className="text-sm text-muted">
-                        · {item.designation}
-                      </span>
-                    ) : null}
-                  </div>
-                  <div className="flex items-center gap-1 text-primary">
-                    {Array.from({ length: 5 }).map((_, index) => (
-                      <Star
-                        key={index}
-                        className={`size-3.5 ${
-                          index < item.stars
-                            ? "fill-primary text-primary"
-                            : "text-border"
-                        }`}
-                      />
-                    ))}
-                  </div>
-                  <p className="max-w-3xl text-sm leading-relaxed text-foreground">
-                    “{item.review}”
-                  </p>
-                </div>
+            {reviews.map((item) => {
+              const itemImg =
+                typeof item.image === "string"
+                  ? item.image
+                  : item.image?.url;
+              return (
+                <div
+                  key={item._id}
+                  className="flex flex-col gap-4 rounded-xl border border-border/60 p-4 md:flex-row md:items-start md:justify-between"
+                >
+                  <div className="flex items-start gap-3.5">
+                    <div className="flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-full border border-border/80 bg-muted/40">
+                      {itemImg ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={itemImg}
+                          alt={item.name}
+                          className="size-full object-cover"
+                        />
+                      ) : (
+                        <span className="text-xs font-bold text-muted">
+                          {item.name ? item.name.charAt(0).toUpperCase() : "U"}
+                        </span>
+                      )}
+                    </div>
 
-                <div className="flex items-center gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="icon"
-                    onClick={() => handleEdit(item)}
-                    aria-label="Edit review"
-                  >
-                    <Pencil className="size-4" />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="destructive"
-                    size="icon"
-                    disabled={deletingId === item._id}
-                    onClick={() => handleDelete(item._id)}
-                    aria-label="Delete review"
-                  >
-                    {deletingId === item._id ? (
-                      <Loader2 className="size-4 animate-spin" />
-                    ) : (
-                      <Trash2 className="size-4" />
-                    )}
-                  </Button>
+                    <div className="space-y-1.5">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-semibold text-heading">
+                          {item.name}
+                        </span>
+                        {item.designation ? (
+                          <span className="text-sm text-muted">
+                            · {item.designation}
+                          </span>
+                        ) : null}
+                      </div>
+                      <div className="flex items-center gap-1 text-primary">
+                        {Array.from({ length: 5 }).map((_, index) => (
+                          <Star
+                            key={index}
+                            className={`size-3.5 ${
+                              index < item.stars
+                                ? "fill-primary text-primary"
+                                : "text-border"
+                            }`}
+                          />
+                        ))}
+                      </div>
+                      <p className="max-w-3xl text-sm leading-relaxed text-foreground">
+                        “{item.review}”
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex shrink-0 items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      onClick={() => handleEdit(item)}
+                      aria-label="Edit review"
+                    >
+                      <Pencil className="size-4" />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      size="icon"
+                      disabled={deletingId === item._id}
+                      onClick={() => handleDelete(item._id)}
+                      aria-label="Delete review"
+                    >
+                      {deletingId === item._id ? (
+                        <Loader2 className="size-4 animate-spin" />
+                      ) : (
+                        <Trash2 className="size-4" />
+                      )}
+                    </Button>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

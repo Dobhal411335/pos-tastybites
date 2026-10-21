@@ -13,20 +13,34 @@ import {
   CarouselPrevious,
 } from "@/components/ui/carousel";
 
-function StarRating({ stars = 5 }) {
-  const filled = Math.min(5, Math.max(0, Number(stars) || 0));
+function StarRating({ stars = 5, size = "h-4 w-4" }) {
+  const rating = Number(stars) || 0;
   return (
     <div className="flex items-center gap-1 text-primary">
-      {Array.from({ length: 5 }).map((_, index) => (
-        <Star
-          key={index}
-          className={`h-4 w-4 ${
-            index < filled ? "fill-primary text-primary" : "text-[var(--border)]"
-          }`}
-        />
-      ))}
+      {Array.from({ length: 5 }).map((_, index) => {
+        const fillAmount = Math.max(0, Math.min(1, rating - index));
+        return (
+          <Star
+            key={index}
+            className={`${size} ${
+              fillAmount >= 0.75
+                ? "fill-primary text-primary"
+                : fillAmount >= 0.25
+                  ? "fill-primary/50 text-primary"
+                  : "text-[var(--border)]"
+            }`}
+          />
+        );
+      })}
     </div>
   );
+}
+
+function getInitials(name = "") {
+  const parts = String(name).trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return "U";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
 export default function CustomerReviews() {
@@ -65,10 +79,19 @@ export default function CustomerReviews() {
     return null;
   }
 
+  const totalReviews = reviews.length;
+  const avgRating =
+    totalReviews > 0
+      ? (
+          reviews.reduce((acc, r) => acc + (Number(r.stars) || 0), 0) /
+          totalReviews
+        ).toFixed(1)
+      : "5.0";
+
   return (
     <section className="w-full bg-[var(--customer-surface-low)] py-14">
       <div className="mx-auto max-w-[1320px] px-5 lg:px-12">
-        <div className="mb-8 flex flex-col justify-between gap-2 md:flex-row md:items-end">
+        <div className="mb-8 flex flex-col justify-between gap-4 md:flex-row md:items-end">
           <div>
             <span className="text-[11px] font-bold uppercase tracking-widest text-primary">
               Community Voices
@@ -76,10 +99,24 @@ export default function CustomerReviews() {
             <h2 className="text-2xl font-extrabold text-[var(--customer-ink)] sm:text-3xl">
               What Our Customers Say
             </h2>
+            <p className="mt-1 text-xs font-medium text-[var(--customer-muted)]">
+              Guests who ordered online for pickup at {brandName}
+            </p>
           </div>
-          <span className="text-xs font-medium text-[var(--customer-muted)]">
-            Guests who ordered online for pickup at {brandName}
-          </span>
+
+          {totalReviews > 0 ? (
+            <div className="flex items-center gap-3 rounded-2xl border border-[var(--border)]/20 bg-white px-4 py-3 shadow-sm">
+              <span className="text-2xl font-black text-[var(--customer-ink)]">
+                {avgRating}
+              </span>
+              <div className="flex flex-col gap-0.5">
+                <StarRating stars={Number(avgRating)} size="h-3.5 w-3.5" />
+                <span className="text-[11px] font-semibold text-[var(--customer-muted)]">
+                  Based on {totalReviews} {totalReviews === 1 ? "review" : "reviews"}
+                </span>
+              </div>
+            </div>
+          ) : null}
         </div>
 
         {isLoading ? (
@@ -106,34 +143,55 @@ export default function CustomerReviews() {
             className="w-full"
           >
             <CarouselContent className="-ml-4">
-              {reviews.map((item) => (
-                <CarouselItem
-                  key={item._id}
-                  className="basis-full pl-4 md:basis-1/2 lg:basis-1/3"
-                >
-                  <article className="flex h-full flex-col justify-between gap-4 rounded-2xl border border-[var(--border)]/20 bg-white p-6 shadow-sm">
-                    <div className="flex flex-col gap-2.5">
-                      <StarRating stars={item.stars} />
-                      <p className="text-xs italic leading-relaxed text-[var(--customer-ink)] sm:text-sm">
-                        “{item.review}”
-                      </p>
-                    </div>
-                    <div className="flex items-center justify-between border-t border-[var(--border)]/20 pt-2">
-                      <div>
-                        <span className="block text-xs font-bold text-[var(--customer-ink)]">
-                          {item.name}
-                        </span>
-                        {item.designation ? (
-                          <span className="text-[11px] text-[var(--customer-muted)]">
-                            {item.designation}
-                          </span>
-                        ) : null}
+              {reviews.map((item) => {
+                const imageUrl =
+                  typeof item.image === "string"
+                    ? item.image
+                    : item.image?.url || "";
+
+                return (
+                  <CarouselItem
+                    key={item._id}
+                    className="basis-full pl-4 md:basis-1/2 lg:basis-1/3"
+                  >
+                    <article className="flex h-full flex-col justify-between gap-4 rounded-2xl border border-[var(--border)]/20 bg-white p-6 shadow-sm">
+                      <div className="flex flex-col gap-2.5">
+                        <StarRating stars={item.stars} />
+                        <p className="text-xs italic leading-relaxed text-[var(--customer-ink)] sm:text-sm">
+                          “{item.review}”
+                        </p>
                       </div>
-                      <BadgeCheck className="h-[18px] w-[18px] text-primary" />
-                    </div>
-                  </article>
-                </CarouselItem>
-              ))}
+                      <div className="flex items-center justify-between border-t border-[var(--border)]/20 pt-3">
+                        <div className="flex min-w-0 items-center gap-3">
+                          {imageUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={imageUrl}
+                              alt={item.name}
+                              className="size-15 shrink-0 rounded-full object-cover ring-2 ring-primary/20"
+                            />
+                          ) : (
+                            <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary ring-2 ring-primary/20">
+                              {getInitials(item.name)}
+                            </div>
+                          )}
+                          <div className="min-w-0">
+                            <span className="block truncate text-md font-bold text-[var(--customer-ink)]">
+                              {item.name}
+                            </span>
+                            {item.designation ? (
+                              <span className="block truncate text-[11px] text-[var(--customer-muted)]">
+                                {item.designation}
+                              </span>
+                            ) : null}
+                          </div>
+                        </div>
+                        <BadgeCheck className="ml-2 h-[18px] w-[18px] shrink-0 text-primary" />
+                      </div>
+                    </article>
+                  </CarouselItem>
+                );
+              })}
             </CarouselContent>
             {reviews.length > 1 ? (
               <>

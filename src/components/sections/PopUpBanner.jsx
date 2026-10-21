@@ -11,12 +11,30 @@ export default function PopUpBanner() {
   const [showAnim, setShowAnim] = useState(false);
 
   useEffect(() => {
+    if (typeof window !== "undefined") {
+      try {
+        if (sessionStorage.getItem("popup_banner_dismissed") === "true") {
+          return;
+        }
+      } catch {
+        // Ignore storage access error
+      }
+    }
     const first = restaurant?.popups?.[0];
     if (first) setBanner(first);
   }, [restaurant]);
 
   useEffect(() => {
     if (!banner) return;
+    if (typeof window !== "undefined") {
+      try {
+        if (sessionStorage.getItem("popup_banner_dismissed") === "true") {
+          return;
+        }
+      } catch {
+        // Ignore storage access error
+      }
+    }
     const timer = setTimeout(() => {
       setOpen(true);
       setTimeout(() => setShowAnim(true), 10);
@@ -25,6 +43,13 @@ export default function PopUpBanner() {
   }, [banner]);
 
   const handleClose = () => {
+    if (typeof window !== "undefined") {
+      try {
+        sessionStorage.setItem("popup_banner_dismissed", "true");
+      } catch {
+        // Ignore storage access error
+      }
+    }
     setShowAnim(false);
     setTimeout(() => setOpen(false), 200);
   };
@@ -35,16 +60,20 @@ export default function PopUpBanner() {
     typeof banner.image === "string" ? banner.image : banner.image?.url || "";
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 p-4">
+    <div
+      className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 p-4"
+      onClick={handleClose}
+    >
       <div
         className={`relative w-full max-w-lg rounded-2xl bg-white overflow-hidden shadow-2xl transition-all duration-200 ${
           showAnim ? "opacity-100 scale-100" : "opacity-0 scale-95"
         }`}
+        onClick={(e) => e.stopPropagation()}
       >
         <button
           type="button"
           onClick={handleClose}
-          className="absolute top-3 right-3 z-10 h-10 w-10 rounded-full bg-white/90 flex items-center justify-center text-zinc-700"
+          className="absolute top-3 right-3 z-10 h-10 w-10 rounded-full bg-white/90 flex items-center justify-center text-zinc-700 hover:bg-white transition-colors"
           aria-label="Close promotion"
         >
           <X className="h-5 w-5" />
@@ -65,7 +94,8 @@ export default function PopUpBanner() {
           {banner.buttonLink && (
             <a
               href={banner.buttonLink}
-              className="inline-flex h-11 items-center justify-center rounded-lg bg-primary px-5 text-xs font-bold uppercase tracking-widest text-white"
+              onClick={handleClose}
+              className="inline-flex h-11 items-center justify-center rounded-lg bg-primary px-5 text-xs font-bold uppercase tracking-widest text-white hover:opacity-90 transition-opacity"
             >
               Order Now
             </a>

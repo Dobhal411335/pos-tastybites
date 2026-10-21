@@ -1,10 +1,19 @@
 "use client";
 
 import React from "react";
-import Link from "next/link";
 import Image from "next/image";
-import { Mail, Phone, MapPin, ExternalLink } from "lucide-react";
+import Link from "next/link";
+import { Mail, MapPin, Phone } from "lucide-react";
+import { Separator } from "@/components/ui/separator";
 import { useRestaurantPublic } from "@/context/RestaurantPublicContext";
+
+function formatPhone(number) {
+  const digits = String(number || "").replace(/\D/g, "");
+  if (digits.length === 10) {
+    return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+  }
+  return number || "";
+}
 
 function FacebookIcon({ className }) {
   return (
@@ -14,8 +23,6 @@ function FacebookIcon({ className }) {
       fill="none"
       stroke="currentColor"
       strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
       className={className}
       aria-hidden="true"
     >
@@ -32,8 +39,6 @@ function InstagramIcon({ className }) {
       fill="none"
       stroke="currentColor"
       strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
       className={className}
       aria-hidden="true"
     >
@@ -49,226 +54,277 @@ function YoutubeIcon({ className }) {
     <svg
       xmlns="http://www.w3.org/2000/svg"
       viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
+      fill="currentColor"
       className={className}
       aria-hidden="true"
     >
-      <path d="M2.5 17a24.12 24.12 0 0 1 0-10 2 2 0 0 1 1.4-1.4 49.56 49.56 0 0 1 16.2 0A2 2 0 0 1 21.5 7a24.12 24.12 0 0 1 0 10 2 2 0 0 1-1.4 1.4 49.55 49.55 0 0 1-16.2 0A2 2 0 0 1 2.5 17" />
-      <path d="m10 15 5-3-5-3z" />
+      <path d="M23.5 6.2a3 3 0 0 0-2.1-2.1C19.5 3.5 12 3.5 12 3.5s-7.5 0-9.4.6A3 3 0 0 0 .5 6.2 31.6 31.6 0 0 0 0 12a31.6 31.6 0 0 0 .5 5.8 3 3 0 0 0 2.1 2.1c1.9.6 9.4.6 9.4.6s7.5 0 9.4-.6a3 3 0 0 0 2.1-2.1A31.6 31.6 0 0 0 24 12a31.6 31.6 0 0 0-.5-5.8ZM10 15.5V8.5L16 12l-6 3.5Z" />
     </svg>
   );
 }
 
+function GoogleIcon({ className }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      className={className}
+      aria-hidden="true"
+    >
+      <path d="M21.6 12.23c0-.74-.07-1.45-.19-2.13H12v4.03h5.38a4.6 4.6 0 0 1-2 3.02v2.5h3.23c1.89-1.74 2.99-4.3 2.99-7.42Z" />
+      <path d="M12 22c2.7 0 4.96-.9 6.62-2.35l-3.23-2.5c-.9.6-2.04.96-3.39.96-2.61 0-4.82-1.76-5.61-4.13H3.06v2.58A10 10 0 0 0 12 22Z" />
+      <path d="M6.39 13.98A6.01 6.01 0 0 1 6.08 12c0-.69.12-1.35.31-1.98V7.44H3.06A10 10 0 0 0 2 12c0 1.61.39 3.14 1.06 4.56l3.33-2.58Z" />
+      <path d="M12 5.89c1.47 0 2.79.5 3.82 1.5l2.87-2.87C16.95 2.89 14.7 2 12 2A10 10 0 0 0 3.06 7.44l3.33 2.58C7.18 7.65 9.39 5.89 12 5.89Z" />
+    </svg>
+  );
+}
+
+const PAYMENT_CARDS = [
+  { name: "Visa", src: "/card/visa.png" },
+  { name: "Mastercard", src: "/card/mastercard.webp" },
+  { name: "RuPay", src: "/card/rupay.webp" },
+  { name: "American Express", src: "/card/american-express.webp" },
+  { name: "Discover", src: "/card/discover.png" },
+];
+
+const DEFAULT_COLUMNS = [
+  {
+    title: "Quick Links",
+    order: 1,
+    active: true,
+    links: [
+      { label: "Home", url: "/", order: 1, active: true },
+      { label: "View Menu", url: "/menu", order: 2, active: true },
+      { label: "Order Online", url: "/menu", order: 3, active: true },
+      { label: "Reservations", url: "/#reservations", order: 4, active: true },
+      { label: "Contact", url: "/#contact-footer", order: 5, active: true },
+    ],
+  },
+  {
+    title: "Customer Support",
+    order: 2,
+    active: true,
+    links: [
+      { label: "Pickup Information", url: "/menu", order: 1, active: true },
+      { label: "About Us", url: "/#our-story", order: 2, active: true },
+      { label: "Special Offers", url: "/#special-offers", order: 3, active: true },
+    ],
+  },
+];
+
 export default function Footer() {
   const { restaurant } = useRestaurantPublic();
   const brandName = restaurant?.name || "Tasty Bites";
-  const phone = restaurant?.phone || "";
-  const phoneDisplay = restaurant?.phoneDisplay || "";
-  const address = restaurant?.address || "";
-  const email = restaurant?.email || "";
-  const mapLink = restaurant?.googleMapLink || "";
-  const social = restaurant?.social || {};
   const footerLogo =
-    restaurant?.logos?.footer || restaurant?.logos?.main || restaurant?.logos?.mobile || "";
+    restaurant?.logos?.footer ||
+    restaurant?.logos?.main ||
+    restaurant?.logos?.mobile ||
+    "";
+
+  const addresses =
+    restaurant?.officeAddresses?.length > 0
+      ? restaurant.officeAddresses
+      : restaurant?.address
+        ? [restaurant.address]
+        : [];
+
+  const phones =
+    restaurant?.contactNumbers?.length > 0
+      ? restaurant.contactNumbers
+      : restaurant?.phone
+        ? [restaurant.phone]
+        : [];
+
+  const emails =
+    restaurant?.emails?.length > 0
+      ? restaurant.emails
+      : restaurant?.email
+        ? [restaurant.email]
+        : [];
+
+  const social = restaurant?.social || {};
+  const googleHref =
+    social.google ||
+    restaurant?.googleHref ||
+    restaurant?.googleMapLink ||
+    "https://www.google.com";
+
+  const socialLinks = [
+    { href: social.facebook, label: "Facebook", Icon: FacebookIcon },
+    { href: social.instagram, label: "Instagram", Icon: InstagramIcon },
+    { href: social.youtube, label: "YouTube", Icon: YoutubeIcon },
+    { href: googleHref, label: "Google", Icon: GoogleIcon },
+  ].filter((item) => Boolean(item.href?.trim()));
+
+  const managedFooter = restaurant?.footer;
+  const rawColumns =
+    managedFooter?.columns?.length > 0 ? managedFooter.columns : DEFAULT_COLUMNS;
+  const columns = rawColumns
+    .filter((col) => col.active !== false)
+    .sort((a, b) => (Number(a.order) || 0) - (Number(b.order) || 0));
+
+  const thankYou = managedFooter?.thankYou || "Thank you for visiting";
+  const description =
+    managedFooter?.description ||
+    "Order online, pick up at our store, and pay when you arrive. Fresh food made to order — no delivery.";
 
   return (
     <footer
-      className="w-full border-t border-[var(--border)]/30 bg-[var(--customer-surface-low)] pt-12 pb-8"
+      className="w-full border-t border-[var(--border)]/30 bg-[var(--customer-surface-low)] pt-12 pb-6"
       id="contact-footer"
     >
       <div className="mx-auto max-w-[1320px] px-5 lg:px-12">
-        <div className="grid grid-cols-1 gap-8 pb-10 md:grid-cols-2 lg:grid-cols-4">
+        {/* Row 1: Contact Us & Dynamic Columns */}
+        <div className="grid grid-cols-1 gap-8 pb-10 sm:grid-cols-2 lg:grid-cols-4">
+          {/* Contact Us */}
           <div className="flex flex-col gap-3">
-            <Link href="/" className="inline-flex w-fit flex-col gap-2">
-              {footerLogo ? (
-                <span className="relative h-12 w-40">
-                  <Image
-                    src={footerLogo}
-                    alt={brandName}
-                    fill
-                    className="object-contain object-left"
-                    sizes="160px"
-                  />
-                </span>
-              ) : (
-                <>
-                  <span className="text-base font-bold uppercase tracking-wider text-[var(--customer-ink)]">
-                    {brandName}
-                  </span>
-                  <span className="text-[11px] font-semibold uppercase tracking-widest text-primary">
-                    Same-day pickup
-                  </span>
-                </>
-              )}
-            </Link>
-            <p className="text-[13px] leading-relaxed text-[var(--customer-muted)]">
-              Order online, pick up at {brandName}, and pay when you arrive. Fresh food made to
-              order — no delivery.
-            </p>
-            <ul className="flex flex-col gap-1 pt-1 text-[13px] text-[var(--customer-muted)]">
-              <li>
-                <Link href="/" className="transition-colors hover:text-primary">
-                  Home
-                </Link>
-              </li>
-              <li>
-                <Link href="/menu" className="transition-colors hover:text-primary">
-                  View Menu
-                </Link>
-              </li>
-              <li>
-                <Link href="/menu" className="transition-colors hover:text-primary">
-                  Order Online
-                </Link>
-              </li>
-              <li>
-                <Link href="/#reservations" className="transition-colors hover:text-primary">
-                  Reservations
-                </Link>
-              </li>
-              <li>
-                <Link href="/#contact-footer" className="transition-colors hover:text-primary">
-                  Contact
-                </Link>
-              </li>
-            </ul>
-          </div>
-
-          <div className="flex flex-col gap-3">
-            <span className="text-[13px] font-bold uppercase tracking-wider text-[var(--customer-ink)]">
-              Customer Support
-            </span>
-            <ul className="flex flex-col gap-2 text-[13px] text-[var(--customer-muted)]">
-              <li>
-                <Link href="/menu" className="transition-colors hover:text-primary">
-                  Pickup Information
-                </Link>
-              </li>
-              <li>
-                <Link href="/#our-story" className="transition-colors hover:text-primary">
-                  About Us
-                </Link>
-              </li>
-              <li>
-                <Link href="/#special-offers" className="transition-colors hover:text-primary">
-                  Special Offers
-                </Link>
-              </li>
-            </ul>
-          </div>
-
-          <div className="flex flex-col gap-3">
-            <span className="text-[13px] font-bold uppercase tracking-wider text-[var(--customer-ink)]">
-              Contact &amp; Hours
-            </span>
-            <div className="flex flex-col gap-2 text-[13px] text-[var(--customer-muted)]">
-              {address ? (
-                <div className="flex items-start gap-1.5">
-                  <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-                  {mapLink ? (
+            <h2 className="text-base font-bold uppercase tracking-wider text-[var(--customer-ink)]">
+              Contact Us
+            </h2>
+            <ul className="space-y-3 text-sm text-[var(--customer-muted)]">
+              {addresses.map((text, idx) => (
+                <li key={`addr-${idx}`} className="flex items-start gap-2.5">
+                  <MapPin className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
+                  <span>{text}</span>
+                </li>
+              ))}
+              {phones.map((number, idx) => {
+                const digits = String(number || "").replace(/\D/g, "");
+                return (
+                  <li key={`phone-${idx}`} className="flex items-start gap-2.5">
+                    <Phone className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
                     <a
-                      href={mapLink}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-start gap-1 transition-colors hover:text-primary"
+                      href={`tel:${digits}`}
+                      className="transition-colors hover:text-primary"
                     >
-                      <span>{address}</span>
-                      <ExternalLink className="mt-0.5 h-3 w-3 shrink-0 opacity-70" />
+                      {formatPhone(number)}
                     </a>
-                  ) : (
-                    <span>{address}</span>
-                  )}
-                </div>
-              ) : null}
-              {phone ? (
-                <div className="flex items-center gap-1.5">
-                  <Phone className="h-4 w-4 shrink-0 text-primary" />
-                  <a
-                    href={`tel:${phone}`}
-                    className="transition-colors hover:text-primary"
-                  >
-                    {phoneDisplay || phone}
-                  </a>
-                </div>
-              ) : null}
-              {email ? (
-                <div className="flex items-center gap-1.5">
-                  <Mail className="h-4 w-4 shrink-0 text-primary" />
+                  </li>
+                );
+              })}
+              {emails.map((email, idx) => (
+                <li key={`email-${idx}`} className="flex items-start gap-2.5">
+                  <Mail className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
                   <a
                     href={`mailto:${email}`}
                     className="break-all transition-colors hover:text-primary"
                   >
                     {email}
                   </a>
-                </div>
-              ) : null}
-              <p className="pt-1 text-[11px] font-semibold text-primary">
-                Online ordering · Same-day pickup only
-              </p>
-            </div>
+                </li>
+              ))}
+            </ul>
           </div>
 
-          <div className="flex flex-col gap-4">
-            <span className="text-[13px] font-bold uppercase tracking-wider text-[var(--customer-ink)]">
-              Order Direct
-            </span>
-            <p className="text-[13px] text-[var(--customer-muted)]">
-              Skip third-party apps — order here and pick up fresh at {brandName}.
-            </p>
-            <Link
-              href="/menu"
-              className="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2.5 text-center text-xs font-bold uppercase tracking-wider text-white shadow-sm transition-all hover:bg-primary-hover"
-            >
-              Order Online Now
-            </Link>
-            {(social.instagram || social.facebook || social.youtube) && (
-              <div className="flex items-center gap-2 pt-1">
-                {social.instagram ? (
-                  <a
-                    aria-label="Instagram"
-                    href={social.instagram}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex h-9 w-9 items-center justify-center rounded-full border border-black/20 bg-[var(--customer-surface-container)] text-[var(--customer-muted)] transition-colors hover:bg-primary hover:text-white"
-                  >
-                    <InstagramIcon className="h-5 w-5" />
-                  </a>
-                ) : null}
-                {social.facebook ? (
-                  <a
-                    aria-label="Facebook"
-                    href={social.facebook}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex h-9 w-9 items-center justify-center rounded-full border border-black/20 bg-[var(--customer-surface-container)] text-[var(--customer-muted)] transition-colors hover:bg-primary hover:text-white"
-                  >
-                    <FacebookIcon className="h-5 w-5" />
-                  </a>
-                ) : null}
-                {social.youtube ? (
-                  <a
-                    aria-label="YouTube"
-                    href={social.youtube}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex h-9 w-9 items-center justify-center rounded-full border border-black/20 bg-[var(--customer-surface-container)] text-[var(--customer-muted)] transition-colors hover:bg-primary hover:text-white"
-                  >
-                    <YoutubeIcon className="h-5 w-5" />
-                  </a>
-                ) : null}
+          {/* Dynamic Footer Columns */}
+          {columns.map((column) => (
+            <div key={column.title} className="flex flex-col gap-3">
+              <h2 className="text-base font-bold uppercase tracking-wider text-[var(--customer-ink)]">
+                {column.title}
+              </h2>
+              <ul className="space-y-2.5 text-sm text-[var(--customer-muted)]">
+                {(column.links || [])
+                  .filter((link) => link.active !== false)
+                  .sort((a, b) => (Number(a.order) || 0) - (Number(b.order) || 0))
+                  .map((link) => (
+                    <li key={link.label}>
+                      <Link
+                        href={link.url || link.href || "#"}
+                        className="transition-colors hover:text-primary"
+                      >
+                        {link.label}
+                      </Link>
+                    </li>
+                  ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+
+        <Separator className="border-t border-[var(--border)]/20" />
+
+        {/* Row 2: Brand/Description & Social / Payment Cards */}
+        <div className="grid gap-8 py-10 lg:grid-cols-[1.3fr_1fr] lg:items-center lg:gap-12">
+          {/* Brand info with logo, thank-you & description */}
+          <div className="flex flex-col gap-2">
+            {footerLogo ? (
+              <div className="relative mb-2 h-12 w-48">
+                <Image
+                  src={footerLogo}
+                  alt={brandName}
+                  fill
+                  className="object-contain object-left"
+                  sizes="192px"
+                />
               </div>
+            ) : (
+              <p className="font-display text-2xl font-bold tracking-tight text-[var(--customer-ink)]">
+                {brandName}
+              </p>
             )}
+            <p className="text-base font-semibold text-[var(--customer-ink)]">
+              {thankYou}
+            </p>
+            <p className="max-w-md text-sm leading-relaxed text-[var(--customer-muted)]">
+              {description}
+            </p>
+          </div>
+
+          {/* Social links & Payment Cards */}
+          <div className="flex flex-col gap-6 lg:items-end lg:text-right">
+            {socialLinks.length > 0 ? (
+              <div className="space-y-2">
+                <p className="text-sm font-semibold uppercase tracking-wider text-[var(--customer-ink)]">
+                  Follow Us
+                </p>
+                <div className="flex items-center gap-2.5 lg:justify-end">
+                  {socialLinks.map(({ href, label, Icon }) => (
+                    <a
+                      key={label}
+                      href={href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-label={label}
+                      className="flex size-9 items-center justify-center rounded-full border border-[var(--border)]/40 bg-white text-[var(--customer-muted)] shadow-xs transition-colors hover:bg-primary hover:text-white"
+                    >
+                      <Icon className="size-4" />
+                    </a>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            <div className="space-y-2.5">
+              <p className="text-sm font-semibold uppercase tracking-wider text-[var(--customer-ink)]">
+                We Accept Payments
+              </p>
+              <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+                {PAYMENT_CARDS.map((card) => (
+                  <div
+                    key={card.name}
+                    className="flex h-8 w-12 shrink-0 items-center justify-center overflow-hidden rounded-md border border-[var(--border)]/40 bg-white p-1 shadow-xs transition-transform hover:scale-105"
+                    title={card.name}
+                  >
+                    <Image
+                      src={card.src}
+                      alt={card.name}
+                      width={48}
+                      height={32}
+                      className="max-h-full max-w-full object-contain"
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
 
-        <div className="flex flex-col items-center justify-center gap-2 border-t border-[var(--border)]/30 pt-6 text-[13px] text-black sm:flex-row">
-          <div>
+        {/* Row 3: Bottom Copyright Bar */}
+        <div className="border-t border-[var(--border)]/30 pt-6">
+          <p className="text-center text-xs text-[var(--customer-muted)] sm:text-sm">
             © {new Date().getFullYear()} {brandName}. All rights reserved.
-          </div>
+          </p>
         </div>
       </div>
     </footer>

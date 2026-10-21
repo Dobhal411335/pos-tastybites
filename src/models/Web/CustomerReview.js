@@ -31,6 +31,10 @@ const CustomerReviewSchema = new Schema(
       type: Number,
       default: 0,
     },
+    image: {
+      url: { type: String, default: "" },
+      key: { type: String, default: "" },
+    },
   },
   { timestamps: true }
 );
