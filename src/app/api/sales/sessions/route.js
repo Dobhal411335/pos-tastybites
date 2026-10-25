@@ -12,6 +12,7 @@ import { v4 as uuidv4 } from "uuid";
 import { createNotification } from "@/lib/notifications/notificationService";
 import { isSalesAdminRole } from "@/utils/roles";
 import { joinTableNumbers, resolveDocumentId } from "@/utils/orderDisplay";
+import { todayBusinessDate, businessDateBounds } from "@/lib/eod/eodHelpers";
 import {
   applyLinkedTablesToSession,
   collectSessionTableIds,
@@ -255,6 +256,42 @@ export const PUT = withAuth(async (request) => {
   try {
     const data = await request.json();
     const { sessionId, action, guestCount, notes, newEmployeeId, effectiveSeatCount, adminOverride, releaseReason, linkedTableIds } = data;
+
+    if (action === "RELEASE_PRIOR_DAY") {
+      const todayStr = todayBusinessDate();
+      const { start: todayStart } = businessDateBounds(todayStr);
+
+      const staleSessions = await TableSession.find({
+        restaurant: request.restaurant,
+        isSessionOpen: true,
+        openedAt: { $lt: todayStart },
+      });
+
+      let releasedCount = 0;
+      for (const session of staleSessions) {
+        session.status = "RELEASED";
+        session.isSessionOpen = false;
+        session.closedAt = new Date();
+        session.notes = session.notes
+          ? `${session.notes} | Released next-day carryover`
+          : "Released next-day carryover";
+        await session.save();
+
+        const releasedIds = await freeSessionTables(session);
+        releasedCount++;
+
+        emitFloorTableEvent("table:released", request.restaurant, session.floor, {
+          sessionId: session._id,
+          tableId: session.primaryTable,
+          tableIds: releasedIds,
+        });
+      }
+
+      return sendSuccess(
+        { releasedCount },
+        `Successfully released ${releasedCount} prior day table session${releasedCount === 1 ? "" : "s"}`
+      );
+    }
 
     if (!sessionId) {
       return sendError(new Error("Missing ID"), "sessionId is required", 400);

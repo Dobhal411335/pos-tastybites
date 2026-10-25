@@ -29,7 +29,10 @@ import {
   businessDateBounds,
   todayBusinessDate,
 } from "@/lib/eod/eodHelpers";
-import { todaySalesOrdersOrClause } from "@/lib/public/offerFulfillment";
+import {
+  todaySalesOrdersOrClause,
+  futureOfferFulfillmentExclusion,
+} from "@/lib/public/offerFulfillment";
 import {
   normalizeSeatNumber,
   seatKey,
@@ -945,7 +948,7 @@ export const GET = withAuth(async (request) => {
       return sendSuccess(enriched, "Session order retrieved");
     }
 
-    // Unpaid open-order count for employee topnav badge
+    // Unpaid open-order count for employee topnav badge (includes previous day pending orders)
     if (searchParams.get("unpaidCount") === "true") {
       const todayStr = todayBusinessDate();
       const { start, end } = businessDateBounds(todayStr);
@@ -954,12 +957,18 @@ export const GET = withAuth(async (request) => {
         isActive: { $ne: false },
         paymentStatus: { $ne: "PAID" },
         status: { $nin: ["CANCELLED", "WAIVED", "PAID"] },
-        ...todaySalesOrdersOrClause(todayStr, start, end),
+        $or: [
+          todaySalesOrdersOrClause(todayStr, start, end),
+          {
+            createdAt: { $lt: start },
+            ...futureOfferFulfillmentExclusion(todayStr),
+          },
+        ],
       });
       return sendSuccess({ unpaidCount }, "Unpaid order count");
     }
 
-    // Default: Get recent employee orders; today=true returns all restaurant orders for the day
+    // Default: Get recent employee orders; today=true returns all restaurant orders for the day + pending prior-day orders
     const employeeId = request.user.id;
     const restaurantId = request.restaurant;
     const startDate = searchParams.get("startDate");
@@ -968,11 +977,21 @@ export const GET = withAuth(async (request) => {
     const limit = limitParam ? Math.min(Math.max(1, Number(limitParam) || 50), 1000) : 500;
     
     let query = { restaurantId, isActive: { $ne: false } };
-    
+    let todayStartObj = null;
+
     if (today === "true") {
       const todayStr = todayBusinessDate();
       const { start, end } = businessDateBounds(todayStr);
-      Object.assign(query, todaySalesOrdersOrClause(todayStr, start, end));
+      todayStartObj = start;
+      query.$or = [
+        todaySalesOrdersOrClause(todayStr, start, end),
+        {
+          createdAt: { $lt: start },
+          paymentStatus: { $ne: "PAID" },
+          status: { $nin: ["CANCELLED", "WAIVED", "PAID"] },
+          ...futureOfferFulfillmentExclusion(todayStr),
+        },
+      ];
     } else {
       query.processedBy = employeeId;
       if (startDate || endDate) {
@@ -997,8 +1016,17 @@ export const GET = withAuth(async (request) => {
       .lean();
 
     const enriched = await enrichOrdersWithProcessedBy(orders);
+    const finalOrders = enriched.map((order) => {
+      const createdAtDate = order.createdAt ? new Date(order.createdAt) : null;
+      const isPriorDay =
+        todayStartObj && createdAtDate ? createdAtDate < todayStartObj : false;
+      return {
+        ...order,
+        isPriorDay,
+      };
+    });
 
-    return sendSuccess(enriched, "Employee orders retrieved successfully");
+    return sendSuccess(finalOrders, "Employee orders retrieved successfully");
   } catch (error) {
     logger.error("Failed to fetch employee orders", error);
     return sendError(error, "Failed to fetch orders", 500);

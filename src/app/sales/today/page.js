@@ -399,6 +399,10 @@ function TodayOrdersPageContent() {
     ];
   }, [orders]);
 
+  const priorDayPendingCount = useMemo(() => {
+    return orders.filter((o) => o.isPriorDay && !isOrderPaid(o)).length;
+  }, [orders]);
+
   const getStatusColor = (status) => {
     switch (status?.toUpperCase()) {
       case "PENDING": return "bg-amber-100 text-amber-700";
@@ -852,6 +856,14 @@ function TodayOrdersPageContent() {
         {/* LIST */}
         <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar p-4">
           <div className="max-w-5xl mx-auto space-y-3">
+            {priorDayPendingCount > 0 && (
+              <div className="flex items-center gap-2.5 rounded-xl border border-amber-200 bg-amber-50/90 px-4 py-2.5 text-xs text-amber-900 font-semibold shadow-xs">
+                <Clock className="w-4 h-4 text-amber-600 shrink-0" />
+                <span>
+                  Showing {priorDayPendingCount} pending order{priorDayPendingCount === 1 ? "" : "s"} carried over from previous days.
+                </span>
+              </div>
+            )}
             {loading ? (
               <div className="flex justify-center items-center py-20">
                 <Loader2 className="w-8 h-8 animate-spin text-orange-500" />
@@ -889,6 +901,11 @@ function TodayOrdersPageContent() {
                       <div>
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-bold text-zinc-900">Order #{order.orderNumber}</span>
+                          {order.isPriorDay && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-md border border-amber-300 bg-amber-50 text-[11px] font-bold uppercase tracking-wider text-amber-800">
+                              Previous Day
+                            </span>
+                          )}
                           <span
                             className={`inline-flex items-center px-2 py-0.5 rounded-md border text-[12px] font-bold uppercase tracking-wider ${getOrderTypeBadgeClass(order)}`}
                           >
@@ -962,6 +979,11 @@ function TodayOrdersPageContent() {
               <div className="min-w-0">
                 <div className="flex items-center gap-2 mb-1 flex-wrap">
                   <h2 className="text-xl font-bold text-zinc-900">Order #{selectedOrder.orderNumber}</h2>
+                  {selectedOrder.isPriorDay && (
+                    <Badge variant="outline" className="bg-amber-50 text-amber-800 border-amber-300 text-[10px] uppercase font-bold px-2 py-0.5">
+                      Previous Day
+                    </Badge>
+                  )}
                   <span
                     className={`inline-flex items-center px-2 py-0.5 rounded-md border text-[10px] font-bold uppercase tracking-wider ${getOrderTypeBadgeClass(selectedOrder)}`}
                   >

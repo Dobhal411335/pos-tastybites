@@ -3159,14 +3159,14 @@ function OrderPageContent() {
                       ? "Pay remaining seats"
                       : "Pay Now"}
                 </Button>
-              ) : (
+              ) : hasSentKot ? (
                 <Button
                   onClick={() => router.push("/sales/today")}
                   className="flex-1 h-14 bg-orange-500 hover:bg-orange-600 text-white font-bold text-sm rounded-xl shadow-none"
                 >
                   Go to Orders
                 </Button>
-              )}
+              ) : null}
             </div>
           </div>
         </div>

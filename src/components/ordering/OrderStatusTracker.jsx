@@ -12,9 +12,10 @@ const STEPS = [
 
 function stepIndex(status, paymentStatus) {
   const s = String(status || "").toUpperCase();
+  const p = String(paymentStatus || "").toUpperCase();
   if (s === "CANCELLED" || s === "WAIVED") return -1;
-  if (s === "COMPLETED" || s === "PAID") return 3;
-  if (s === "READY") return 2;
+  if (p === "PAID" || s === "PAID") return 3;
+  if (s === "READY" || s === "COMPLETED") return 2;
   if (s === "CONFIRMED") return 1;
   return 0; // PENDING
 }
@@ -49,7 +50,11 @@ export default function OrderStatusTracker({ status, paymentStatus }) {
                     : "bg-white border-zinc-200 text-zinc-400"
                 )}
               >
-                {done ? <Check className="h-4 w-4" /> : index + 1}
+                {done || (active && index === STEPS.length - 1) ? (
+                  <Check className="h-4 w-4" />
+                ) : (
+                  index + 1
+                )}
               </span>
               {index < STEPS.length - 1 && (
                 <span

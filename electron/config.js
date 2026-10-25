@@ -66,3 +66,7 @@ export function isAllowedNavigation(targetUrl, allowedOrigins) {
 
 
 
+
+
+
+

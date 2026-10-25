@@ -371,7 +371,7 @@ export default function SalesReservationsPage() {
                   key={f.id}
                   type="button"
                   onClick={() => setTab(f.id)}
-                  className={`inline-flex items-center gap-1.5 rounded-md border border-zinc-600 bg-zinc-100 text-zinc-600 px-3.5 py-2 text-md font-bold transition ${
+                  className={`inline-flex items-center gap-1.5 rounded-md border border-zinc-600 bg-zinc-50 text-zinc-600 px-3.5 py-2 text-md font-bold transition ${
                     active
                       ? "bg-orange-500 text-white shadow-sm"
                       : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"
@@ -379,8 +379,8 @@ export default function SalesReservationsPage() {
                 >
                   {f.label}
                   <span
-                    className={`rounded-full px-1.5 border border-black py-0.5 text-[10px] tabular-nums ${
-                      active ? "bg-white/20 text-black" : "bg-white text-zinc-800"
+                    className={`rounded-full px-2 border border-black py-0.5 text-[10px] tabular-nums ${
+                      active ? "bg-red-500 text-white" : "bg-red-500 text-white"
                     }`}
                   >
                     {count}
@@ -486,7 +486,6 @@ export default function SalesReservationsPage() {
                     <div className="flex w-full flex-col gap-2 lg:w-56">
                       {r.status === "PENDING" ? (
                         <>
-                          {!isFuture ? (
                             <Button
                               disabled={busy}
                               onClick={() =>
@@ -494,28 +493,28 @@ export default function SalesReservationsPage() {
                                   assignedTableNo: tableDrafts[id] || undefined,
                                 })
                               }
-                              className="h-10 bg-emerald-600 font-bold text-white hover:bg-emerald-700 shadow-sm"
+                              className="h-15 bg-emerald-600 text-md font-bold text-white hover:bg-emerald-700 shadow-sm"
                             >
                               {busy ? (
                                 <Loader2 className="h-4 w-4 animate-spin" />
                               ) : (
                                 <>
-                                  <Check className="mr-1 h-4 w-4" /> Accept & email
+                                  <Check className="mr-1 h-5 w-5" /> Accept & email
                                 </>
                               )}
                             </Button>
-                          ) : null}
+                      
                           <Button
                             disabled={busy}
                             variant={isFuture ? "default" : "outline"}
                             onClick={() => patchReservation(id, "decline")}
                             className={
                               isFuture
-                                ? "h-10 bg-red-600 font-bold text-white hover:bg-red-700 shadow-sm"
-                                : "h-10 border-zinc-300 font-bold"
+                                ? "h-15 bg-red-600 font-bold text-md text-white hover:bg-red-700 shadow-sm"
+                                : "h-15 border-zinc-300 font-bold text-md"
                             }
                           >
-                            <X className="mr-1 h-4 w-4" /> Decline
+                            <X className="mr-1 h-5 w-5" /> Decline
                           </Button>
                         </>
                       ) : null}
@@ -525,7 +524,7 @@ export default function SalesReservationsPage() {
                           <Button
                             disabled={busy}
                             onClick={() => openSeatDialog(r)}
-                            className="h-10 bg-sky-600 font-bold text-white hover:bg-sky-700 shadow-sm"
+                            className="h-15 bg-sky-600 text-md font-bold text-white hover:bg-sky-700 shadow-sm"
                           >
                             <Armchair className="mr-1.5 h-4 w-4" /> Seat Now
                           </Button>
@@ -533,7 +532,7 @@ export default function SalesReservationsPage() {
                             disabled={busy}
                             variant="outline"
                             onClick={() => patchReservation(id, "no-show")}
-                            className="h-10 border-zinc-300 font-bold"
+                            className="h-15 border-zinc-300 font-bold"
                           >
                             No-show
                           </Button>
@@ -544,11 +543,11 @@ export default function SalesReservationsPage() {
                         <>
                           <Button
                             onClick={() => handleMakeOrder(r)}
-                            className="h-10 bg-orange-600 font-bold text-white hover:bg-orange-700 shadow-sm"
+                            className="h-15 bg-orange-600 font-bold text-white hover:bg-orange-700 shadow-sm"
                           >
                             <ShoppingBag className="mr-1.5 h-4 w-4" /> Make Order
                           </Button>
-                          <div className="flex items-center justify-between rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs font-semibold text-sky-800">
+                          <div className="flex items-center justify-between rounded-lg border border-sky-200 bg-sky-50 px-3 py-5 text-xs font-semibold text-sky-800">
                             <span className="flex items-center gap-1.5">
                               <Armchair className="h-4 w-4 text-sky-600" />
                               Table {r.assignedTableNo || "—"}

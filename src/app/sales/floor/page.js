@@ -23,11 +23,12 @@ import {
   Gift,
   ArrowRight,
   RefreshCw,
-  
   CalendarDays,
+  UtensilsCrossed,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import {
   Dialog,
@@ -158,6 +159,8 @@ export default function SalesFloorPage() {
   const [showTableActions, setShowTableActions] = useState(false);
   const [showAdminOverride, setShowAdminOverride] = useState(false);
   const [adminOverrideReason, setAdminOverrideReason] = useState("");
+  const [priorDayModalDismissed, setPriorDayModalDismissed] = useState(false);
+  const [isReleasingPriorTables, setIsReleasingPriorTables] = useState(false);
 
   // Action Sub-views
   const [actionView, setActionView] = useState("MAIN"); // MAIN, GUESTS, TRANSFER, TRANSFER_CONFIRM, RECONFIGURE
@@ -1770,6 +1773,144 @@ export default function SalesFloorPage() {
                 "Force Release"
               )}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Prior Day Carryover Alert Dialog */}
+      <Dialog
+        open={Boolean(floorData?.priorDayCarryover?.hasCarryover && !priorDayModalDismissed)}
+        onOpenChange={(open) => {
+          if (!open) setPriorDayModalDismissed(true);
+        }}
+      >
+        <DialogContent className="sm:max-w-[550px] p-0 overflow-hidden border-amber-200">
+          <div className="bg-gradient-to-r from-amber-500 to-orange-500 px-6 py-4 text-white">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="h-6 w-6 text-white shrink-0" />
+              <DialogTitle className="text-lg font-bold text-white tracking-tight">
+                Pending Items From Previous Day
+              </DialogTitle>
+            </div>
+            <p className="mt-1 text-xs text-amber-100 font-medium">
+              There are unsettled orders or tables left open from a previous day. Please review or release them before today&apos;s service.
+            </p>
+          </div>
+
+          <div className="max-h-[60vh] overflow-y-auto p-6 space-y-4">
+            {/* Pending Orders Section */}
+            {floorData?.priorDayCarryover?.orders?.length > 0 && (
+              <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-bold uppercase tracking-wider text-amber-900 flex items-center gap-1.5">
+                    <ShoppingBag className="h-4 w-4 text-amber-600" />
+                    Pending Orders ({floorData.priorDayCarryover.pendingOrderCount})
+                  </span>
+                </div>
+                <div className="divide-y divide-amber-200/60 max-h-40 overflow-y-auto">
+                  {floorData.priorDayCarryover.orders.map((o) => (
+                    <div key={o.id} className="py-2 flex items-center justify-between text-xs">
+                      <div>
+                        <span className="font-bold text-zinc-900">#{o.orderNumber}</span>
+                        <span className="text-zinc-500 ml-1.5">· {o.tableNo}</span>
+                        {o.partyName && <span className="text-zinc-500 ml-1">({o.partyName})</span>}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className="text-[10px] bg-white border-amber-300 text-amber-800">
+                          {o.status}
+                        </Badge>
+                        <span className="font-bold text-zinc-900">
+                          ${Number(o.totalAmount || 0).toFixed(2)}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Occupied / Booked Tables Section */}
+            {floorData?.priorDayCarryover?.sessions?.length > 0 && (
+              <div className="rounded-xl border border-rose-200 bg-rose-50/60 p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-bold uppercase tracking-wider text-rose-900 flex items-center gap-1.5">
+                    <UtensilsCrossed className="h-4 w-4 text-rose-600" />
+                    Occupied Floor Tables ({floorData.priorDayCarryover.openSessionCount})
+                  </span>
+                </div>
+                <div className="divide-y divide-rose-200/60 max-h-36 overflow-y-auto">
+                  {floorData.priorDayCarryover.sessions.map((s) => (
+                    <div key={s.id} className="py-2 flex items-center justify-between text-xs">
+                      <div>
+                        <span className="font-bold text-zinc-900">Table {s.tableNumber}</span>
+                        <span className="text-zinc-500 ml-1.5">· {s.floorName}</span>
+                      </div>
+                      <span className="text-zinc-500 text-[11px]">
+                        Server: {s.assignedEmployeeName}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="border-t border-zinc-100 bg-zinc-50/80 px-6 py-3.5 flex flex-wrap gap-2 sm:justify-between items-center">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPriorDayModalDismissed(true)}
+              className="text-xs font-bold text-zinc-600"
+            >
+              Dismiss
+            </Button>
+            <div className="flex items-center gap-2">
+              {floorData?.priorDayCarryover?.sessions?.length > 0 && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={async () => {
+                    if (isReleasingPriorTables) return;
+                    setIsReleasingPriorTables(true);
+                    try {
+                      const res = await employeeFetch("/api/sales/sessions", {
+                        method: "PUT",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ action: "RELEASE_PRIOR_DAY" }),
+                      });
+                      const data = await res.json();
+                      if (res.ok && data.success) {
+                        toast.success(data.message || "Floor tables released successfully");
+                        reloadCurrentFloor();
+                      } else {
+                        toast.error(data.message || "Failed to release floor tables");
+                      }
+                    } catch {
+                      toast.error("Failed to release floor tables");
+                    } finally {
+                      setIsReleasingPriorTables(false);
+                    }
+                  }}
+                  disabled={isReleasingPriorTables}
+                  className="bg-white border-rose-300 text-rose-700 hover:bg-rose-50 font-bold text-xs"
+                >
+                  {isReleasingPriorTables ? (
+                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+                  )}
+                  Release Floor Tables
+                </Button>
+              )}
+              <Button
+                size="sm"
+                onClick={() => router.push("/sales/today")}
+                className="bg-orange-600 hover:bg-orange-700 text-white font-bold text-xs"
+              >
+                <ShoppingBag className="mr-1.5 h-3.5 w-3.5" />
+                Go to Orders
+              </Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>

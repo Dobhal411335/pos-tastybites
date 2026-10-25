@@ -7,6 +7,8 @@ import { sendSuccess } from "@/utils/apiResponse";
 import { sendError } from "@/utils/errorHandler";
 import { logger } from "@/utils/logger";
 import { joinTableNumbers } from "@/utils/orderDisplay";
+import { todayBusinessDate, businessDateBounds } from "@/lib/eod/eodHelpers";
+import { futureOfferFulfillmentExclusion } from "@/lib/public/offerFulfillment";
 
 // GET - Unified Floor Data for Sales Operations
 export const GET = withAuth(async (request) => {
@@ -133,6 +135,76 @@ export const GET = withAuth(async (request) => {
           orderTakerName: orderTakerBySession.get(s._id.toString()) || null,
         };
       }),
+    };
+
+    const todayStr = todayBusinessDate();
+    const { start: todayStart } = businessDateBounds(todayStr);
+
+    const [priorDaySessions, priorDayOrders] = await Promise.all([
+      TableSession.find({
+        restaurant: restaurantId,
+        isSessionOpen: true,
+        openedAt: { $lt: todayStart },
+      })
+        .populate("primaryTable", "tableNumber")
+        .populate("linkedTables", "tableNumber")
+        .populate("floor", "name")
+        .populate("assignedEmployee", "firstName lastName name")
+        .lean(),
+      Order.find({
+        restaurantId,
+        isActive: { $ne: false },
+        status: { $nin: ["PAID", "CANCELLED", "WAIVED"] },
+        paymentStatus: { $ne: "PAID" },
+        createdAt: { $lt: todayStart },
+        ...futureOfferFulfillmentExclusion(todayStr),
+      })
+        .select(
+          "orderNumber status paymentStatus totalAmount tableNo createdAt source partyName guestName"
+        )
+        .sort({ createdAt: -1 })
+        .limit(30)
+        .lean(),
+    ]);
+
+    const formattedPriorSessions = priorDaySessions.map((s) => ({
+      id: s._id.toString(),
+      sessionId: s.sessionId,
+      tableNumber:
+        joinTableNumbers([
+          s.primaryTable?.tableNumber,
+          ...(s.linkedTables || []).map((t) => t.tableNumber),
+        ]) || "Unknown",
+      floorName: s.floor?.name || "Floor",
+      guestCount: s.guestCount || 0,
+      openedAt: s.openedAt,
+      assignedEmployeeName:
+        s.assignedEmployee?.name ||
+        [s.assignedEmployee?.firstName, s.assignedEmployee?.lastName]
+          .filter(Boolean)
+          .join(" ") ||
+        "Unassigned",
+    }));
+
+    const formattedPriorOrders = priorDayOrders.map((o) => ({
+      id: o._id.toString(),
+      orderNumber: o.orderNumber,
+      status: o.status,
+      paymentStatus: o.paymentStatus,
+      totalAmount: o.totalAmount || 0,
+      tableNo: o.tableNo || "Takeaway",
+      createdAt: o.createdAt,
+      partyName: o.partyName || o.guestName || null,
+      source: o.source || "POS",
+    }));
+
+    result.priorDayCarryover = {
+      hasCarryover:
+        formattedPriorSessions.length > 0 || formattedPriorOrders.length > 0,
+      sessions: formattedPriorSessions,
+      orders: formattedPriorOrders,
+      pendingOrderCount: formattedPriorOrders.length,
+      openSessionCount: formattedPriorSessions.length,
     };
 
     return sendSuccess(result, "Floor data retrieved successfully");
