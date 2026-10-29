@@ -25,6 +25,7 @@ import {
   ChevronUp,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useKeyboardAwareInputs } from "@/hooks/useKeyboardAwareInputs";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -325,6 +326,8 @@ export default function OrderPaymentView({
   seatMode = null,
   restaurantDetails = null,
 }) {
+  useKeyboardAwareInputs();
+
   const isSeatPayMode =
     seatMode !== null && seatMode !== undefined && seatMode !== "";
   const seatPayNumber =
@@ -3792,8 +3795,8 @@ function FullPayOptions({
 
 function GiftCardConfirmModal({ giftCardDetails, onClose, onApply }) {
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-zinc-900/50 p-4 backdrop-blur-sm">
-      <div className="flex max-h-[90vh] w-full max-w-lg flex-col rounded-2xl bg-white shadow-2xl">
+    <div className="fixed inset-0 z-[70] flex items-center justify-center overflow-y-auto bg-zinc-900/50 p-4 backdrop-blur-sm">
+      <div className="flex h-[90dvh] max-h-[calc(100dvh-1rem)] w-full max-w-lg flex-col rounded-2xl bg-white shadow-2xl">
         <div className="flex shrink-0 items-center justify-between border-b border-zinc-100 p-5">
           <h2 className="text-xl font-bold text-zinc-900">Gift Card Details</h2>
           <button
@@ -3805,7 +3808,7 @@ function GiftCardConfirmModal({ giftCardDetails, onClose, onApply }) {
             <X className="h-4 w-4" />
           </button>
         </div>
-        <div className="custom-scrollbar space-y-4 overflow-y-auto p-5">
+        <div className="custom-scrollbar min-h-0 flex-1 space-y-4 overflow-y-auto p-5">
           <div className="grid grid-cols-2 gap-4 rounded-xl border border-zinc-200 bg-zinc-50 p-4">
             <div>
               <p className="text-xs font-bold uppercase text-zinc-500">Code</p>

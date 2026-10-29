@@ -75,6 +75,7 @@ import {
   getUnsettledSeatNumbers,
 } from "@/lib/orders/seatHelpers";
 import { countryCodes } from "@/utils/countryCodes";
+import { useKeyboardAwareInputs } from "@/hooks/useKeyboardAwareInputs";
 import {
   OFFER_CATEGORY,
   isOfferItem,
@@ -352,6 +353,8 @@ export default function OrderPage() {
 }
 
 function OrderPageContent() {
+  useKeyboardAwareInputs();
+
   const params = useParams();
   const searchParams = useSearchParams();
   const { user: currentUser } = useAuth();
@@ -2583,7 +2586,7 @@ function OrderPageContent() {
         key={offer._id}
         type="button"
         onClick={() => addOfferFromList(offer)}
-        className={`relative flex flex-col items-stretch overflow-hidden rounded-xl border-2 text-left shadow-sm transition-colors ${theme.bg}`}
+        className={`relative flex flex-col items-stretch overflow-hidden rounded border-2 text-left shadow-sm transition-colors ${theme.bg}`}
       >
         {imageUrl ? (
           <span className="relative block w-full aspect-[16/11] shrink-0 bg-zinc-100 border-b border-zinc-200/80">
@@ -2602,23 +2605,23 @@ function OrderPageContent() {
           Offer
         </span>
         <div
-          className={`flex flex-1 flex-col items-center justify-center gap-1.5 px-2.5 py-2 ${
+          className={`flex flex-1 flex-col items-center justify-center ${
             imageUrl ? "" : "min-h-[96px] pt-7"
           }`}
         >
-          <span className="text-[13px] font-extrabold text-zinc-900 text-center leading-snug line-clamp-2">
+          <span className="w-full px-2.5 py-2 text-[13px] font-extrabold text-zinc-900 text-center leading-snug line-clamp-2">
             {offer.name}
           </span>
-          <div className="flex w-full items-center justify-between gap-2">
-            <span className="text-base font-black tabular-nums text-orange-600">
+          <div className="mt-auto grid w-full grid-cols-2 gap-0 border-t border-zinc-200/80">
+            <span className="flex min-w-0 items-center justify-center bg-sky-700 px-2 py-2 text-sm font-black tabular-nums text-white">
               ${totalPrice.toFixed(2)}
             </span>
             {hasOptions ? (
-              <span className="rounded-lg bg-orange-500 border border-orange-600 px-3 py-1.5 text-xs font-bold text-white shadow-sm">
+              <span className="flex min-w-0 items-center justify-center bg-red-600 px-2 py-2 text-xs font-bold text-white">
                 Options
               </span>
             ) : (
-              <span className="rounded-lg bg-orange-500 px-3 py-1.5 text-xs font-bold text-white shadow-sm">
+              <span className="flex min-w-0 items-center justify-center bg-orange-500 px-2 py-2 text-xs font-bold text-white">
                 Add
               </span>
             )}
@@ -2647,7 +2650,7 @@ function OrderPageContent() {
         type="button"
         disabled={!isAvailable}
         onClick={onAdd}
-        className={`relative flex flex-col items-stretch overflow-hidden rounded-xl border-2 text-left shadow-sm transition-colors disabled:opacity-45 disabled:cursor-not-allowed ${theme.bg}`}
+        className={`relative flex flex-col justify-between overflow-hidden rounded-md border-2 text-left shadow-sm transition-colors disabled:opacity-45 disabled:cursor-not-allowed ${theme.bg}`}
       >
         {imageUrl ? (
           <span className="relative block w-full aspect-[16/10] shrink-0 bg-zinc-100 border-b border-zinc-200/80">
@@ -2666,11 +2669,11 @@ function OrderPageContent() {
           </span>
         ) : null}
         <div
-          className={`flex flex-1 flex-col items-start justify-center gap-1.5 px-2.5 py-3 ${
+          className={`flex flex-1 flex-col items-start justify-center ${
             imageUrl ? "" : "min-h-[96px]"
           }`}
         >
-          <span className="inline-flex items-center gap-1.5 text-[13px] font-extrabold text-zinc-900 text-left leading-snug line-clamp-2 py-1">
+          <span className="inline-flex w-full items-center gap-1.5 px-2.5 py-3 text-[13px] font-extrabold text-zinc-900 text-left leading-snug line-clamp-2">
             {code ? (
               <span className="shrink-0 text-white bg-orange-500 border border-orange-800 rounded-md px-1 py-0.5 text-[11px]">
                 {code}
@@ -2678,16 +2681,16 @@ function OrderPageContent() {
             ) : null}
             <span className="min-w-0">{product.name}</span>
           </span>
-          <div className="flex items-center justify-between gap-2 w-full">
-            <span className="text-base font-black tabular-nums text-orange-600">
+          <div className="mt-auto grid w-full grid-cols-2 gap-0 border-t border-zinc-200/80">
+            <span className="flex min-w-0 items-center justify-center bg-sky-700 px-2 py-4 text-sm font-black tabular-nums text-white">
               ${Number(basePrice).toFixed(2)}
             </span>
             {hasOptions ? (
-              <span className="rounded-md bg-orange-500 border border-zinc-200 px-2 py-0.5 text-[10px] font-bold text-white">
+              <span className="flex min-w-0 items-center justify-center bg-red-600 px-2 py-2 text-xs font-bold text-white">
                 Options
               </span>
             ) : (
-              <span className="rounded-md bg-orange-500 px-2 py-0.5 text-[10px] font-bold text-white">
+              <span className="flex min-w-0 items-center justify-center bg-orange-500 px-2 py-2 text-xs font-bold text-white">
                 Add
               </span>
             )}
@@ -2728,7 +2731,7 @@ function OrderPageContent() {
   }
 
   return (
-    <div className="flex flex-col h-[calc(100vh-60px)] w-full bg-zinc-50 font-sans overflow-hidden border border-zinc-200 rounded-xl shadow-sm">
+    <div className="flex flex-col h-[calc(100dvh-60px)] w-full bg-zinc-50 font-sans overflow-hidden border border-zinc-200 rounded-xl shadow-sm">
       {/* SPLIT PANELS */}
       <div className="flex-1 flex min-h-0 overflow-hidden">
         {/* CATEGORIES SIDEBAR (3-PANEL) */}
@@ -3174,8 +3177,8 @@ function OrderPageContent() {
 
       {/* KITCHEN / PARTY NAME MODAL */}
       {isKitchenModalOpen && !isStaffOrder && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-900/50 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl flex flex-col max-h-[90vh]">
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-4 bg-zinc-900/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl flex max-h-[calc(100dvh-1rem)] flex-col">
             <div className="p-5 border-b border-zinc-100 flex items-center justify-between">
               <div>
                 <h2 className="text-lg font-bold text-zinc-900">
@@ -3341,11 +3344,11 @@ function OrderPageContent() {
 
       {/* OPTIONS MODAL */}
       {isOptionsModalOpen && selectedProduct && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-zinc-900/50 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl w-full max-w-2xl shadow-2xl flex flex-col max-h-[85vh] animate-in zoom-in-95 duration-200">
-            <div className="p-5 bg-zinc-50 border-b border-zinc-100 flex items-center justify-between shrink-0 rounded-t-2xl">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center overflow-y-auto p-4 bg-zinc-900/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl w-[calc(100vw-2rem)] max-w-[1500px] h-[85dvh] max-h-[calc(100dvh-1rem)] shadow-2xl flex flex-col animate-in zoom-in-95 duration-200">
+            <div className="p-4 bg-zinc-50 border-b border-zinc-100 flex items-center justify-between shrink-0 rounded-t-2xl">
               <div>
-                <h2 className="text-xl font-bold text-zinc-900">
+                <h2 className="text-lg font-bold text-zinc-900">
                   {isOfferItem(selectedProduct) ? (
                     <span className="text-[10px] font-bold text-violet-700 bg-violet-50 border border-violet-100 rounded px-1.5 py-0.5 mr-2 align-middle">
                       OFFER
@@ -3357,7 +3360,7 @@ function OrderPageContent() {
                   ) : null}
                   {selectedProduct.name}
                 </h2>
-                <p className="text-sm font-medium text-zinc-500 mt-0.5">
+                <p className="text-xs font-medium text-zinc-500 mt-0.5">
                   {isOfferItem(selectedProduct)
                     ? "Select inclusions, one choice and one drink"
                     : "Select variations and extras"}
@@ -3371,7 +3374,7 @@ function OrderPageContent() {
               </button>
             </div>
 
-            <div className="flex-1 p-6 overflow-y-auto custom-scrollbar">
+            <div className="flex-1 min-h-0 overflow-hidden p-6">
               {(() => {
                 const isOffer = isOfferItem(selectedProduct);
                 const offerInclusions = cleanOfferList(
@@ -3412,12 +3415,34 @@ function OrderPageContent() {
                       ),
                       ...(hasAddons ? ["addons"] : []),
                     ];
-                const defaultOpen = sectionIds[0] ? [sectionIds[0]] : [];
+                const defaultOpen = isOffer
+                  ? sectionIds[0]
+                    ? [sectionIds[0]]
+                    : []
+                  : sectionIds.filter((sectionId) =>
+                      ["variants", "preparation", "addons"].includes(sectionId),
+                    );
+                const columnCount = Math.min(3, Math.max(1, sectionIds.length));
+                const sectionColumns = isOffer
+                  ? Array.from({ length: columnCount }, (_, columnIndex) =>
+                      sectionIds.filter(
+                        (_, sectionIndex) =>
+                          sectionIndex % columnCount === columnIndex,
+                      ),
+                    )
+                  : [
+                      sectionIds.filter((sectionId) => sectionId === "variants"),
+                      sectionIds.filter((sectionId) => sectionId === "addons"),
+                      sectionIds.filter(
+                        (sectionId) =>
+                          sectionId !== "variants" && sectionId !== "addons",
+                      ),
+                    ].filter((column) => column.length > 0);
                 const accordionItemClass =
-                  "overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-none";
+                  "min-w-0 overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-none";
                 const accordionTriggerClass =
-                  "px-3 py-3 text-[13px] font-bold text-zinc-900 hover:no-underline hover:bg-zinc-50";
-                const accordionContentClass = "px-3 pt-3 pb-3";
+                  "px-3 py-2.5 text-xs font-bold text-zinc-900 hover:no-underline hover:bg-zinc-50";
+                const accordionContentClass = "min-w-0 px-2.5 pt-2.5 pb-2.5";
                 const productKey =
                   selectedProduct._id ||
                   selectedProduct.id ||
@@ -3425,15 +3450,24 @@ function OrderPageContent() {
                   "options";
 
                 return (
-                  <Accordion
-                    key={productKey}
-                    type="multiple"
-                    defaultValue={defaultOpen}
-                    className="space-y-3"
-                  >
+                  <div className="grid h-full min-h-0 grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
+                    {sectionColumns.map((columnSectionIds, columnIndex) => (
+                      <div
+                        key={`${productKey}-column-${columnIndex}`}
+                        className="h-full min-w-0 min-h-0 overflow-y-scroll custom-scrollbar [scrollbar-gutter:stable]"
+                      >
+                        <Accordion
+                          key={`${productKey}-${columnIndex}`}
+                          type="multiple"
+                          defaultValue={defaultOpen.filter((sectionId) =>
+                            columnSectionIds.includes(sectionId),
+                          )}
+                          className="min-w-0 space-y-3"
+                        >
                     {isOffer ? (
                       <>
-                        {offerInclusions.length > 0 && (
+                        {offerInclusions.length > 0 &&
+                          columnSectionIds.includes("inclusions") && (
                           <AccordionItem
                             value="inclusions"
                             className={accordionItemClass}
@@ -3456,7 +3490,7 @@ function OrderPageContent() {
                                         : "border-zinc-200 hover:border-orange-300"
                                     }`}
                                   >
-                                    <div className="flex-1 flex items-center gap-3 text-[14px] font-bold text-zinc-800">
+                                    <div className="min-w-0 flex-1 flex items-center gap-3 text-[13px] font-bold text-zinc-800">
                                       <input
                                         type="checkbox"
                                         checked={selectedOfferInclusions.includes(
@@ -3470,7 +3504,7 @@ function OrderPageContent() {
                                         }
                                         className="w-4 h-4 accent-orange-500"
                                       />
-                                      <span>{item}</span>
+                                      <span className="line-clamp-2 break-words">{item}</span>
                                     </div>
                                   </label>
                                 ))}
@@ -3479,7 +3513,8 @@ function OrderPageContent() {
                           </AccordionItem>
                         )}
 
-                        {offerChoices.length > 0 && (
+                        {offerChoices.length > 0 &&
+                          columnSectionIds.includes("choices") && (
                           <AccordionItem
                             value="choices"
                             className={accordionItemClass}
@@ -3502,7 +3537,7 @@ function OrderPageContent() {
                                         : "border-zinc-200 hover:border-orange-300"
                                     }`}
                                   >
-                                    <div className="flex-1 flex items-center gap-3 text-[14px] font-bold text-zinc-800">
+                                    <div className="min-w-0 flex-1 flex items-center gap-3 text-[13px] font-bold text-zinc-800">
                                       <input
                                         type="radio"
                                         name="offer-choice"
@@ -3515,7 +3550,7 @@ function OrderPageContent() {
                                         }
                                         className="w-4 h-4 accent-orange-500"
                                       />
-                                      <span>{choice}</span>
+                                      <span className="line-clamp-2 break-words">{choice}</span>
                                     </div>
                                   </label>
                                 ))}
@@ -3524,7 +3559,8 @@ function OrderPageContent() {
                           </AccordionItem>
                         )}
 
-                        {offerDrinks.length > 0 && (
+                        {offerDrinks.length > 0 &&
+                          columnSectionIds.includes("drinks") && (
                           <AccordionItem
                             value="drinks"
                             className={accordionItemClass}
@@ -3547,7 +3583,7 @@ function OrderPageContent() {
                                         : "border-zinc-200 hover:border-orange-300"
                                     }`}
                                   >
-                                    <div className="flex-1 flex items-center gap-3 text-[14px] font-bold text-zinc-800">
+                                    <div className="min-w-0 flex-1 flex items-center gap-3 text-[13px] font-bold text-zinc-800">
                                       <input
                                         type="radio"
                                         name="offer-drink"
@@ -3571,7 +3607,7 @@ function OrderPageContent() {
                       </>
                     ) : (
                       <>
-                        {hasVariants && (
+                        {hasVariants && columnSectionIds.includes("variants") && (
                           <AccordionItem
                             value="variants"
                             className={accordionItemClass}
@@ -3584,8 +3620,8 @@ function OrderPageContent() {
                             <AccordionContent
                               className={accordionContentClass}
                             >
-                              <div className="flex text-[11px] font-bold uppercase tracking-wider text-zinc-400 mb-2 border-b border-zinc-100 pb-2 px-1 gap-1">
-                                <div className="flex-1 min-w-[100px]">
+                              <div className="flex min-w-0 overflow-hidden text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-2 border-b border-zinc-100 pb-2 px-1 gap-1">
+                                <div className="flex-1 min-w-0">
                                   Option
                                 </div>
                                 <div className="w-20 text-center">Qty</div>
@@ -3594,7 +3630,7 @@ function OrderPageContent() {
                                 <div className="w-16 text-center">Tax</div>
                                 <div className="w-20 text-right">Total</div>
                               </div>
-                              <div className="grid gap-2">
+                              <div className="grid min-w-0 gap-2">
                                 {selectedProduct.variants.map((v, idx) => {
                                   const variantKey = getVariantKey(v, idx);
                                   const qty = variantQtyBySize[variantKey] || 0;
@@ -3619,19 +3655,19 @@ function OrderPageContent() {
                                   return (
                                     <div
                                       key={variantKey}
-                                      className={`border p-3 rounded-lg transition-colors gap-1 ${
+                                      className={`min-w-0 overflow-hidden border p-3 rounded-lg transition-colors gap-1 ${
                                         isChecked
                                           ? "border-orange-500 bg-orange-50/30"
                                           : "border-zinc-200"
                                       }`}
                                     >
-                                      <div className="flex items-center gap-1">
+                                      <div className="flex min-w-0 items-center gap-1 overflow-hidden">
                                         <div
-                                          className={`flex-1 min-w-[100px] text-[14px] font-bold ${isChecked ? "text-zinc-900" : "text-zinc-700"}`}
+                                          className={`flex-1 min-w-0 overflow-hidden text-[13px] font-bold ${isChecked ? "text-zinc-900" : "text-zinc-700"}`}
                                         >
-                                          {v.size}
+                                          <span className="line-clamp-2 break-words">{v.size}</span>
                                         </div>
-                                        <div className="w-20 flex items-center justify-center gap-1">
+                                        <div className="w-20 shrink-0 flex items-center justify-center gap-1">
                                           <button
                                             type="button"
                                             onClick={() =>
@@ -3755,7 +3791,8 @@ function OrderPageContent() {
                           </AccordionItem>
                         )}
 
-                        {hasPrepStyles && (
+                        {hasPrepStyles &&
+                          columnSectionIds.includes("preparation") && (
                           <AccordionItem
                             value="preparation"
                             className={accordionItemClass}
@@ -3781,7 +3818,7 @@ function OrderPageContent() {
                                             : "border-zinc-200 hover:border-orange-300"
                                         }`}
                                       >
-                                        <div className="flex-1 flex items-center gap-3 text-[14px] font-bold text-zinc-800 min-w-0">
+                                        <div className="min-w-0 flex-1 flex items-center gap-3 text-[13px] font-bold text-zinc-800">
                                           <input
                                             type="radio"
                                             name="preparationStyle"
@@ -3793,7 +3830,7 @@ function OrderPageContent() {
                                             }
                                             className="w-4 h-4 accent-orange-500 shrink-0"
                                           />
-                                          <span className="truncate">
+                                          <span className="min-w-0 line-clamp-2 break-words">
                                             {style}
                                           </span>
                                         </div>
@@ -3816,6 +3853,7 @@ function OrderPageContent() {
 
                         {productCustomDataGroups.map((group, groupIndex) => {
                           const value = `custom-${groupIndex}-${group.name}`;
+                          if (!columnSectionIds.includes(value)) return null;
                           return (
                             <AccordionItem
                               key={value}
@@ -3856,7 +3894,7 @@ function OrderPageContent() {
                                             }
                                             className="w-4 h-4 accent-violet-500"
                                           />
-                                          <span>{choice}</span>
+                                      <span className="line-clamp-2 break-words">{choice}</span>
                                         </div>
                                       </label>
                                     );
@@ -3869,6 +3907,7 @@ function OrderPageContent() {
 
                         {productChoiceGroups.map((group, groupIndex) => {
                           const value = `choice-${groupIndex}-${group.name}`;
+                          if (!columnSectionIds.includes(value)) return null;
                           return (
                             <AccordionItem
                               key={value}
@@ -3920,7 +3959,7 @@ function OrderPageContent() {
                           );
                         })}
 
-                        {hasAddons && (
+                        {hasAddons && columnSectionIds.includes("addons") && (
                           <AccordionItem
                             value="addons"
                             className={accordionItemClass}
@@ -3933,6 +3972,14 @@ function OrderPageContent() {
                             <AccordionContent
                               className={accordionContentClass}
                             >
+                              <div className="flex min-w-0 overflow-hidden text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-2 border-b border-zinc-100 pb-2 px-1 gap-1">
+                                <div className="flex-1 min-w-0">Option</div>
+                                <div className="w-20 shrink-0 text-center">Qty</div>
+                                <div className="w-14 shrink-0 text-center">Base</div>
+                                <div className="w-16 shrink-0 text-center">Discount</div>
+                                <div className="w-16 shrink-0 text-center">Tax</div>
+                                <div className="w-20 shrink-0 text-right">Total</div>
+                              </div>
                               <div className="grid gap-3">
                                 {selectedProduct.addons.map((addon) => {
                                   const addonKey = getAddonKey(addon);
@@ -3971,18 +4018,18 @@ function OrderPageContent() {
                                           : "border-zinc-200"
                                       }`}
                                     >
-                                      <div className="flex items-center p-3 gap-1">
-                                        <div
-                                          className={`flex-1 min-w-[100px] text-[14px] font-bold ${isChecked ? "text-zinc-900" : "text-zinc-700"}`}
+                                      <div className="flex items-center p-3">
+                                      <div
+                                        className={`flex-1 min-w-0 overflow-hidden text-[13px] font-bold ${isChecked ? "text-zinc-900" : "text-zinc-700"}`}
                                         >
-                                          <div>{addon.name}</div>
+                                        <div className="line-clamp-2 break-words">{addon.name}</div>
                                           {addon.fromCategory ? (
                                             <span className="mt-0.5 block text-[10px] font-semibold uppercase tracking-wide text-zinc-400">
                                               Linked from category
                                             </span>
                                           ) : null}
                                         </div>
-                                        <div className="w-20 flex items-center justify-center gap-1">
+                                        <div className="w-20 shrink-0 flex items-center justify-center gap-1">
                                           <button
                                             type="button"
                                             onClick={() =>
@@ -4074,7 +4121,7 @@ function OrderPageContent() {
                                                               }
                                                               className="w-4 h-4 accent-orange-500"
                                                             />
-                                                            <span>
+                                                            <span className="line-clamp-2 break-words">
                                                               {choice}
                                                             </span>
                                                           </div>
@@ -4097,7 +4144,10 @@ function OrderPageContent() {
                         )}
                       </>
                     )}
-                  </Accordion>
+                        </Accordion>
+                      </div>
+                    ))}
+                  </div>
                 );
               })()}
             </div>
@@ -4123,8 +4173,8 @@ function OrderPageContent() {
 
       {/* ADD CUSTOM ITEM MODAL */}
       {customExtraModal && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-zinc-900/50 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden">
+        <div className="fixed inset-0 z-[70] flex items-center justify-center overflow-y-auto p-4 bg-zinc-900/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl w-full max-w-md max-h-[calc(100dvh-1rem)] shadow-2xl flex flex-col overflow-hidden">
             <div className="p-5 border-b border-zinc-100 bg-zinc-50 flex items-center justify-between">
               <div>
                 <h3 className="text-lg font-bold text-zinc-900">
@@ -4143,7 +4193,7 @@ function OrderPageContent() {
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <div className="p-5 space-y-4">
+            <div className="min-h-0 flex-1 overflow-y-auto p-5 space-y-4 custom-scrollbar">
               <div className="space-y-1.5">
                 <label
                   htmlFor="pos-cart-custom-extra-name"
