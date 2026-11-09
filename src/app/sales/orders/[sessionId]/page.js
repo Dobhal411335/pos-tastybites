@@ -354,7 +354,6 @@ export default function OrderPage() {
 
 function OrderPageContent() {
   useKeyboardAwareInputs();
-
   const params = useParams();
   const searchParams = useSearchParams();
   const { user: currentUser } = useAuth();
@@ -3711,10 +3710,10 @@ function OrderPageContent() {
                                           ).toFixed(2)}
                                         </div>
                                       </div>
-                                      <IngredientChips
+                                      {/* <IngredientChips
                                         ingredients={v.ingredients}
                                         label="Includes"
-                                      />
+                                      /> */}
                                       {(() => {
                                         const variantChoiceGroups =
                                           normalizeChoiceOptions(
@@ -4074,11 +4073,11 @@ function OrderPageContent() {
                                         </div>
                                       </div>
                                       <div className="px-3 pb-2">
-                                        <IngredientChips
+                                        {/* <IngredientChips
                                           ingredients={addon.ingredients}
                                           label="Addon includes"
                                           compact
-                                        />
+                                        /> */}
                                       </div>
                                       {addonChoiceGroups.length > 0 && (
                                         <div className="px-3 pb-3 pt-1 space-y-4 border-t border-zinc-100/80">
