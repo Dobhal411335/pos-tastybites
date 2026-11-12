@@ -1,6 +1,5 @@
 import React from "react";
 import "./print.css";
-import moment from "moment";
 import { isOfferItem } from "@/utils/offerDetails";
 import { getReceiptModifierLines } from "@/utils/productChoices";
 import {
@@ -8,6 +7,7 @@ import {
   formatTableLocation,
   getOrderTypeLabel,
 } from "@/utils/orderDisplay";
+import { formatReceiptDateTimeInRestaurantTz } from "@/lib/restaurantTime";
 
 /**
  * Hardware-independent Kitchen Order Ticket for 80mm thermal paper.
@@ -134,7 +134,7 @@ const KitchenOrderTicket = ({
         </div>
         <div>
           <span className="receipt-bold">Sent:</span>{" "}
-          {moment(createdAt || undefined).format("MMM DD, YYYY [at] hh:mm A")}
+          {formatReceiptDateTimeInRestaurantTz(createdAt || new Date())}
         </div>
         {serverName && (
           <div>

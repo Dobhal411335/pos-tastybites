@@ -33,8 +33,11 @@ import { useSocket } from "@/components/providers/SocketProvider";
 import CustomerReceipt from "@/components/receipts/CustomerReceipt";
 import KitchenOrderTicket from "@/components/receipts/KitchenOrderTicket";
 import BarReceipt from "@/components/receipts/BarReceipt";
-import moment from "moment";
 import { joinTableNumbers } from "@/utils/orderDisplay";
+import {
+  formatDateShortInRestaurantTz,
+  formatTimeWithSecondsInRestaurantTz,
+} from "@/lib/restaurantTime";
 import { getItemLineTotal } from "@/utils/productChoices";
 import {
   filterItemsBySeat,
@@ -464,7 +467,7 @@ export default function PrintJobDetailPage() {
                     Created At
                   </dt>
                   <dd className="text-zinc-700">
-                    {moment(job.createdAt).format("MMM D, YYYY [at] HH:mm:ss")}
+                    {`${formatDateShortInRestaurantTz(job.createdAt)}, ${formatTimeWithSecondsInRestaurantTz(job.createdAt)}`}
                   </dd>
                 </div>
 
@@ -472,7 +475,7 @@ export default function PrintJobDetailPage() {
                   <div className="flex justify-between items-center">
                     <dt className="text-zinc-500">Started At</dt>
                     <dd className="text-zinc-700">
-                      {moment(job.startedAt).format("HH:mm:ss")}
+                      {formatTimeWithSecondsInRestaurantTz(job.startedAt)}
                     </dd>
                   </div>
                 )}
@@ -481,7 +484,7 @@ export default function PrintJobDetailPage() {
                   <div className="flex justify-between items-center">
                     <dt className="text-zinc-500">Printed At</dt>
                     <dd className="font-medium text-emerald-700">
-                      {moment(job.printedAt).format("MMM D, HH:mm:ss")}
+                      {`${formatDateShortInRestaurantTz(job.printedAt)}, ${formatTimeWithSecondsInRestaurantTz(job.printedAt)}`}
                     </dd>
                   </div>
                 )}

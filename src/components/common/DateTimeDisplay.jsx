@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { formatDate, formatTime } from "@/utils/DateTime";
+import { getRestaurantTimezone } from "@/lib/restaurantTime";
 
 export default function DateTimeDisplay({ compact = false }) {
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -14,19 +15,21 @@ export default function DateTimeDisplay({ compact = false }) {
   }, []);
 
   const dateLabel = compact
-    ? currentDate.toLocaleDateString("en-CA", {
+    ? new Intl.DateTimeFormat("en-CA", {
+        timeZone: getRestaurantTimezone(),
         weekday: "short",
         month: "short",
         day: "numeric",
-      })
+      }).format(currentDate)
     : formatDate(currentDate);
 
   const timeLabel = compact
-    ? currentDate.toLocaleTimeString("en-CA", {
+    ? new Intl.DateTimeFormat("en-CA", {
+        timeZone: getRestaurantTimezone(),
         hour: "numeric",
         minute: "2-digit",
         hour12: true,
-      })
+      }).format(currentDate)
     : formatTime(currentDate);
 
   if (compact) {

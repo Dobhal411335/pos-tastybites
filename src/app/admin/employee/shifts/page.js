@@ -16,6 +16,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { PALETTE } from "@/utils/paletteeColor";
 import DeleteDialog from "@/components/common/DeleteDialog";
+import { formatTimeInRestaurantTz } from "@/lib/restaurantTime";
 
 const DAYS_OF_WEEK = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 const SCHEDULE_MONTH_OPTIONS = Array.from({ length: 12 }, (_, index) => ({
@@ -579,8 +580,8 @@ export default function ShiftManagementPage() {
                                     </div>
                                     <div className="opacity-75">
                                       {dutyChange?.newStartTime
-                                        ? new Date(dutyChange.newStartTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                                        : new Date(shift.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                        ? formatTimeInRestaurantTz(dutyChange.newStartTime)
+                                        : formatTimeInRestaurantTz(shift.startTime)}
                                     </div>
                                   </div>
                                 );
@@ -601,7 +602,7 @@ export default function ShiftManagementPage() {
                                       <span className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full ring-1 ring-white" style={{ backgroundColor: DUTY_DOT[dc.changeType] || '#6b7280' }} />
                                       {selectedCalendarEmployee === "all" && <div className="font-bold truncate">{dcEmp?.firstName}</div>}
                                       <div className="font-medium">{DUTY_LABELS[dc.changeType] || dc.changeType}</div>
-                                      {dc.newStartTime && <div className="opacity-75">{new Date(dc.newStartTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>}
+                                      {dc.newStartTime && <div className="opacity-75">{formatTimeInRestaurantTz(dc.newStartTime)}</div>}
                                     </div>
                                   );
                                 })}
@@ -817,8 +818,8 @@ export default function ShiftManagementPage() {
                       {dutyDialogPlannedShift.templateId?.name || dutyDialogPlannedShift.shiftType || 'Regular'}
                     </div>
                     <div className="text-xs text-zinc-900 mt-0.5">
-                      {new Date(dutyDialogPlannedShift.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      {dutyDialogPlannedShift.endTime ? ` – ${new Date(dutyDialogPlannedShift.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}
+                      {formatTimeInRestaurantTz(dutyDialogPlannedShift.startTime)}
+                      {dutyDialogPlannedShift.endTime ? ` – ${formatTimeInRestaurantTz(dutyDialogPlannedShift.endTime)}` : ''}
                     </div>
                   </>
                 ) : (

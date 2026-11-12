@@ -17,6 +17,7 @@ import {
   proportionalOrderTotalsForItems,
   resolveSplitReceiptSeatFilter,
 } from "@/lib/orders/seatHelpers";
+import { formatReceiptDateTimeInRestaurantTz } from "@/lib/restaurantTime";
 
 const ESC = 0x1b;
 const GS = 0x1d;
@@ -177,21 +178,10 @@ function writeWrapped(e, text, width = activeWidth) {
 
 function formatSentAt(dateLike) {
   const d = dateLike ? new Date(dateLike) : new Date();
-  if (Number.isNaN(d.getTime())) return toPrinterText(new Date().toLocaleString());
-  const months = [
-    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
-  ];
-  const month = months[d.getMonth()];
-  const day = String(d.getDate()).padStart(2, "0");
-  const year = d.getFullYear();
-  let hours = d.getHours();
-  const minutes = String(d.getMinutes()).padStart(2, "0");
-  const ampm = hours >= 12 ? "PM" : "AM";
-  hours = hours % 12;
-  if (hours === 0) hours = 12;
-  const hh = String(hours).padStart(2, "0");
-  return `${month} ${day}, ${year} at ${hh}:${minutes} ${ampm}`;
+  if (Number.isNaN(d.getTime())) {
+    return toPrinterText(formatReceiptDateTimeInRestaurantTz(new Date()));
+  }
+  return toPrinterText(formatReceiptDateTimeInRestaurantTz(d));
 }
 
 function isDirectSaleOrder(order) {
@@ -573,7 +563,7 @@ export function buildTestTicket({
       `Width:   ${activeWidth} cols / ${Number(paperWidthMm) || 80}mm`,
     );
     e.line(divider());
-    e.align(1).line(toPrinterText(new Date().toLocaleString()));
+    e.align(1).line(toPrinterText(formatReceiptDateTimeInRestaurantTz(new Date())));
     e.resetStyle();
     e.line("");
     e.cut();

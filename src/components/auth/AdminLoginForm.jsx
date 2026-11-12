@@ -11,6 +11,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
+import {
+  formatTimeWithSecondsInRestaurantTz,
+  getRestaurantTimezone,
+} from "@/lib/restaurantTime";
 
 /**
  * Shared admin login UI used by /login and /admin/login (PWA in-scope entry).
@@ -74,10 +78,15 @@ export default function AdminLoginForm() {
           <div className="flex items-center gap-3 sm:gap-4">
             <div className="flex items-center gap-2 sm:gap-3 bg-white/90 backdrop-blur-md px-3 py-1.5 rounded shadow-md border border-slate-200">
               <span className="hidden sm:inline-block text-[10px] sm:text-xs font-bold uppercase tracking-widest text-zinc-500">
-                {currentTime.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}
+                {new Intl.DateTimeFormat("en-CA", {
+                  timeZone: getRestaurantTimezone(),
+                  weekday: "short",
+                  month: "short",
+                  day: "numeric",
+                }).format(currentTime)}
               </span>
               <span className="font-mono font-bold text-xs sm:text-sm text-zinc-800 bg-white px-2 py-1 rounded-md border border-slate-100 shadow-sm">
-                {currentTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+                {formatTimeWithSecondsInRestaurantTz(currentTime)}
               </span>
             </div>
             <LoginNotificationBell />

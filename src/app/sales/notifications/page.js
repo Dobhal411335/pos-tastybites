@@ -30,6 +30,7 @@ import {
   installNotificationAudioUnlockOnGesture,
 } from "@/lib/notifications/notificationSound";
 import { employeeFetch } from "@/lib/employeeFetch";
+import { formatDateInRestaurantTz } from "@/lib/restaurantTime";
 import {
   notificationMetaLine,
   notificationMessageLine,
@@ -62,7 +63,7 @@ function relativeTime(date) {
   if (diff < 3600) return `${Math.floor(diff / 60)} min ago`;
   if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
   if (diff < 172800) return "Yesterday";
-  return d.toLocaleDateString();
+  return formatDateInRestaurantTz(d);
 }
 
 function hrefFor(n) {

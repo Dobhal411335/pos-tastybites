@@ -26,6 +26,7 @@ import {
 } from "@/utils/productChoices";
 import { isOfferItem } from "@/utils/offerDetails";
 import { resolveTenders } from "@/lib/eod/eodHelpers";
+import { formatTimeInRestaurantTz } from "@/lib/restaurantTime";
 
 const STATUSES = ["All", "PENDING", "CONFIRMED", "CANCELLED", "WAIVED", "PAID", "ONLINE"];
 const STATUS_RANK = {
@@ -930,7 +931,7 @@ function TodayOrdersPageContent() {
                         <div className="flex items-center gap-3 text-xs font-semibold text-zinc-500 mt-1 uppercase tracking-wider flex-wrap">
                           <span className="flex items-center gap-1">
                             <Clock className="w-3.5 h-3.5" />{" "}
-                            {new Date(order.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                            {formatTimeInRestaurantTz(order.createdAt)}
                           </span>
                           {placerName && <span className="normal-case tracking-normal">{placerName}</span>}
                           <span>{order.items?.length || 0} Items</span>

@@ -44,6 +44,7 @@ import {
   installNotificationAudioUnlockOnGesture,
 } from "@/lib/notifications/notificationSound";
 import { showSystemNotification } from "@/lib/notifications/systemNotifications";
+import { formatDateInRestaurantTz } from "@/lib/restaurantTime";
 
 const TYPE_ICONS = {
   Orders: ShoppingCart,
@@ -62,7 +63,7 @@ function relativeTime(date) {
   if (diff < 3600) return `${Math.floor(diff / 60)} min ago`;
   if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
   if (diff < 172800) return "Yesterday";
-  return d.toLocaleDateString();
+  return formatDateInRestaurantTz(d);
 }
 
 function notificationHref(n) {

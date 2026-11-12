@@ -24,8 +24,16 @@ import {
   XAxis, YAxis, Tooltip, ResponsiveContainer
 } from "recharts";
 import { toast } from "sonner";
-import moment from "moment";
 import { useSocket } from "@/components/providers/SocketProvider";
+import {
+  formatDateTimeInRestaurantTz,
+  formatHourLabelInRestaurantTz,
+  formatTimeInRestaurantTz,
+  restaurantDateISO,
+  restaurantMonthKey,
+  restaurantWeekKey,
+  todayRestaurantISO,
+} from "@/lib/restaurantTime";
 import PrintPreviewModal from "@/components/receipts/PrintPreviewModal";
 import {
   getOrderLocationLabel,
@@ -541,21 +549,26 @@ export default function EmployeeSalesPage() {
     setTicketHistorySlips(null);
   };
 
-  // Date Range Filtering
+  // Date Range Filtering — restaurant wall clock (not browser/local IST)
   const dateFilteredOrders = useMemo(() => {
     if (!orders.length) return [];
     if (dateRange === "All") return orders;
+    const now = new Date();
+    const todayKey = todayRestaurantISO();
+    const weekKey = restaurantWeekKey(now);
+    const monthKey = restaurantMonthKey(now);
     return orders.filter((o) => {
-      const d = moment(o.createdAt);
-      if (!d.isValid()) return true;
+      if (!o?.createdAt) return true;
+      const created = new Date(o.createdAt);
+      if (Number.isNaN(created.getTime())) return true;
       if (dateRange === "Today") {
-        return d.isSame(moment(), "day");
+        return restaurantDateISO(created) === todayKey;
       }
       if (dateRange === "This Week") {
-        return d.isSame(moment(), "week");
+        return restaurantWeekKey(created) === weekKey;
       }
       if (dateRange === "This Month") {
-        return d.isSame(moment(), "month");
+        return restaurantMonthKey(created) === monthKey;
       }
       return true;
     });
@@ -598,7 +611,8 @@ export default function EmployeeSalesPage() {
     }
     const hourly = {};
     validOrders.forEach((o) => {
-      const hourStr = moment(o.createdAt).format("h A");
+      const hourStr = formatHourLabelInRestaurantTz(o.createdAt);
+      if (!hourStr) return;
       hourly[hourStr] = (hourly[hourStr] || 0) + Number(o.totalAmount || 0);
     });
     return Object.entries(hourly).map(([time, sales]) => ({
@@ -1062,7 +1076,7 @@ export default function EmployeeSalesPage() {
                       <TableCell className="py-3 px-3 align-middle text-xs text-zinc-500 font-medium whitespace-nowrap">
                         <div className="flex items-center gap-1 font-mono">
                           <Clock className="w-3 h-3 text-zinc-400" />
-                          <span>{moment(order.createdAt).format("hh:mm A")}</span>
+                          <span>{formatTimeInRestaurantTz(order.createdAt)}</span>
                         </div>
                       </TableCell>
 
@@ -1251,7 +1265,7 @@ export default function EmployeeSalesPage() {
                   <div className="flex justify-between gap-3 font-medium">
                     <span className="text-zinc-500">Placed At</span>
                     <span className="text-zinc-900 font-medium">
-                      {moment(selectedOrder.createdAt).format("MMM D, YYYY · h:mm A")}
+                      {formatDateTimeInRestaurantTz(selectedOrder.createdAt)}
                     </span>
                   </div>
                   {selectedOrder.source === "STAFF" && selectedOrder.staffOrderReason && (

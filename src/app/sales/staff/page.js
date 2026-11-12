@@ -23,6 +23,7 @@ import { useSocket } from "@/components/providers/SocketProvider";
 import PrintPreviewModal from "@/components/receipts/PrintPreviewModal";
 import { getOrderTypeBadgeClass } from "@/utils/orderDisplay";
 import { cn } from "@/lib/utils";
+import { formatTimeInRestaurantTz } from "@/lib/restaurantTime";
 
 const OPEN_STATUSES = new Set(["PENDING", "CONFIRMED"]);
 
@@ -57,10 +58,7 @@ function getStaffForName(order) {
 function formatTime(value) {
   if (!value) return "—";
   try {
-    return new Date(value).toLocaleTimeString(undefined, {
-      hour: "numeric",
-      minute: "2-digit",
-    });
+    return formatTimeInRestaurantTz(value) || "—";
   } catch {
     return "—";
   }

@@ -1,7 +1,7 @@
 import React from "react";
 import "./print.css";
-import moment from "moment";
 import { isOfferItem } from "@/utils/offerDetails";
+import { formatReceiptDateTimeInRestaurantTz } from "@/lib/restaurantTime";
 import {
   getReceiptModifierLines,
   getItemLineTotal,
@@ -360,7 +360,7 @@ const CustomerReceipt = ({
         <div className="text-[9px] text-nowrap">{restAddress}</div>
         <div className="text-[9px] mt-0.5">{restPhone}</div>
         <div className="mt-2 text-[10px]">
-          {moment(createdAt || undefined).format("MMM DD, YYYY [at] hh:mm A")}
+          {formatReceiptDateTimeInRestaurantTz(createdAt || new Date())}
         </div>
       </div>
 

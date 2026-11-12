@@ -1,12 +1,12 @@
 import React from "react";
 import "./print.css";
-import moment from "moment";
 import {
   isDirectSaleOrder,
   formatTableNumbersWithFloor,
   getOrderTypeLabel,
 } from "@/utils/orderDisplay";
 import { getReceiptModifierLines } from "@/utils/productChoices";
+import { formatReceiptDateTimeInRestaurantTz } from "@/lib/restaurantTime";
 
 /**
  * Hardware-independent Bar / Counter ticket for small thermal printers.
@@ -96,7 +96,7 @@ const BarReceipt = ({
       <div className="text-left text-[11px] space-y-0.5 mb-3">
         <div>
           <span className="receipt-bold">Sent:</span>{" "}
-          {moment(createdAt || undefined).format("MMM DD, YYYY [at] hh:mm A")}
+          {formatReceiptDateTimeInRestaurantTz(createdAt || new Date())}
         </div>
         {!directSale && tableLabel && (
           <div>

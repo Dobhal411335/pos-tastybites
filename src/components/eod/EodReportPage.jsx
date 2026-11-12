@@ -27,7 +27,10 @@ import {
 } from "@/components/ui/table";
 import EodReportPreview from "@/components/eod/EodReportPreview";
 import EodEmailDialog from "@/components/eod/EodEmailDialog";
-import { todayRestaurantISO } from "@/lib/restaurantTime";
+import {
+  formatDateTimeInRestaurantTz,
+  todayRestaurantISO,
+} from "@/lib/restaurantTime";
 
 const money = (n) =>
   `$${(Math.round((Number(n) || 0) * 100) / 100).toFixed(2)}`;
@@ -430,7 +433,7 @@ export default function EodReportPage({
                         <TableCell>{row.generatedByName || "—"}</TableCell>
                         <TableCell>
                           {row.generatedAt
-                            ? new Date(row.generatedAt).toLocaleString()
+                            ? formatDateTimeInRestaurantTz(row.generatedAt)
                             : "—"}
                         </TableCell>
                         <TableCell className="text-right space-x-1">

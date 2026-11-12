@@ -63,6 +63,7 @@ import {
 } from "recharts";
 import DateTimeDisplay from "@/components/common/DateTimeDisplay";
 import NotificationBell from "@/components/common/NotificationBell";
+import { getRestaurantTimezone } from "@/lib/restaurantTime";
 
 const EMPTY_CHART = [
   { time: "8AM", val: 0 },
@@ -312,13 +313,23 @@ export default function AdminDashboardPage() {
     }
   };
 
-  const today = new Date();
-  const formattedDate = today.toLocaleDateString("en-US", {
+  const restaurantTz = getRestaurantTimezone();
+  const now = new Date();
+  const formattedDate = new Intl.DateTimeFormat("en-US", {
+    timeZone: restaurantTz,
     weekday: "long",
     year: "numeric",
     month: "long",
     day: "numeric",
-  });
+  }).format(now);
+  const hourRaw = new Intl.DateTimeFormat("en-US", {
+    timeZone: restaurantTz,
+    hour: "numeric",
+    hour12: false,
+  }).format(now);
+  const restaurantHour = hourRaw === "24" ? 0 : Number(hourRaw);
+  const greeting =
+    restaurantHour < 12 ? "Morning" : restaurantHour < 17 ? "Afternoon" : "Evening";
 
   return (
     <div className="min-h-screen flex flex-col bg-[#F8FAFC] text-slate-900 selection:bg-blue-100 antialiased font-sans">
@@ -407,13 +418,8 @@ export default function AdminDashboardPage() {
                 </Badge>
               </div>
               <h1 className="text-4xl md:text-5xl font-black tracking-tight text-slate-900 drop-shadow-sm">
-                Good{" "}
-                {today.getHours() < 12
-                  ? "Morning"
-                  : today.getHours() < 17
-                    ? "Afternoon"
-                    : "Evening"}
-                , {adminUser?.name?.split(" ").slice(0, 2).join(" ") || ""}
+                Good {greeting},{" "}
+                {adminUser?.name?.split(" ").slice(0, 2).join(" ") || ""}
               </h1>
               <div className="flex items-center gap-3 pt-2 text-slate-500 font-medium text-sm">
                 <CalendarDays className="w-4 h-4 text-blue-500" />

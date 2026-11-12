@@ -135,12 +135,154 @@ export function formatTimeInRestaurantTz(
   timeZone = getRestaurantTimezone()
 ) {
   if (!date) return "";
+  const d = new Date(date);
+  if (Number.isNaN(d.getTime())) return "";
   return new Intl.DateTimeFormat("en-CA", {
     timeZone,
     hour: "numeric",
     minute: "2-digit",
     hour12: true,
+  }).format(d);
+}
+
+/** Compact clock with seconds (print jobs, live POS clock). */
+export function formatTimeWithSecondsInRestaurantTz(
+  date,
+  timeZone = getRestaurantTimezone()
+) {
+  if (!date) return "";
+  const d = new Date(date);
+  if (Number.isNaN(d.getTime())) return "";
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).format(d);
+}
+
+export function formatDateInRestaurantTz(
+  date,
+  timeZone = getRestaurantTimezone()
+) {
+  if (!date) return "";
+  const d = new Date(date);
+  if (Number.isNaN(d.getTime())) return "";
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(d);
+}
+
+export function formatDateShortInRestaurantTz(
+  date,
+  timeZone = getRestaurantTimezone()
+) {
+  if (!date) return "";
+  const d = new Date(date);
+  if (Number.isNaN(d.getTime())) return "";
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    month: "short",
+    day: "numeric",
+  }).format(d);
+}
+
+/** e.g. "Nov 12, 2026, 3:45 p.m." — UI lists / detail panels. */
+export function formatDateTimeInRestaurantTz(
+  date,
+  timeZone = getRestaurantTimezone()
+) {
+  if (!date) return "";
+  const d = new Date(date);
+  if (Number.isNaN(d.getTime())) return "";
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  }).format(d);
+}
+
+/** Receipt / ticket line: "Nov 12, 2026 at 3:45 PM". */
+export function formatReceiptDateTimeInRestaurantTz(
+  date,
+  timeZone = getRestaurantTimezone()
+) {
+  if (!date) return "";
+  const d = new Date(date);
+  if (Number.isNaN(d.getTime())) return "";
+  const datePart = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    month: "short",
+    day: "2-digit",
+    year: "numeric",
+  }).format(d);
+  const timePart = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  }).format(d);
+  return `${datePart} at ${timePart}`;
+}
+
+/** Hour bucket label for charts: "3 PM". */
+export function formatHourLabelInRestaurantTz(
+  date,
+  timeZone = getRestaurantTimezone()
+) {
+  if (!date) return "";
+  const d = new Date(date);
+  if (Number.isNaN(d.getTime())) return "";
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    hour: "numeric",
+    hour12: true,
+  }).format(d);
+}
+
+/** YYYY-MM-DD for any instant in restaurant wall clock. */
+export function restaurantDateISO(
+  date = new Date(),
+  timeZone = getRestaurantTimezone()
+) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
   }).format(new Date(date));
+}
+
+/** YYYY-MM for restaurant wall clock (month filters). */
+export function restaurantMonthKey(
+  date = new Date(),
+  timeZone = getRestaurantTimezone()
+) {
+  const parts = tzParts(new Date(date), timeZone);
+  return `${parts.year}-${String(parts.month).padStart(2, "0")}`;
+}
+
+/**
+ * Stable week key (Sunday-start, matches prior moment.js default locale).
+ * Based on restaurant civil date, not the viewer's browser TZ.
+ */
+export function restaurantWeekKey(
+  date = new Date(),
+  timeZone = getRestaurantTimezone()
+) {
+  const parts = tzParts(new Date(date), timeZone);
+  const utcNoon = Date.UTC(parts.year, parts.month - 1, parts.day, 12, 0, 0);
+  const dow = new Date(utcNoon).getUTCDay(); // 0 = Sunday
+  const weekStart = new Date(utcNoon - dow * 86400000);
+  return `${weekStart.getUTCFullYear()}-${String(weekStart.getUTCMonth() + 1).padStart(2, "0")}-${String(weekStart.getUTCDate()).padStart(2, "0")}`;
 }
 
 export function weekdayInRestaurantTz(
@@ -152,12 +294,7 @@ export function weekdayInRestaurantTz(
 
 /** YYYY-MM-DD for the restaurant wall clock (safe on client + server). */
 export function todayRestaurantISO(timeZone = getRestaurantTimezone()) {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(new Date());
+  return restaurantDateISO(new Date(), timeZone);
 }
 
 /**

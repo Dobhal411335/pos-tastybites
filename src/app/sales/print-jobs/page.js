@@ -22,6 +22,7 @@ import {
   X,
 } from "lucide-react";
 import {
+  formatDateShortInRestaurantTz,
   formatTimeInRestaurantTz,
   todayRestaurantISO,
 } from "@/lib/restaurantTime";
@@ -54,7 +55,6 @@ import {
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { useSocket } from "@/components/providers/SocketProvider";
-import moment from "moment";
 import { joinTableNumbers } from "@/utils/orderDisplay";
 
 const STATUS_STYLES = {
@@ -378,7 +378,7 @@ export default function PrintJobsPage() {
       if (!value) return "—";
       const time = formatTimeInRestaurantTz(value);
       if (!isViewingAllDates) return time;
-      return `${moment(value).format("MMM D")} · ${time}`;
+      return `${formatDateShortInRestaurantTz(value)} · ${time}`;
     },
     [isViewingAllDates]
   );
